@@ -649,31 +649,32 @@ This provides:
 
 **Purpose**: Reward miners for providing Kubernetes infrastructure to serve user AI requests.
 
-**Key Feature**: **Miners receive 50% of the revenue they generate** from user services.
+**Key Feature**: **Emissions are distributed per resources provided** (GPU nodes)
 
-**Scoring Criteria** (weighted):
+**⚠️ Mandatory Requirement**:
+- **TEE Attestation** (Intel TDX/SGX, NVIDIA CC) must be proven — **no attestation = no emissions**
+
+**Emission Allocation** (per node type with 8 GPUs):
+
+| GPU Node Type | Base Weight | Description |
+|---------------|-------------|-------------|
+| **H100** | 1.0x | Base tier |
+| **H200** | 1.5x | Higher memory bandwidth |
+| **B200** | 2.0x | Next-gen Blackwell |
+| **B300** | 2.5x | Top-tier Blackwell |
+
+**Quality Multipliers** (applied to base weight):
 
 | Criteria | Weight | Description |
 |----------|--------|-------------|
-| **Uptime** | 40% | Target 99.9%+ availability |
-| **TEE Compliance** | 25% | Intel TDX/SGX, NVIDIA CC |
-| **Latency** | 20% | Response time quality |
-| **Capacity** | 15% | Available GPU/CPU resources |
-
-**Revenue Sharing Model**:
-
-```python
-# When a user request is processed:
-billed_amount = (tokens_processed * 0.00001) + (gpu_seconds * 0.001)
-
-# Miner receives 50% of billed amount
-miner_share = billed_amount * 0.50  # Direct incentive!
-```
+| **Uptime** | 40% | Most important — target 99.9%+ availability |
+| **Bandwidth** | 35% | Network throughput — 10Gbps baseline |
+| **Latency** | 25% | Response time quality |
 
 **Benefits**:
-- ✅ Direct incentive to serve more users
-- ✅ Quality matters: better service → more users → more revenue
-- ✅ Sustainable economics: real revenue, not just emissions
+- ✅ TEE compliance is enforced, not optional
+- ✅ Clear incentive to provide higher-tier GPU nodes
+- ✅ Quality matters: uptime-focused with latency and bandwidth factors
 
 ### Mechanism 1: Open Source Competition (40% Emissions)
 
