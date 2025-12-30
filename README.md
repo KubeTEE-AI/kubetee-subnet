@@ -667,14 +667,20 @@ This provides:
 
 | Criteria | Weight | Description |
 |----------|--------|-------------|
-| **Uptime** | 40% | Most important — target 99.9%+ availability |
-| **Bandwidth** | 35% | Network throughput — 10Gbps baseline |
-| **Latency** | 25% | Response time quality |
+| **Resource Utilization** | 35% | Most important — target 80% capacity (±5% tolerance) |
+| **Uptime** | 30% | Target 99.9%+ availability |
+| **Bandwidth** | 20% | Network throughput — 10Gbps baseline |
+| **Latency** | 15% | Response time quality |
+
+**⚠️ Resource Utilization Penalties**:
+- **Above 85% capacity**: Penalized — cluster is overloaded, cannot serve additional requests
+- **Below 75% capacity**: Penalized — underutilized, not contributing proportionally to subnet demand
+- **Target: 80% capacity**: Optimal — ensures miners provide exactly what the subnet needs
 
 **Benefits**:
 - ✅ TEE compliance is enforced, not optional
 - ✅ Clear incentive to provide higher-tier GPU nodes
-- ✅ Quality matters: uptime-focused with latency and bandwidth factors
+- ✅ Resource utilization ensures balanced subnet capacity — no over/under provisioning
 
 ### Mechanism 1: Open Source Competition (40% Emissions)
 
