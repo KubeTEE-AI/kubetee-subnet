@@ -724,13 +724,13 @@ This provides:
 | `bounty:medium` | Difficulty | 2x | Standard tasks |
 | `bounty:hard` | Difficulty | 4x | Complex improvements |
 | `bounty:epic` | Difficulty | 8x | Major features |
-| `category:bug-fix` | Category | - | Bug fixes |
-| `category:feature` | Category | - | New features |
-| `category:documentation` | Category | - | Docs improvements |
-| `category:benchmark` | Category | - | Benchmark improvements |
-| `category:security` | Category | - | Security fixes |
-| `category:optimization` | Category | - | Performance optimizations |
-| `category:testing` | Category | - | Test coverage |
+| `category:bug-fix` | Category | Merged PR | Bug fixes |
+| `category:feature` | Category | Bounty | New features |
+| `category:documentation` | Category | Merged PR | Docs improvements |
+| `category:benchmark` | Category | Bounty | Benchmark improvements |
+| `category:security` | Category | Bounty | Security fixes |
+| `category:optimization` | Category | Bounty | Performance optimizations |
+| `category:testing` | Category | Merged PR | Test coverage |
 
 #### Emission Distribution
 
@@ -740,32 +740,21 @@ This provides:
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
 │  ┌──────────────────┐   ┌──────────────────┐   ┌──────────────────┐         │
-│  │   BOUNTY POOL    │   │   CONTINUOUS     │   │   BENCHMARK      │         │
-│  │      60%         │   │      30%         │   │      10%         │         │
+│  │   BOUNTY POOL    │   │   BENCHMARK      │   │   MERGED PRs     │         │
+│  │      50%         │   │      30%         │   │      20%         │         │
 │  └────────┬─────────┘   └────────┬─────────┘   └────────┬─────────┘         │
 │           │                      │                      │                   │
 │           ▼                      ▼                      ▼                   │
 │  ┌──────────────────┐   ┌──────────────────┐   ┌──────────────────┐         │
-│  │ Bounty Hotkeys   │   │ Proportional to  │   │ Benchmark        │         │
-│  │ (weighted by     │   │ contribution     │   │ improvement      │         │
-│  │  difficulty)     │   │ points           │   │ bonus            │         │
+│  │ Bounty Hotkeys   │   │ Benchmark        │   │ PRs merged to    │         │
+│  │ (weighted by     │   │ improvement      │   │ main branch      │         │
+│  │  difficulty)     │   │ bonus            │   │                  │         │
 │  └──────────────────┘   └──────────────────┘   └──────────────────┘         │
 │                                                                             │
 │  When bounty is WON → Accumulated emissions transfer to winner!             │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
-
-**Continuous Contribution Points**:
-
-| Contribution Type | Points | Description |
-|-------------------|--------|-------------|
-| PR Merged | 10 | Pull request merged to main |
-| Bug Fix | 15 | Bug fix merged |
-| Documentation | 5 | Docs improvement |
-| Test Added | 8 | Test coverage increase |
-| Code Review | 3 | Helpful code review |
-| Issue Triaged | 2 | Issue labeled/triaged |
 
 #### Bounty Lifecycle (Fully Automated)
 
