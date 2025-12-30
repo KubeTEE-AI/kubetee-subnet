@@ -27,12 +27,11 @@ As part of NVIDIA's Inception Program, KubeTEE AI leverages cutting-edge NVIDIA 
 
 KubeTEE AI actively contributes to and builds upon the [OpenInfra Foundation's](https://openinfra.org/) open source infrastructure projects, particularly:
 - **[Kata Containers](https://katacontainers.io/)**: Secure, lightweight CRI-compatible virtualized containers that provide the TEE foundation for our confidential computing infrastructure
-- **OpenStack**: Programmable infrastructure for VMs, containers, and bare metal deployment
 
+We also leverage CNCF projects for cloud-native confidential computing:
+- **[Confidential Containers (CoCo)](https://github.com/confidential-containers/confidential-containers)**: CNCF Sandbox project enabling transparent deployment of unmodified containers in Trusted Execution Environments (TEEs) with support for Intel TDX/SGX and other hardware platforms
 
-As noted by Steven Vaughan-Nichols in ZDNet: ["OpenStack and Kata Containers are both seeing a resurgence of adoption"](https://openinfra.org/blog/why-openstack-and-kata-containers-are-both-seeing-a-resurgence-of-adoption), positioning KubeTEE AI at the forefront of this industry transformation.
-
-**Mission**: To provide decentralized, enterprise-grade AI infrastructure with the highest standards of security, compliance, and performance—combining the power of NVIDIA's AI platform with the trust guarantees of Confidential Computing and the collaborative innovation of OpenInfra Foundation projects.
+**Mission**: To provide decentralized, enterprise-grade AI Deep Search Agent with privacy data and infrastructure of the highest standards of security, compliance, and performance—combining the power of NVIDIA's AI platform with the trust guarantees of Confidential Computing and the collaborative innovation 
 
 **Key Differentiators**:
 - 🔒 **Security-First**: TEE-enabled infrastructure with FIPS-140-2 certification and Kata Containers isolation
@@ -85,6 +84,7 @@ As noted by Steven Vaughan-Nichols in ZDNet: ["OpenStack and Kata Containers are
       - [3. NVIDIA Streaming Data to RAG](#3-nvidia-streaming-data-to-rag)
       - [4. NVIDIA NeMo Retriever Microservice](#4-nvidia-nemo-retriever-microservice)
       - [5. NVIDIA Data Flywheel](#5-nvidia-data-flywheel)
+      - [6. NVIDIA Video Search and Summarization](#6-nvidia-video-search-and-summarization)
       - [Additional Services](#additional-services)
     - [NVIDIA NeMo Microservices](#nvidia-nemo-microservices)
     - [NVIDIA NIM Models](#nvidia-nim-models)
@@ -445,11 +445,11 @@ As Big Tech consolidates AI agents, KubeTEE AI represents the **decentralized al
 ### Multi-Cluster Topology
 
 #### Subnet Owner Infrastructure
-- Multi-Cluster with Confidential Computing TEE
-- Rancher Management Cluster with Fleet for GitOps
-- RKE2 Rancher Kubernetes with FIPS-140-2
-- Kata Containers (TEE)
-- [Confidential Containers](https://confidentialcontainers.org/docs/overview/) Operator
+- Global Multi-Cluster Control Plane with Rancher on Confidential Computing TEE
+- Rancher Multi-Cluster Management with Fleet for GitOps
+  - RKE2 Rancher Kubernetes with FIPS-140-2 deployment
+  - Kata Containers (TEE)
+  - [Confidential Containers](https://confidentialcontainers.org/docs/overview/) Operator
 
 #### Miner Infrastructure
 - RKE2 Rancher Kubernetes
@@ -457,7 +457,7 @@ As Big Tech consolidates AI agents, KubeTEE AI represents the **decentralized al
   - Regional deployment (One Region/Zone Control Plane with same region workers)
   - Cluster labeled with `kubetee.ai/` prefixed labels for permanent identification
   - Required labels: `kubetee.ai/continent`, `kubetee.ai/country`, `kubetee.ai/city`, `kubetee.ai/miner-hotkey`, `kubetee.ai/miner-coldkey`, `kubetee.ai/miner-uid`
-- Kata Containers (TEE)
+- Kata Containers and CoCo Containers (TEE)
 - Fleet Agent for automated deployments
 
 **Important**: Clusters are labeled with `kubetee.ai/miner-hotkey` and `kubetee.ai/miner-coldkey` for permanent identification. These labels never change, while `kubetee.ai/miner-uid` can be updated if a miner deregisters and re-registers on the subnet.
@@ -526,6 +526,23 @@ This means developers can use **any agentic framework they prefer** (LangChain, 
 #### 5. NVIDIA Data Flywheel
 
 [NVIDIA Data Flywheel](https://github.com/KubeTEE-AI-Blueprints/data-flywheel) - Autonomous self-improvement through Reinforcement Learning (RL) from prompt response logs in ElasticSearch
+
+#### 6. NVIDIA Video Search and Summarization
+
+[NVIDIA Video Search and Summarization Blueprint](https://github.com/KubeTEE-AI-Blueprints/video-search-and-summarization) - Ingest massive volumes of live or archived videos and extract insights for summarization and interactive Q&A
+
+**Key Capabilities**:
+- 🎥 **Video Analytics AI Agent**: Natural language tasks for complex operations like video summarization and visual question-answering
+- 🔍 **Multi-hop Reasoning**: Deeper contextual understanding with graph and vector databases
+- 📊 **Scalable Architecture**: Efficient management of extensive video data with short-term (chat history) and long-term memory (vector/graph DB)
+
+**Software Components**:
+- **VLM**: Cosmos Reason1 7B for visual understanding
+- **LLM**: Llama 3.1 70B/8B for language processing
+- **Embeddings**: llama-3.2-nv-embedqa-1b-v2
+- **Reranker**: llama-3.2-nv-rerankqa-1b-v2
+
+**Supported GPU Topologies**: 8xH100, 8xH200, 8xB200
 
 #### Additional Services
 
