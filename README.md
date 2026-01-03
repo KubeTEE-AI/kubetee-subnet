@@ -157,10 +157,13 @@ KubeTEE AI provides Enterprise-Grade AI as a Service (AIaaS) featuring the world
 
 **AI Deep Research Agents**: Ranked on [DeepResearch Benchmark Leaderboard](https://huggingface.co/spaces/Ayanami0730/DeepResearch-Leaderboard) using Open Source code and Fine-Tuned Open Source Models, part of the AGI Benchmarks.
 
+**GAIA Benchmark** (General AI Assistants): KubeTEE targets [GAIA Benchmark](https://huggingface.co/spaces/gaia-benchmark/leaderboard) — the industry standard for evaluating AI agents on real-world tasks across three difficulty levels.
+
 **Benchmark Resources**:
-- [Benchmark White Paper](https://arxiv.org/pdf/2506.11763)
-- [Benchmark Website](https://deepresearch-bench.github.io/)
+- [DeepResearch Benchmark White Paper](https://arxiv.org/pdf/2506.11763)
+- [DeepResearch Benchmark Website](https://deepresearch-bench.github.io/)
 - [GitHub Deep Research Bench Code](https://github.com/Ayanami0730/deep_research_bench)
+- [GAIA Benchmark Leaderboard](https://huggingface.co/spaces/gaia-benchmark/leaderboard)
 
 ### AI Deep Research Reports
 
@@ -363,6 +366,14 @@ The AI agent market is rapidly consolidating as Big Tech acquires emerging start
 - Raised $75M from Benchmark at $500M valuation in April 2025
 - Grew to $100M+ ARR with millions of users before acquisition
 - Meta will integrate Manus agents into Facebook, Instagram, WhatsApp
+
+**Manus Technical Architecture** ([Helicone Analysis](https://www.helicone.ai/blog/manus-benchmark-operator-comparison)):
+- **GAIA Benchmark**: Achieved state-of-the-art performance across all difficulty levels, surpassing OpenAI Deep Research
+- **Multi-Agent System**: Executor Agent, Planner Agent, Knowledge Agent working in coordination
+- **Powered by Claude** with 29 different tools for browsing, coding, data analysis, and media creation
+- **Sandbox Environment**: Isolated Linux-based sandbox with browser, Python interpreter, and file system
+- **Capabilities**: Autonomous browsing, code execution, research, data visualization, web deployment
+- **Pricing**: $79/month Professional plan vs OpenAI Operator at $200/month
 
 **Why This Matters for KubeTEE AI**:
 
@@ -1569,6 +1580,7 @@ Comprehensive evaluation across all deployment tiers with focus on:
 
 ### Additional Planned Benchmarks
 
+- [ ] [GAIA Benchmark](https://huggingface.co/spaces/gaia-benchmark/leaderboard) — General AI Assistants real-world task evaluation
 - [ ] [ARC-AGI-3-Agents](https://github.com/KubeTEE-AI/ARC-AGI-3-Agents)
 - [ ] [REKA Research Eval](https://github.com/KubeTEE-AI/research-eval)
 - [ ] [YDC Deep Research Evals](https://github.com/KubeTEE-AI/ydc-deep-research-evals)
