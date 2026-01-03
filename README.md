@@ -1013,27 +1013,27 @@ response = requests.post(
 
 | User Action | Price | Direct User | Referred User (50/50 Split) |
 |-------------|-------|-------------|----------------------------|
-| **Basic Subscription** | **$499/month** | $499 → KubeTEE | $249.50 → KubeTEE, **$249.50 → Referrer** |
-| **Professional Subscription** | **$1,499/month** | $1,499 → KubeTEE | $749.50 → KubeTEE, **$749.50 → Referrer** |
-| **Enterprise Subscription** | **$4,999/month** | $4,999 → KubeTEE | $2,499.50 → KubeTEE, **$2,499.50 → Referrer** |
+| **Basic Subscription** | **$295/month** | $295 → KubeTEE | $147.50 → KubeTEE, **$147.50 → Referrer** |
+| **Professional Subscription** | **$595/month** | $595 → KubeTEE | $297.50 → KubeTEE, **$297.50 → Referrer** |
+| **Enterprise Subscription** | **$995/month** | $995 → KubeTEE | $497.50 → KubeTEE, **$497.50 → Referrer** |
 | Extra H200 GPU hour | $2.00 | $2.00 → KubeTEE | $1.00 → KubeTEE, **$1.00 → Referrer** |
-| 1K tokens usage | $0.02 | $0.02 → KubeTEE | $0.01 → KubeTEE, **$0.01 → Referrer** |
+| 1K tokens usage | $0.005 | $0.005 → KubeTEE | $0.0025 → KubeTEE, **$0.0025 → Referrer** |
 
 **Referrer Earnings Example**:
-- Refer 10 Basic subscribers (RAG users, no GPU): 10 × $249.50 = **$2,495/month**
-- Refer 5 Professional subscribers (H200 + fine-tuning): 5 × $749.50 = **$3,747.50/month**
-- Refer 2 Enterprise subscribers: 2 × $2,499.50 = **$4,999/month**
+- Refer 10 Basic subscribers (RAG users, no GPU): 10 × $147.50 = **$1,475/month**
+- Refer 5 Professional subscribers (H200 + fine-tuning): 5 × $297.50 = **$1,487.50/month**
+- Refer 2 Enterprise subscribers: 2 × $497.50 = **$995/month**
 
 **Scaling Your Referral Income**:
 
 | Referred Subscribers | Tier | Monthly Revenue | Your 50% Share |
 |---------------------|------|-----------------|----------------|
-| 5 | Basic ($499) | $2,495 | **$1,247.50/month** |
-| 10 | Basic ($499) | $4,990 | **$2,495/month** |
-| 5 | Professional ($1,499) | $7,495 | **$3,747.50/month** |
-| 10 | Professional ($1,499) | $14,990 | **$7,495/month** |
-| 2 | Enterprise ($4,999) | $9,998 | **$4,999/month** |
-| Mix: 10 Basic + 5 Pro | — | $12,485 | **$6,242.50/month** |
+| 5 | Basic ($295) | $1,475 | **$737.50/month** |
+| 10 | Basic ($295) | $2,950 | **$1,475/month** |
+| 5 | Professional ($595) | $2,975 | **$1,487.50/month** |
+| 10 | Professional ($595) | $5,950 | **$2,975/month** |
+| 2 | Enterprise ($995) | $1,990 | **$995/month** |
+| Mix: 10 Basic + 5 Pro | — | $5,925 | **$2,962.50/month** |
 
 **Why USDC on BASE?**
 - ✅ **Zero volatility** - Stable earnings for referrers
@@ -1118,9 +1118,9 @@ Reference: [Bittensor Multi-Mechanism Docs](https://docs.learnbittensor.org/subn
 | Plan | Price | RAG Storage | RAG GPU | Custom Model GPU | Total GPUs | Fine-Tuning |
 |------|-------|-------------|---------|------------------|------------|-------------|
 | **Pay-as-you-go** | **Usage-based** | — | Shared | Shared | 0 | ❌ None |
-| **Basic** | **$499/month** | 50GB | CPU | — | 0 | ❌ None |
-| **Professional** | **$1,499/month** | 100GB | 1× H200 | 1× H200 | **2× H200** | ✅ Weekly |
-| **Enterprise** | **$4,999/month** | 500GB | 1× H200 | 2× H200 | **3× H200** | ✅ Continuous |
+| **Basic** | **$295/month** | 50GB | CPU | — | 0 | ❌ None |
+| **Professional** | **$595/month** | 100GB | 1× H200 | 1× H200 | **2× H200** | ✅ Weekly |
+| **Enterprise** | **$995/month** | 500GB | 1× H200 | 2× H200 | **3× H200** | ✅ Continuous |
 
 **🆕 Pay-as-you-go with X.402 Protocol** (No subscription required):
 
@@ -1128,8 +1128,8 @@ Anyone can use KubeTEE AI services instantly via the [X.402 Protocol](https://ww
 
 | Usage Type | Price |
 |------------|-------|
-| LLM Inference | $0.02 per 1K tokens |
-| Embedding | $0.01 per 1K tokens |
+| LLM Inference | $0.005 per 1K tokens ($5/1M) |
+| Embedding | $0.001 per 1K tokens ($1/1M) |
 | GPU Compute | $2.00 per H200 hour |
 
 - ✅ **No KYC required** — permissionless access for everyone
@@ -1152,7 +1152,7 @@ Anyone can use KubeTEE AI services instantly via the [X.402 Protocol](https://ww
 │  ✅ Instant access via X.402 micropayments (USDC on BASE)                   │
 │  ✅ No KYC required — permissionless for everyone                           │
 │  ✅ Shared inference on KubeTEE NVIDIA NIM models                           │
-│  ✅ Pay per request: $0.02/1K tokens, $2.00/GPU hour                        │
+│  ✅ Pay per request: $0.005/1K tokens, $2.00/GPU hour                       │
 │  ❌ No dedicated namespace or storage                                       │
 │  ❌ No custom fine-tuning                                                   │
 │                                                                             │
@@ -1166,7 +1166,7 @@ Anyone can use KubeTEE AI services instantly via the [X.402 Protocol](https://ww
 │                                                                             │
 │  ═══════════════════════════════════════════════════════════════════════    │
 │                                                                             │
-│  BASIC ($499/month)                                                         │
+│  BASIC ($295/month)                                                         │
 │  ─────────────────                                                          │
 │  ✅ RAG Blueprint with 50GB vector storage                                  │
 │  ✅ RAG server on CPU (no dedicated GPU)                                    │
@@ -1175,7 +1175,7 @@ Anyone can use KubeTEE AI services instantly via the [X.402 Protocol](https://ww
 │  ❌ No dedicated GPU                                                        │
 │  ❌ No custom fine-tuning                                                   │
 │                                                                             │
-│  PROFESSIONAL ($1,499/month)                                                │
+│  PROFESSIONAL ($595/month)                                                  │
 │  ────────────────────────────                                               │
 │  ✅ RAG Blueprint with 100GB vector storage                                 │
 │  ✅ 1× H200 GPU for RAG server (dedicated)                                  │
@@ -1184,7 +1184,7 @@ Anyone can use KubeTEE AI services instantly via the [X.402 Protocol](https://ww
 │  ✅ Email support, 99.5% SLA                                                │
 │  📊 Total: 2× H200 GPUs dedicated to your namespace                         │
 │                                                                             │
-│  ENTERPRISE ($4,999/month)                                                  │
+│  ENTERPRISE ($995/month)                                                    │
 │  ─────────────────────────                                                  │
 │  ✅ RAG Blueprint with 500GB+ vector storage                                │
 │  ✅ 1× H200 GPU for RAG server (dedicated)                                  │
@@ -1225,36 +1225,36 @@ Anyone can use KubeTEE AI services instantly via the [X.402 Protocol](https://ww
 | Resource | Unit | Price (USDC) |
 |----------|------|--------------|
 | **NVIDIA H200 GPU** | Per hour | **$2.00/hour** |
-| Tokens Processed | Per 1K tokens | $0.02 |
+| Tokens Processed | Per 1K tokens | $0.005 |
 | RAG Storage | Per GB/month | $0.03 |
-| Embedding | Per 1K tokens | $0.01 |
+| Embedding | Per 1K tokens | $0.001 |
 
 **Professional Tier Value Calculation**:
 - 2× H200 GPUs (730 hours/month each): 2 × 730 × $2.00 = **$2,920 value**
 - 100GB RAG storage: 100 × $0.03 = **$3 value**
 - Weekly fine-tuning (~4 hours/week × 4): 16 × $2.00 = **$32 value**
-- **Total value: ~$2,955** → You pay **$1,499/month** (49% discount!) ✅
+- **Total value: ~$2,955** → You pay **$595/month** (80% discount!) ✅
 
 **Enterprise Tier Value Calculation**:
 - 3× H200 GPUs (730 hours/month each): 3 × 730 × $2.00 = **$4,380 value**
 - 500GB RAG storage: 500 × $0.03 = **$15 value**
 - Continuous fine-tuning (~20 hours/week × 4): 80 × $2.00 = **$160 value**
-- **Total value: ~$4,555** → You pay **$4,999/month** ✅
+- **Total value: ~$4,555** → You pay **$995/month** (78% discount!) ✅
 
 **Example Monthly Bills**:
 
 | User Type | Subscription | Additional Usage | Total |
 |-----------|--------------|------------------|-------|
-| Basic user (light RAG) | $499 | — | **$499** |
-| Basic user + tokens | $499 | 1M tokens ($20) | **$519** |
-| Pro user (included) | $1,499 | — | **$1,499** |
-| Pro user + extra GPU | $1,499 | 50 GPU-hours ($100) | **$1,599** |
+| Basic user (light RAG) | $295 | — | **$295** |
+| Basic user + tokens | $295 | 1M tokens ($5) | **$300** |
+| Pro user (included) | $595 | — | **$595** |
+| Pro user + extra GPU | $595 | 50 GPU-hours ($100) | **$695** |
 
 **Referrer Revenue Share** (50% of all revenue):
 - Referrers earn **50% of subscription + usage revenue** from referred users
-- Basic subscriber: $499 × 50% = **$249.50/month per referral**
-- Pro subscriber: $1,499 × 50% = **$749.50/month per referral**
-- Enterprise subscriber: $4,999 × 50% = **$2,499.50/month per referral**
+- Basic subscriber: $295 × 50% = **$147.50/month per referral**
+- Pro subscriber: $595 × 50% = **$297.50/month per referral**
+- Enterprise subscriber: $995 × 50% = **$497.50/month per referral**
 
 **Integration Options**:
 - Bring Your Own LLM to KubeTEE with NeMo Microservices
