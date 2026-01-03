@@ -122,6 +122,7 @@ We also leverage CNCF projects for cloud-native confidential computing:
     - [Phase 2: Launch](#phase-2-launch)
       - [Subnet 93 — Bitcast (Marketing \& Awareness)](#subnet-93--bitcast-marketing--awareness)
       - [Subnet 16 — BitAds (Affiliate \& Performance Marketing)](#subnet-16--bitads-affiliate--performance-marketing)
+      - [Subnet 71 — LeadPoet (B2B Lead Intelligence)](#subnet-71--leadpoet-b2b-lead-intelligence)
     - [Phase 3: Enhancements](#phase-3-enhancements)
     - [Phase 4: Expansion](#phase-4-expansion)
       - [Subnet 22 — Desearch (Decentralized Web Search)](#subnet-22--desearch-decentralized-web-search)
@@ -386,7 +387,6 @@ The AI agent market is rapidly consolidating as Big Tech acquires emerging start
 ```
 
 **KubeTEE's Decentralized Advantage**:
-- ✅ **Cannot be acquired** — Bittensor subnet owned by the network, not VCs
 - ✅ **No platform lock-in** — Unlike Manus (now locked to Meta ecosystem)
 - ✅ **Privacy-first** — TEE ensures data never leaves secure enclave
 - ✅ **Open innovation** — Anyone can contribute and monetize
@@ -1113,25 +1113,53 @@ Reference: [Bittensor Multi-Mechanism Docs](https://docs.learnbittensor.org/subn
 - Transparent billing based on actual usage
 - **50% of billing goes directly to the miner who served the request**
 
-**Subscription Tiers** (USDC on BASE):
+**Pricing Tiers** (USDC on BASE):
 
-| Plan | Monthly Price | RAG Storage | RAG GPU | Custom Model GPU | Total GPUs | Fine-Tuning |
-|------|---------------|-------------|---------|------------------|------------|-------------|
+| Plan | Price | RAG Storage | RAG GPU | Custom Model GPU | Total GPUs | Fine-Tuning |
+|------|-------|-------------|---------|------------------|------------|-------------|
+| **Pay-as-you-go** | **Usage-based** | — | Shared | Shared | 0 | ❌ None |
 | **Basic** | **$499/month** | 50GB | CPU | — | 0 | ❌ None |
 | **Professional** | **$1,499/month** | 100GB | 1× H200 | 1× H200 | **2× H200** | ✅ Weekly |
 | **Enterprise** | **$4,999/month** | 500GB | 1× H200 | 2× H200 | **3× H200** | ✅ Continuous |
 
-> **Note**: All users get 1 namespace and access to shared KubeTEE NVIDIA NIM models in TEE.
+**🆕 Pay-as-you-go with X.402 Protocol** (No subscription required):
+
+Anyone can use KubeTEE AI services instantly via the [X.402 Protocol](https://www.x402.org/) — a payment standard enabling HTTP-native micropayments with USDC on BASE.
+
+| Usage Type | Price |
+|------------|-------|
+| LLM Inference | $0.02 per 1K tokens |
+| Embedding | $0.01 per 1K tokens |
+| GPU Compute | $2.00 per H200 hour |
+
+- ✅ **No KYC required** — permissionless access for everyone
+- ✅ **Instant payments** — pay per request with USDC on BASE
+- ✅ **No commitment** — use as much or as little as you need
+- ✅ **Shared GPU inference** — access to KubeTEE NVIDIA NIM models
+- ❌ No dedicated namespace or storage
+
+> **Note**: Subscription tiers include 1 namespace and dedicated access to KubeTEE NVIDIA NIM models in TEE.
 
 **Tier Details**:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                         SUBSCRIPTION TIERS                                  │
+│                         PRICING TIERS                                       │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│  ALL TIERS INCLUDE:                                                         │
-│  ──────────────────                                                         │
+│  PAY-AS-YOU-GO (X.402 Protocol - No subscription)                          │
+│  ────────────────────────────────────────────────                           │
+│  ✅ Instant access via X.402 micropayments (USDC on BASE)                   │
+│  ✅ No KYC required — permissionless for everyone                           │
+│  ✅ Shared inference on KubeTEE NVIDIA NIM models                           │
+│  ✅ Pay per request: $0.02/1K tokens, $2.00/GPU hour                        │
+│  ❌ No dedicated namespace or storage                                       │
+│  ❌ No custom fine-tuning                                                   │
+│                                                                             │
+│  ═══════════════════════════════════════════════════════════════════════    │
+│                                                                             │
+│  SUBSCRIPTION TIERS (dedicated resources):                                  │
+│  ─────────────────────────────────────────                                  │
 │  ✅ 1 dedicated namespace per user                                          │
 │  ✅ Access to shared KubeTEE NVIDIA NIM/AIQ Blueprint models (TEE)          │
 │  ✅ Shared inference on pre-trained models (Llama, Mistral, Nemotron, etc.) │
@@ -1627,6 +1655,19 @@ Integration with [BitAds](https://bitads.ai) for affiliate/referral marketing an
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
+#### Subnet 71 — LeadPoet (B2B Lead Intelligence)
+
+> *Decentralized B2B Lead Data Intelligence on Bittensor*
+
+Integration with [LeadPoet](https://leadpoet.com/) for B2B lead generation and intelligence:
+
+- [ ] Integrate LeadPoet for enterprise lead identification
+- [ ] Access decentralized B2B contact and company data
+- [ ] Leverage AI-powered lead scoring and enrichment
+- [ ] Target enterprise customers for KubeTEE AI services
+
+**Benefits**: Tap into LeadPoet's decentralized B2B intelligence network to identify and qualify enterprise prospects for KubeTEE's confidential AI infrastructure services.
+
 **Benefits**: 
 - Decentralized affiliate tracking (no middleman)
 - Performance-based payouts (pay for conversions, not impressions)
@@ -1636,13 +1677,13 @@ Integration with [BitAds](https://bitads.ai) for affiliate/referral marketing an
 ### Phase 3: Enhancements
 
 - [ ] MCP servers for community projects
-- [ ] Design UI interface for chatting with AI agent to launch AI Agents
+- [ ] Add Tools and MCP servers
+- [ ] Improve Design UI interface for chatting with AI agent to launch AI Agents
 
 ### Phase 4: Expansion
 
 - [ ] Expand benchmark suites
 - [ ] Scale to additional regions
-- [ ] Community governance implementation
 
 #### Subnet 22 — Desearch (Decentralized Web Search)
 
