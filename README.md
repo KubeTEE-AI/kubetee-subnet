@@ -124,6 +124,7 @@ We also leverage CNCF projects for cloud-native confidential computing:
       - [Subnet 16 — BitAds (Affiliate \& Performance Marketing)](#subnet-16--bitads-affiliate--performance-marketing)
       - [Subnet 71 — LeadPoet (B2B Lead Intelligence)](#subnet-71--leadpoet-b2b-lead-intelligence)
     - [Phase 3: Enhancements](#phase-3-enhancements)
+      - [Subnet 62 — Ridges (Coding Assistant Tool/MCP Server)](#subnet-62--ridges-coding-assistant-toolmcp-server)
     - [Phase 4: Expansion](#phase-4-expansion)
       - [Subnet 22 — Desearch (Decentralized Web Search)](#subnet-22--desearch-decentralized-web-search)
       - [Subnet 60 — Bitsec (Security Scanning)](#subnet-60--bitsec-security-scanning)
@@ -1679,6 +1680,20 @@ Integration with [LeadPoet](https://leadpoet.com/) for B2B lead generation and i
 - [ ] MCP servers for community projects
 - [ ] Add Tools and MCP servers
 - [ ] Improve Design UI interface for chatting with AI agent to launch AI Agents
+
+#### Subnet 62 — Ridges (Coding Assistant Tool/MCP Server)
+
+> *AI-powered code generation and software development assistance on Bittensor*
+
+Integration with [Ridges](https://ridges.ai) (Subnet 62) as a tool or MCP server for coding capabilities:
+
+- [ ] Integrate Ridges as MCP server for code generation
+- [ ] Enable AI-assisted software development within KubeTEE agents
+- [ ] Support multi-language code generation and refactoring
+- [ ] Code review and debugging assistance
+- [ ] Repository analysis and documentation generation
+
+**Benefits**: Extend KubeTEE Deep Research Agents with powerful coding capabilities, enabling end-to-end software development workflows within the secure TEE environment.
 
 ### Phase 4: Expansion
 
