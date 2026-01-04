@@ -497,6 +497,54 @@ As Big Tech consolidates AI agents, KubeTEE AI represents the **decentralized al
 | **SN60** | Bitsec | Security scanning for code and vulnerabilities |
 | **SN62** | Ridges | AI-powered coding assistance |
 | **SN75** | Hippius | Decentralized cloud storage for datasets/models |
+| **SN120** | Affine | RL-trained open source models outperforming Nemotron 49B |
+
+**🎯 Affine Open Source Reasoning Models** (SN120):
+
+Affine uses Reinforcement Learning to create **open source models that outperform NVIDIA Llama 3.3 Nemotron Super 49B V1.5**. These models are trained on Affine's decentralized network and deployed for inference on KubeTEE's TEE infrastructure:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    AFFINE → KUBETEE INFERENCE PIPELINE                      │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ┌─────────────────────┐         ┌─────────────────────────────────────┐   │
+│  │   AFFINE (SN120)    │         │   KUBETEE AI INFRASTRUCTURE         │   │
+│  │   Training          │         │   Inference (TEE)                   │   │
+│  ├─────────────────────┤         ├─────────────────────────────────────┤   │
+│  │ • RL optimization   │         │ • Confidential Computing            │   │
+│  │ • Pareto frontier   │────────▶│ • Intel TDX/SGX + NVIDIA CC         │   │
+│  │ • Open source model │         │ • Private data protection           │   │
+│  │ • Outperforms 49B   │         │ • Enterprise deployment             │   │
+│  └─────────────────────┘         └─────────────────────────────────────┘   │
+│                                                                             │
+│  Training: Decentralized (Affine)    Inference: TEE-Protected (KubeTEE)    │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Domain-Specific Models** (RL-trained by Affine, inferred on KubeTEE):
+
+| Domain | Model | Use Cases |
+|--------|-------|-----------|
+| **Healthcare** | Affine-Healthcare | Medical research, clinical decision support, Text2SQL |
+| **Finance** | Affine-Finance | Investment analysis, risk assessment, compliance |
+| **Legal** | Affine-Legal | Contract analysis, case research, drafting |
+| **Insurance** | Affine-Insurance | Claims processing, underwriting, policy analysis |
+| **Blockchain** | Affine-Web3 | Smart contracts, DeFi research, on-chain reasoning |
+| **HR/Talent** | Affine-HR | Resume analysis, workforce planning, compliance, talent acquisition |
+| **Supply Chain** | Affine-SupplyChain | Logistics optimization, vendor analysis, manufacturing planning |
+| **Business Logic** | Affine-Business | Process automation, decision support, workflow optimization |
+
+**Why This Matters**:
+- ✅ **Open Source**: Models are open source, not proprietary
+- ✅ **Better Performance**: RL-optimized to outperform Nemotron 49B V1.5
+- ✅ **Pareto Frontier Evaluation**: Affine's benchmark ensures models dominate across all tasks
+- ✅ **Continuous Benchmarking**: Models constantly evaluated and improved via Affine's competitive mechanism
+- ✅ **Secure Mechanism**: Sybil-proof, decoy-proof, copy-proof, overfitting-proof
+- ✅ **Privacy at Inference**: Your queries processed in KubeTEE TEE
+- ✅ **No Training Data Exposure**: Your private data never used for training theses open source models
+
 
 These integrations create a **compounding effect** — each subnet specializes in one capability, and KubeTEE orchestrates them into a unified Deep Research Agent that outperforms monolithic solutions.
 
