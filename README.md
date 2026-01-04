@@ -66,6 +66,7 @@ We also leverage CNCF projects for cloud-native confidential computing:
     - [Complementary Use Cases](#complementary-use-cases)
     - [Target Market Positioning](#target-market-positioning)
     - [AI Agent Market: Big Tech Consolidation](#ai-agent-market-big-tech-consolidation)
+    - [What Makes KubeTEE Deep Research Agent Different](#what-makes-kubetee-deep-research-agent-different)
   - [Architecture](#architecture)
     - [Infrastructure](#infrastructure)
       - [Kubernetes High Availability](#kubernetes-high-availability)
@@ -405,6 +406,99 @@ The AI agent market is rapidly consolidating as Big Tech acquires emerging start
 - ✅ **Censorship-resistant** — No single entity can shut it down
 
 As Big Tech consolidates AI agents, KubeTEE AI represents the **decentralized alternative** for organizations that want cutting-edge Deep Research capabilities without platform dependency.
+
+### What Makes KubeTEE Deep Research Agent Different
+
+> **🔑 KEY DIFFERENTIATOR: Privacy & Compliance** — KubeTEE is the only Deep Research Agent where your private data **never leaves your control** and is processed inside hardware-secured Trusted Execution Environments.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│            KUBETEE vs OTHER DEEP RESEARCH AGENTS                            │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  Feature              │ Manus/OpenAI │ Perplexity │ KubeTEE AI             │
+│  ─────────────────────┼──────────────┼────────────┼────────────────────────│
+│  Private Data RAG     │ ⚠️ Requires   │ ❌ No       │ ✅ TEE-Protected RAG    │
+│                       │   data upload │            │   (data never exposed) │
+│  Data Privacy         │ ❌ Send to    │ ❌ Send to  │ ✅ Confidential Compute │
+│                       │   their cloud │   cloud    │   (zero-trust)         │
+│  Open Source Models   │ ❌ Claude/GPT │ ❌ GPT      │ ✅ 100% Open Source     │
+│  Subnet Integrations  │ ❌ None       │ ❌ None     │ ✅ Bittensor ecosystem  │
+│  Self-Hosted Option   │ ❌ No         │ ❌ No       │ ✅ Your infrastructure  │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**⚠️ The Problem with Manus/OpenAI RAG**:
+- They **CAN** do RAG on your data, but you must either:
+  - 📤 **Upload your private data** to their cloud servers
+  - 🔓 **Grant API access** to your internal systems
+- Your data is processed on **their non confidential infrastructure** — you trust them not to:
+  - Use your data for training
+  - Expose it to breaches
+  - Share with third parties
+- **No regulatory compliance** for sensitive industries (healthcare, finance, government)
+
+**🔐 KubeTEE's Privacy-First RAG** (Subscription Tiers):
+- **NeMo Ingestor**: Ingest all unstructured data types (PDFs, images, videos, audio, documents)
+- **Private Vector Store**: Your data stays in your namespace, never shared
+- **TEE-Protected**: All processing happens inside Trusted Execution Environment
+  - Even KubeTEE infrastructure operators **cannot access your data**
+  - Hardware-level isolation (Intel TDX/SGX, NVIDIA Confidential Computing)
+- **Enterprise Compliance**: HIPAA, SOC2, GDPR, FedRAMP-ready
+- **Cryptographic Attestation**: Verify the exact code running on your data
+
+**🧠 Your Own Custom LLM** (via NVIDIA Data Flywheel):
+- **Fine-tune on your private data**: Train a custom LLM model using your proprietary data
+- **The model is yours only**: Your fine-tuned model is never shared with anyone else
+- **TEE-Protected Training**: Fine-tuning happens inside Trusted Execution Environment
+- **Encrypted Storage**: Model weights stored encrypted, accessible only by you
+- **Continuous Improvement**: Data Flywheel automatically improves your model from usage patterns
+- **No data leakage**: Unlike cloud fine-tuning services, your training data never leaves the secure enclave
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    YOUR PRIVATE DATA FLYWHEEL                               │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│   Your Private Data ──► NeMo Ingestor ──► TEE-Protected Fine-Tuning         │
+│         │                                          │                        │
+│         │                                          ▼                        │
+│         │                              ┌─────────────────────┐              │
+│         │                              │  YOUR CUSTOM LLM    │              │
+│         │                              │  (Encrypted Storage)│              │
+│         │                              │  Only YOU can access│              │
+│         │                              └─────────────────────┘              │
+│         │                                          │                        │
+│         └──────────────────────────────────────────┘                        │
+│                     Continuous improvement loop                             │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**🔓 100% Open Source LLM Models**:
+- Unlike Manus (Claude) or OpenAI (GPT-4), KubeTEE uses **only open source models**
+- No vendor lock-in to proprietary model providers
+- Full transparency and auditability of model behavior
+- Community-driven model improvements via Open Source Competition mechanism
+
+**🌐 Bittensor Subnet Integrations** (Unique to KubeTEE):
+
+| Subnet | Name | Integration Purpose |
+|--------|------|---------------------|
+| **SN01** | Apex | Agentic reasoning datasets (millions of tokens/day) |
+| **SN03** | Templar | Model pre-training from scratch |
+| **SN09** | IOTA | Distributed pre-training orchestration |
+| **SN13** | Data Universe | Decentralized data sourcing (55B+ social posts) |
+| **SN22** | Desearch | Decentralized web search replacing Tavily |
+| **SN37** | Aurelius | AI alignment — red-teaming and safety verification |
+| **SN52** | Dojo | Human-validated data samples |
+| **SN56** | Gradients | Decentralized fine-tuning |
+| **SN60** | Bitsec | Security scanning for code and vulnerabilities |
+| **SN62** | Ridges | AI-powered coding assistance |
+| **SN75** | Hippius | Decentralized cloud storage for datasets/models |
+
+These integrations create a **compounding effect** — each subnet specializes in one capability, and KubeTEE orchestrates them into a unified Deep Research Agent that outperforms monolithic solutions.
 
 ---
 
@@ -1911,13 +2005,21 @@ Integration with [Templar](https://github.com/templar-ai) to create custom model
 
 > *Decentralized protocol for surfacing and verifying alignment failures in LLMs*
 
-Explore integration with [Aurelius](https://aurelius.ai) for AI safety verification and red-teaming of KubeTEE models:
+Integration with [Aurelius](https://subnetalpha.ai/subnet/aurelius/) for AI safety verification and red-teaming of KubeTEE models:
 
+**What Aurelius Does** ([Source](https://subnetalpha.ai/subnet/aurelius/)):
+- **Crowdsourced Red-Teaming**: Independent participants aggressively test AI systems to expose failures
+- **High-Signal Alignment Data**: Structured, verifiable datasets for safer AI fine-tuning
+- **Three-Tier System**: Miners (adversarial prompters) → Validators (auditors) → Tribunate (governance rules)
+- **Cryptographic Verification**: All interactions logged on-chain with provenance guarantees
+
+**KubeTEE Integration Tasks**:
 - [ ] Integrate Aurelius for adversarial testing of KubeTEE Deep Research models
 - [ ] Use Aurelius to verify alignment of custom fine-tuned models
-- [ ] Generate structured safety datasets for model improvement
+- [ ] Generate structured safety datasets for model improvement via Data Flywheel
 - [ ] Red-team models before production deployment
 - [ ] Continuous alignment monitoring for deployed agents
+- [ ] Provide alignment attestation certificates for enterprise clients
 
 **Architecture**:
 
