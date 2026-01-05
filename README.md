@@ -505,12 +505,12 @@ As Big Tech consolidates AI agents, KubeTEE AI represents the **decentralized al
 
 Affine subnet 120 on Bittensor and his owner Jacob Steeves co-creator of Bittensor is a comptetition using Reinforcement Learning to create an **open source models that outperform [NVIDIA Llama 3.3 Nemotron Super 49B V1.5](#nvidia-llama-33-nemotron-super-49b-v15--model-summary)**. This model is trained on Affine's decentralized miners competition and will be deployed for inference on KubeTEE's TEE infrastructure.
 
-**Base Models for RL Optimization:**
+**KubeTEE AI Inference Models:**
 
-| Base Model | Parameters | Context | Architecture | Use Case |
-|------------|------------|---------|--------------|----------|
-| [NVIDIA Llama 3.3 Nemotron Super 49B V1.5](#nvidia-llama-33-nemotron-super-49b-v15--model-summary) | 49B | 128K | Dense Transformer | Reasoning, RAG, Tool Calling |
-| [Meta Llama 4 Scout](https://huggingface.co/meta-llama/Llama-4-Scout-17B-16E-Instruct) | 109B total / 17B active | 10M | MoE (16 experts) | Massive context, Multimodal, Agentic |
+| Status | Model | Parameters | Context | Architecture | Use Case |
+|--------|-------|------------|---------|--------------|----------|
+| ✅ **Current** | [NVIDIA Llama 3.3 Nemotron Super 49B V1.5](#nvidia-llama-33-nemotron-super-49b-v15--model-summary) | 49B | 128K | Dense Transformer | Reasoning, RAG, Tool Calling |
+| 🔜 **Future** | Affine-Scout-Super (RL-optimized [Llama 4 Scout](https://huggingface.co/meta-llama/Llama-4-Scout-17B-16E-Instruct)) | 109B total / 17B active | 10M | MoE (16 experts) | Massive context, Multimodal, Agentic |
 
 **Why Llama 4 Scout?**
 - ✅ **10M Token Context**: Analyze entire codebases, research archives, or legal document collections
