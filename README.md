@@ -385,18 +385,18 @@ The AI agent market is rapidly consolidating as Big Tech acquires emerging start
 │                    AI AGENT MARKET CONSOLIDATION                            │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│  PROPRIETARY (Big Tech Owned)          OPEN SOURCE (KubeTEE Alternative)   │
-│  ────────────────────────────          ─────────────────────────────────   │
+│  PROPRIETARY (Big Tech Owned)          OPEN SOURCE (KubeTEE Alternative)    │
+│  ────────────────────────────          ─────────────────────────────────    │
 │                                                                             │
-│  • Manus (Meta) - $2B                  • KubeTEE Deep Research Agent       │
-│  • Character.AI (Google) - $2.7B       • Decentralized, no single owner    │
-│  • Inflection (Microsoft) - $650M      • Community-driven development      │
-│  • OpenAI (Microsoft invested)         • TEE-secured, trustless            │
-│  • Anthropic (Google/Amazon)           • No vendor lock-in                 │
+│  • Manus (Meta) - $2B                  • KubeTEE Deep Research Agent        │
+│  • Character.AI (Google) - $2.7B       • Decentralized, no single owner     │
+│  • Inflection (Microsoft) - $650M      • Community-driven development       │
+│  • OpenAI (Microsoft invested)         • TEE-secured, trustless             │
+│  • Anthropic (Google/Amazon)           • No vendor lock-in                  │
 │                                                                             │
-│  Risk: Acquired startups become        Benefit: Open source can't be       │
-│        locked into Big Tech            acquired—the network owns itself    │
-│        ecosystems                                                          │
+│  Risk: Acquired startups become        Benefit: Open source can't be        │
+│        locked into Big Tech            acquired—the network owns itself     │
+│        ecosystems                                                           │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -414,21 +414,23 @@ As Big Tech consolidates AI agents, KubeTEE AI represents the **decentralized al
 > **🔑 KEY DIFFERENTIATOR: Privacy & Compliance** — KubeTEE is the only Deep Research Agent where your private data **never leaves your control** and is processed inside hardware-secured Trusted Execution Environments.
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│            KUBETEE vs OTHER DEEP RESEARCH AGENTS                            │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  Feature              │ Manus/OpenAI │ Perplexity │ KubeTEE AI             │
-│  ─────────────────────┼──────────────┼────────────┼────────────────────────│
-│  Private Data RAG     │ ⚠️ Requires   │ ❌ No       │ ✅ TEE-Protected RAG    │
-│                       │   data upload │            │   (data never exposed) │
-│  Data Privacy         │ ❌ Send to    │ ❌ Send to  │ ✅ Confidential Compute │
-│                       │   their cloud │   cloud    │   (zero-trust)         │
-│  Open Source Models   │ ❌ Claude/GPT │ ❌ GPT      │ ✅ 100% Open Source     │
-│  Subnet Integrations  │ ❌ None       │ ❌ None     │ ✅ Bittensor ecosystem  │
-│  Self-Hosted Option   │ ❌ No         │ ❌ No       │ ✅ Your infrastructure  │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                              KUBETEE vs OTHER DEEP RESEARCH AGENTS                                                      │
+├─────────────────────────────────┬─────────────────────────────────┬─────────────────────────────────┬───────────────────────────────────┤
+│  Feature                        │  Manus / OpenAI                 │  Perplexity                     │  KubeTEE AI                       │
+├─────────────────────────────────┼─────────────────────────────────┼─────────────────────────────────┼───────────────────────────────────┤
+│  Private Data RAG               │  ⚠️ Requires data upload        │  ❌ No                          │  ✅ TEE-Protected RAG             │
+│                                 │    to their servers             │                                 │    (data never exposed)           │
+├─────────────────────────────────┼─────────────────────────────────┼─────────────────────────────────┼───────────────────────────────────┤
+│  Data Privacy                   │  ❌ Send to their cloud         │  ❌ Send to cloud               │  ✅ Confidential Computing        │
+│                                 │                                 │                                 │    (zero-trust architecture)      │
+├─────────────────────────────────┼─────────────────────────────────┼─────────────────────────────────┼───────────────────────────────────┤
+│  Open Source Models             │  ❌ Claude / GPT (proprietary)  │  ❌ GPT (proprietary)           │  ✅ 100% Open Source              │
+├─────────────────────────────────┼─────────────────────────────────┼─────────────────────────────────┼───────────────────────────────────┤
+│  Subnet Integrations            │  ❌ None                        │  ❌ None                        │  ✅ Bittensor ecosystem           │
+├─────────────────────────────────┼─────────────────────────────────┼─────────────────────────────────┼───────────────────────────────────┤
+│  Self-Hosted Option             │  ❌ No                          │  ❌ No                          │  ✅ Your own infrastructure       │
+└─────────────────────────────────┴─────────────────────────────────┴─────────────────────────────────┴───────────────────────────────────┘
 ```
 
 **⚠️ The Problem with Manus/OpenAI RAG**:
@@ -536,7 +538,7 @@ NVIDIA created Nemotron Super 49B by applying a multi-phase RL pipeline to Meta'
 │  ┌─────────────────────────┐                ┌─────────────────────────┐     │
 │  │ 1. SFT (Math/Code/Sci)  │                │ 1. SFT (Domain-Specific)│     │
 │  │ 2. RPO (Chat Alignment) │                │ 2. RPO (Task Alignment) │     │
-│  │ 3. RLVR (Reasoning)     │ ◀── SAME ───▶ │ 3. RLVR (Deep Research) │     │
+│  │ 3. RLVR (Reasoning)     │ ◀── SAME ───▶  │ 3. RLVR (Deep Research) │     │
 │  │ 4. DPO (Tool Calling)   │   PIPELINE     │ 4. DPO (Agent Tasks)    │     │
 │  └─────────────────────────┘                └─────────────────────────┘     │
 │           ↓                                          ↓                      │
@@ -656,17 +658,17 @@ Affine Scout Super will be the **perfect model** for improving the [Leaderboard 
 │                    AFFINE → KUBETEE INFERENCE PIPELINE                      │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│  ┌─────────────────────┐         ┌─────────────────────────────────────┐   │
-│  │   AFFINE (SN120)    │         │   KUBETEE AI INFRASTRUCTURE         │   │
-│  │   Training          │         │   Inference (TEE)                   │   │
-│  ├─────────────────────┤         ├─────────────────────────────────────┤   │
-│  │ • RL optimization   │         │ • Confidential Computing            │   │
-│  │ • Pareto frontier   │────────▶│ • Intel TDX/SGX + NVIDIA CC         │   │
-│  │ • Open source model │         │ • Private data protection           │   │
-│  │ • Outperforms 49B   │         │ • Enterprise deployment             │   │
-│  └─────────────────────┘         └─────────────────────────────────────┘   │
+│  ┌─────────────────────┐         ┌─────────────────────────────────────┐    │
+│  │   AFFINE (SN120)    │         │   KUBETEE AI INFRASTRUCTURE         │    │
+│  │   Training          │         │   Inference (TEE)                   │    │
+│  ├─────────────────────┤         ├─────────────────────────────────────┤    │
+│  │ • RL optimization   │         │ • Confidential Computing            │    │
+│  │ • Pareto frontier   │────────▶│ • Intel TDX/SGX + NVIDIA CC         │    │
+│  │ • Open source model │         │ • Private data protection           │    │
+│  │ • Outperforms 49B   │         │ • Enterprise deployment             │    │
+│  └─────────────────────┘         └─────────────────────────────────────┘    │
 │                                                                             │
-│  Training: Decentralized (Affine)    Inference: TEE-Protected (KubeTEE)    │
+│  Training: Decentralized (Affine)    Inference: TEE-Protected (KubeTEE)     │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -989,40 +991,40 @@ This provides:
 │                                    │                                        │
 │                 ┌──────────────────┴──────────────────┐                     │
 │                 ▼                                     ▼                     │
-│       ┌─────────────────────┐           ┌─────────────────────┐            │
-│       │   MECHANISM 0       │           │   MECHANISM 1       │            │
-│       │   INFRASTRUCTURE    │           │   OPEN SOURCE       │            │
-│       │      (60%)          │           │      (40%)          │            │
-│       ├─────────────────────┤           ├─────────────────────┤            │
-│       │ • K8s Infra         │           │ • Code Quality      │            │
-│       │ • TEE Compliance    │           │ • Benchmarks        │            │
-│       │ • Service QoS       │           │ • CI/CD             │            │
-│       │ • Uptime            │           │ • Security fixes    │            │
-│       └─────────────────────┘           └─────────────────────┘            │
+│       ┌─────────────────────┐           ┌─────────────────────┐             │
+│       │   MECHANISM 0       │           │   MECHANISM 1       │             │
+│       │   INFRASTRUCTURE    │           │   OPEN SOURCE       │             │
+│       │      (60%)          │           │      (40%)          │             │
+│       ├─────────────────────┤           ├─────────────────────┤             │
+│       │ • K8s Infra         │           │ • Code Quality      │             │
+│       │ • TEE Compliance    │           │ • Benchmarks        │             │
+│       │ • Service QoS       │           │ • CI/CD             │             │
+│       │ • Uptime            │           │ • Security fixes    │             │
+│       └─────────────────────┘           └─────────────────────┘             │
 │                 │                                     │                     │
 │                 ▼                                     ▼                     │
-│       ┌─────────────────────┐           ┌─────────────────────┐            │
-│       │   Independent       │           │   Independent       │            │
-│       │   Weight Matrix     │           │   Weight Matrix     │            │
-│       │   & Bond Pool       │           │   & Bond Pool       │            │
-│       └─────────────────────┘           └─────────────────────┘            │
+│       ┌─────────────────────┐           ┌─────────────────────┐             │
+│       │   Independent       │           │   Independent       │             │
+│       │   Weight Matrix     │           │   Weight Matrix     │             │
+│       │   & Bond Pool       │           │   & Bond Pool       │             │
+│       └─────────────────────┘           └─────────────────────┘             │
 │                                                                             │
 │   ═══════════════════════════════════════════════════════════════════════   │
 │   ║         RESELLERS: ON-CHAIN PAYMENTS (NO EMISSIONS!)                ║   │
 │   ═══════════════════════════════════════════════════════════════════════   │
 │                                                                             │
-│       ┌─────────────────────────────────────────────────────────────────┐  │
-│       │  RESELLERS / WHITE LABEL                                        │  │
-│       │  ─────────────────────────────────────────────────────────────  │  │
-│       │  ✗ NOT registered on Bittensor subnet (no emissions)           │  │
-│       │  ✓ Register via KubeTEE CLI → Creates Rancher account          │  │
-│       │  ✓ Coldkey/Hotkey with Alpha                                   │  │
-│       │  ✓ Deposit Alpha/TAO to on-chain smart contract                │  │
-│       │  ✓ Validators calculate usage & transfer each epoch            │  │
-│       │  ─────────────────────────────────────────────────────────────  │  │
-│       │  PAY 50% OF RETAIL → KubeTEE Owner Key                          │  │
-│       │  Future: ERC-8004 / x.402 payment protocols                    │  │
-│       └─────────────────────────────────────────────────────────────────┘  │
+│       ┌─────────────────────────────────────────────────────────────────┐   │
+│       │  RESELLERS / WHITE LABEL                                        │   │
+│       │  ─────────────────────────────────────────────────────────────  │   │
+│       │  ✗ NOT registered on Bittensor subnet (no emissions)            │   │
+│       │  ✓ Register via KubeTEE CLI → Creates Rancher account           │   │
+│       │  ✓ Coldkey/Hotkey with Alpha                                    │   │
+│       │  ✓ Deposit Alpha/TAO to on-chain smart contract                 │   │
+│       │  ✓ Validators calculate usage & transfer each epoch             │   │
+│       │  ─────────────────────────────────────────────────────────────  │   │
+│       │  PAY 50% OF RETAIL → KubeTEE Owner Key                          │   │
+│       │  Future: ERC-8004 / x.402 payment protocols                     │   │
+│       └─────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -1219,10 +1221,10 @@ We integrate with **Bitsec (SN60)** for decentralized security auditing of code 
 │  ┌─────────────────────────────────────────────────────────────────────┐    │
 │  │                   BITSEC (SN60)                                     │    │
 │  │                                                                     │    │
-│  │   • AI-powered vulnerability detection                             │    │
-│  │   • Smart contract security analysis                               │    │
-│  │   • Code exploit finder                                            │    │
-│  │   • Decentralized security network                                 │    │
+│  │   • AI-powered vulnerability detection                              │    │
+│  │   • Smart contract security analysis                                │    │
+│  │   • Code exploit finder                                             │    │
+│  │   • Decentralized security network                                  │    │
 │  │                                                                     │    │
 │  └──────────────────────────────┬──────────────────────────────────────┘    │
 │                                 │                                           │
@@ -1232,7 +1234,7 @@ We integrate with **Bitsec (SN60)** for decentralized security auditing of code 
 │  │                                                                     │    │
 │  │  Critical: 0  │  High: 0  │  Medium: 2  │  Low: 5                   │    │
 │  │                                                                     │    │
-│  │  Verdict: PASS (no critical/high issues)                           │    │
+│  │  Verdict: PASS (no critical/high issues)                            │    │
 │  └─────────────────────────────────────────────────────────────────────┘    │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -1299,7 +1301,7 @@ Instead of a wholesale model where resellers charge different prices, we use a *
 │   • Same price for everyone → No customer confusion                         │
 │   • Referrers get passive income → Strong incentive to promote              │
 │   • Simple tracking → On-chain attribution                                  │
-│   • Win-win-win → Users, referrers, and subnet all benefit                 │
+│   • Win-win-win → Users, referrers, and subnet all benefit                  │
 │                                                                             │
 │   Future Protocols: ERC-8004 (Decentralized Paymaster) / x.402              │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -1514,7 +1516,7 @@ Anyone can use KubeTEE AI services instantly via the [X.402 Protocol](https://ww
 │                         PRICING TIERS                                       │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│  PAY-AS-YOU-GO (X.402 Protocol - No subscription)                          │
+│  PAY-AS-YOU-GO (X.402 Protocol - No subscription)                           │
 │  ────────────────────────────────────────────────                           │
 │  ✅ Instant access via X.402 micropayments (USDC on BASE)                   │
 │  ✅ No KYC required — permissionless for everyone                           │
@@ -1653,13 +1655,13 @@ KubeTEE AI implements a **hybrid multi-chain payment architecture** optimized fo
 │   ┌─────────────────────────────────────────────────────────────────────┐   │
 │   │                     BITTENSOR NETWORK                               │   │
 │   │                                                                     │   │
-│   │   KubeTEE α Token ◄──AMM──► TAO                                    │   │
-│   │         │                                                          │   │
-│   │         ▼                                                          │   │
-│   │   KubeTEEPayment.sol (Bittensor EVM)                               │   │
-│   │   └── Reseller epoch settlements                                   │   │
-│   │   └── B2B wholesale payments                                       │   │
-│   │   └── Validator consensus                                          │   │
+│   │   KubeTEE α Token ◄──AMM──► TAO                                     │   │
+│   │         │                                                           │   │
+│   │         ▼                                                           │   │
+│   │   KubeTEEPayment.sol (Bittensor EVM)                                │   │
+│   │   └── Reseller epoch settlements                                    │   │
+│   │   └── B2B wholesale payments                                        │   │
+│   │   └── Validator consensus                                           │   │
 │   └─────────────────────────────────────────────────────────────────────┘   │
 │                              │                                              │
 │                              │ Bridge (LayerZero/Wormhole)                  │
@@ -1667,18 +1669,18 @@ KubeTEE AI implements a **hybrid multi-chain payment architecture** optimized fo
 │   ┌─────────────────────────────────────────────────────────────────────┐   │
 │   │                        BASE L2 (Coinbase)                           │   │
 │   │                                                                     │   │
-│   │   wKUBETEE (Wrapped) ──► Uniswap V3 / Aerodrome Liquidity          │   │
-│   │         │                                                          │   │
-│   │         ▼                                                          │   │
-│   │   x402 Protocol Integration                                        │   │
-│   │   └── HTTP 402 micropayments                                       │   │
-│   │   └── AI agent autonomous payments                                 │   │
-│   │   └── Per-request billing                                          │   │
+│   │   wKUBETEE (Wrapped) ──► Uniswap V3 / Aerodrome Liquidity           │   │
+│   │         │                                                           │   │
+│   │         ▼                                                           │   │
+│   │   x402 Protocol Integration                                         │   │
+│   │   └── HTTP 402 micropayments                                        │   │
+│   │   └── AI agent autonomous payments                                  │   │
+│   │   └── Per-request billing                                           │   │
 │   │                                                                     │   │
-│   │   ERC-8004 Agent Standard                                          │   │
-│   │   └── Agent-to-agent discovery                                     │   │
-│   │   └── Reputation and trust                                         │   │
-│   │   └── Autonomous AI workflows                                      │   │
+│   │   ERC-8004 Agent Standard                                           │   │
+│   │   └── Agent-to-agent discovery                                      │   │
+│   │   └── Reputation and trust                                          │   │
+│   │   └── Autonomous AI workflows                                       │   │
 │   └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -1721,38 +1723,38 @@ KubeTEE implements an **automated daily buyback and burn** mechanism that conver
 │                    DAILY BUYBACK & BURN FLOW                                │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│   [STEP 1] COLLECT USDC (BASE L2)                                          │
-│   ─────────────────────────────────────────────────────────────────────    │
+│   [STEP 1] COLLECT USDC (BASE L2)                                           │
+│   ─────────────────────────────────────────────────────────────────────     │
 │   Reseller payments accumulate in KubeTEEReseller.sol                       │
 │   Transferred to KubeTEEBuybackBurn.sol daily                               │
 │                                    │                                        │
 │                                    ▼                                        │
-│   [STEP 2] SWAP USDC → wTAO (Chainlink Automation)                         │
-│   ─────────────────────────────────────────────────────────────────────    │
+│   [STEP 2] SWAP USDC → wTAO (Chainlink Automation)                          │
+│   ─────────────────────────────────────────────────────────────────────     │
 │   Chainlink Keepers trigger daily at 00:00 UTC                              │
 │   Swap via Uniswap V3 with 2% max slippage                                  │
 │                                    │                                        │
 │                                    ▼                                        │
-│   [STEP 3] BRIDGE wTAO → TAO                                               │
-│   ─────────────────────────────────────────────────────────────────────    │
+│   [STEP 3] BRIDGE wTAO → TAO                                                │
+│   ─────────────────────────────────────────────────────────────────────     │
 │   Bridge wTAO from BASE to native TAO on Bittensor                          │
 │                                    │                                        │
 │                                    ▼                                        │
-│   [STEP 4] SWAP TAO → ALPHA (Bittensor Bot)                                │
-│   ─────────────────────────────────────────────────────────────────────    │
+│   [STEP 4] SWAP TAO → ALPHA (Bittensor Bot)                                 │
+│   ─────────────────────────────────────────────────────────────────────     │
 │   buyback_bot.py monitors TAO arrivals                                      │
 │   Swaps TAO → Alpha via subnet native AMM                                   │
 │                                    │                                        │
 │                                    ▼                                        │
 │   [STEP 5] 🔥 BURN ALPHA                                                    │
-│   ─────────────────────────────────────────────────────────────────────    │
+│   ─────────────────────────────────────────────────────────────────────     │
 │   Send Alpha to burn address (unrecoverable):                               │
-│   5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuyUpnhM                        │
+│   5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuyUpnhM                          │
 │                                                                             │
-│   ════════════════════════════════════════════════════════════════════     │
+│   ════════════════════════════════════════════════════════════════════      │
 │   RESULT: Deflationary pressure on Alpha token                              │
 │   More reseller usage = More Alpha burned = Higher Alpha value              │
-│   ════════════════════════════════════════════════════════════════════     │
+│   ════════════════════════════════════════════════════════════════════      │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -2016,9 +2018,9 @@ Integration with [BitAds](https://bitads.ai) for affiliate/referral marketing an
 │                                                                             │
 │  Use Cases:                                                                 │
 │  ──────────                                                                 │
-│  1. Affiliate Links → BitAds tracks → KubeTEE signup → 50% revenue share   │
-│  2. Ad Campaigns → BitAds network → New user acquisition                   │
-│  3. Performance Metrics → Optimize referrer payouts                        │
+│  1. Affiliate Links → BitAds tracks → KubeTEE signup → 50% revenue share    │
+│  2. Ad Campaigns → BitAds network → New user acquisition                    │
+│  3. Performance Metrics → Optimize referrer payouts                         │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -2105,11 +2107,11 @@ Integration with [Desearch](https://desearch.ai) to replace Tavily and other cen
 │                                                                             │
 │  Benefits vs Tavily/Google:                                                 │
 │  ─────────────────────────                                                  │
-│  • Decentralized (no single point of failure/censorship)                   │
-│  • Native Bittensor (pay in TAO/Alpha, not USD)                            │
-│  • Real-time social data (X, Reddit integration)                           │
-│  • Academic focus (Arxiv integration)                                      │
-│  • AI-powered ranking (not just keyword matching)                          │
+│  • Decentralized (no single point of failure/censorship)                    │
+│  • Native Bittensor (pay in TAO/Alpha, not USD)                             │
+│  • Real-time social data (X, Reddit integration)                            │
+│  • Academic focus (Arxiv integration)                                       │
+│  • AI-powered ranking (not just keyword matching)                           │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -2136,19 +2138,19 @@ Integration with [Bitsec](https://bitsec.ai) for decentralized security scanning
 │                    Bitsec (SN60) Integration                        │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                     │
-│  ┌─────────────┐    ┌─────────────────┐    ┌──────────────────┐    │
-│  │   Bounty    │    │    Bitsec       │    │   Validation     │    │
-│  │ Submission  │───▶│    (SN60)       │───▶│    Result        │    │
-│  │             │    │                 │    │                  │    │
-│  │  PR Code    │    │ AI Vulnerability│    │ PASS: 0 critical │    │
-│  │   Diff      │    │   Detection     │    │ FAIL: issues     │    │
-│  └─────────────┘    └─────────────────┘    └──────────────────┘    │
+│  ┌─────────────┐    ┌─────────────────┐    ┌──────────────────┐     │
+│  │   Bounty    │    │    Bitsec       │    │   Validation     │     │
+│  │ Submission  │───▶│    (SN60)       │───▶│    Result        │     │
+│  │             │    │                 │    │                  │     │
+│  │  PR Code    │    │ AI Vulnerability│    │ PASS: 0 critical │     │
+│  │   Diff      │    │   Detection     │    │ FAIL: issues     │     │
+│  └─────────────┘    └─────────────────┘    └──────────────────┘     │
 │                                                                     │
 │  Security Levels:                                                   │
-│  • Critical: Immediate rejection                                   │
-│  • High: Immediate rejection                                       │
-│  • Medium: Warning, manual review option                           │
-│  • Low: Informational, auto-approve allowed                        │
+│  • Critical: Immediate rejection                                    │
+│  • High: Immediate rejection                                        │
+│  • Medium: Warning, manual review option                            │
+│  • Low: Informational, auto-approve allowed                         │
 │                                                                     │
 └─────────────────────────────────────────────────────────────────────┘
 ```
@@ -2193,10 +2195,10 @@ Explore integration with Bounty Hunter (SN20) to enhance or replace our GitHub I
 │  └─────────────────┘    └─────────────────┘    └─────────────────┘          │
 │                                                                             │
 │  Benefits:                                                                  │
-│  • Decentralized bounty discovery (beyond just GitHub watchers)            │
-│  • Cross-subnet contributor pool                                           │
-│  • Native Bittensor payout infrastructure                                  │
-│  • Potential for AI-powered task matching                                  │
+│  • Decentralized bounty discovery (beyond just GitHub watchers)             │
+│  • Cross-subnet contributor pool                                            │
+│  • Native Bittensor payout infrastructure                                   │
+│  • Potential for AI-powered task matching                                   │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -2235,18 +2237,18 @@ Integration with [Templar](https://github.com/templar-ai) to create custom model
 │                                                                             │
 │  Target Models:                                                             │
 │  ─────────────                                                              │
-│  1. KubeTEE-Research-72B     → Outperform Nemotron 49B on DeepResearch     │
-│  2. KubeTEE-Agent-7B         → Optimized agent model for tool use          │
-│  3. KubeTEE-RAG-13B          → Specialized RAG/retrieval model             │
-│  4. Customer Fine-Tuned      → Custom models for enterprise clients        │
+│  1. KubeTEE-Research-72B     → Outperform Nemotron 49B on DeepResearch      │
+│  2. KubeTEE-Agent-7B         → Optimized agent model for tool use           │
+│  3. KubeTEE-RAG-13B          → Specialized RAG/retrieval model              │
+│  4. Customer Fine-Tuned      → Custom models for enterprise clients         │
 │                                                                             │
 │  Benefits vs NVIDIA NIM:                                                    │
 │  ───────────────────────                                                    │
-│  • No vendor lock-in (decentralized training)                              │
-│  • Lower cost (distributed compute)                                        │
-│  • TEE-native security (attestation from training to inference)            │
-│  • Custom optimization (not generic pre-trained weights)                   │
-│  • Open source (community can verify and contribute)                       │
+│  • No vendor lock-in (decentralized training)                               │
+│  • Lower cost (distributed compute)                                         │
+│  • TEE-native security (attestation from training to inference)             │
+│  • Custom optimization (not generic pre-trained weights)                    │
+│  • Open source (community can verify and contribute)                        │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -2301,15 +2303,15 @@ Integration with [Aurelius](https://subnetalpha.ai/subnet/aurelius/) for AI safe
 │                                                                             │
 │  Use Cases:                                                                 │
 │  ──────────                                                                 │
-│  1. Pre-deployment: Verify model alignment before production               │
-│  2. Continuous: Monitor deployed models for alignment drift                │
-│  3. Fine-tuning: Generate datasets to improve model safety                 │
-│  4. Audit: Provide alignment attestation for enterprise clients            │
+│  1. Pre-deployment: Verify model alignment before production                │
+│  2. Continuous: Monitor deployed models for alignment drift                 │
+│  3. Fine-tuning: Generate datasets to improve model safety                  │
+│  4. Audit: Provide alignment attestation for enterprise clients             │
 │                                                                             │
 │  Aurelius Components:                                                       │
-│  • Miners (Prompters): Generate adversarial prompts                        │
-│  • Validators (Auditors): Verify and score outputs                         │
-│  • Tribunate: Dynamic rules layer for evaluation                           │
+│  • Miners (Prompters): Generate adversarial prompts                         │
+│  • Validators (Auditors): Verify and score outputs                          │
+│  • Tribunate: Dynamic rules layer for evaluation                            │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -2339,19 +2341,19 @@ Integration with [Gradients](https://gradients.ai) to replace NVIDIA NeMo micros
 │                    Decentralized AI Pipeline                        │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                     │
-│  ┌─────────────┐    ┌─────────────────┐    ┌──────────────────┐    │
-│  │  Gradients  │    │    KubeTEE      │    │   Deployment     │    │
-│  │   (SN56)    │───▶│  TEE Validation │───▶│   & Inference    │    │
-│  │             │    │                 │    │                  │    │
-│  │ Fine-Tuning │    │ Secure Training │    │ Production AI    │    │
-│  │ Computation │    │  Attestation    │    │   Services       │    │
-│  └─────────────┘    └─────────────────┘    └──────────────────┘    │
+│  ┌─────────────┐    ┌─────────────────┐    ┌──────────────────┐     │
+│  │  Gradients  │    │    KubeTEE      │    │   Deployment     │     │
+│  │   (SN56)    │───▶│  TEE Validation │───▶│   & Inference    │     │
+│  │             │    │                 │    │                  │     │
+│  │ Fine-Tuning │    │ Secure Training │    │ Production AI    │     │
+│  │ Computation │    │  Attestation    │    │   Services       │     │
+│  └─────────────┘    └─────────────────┘    └──────────────────┘     │
 │                                                                     │
 │  Benefits:                                                          │
-│  • No NVIDIA vendor lock-in for fine-tuning                        │
-│  • Decentralized compute for cost efficiency                       │
-│  • TEE attestation ensures training integrity                      │
-│  • Privacy-preserving: data never leaves TEE                       │
+│  • No NVIDIA vendor lock-in for fine-tuning                         │
+│  • Decentralized compute for cost efficiency                        │
+│  • TEE attestation ensures training integrity                       │
+│  • Privacy-preserving: data never leaves TEE                        │
 │                                                                     │
 └─────────────────────────────────────────────────────────────────────┘
 ```
@@ -2393,10 +2395,10 @@ Integration with [Data Universe](https://www.macrocosmos.ai/sn13) for real-time 
 │  └─────────────────┘    └─────────────────┘    └─────────────────┘          │
 │                                                                             │
 │  Why Critical:                                                              │
-│  • Prevents hallucination via real-time grounding                          │
-│  • Largest open social dataset in the world                                │
-│  • MCP integration for Claude compatibility                                │
-│  • Macrocosmos ecosystem synergy (pairs with SN01 Apex)                    │
+│  • Prevents hallucination via real-time grounding                           │
+│  • Largest open social dataset in the world                                 │
+│  • MCP integration for Claude compatibility                                 │
+│  • Macrocosmos ecosystem synergy (pairs with SN01 Apex)                     │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -2517,38 +2519,38 @@ The following diagram shows how data-focused subnets feed into the AIQ Deep Rese
 │                        AIQ DEEP RESEARCH AGENT                              │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│  ┌──────────────────┐    ┌──────────────────────────────────────────────┐  │
-│  │  REASONING CORE  │◄───│  SN01 Apex (agentic traces)                  │  │
-│  │  (Fine-tuned LLM)│◄───│  SN03 Templar (pre-training)                 │  │
-│  └────────┬─────────┘    │  SN56 Gradients (fine-tuning)                │  │
-│           │              └──────────────────────────────────────────────┘  │
+│  ┌──────────────────┐    ┌──────────────────────────────────────────────┐   │
+│  │  REASONING CORE  │◄───│  SN01 Apex (agentic traces)                  │   │
+│  │  (Fine-tuned LLM)│◄───│  SN03 Templar (pre-training)                 │   │
+│  └────────┬─────────┘    │  SN56 Gradients (fine-tuning)                │   │
+│           │              └──────────────────────────────────────────────┘   │
 │           │                                                                 │
-│  ┌────────▼─────────┐    ┌──────────────────────────────────────────────┐  │
-│  │  GROUNDING LAYER │◄───│  SN13 Data Universe (55B social posts)       │  │
-│  │  (RAG + Vector)  │◄───│  SN22 Desearch (summarized web data)         │  │
-│  └────────┬─────────┘    │  SN52 Dojo (human-validated samples)         │  │
-│           │              └──────────────────────────────────────────────┘  │
+│  ┌────────▼─────────┐    ┌──────────────────────────────────────────────┐   │
+│  │  GROUNDING LAYER │◄───│  SN13 Data Universe (55B social posts)       │   │
+│  │  (RAG + Vector)  │◄───│  SN22 Desearch (summarized web data)         │   │
+│  └────────┬─────────┘    │  SN52 Dojo (human-validated samples)         │   │
+│           │              └──────────────────────────────────────────────┘   │
 │           │                                                                 │
-│  ┌────────▼─────────┐    ┌──────────────────────────────────────────────┐  │
-│  │  VERIFICATION    │◄───│  SN37 Aurelius (alignment safety)            │  │
-│  │  (Safety layer)  │◄───│  SN60 Bitsec (security scanning)             │  │
-│  └────────┬─────────┘    └──────────────────────────────────────────────┘  │
+│  ┌────────▼─────────┐    ┌──────────────────────────────────────────────┐   │
+│  │  VERIFICATION    │◄───│  SN37 Aurelius (alignment safety)            │   │
+│  │  (Safety layer)  │◄───│  SN60 Bitsec (security scanning)             │   │
+│  └────────┬─────────┘    └──────────────────────────────────────────────┘   │
 │           │                                                                 │
-│  ┌────────▼─────────┐    ┌──────────────────────────────────────────────┐  │
-│  │  STORAGE LAYER   │◄───│  SN75 Hippius (decentralized storage)        │  │
-│  └────────┬─────────┘    └──────────────────────────────────────────────┘  │
+│  ┌────────▼─────────┐    ┌──────────────────────────────────────────────┐   │
+│  │  STORAGE LAYER   │◄───│  SN75 Hippius (decentralized storage)        │   │
+│  └────────┬─────────┘    └──────────────────────────────────────────────┘   │
 │           │                                                                 │
-│  ┌────────▼─────────┐    ┌──────────────────────────────────────────────┐  │
-│  │  FINANCIAL INTEL │◄───│  SN15 BitQuant (DeFi analysis)               │  │
-│  │  (Domain-specific│◄───│  SN79 τaos (market simulation)               │  │
-│  │   research)      │    └──────────────────────────────────────────────┘  │
+│  ┌────────▼─────────┐    ┌──────────────────────────────────────────────┐   │
+│  │  FINANCIAL INTEL │◄───│  SN15 BitQuant (DeFi analysis)               │   │
+│  │  (Domain-specific│◄───│  SN79 τaos (market simulation)               │   │
+│  │   research)      │    └──────────────────────────────────────────────┘   │
 │  └──────────────────┘                                                       │
 │                                                                             │
-│           ▼ ▼ ▼ ▼ ▼ ▼ ▼ ▼ ▼ ▼ ▼ ▼ ▼ ▼ ▼ ▼ ▼ ▼ ▼ ▼ ▼                        │
-│  ┌──────────────────────────────────────────────────────────────────────┐  │
-│  │              KubeTEE AI / dStack TEE (Intel TDX)                     │  │
-│  │         Confidential Training → Inference → Deployment              │  │
-│  └──────────────────────────────────────────────────────────────────────┘  │
+│           ▼ ▼ ▼ ▼ ▼ ▼ ▼ ▼ ▼ ▼ ▼ ▼ ▼ ▼ ▼ ▼ ▼ ▼ ▼ ▼ ▼                         │
+│  ┌──────────────────────────────────────────────────────────────────────┐   │
+│  │              KubeTEE AI / dStack TEE (Intel TDX)                     │   │
+│  │         Confidential Training → Inference → Deployment               │   │
+│  └──────────────────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
