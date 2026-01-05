@@ -502,7 +502,7 @@ As Big Tech consolidates AI agents, KubeTEE AI represents the **decentralized al
 
 **🎯 Affine Open Source Reasoning Models** (SN120):
 
-Affine uses Reinforcement Learning to create **open source models that outperform [NVIDIA Llama 3.3 Nemotron Super 49B V1.5 (STIG/FIPS)](https://catalog.ngc.nvidia.com/orgs/nim/teams/nvidia/containers/llama-3.3-nemotron-super-49b-v1.5-pb25h2?version=1.14.0-pb5.1-stig-fips-x86-64)**. These models are trained on Affine's decentralized network and deployed for inference on KubeTEE's TEE infrastructure:
+Affine uses Reinforcement Learning to create **open source models that outperform [NVIDIA Llama 3.3 Nemotron Super 49B V1.5](#nvidia-llama-33-nemotron-super-49b-v15--model-summary)**. These models are trained on Affine's decentralized network and deployed for inference on KubeTEE's TEE infrastructure:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -731,8 +731,6 @@ This means developers can use **any agentic framework they prefer** (LangChain, 
 
 #### Language Models
 - NVIDIA Llama3.3 Nemotron 49B Super V1.5
-- NVIDIA Llama3.3 70B Instruct
-- Mixtral 8x22B Instruct 0.1
 
 ---
 
