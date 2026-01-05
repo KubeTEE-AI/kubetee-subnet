@@ -67,6 +67,7 @@ We also leverage CNCF projects for cloud-native confidential computing:
     - [Target Market Positioning](#target-market-positioning)
     - [AI Agent Market: Big Tech Consolidation](#ai-agent-market-big-tech-consolidation)
     - [What Makes KubeTEE Deep Research Agent Different](#what-makes-kubetee-deep-research-agent-different)
+    - [🏆 THE AFFINE SN120 CHALLENGE](#-the-affine-sn120-challenge)
   - [Architecture](#architecture)
     - [Infrastructure](#infrastructure)
       - [Kubernetes High Availability](#kubernetes-high-availability)
@@ -502,7 +503,153 @@ As Big Tech consolidates AI agents, KubeTEE AI represents the **decentralized al
 
 **🎯 Affine Open Source Reasoning Models** (SN120):
 
-Affine uses Reinforcement Learning to create **open source models that outperform [NVIDIA Llama 3.3 Nemotron Super 49B V1.5](#nvidia-llama-33-nemotron-super-49b-v15--model-summary)**. These models are trained on Affine's decentralized network and deployed for inference on KubeTEE's TEE infrastructure:
+Affine subnet 120 on Bittensor and his owner Jacob Steeve co-creator of Bittensor is a comptetition using Reinforcement Learning to create an **open source models that outperform [NVIDIA Llama 3.3 Nemotron Super 49B V1.5](#nvidia-llama-33-nemotron-super-49b-v15--model-summary)**. This model is trained on Affine's decentralized miners competition and will be deployed for inference on KubeTEE's TEE infrastructure.
+
+**Base Models for RL Optimization:**
+
+| Base Model | Parameters | Context | Architecture | Use Case |
+|------------|------------|---------|--------------|----------|
+| [NVIDIA Llama 3.3 Nemotron Super 49B V1.5](#nvidia-llama-33-nemotron-super-49b-v15--model-summary) | 49B | 128K | Dense Transformer | Reasoning, RAG, Tool Calling |
+| [Meta Llama 4 Scout](https://huggingface.co/meta-llama/Llama-4-Scout-17B-16E-Instruct) | 109B total / 17B active | 10M | MoE (16 experts) | Massive context, Multimodal, Agentic |
+
+**Why Llama 4 Scout?**
+- ✅ **10M Token Context**: Analyze entire codebases, research archives, or legal document collections
+- ✅ **MoE Efficiency**: Only 17B parameters active per token — runs on single H100
+- ✅ **Multimodal**: Native text, image, and video understanding
+- ✅ **Open Weights**: Full fine-tuning and RL optimization capabilities
+- ✅ **Agentic Design**: Built for tool use and complex multi-step reasoning
+
+**🔬 Applying NVIDIA's RL Methodology to Llama 4 Scout:**
+
+NVIDIA created Nemotron Super 49B by applying a multi-phase RL pipeline to Meta's Llama 3.3 70B. Affine SN120 can apply the **same proven methodology** and/or better ones to Llama 4 Scout, creating next-generation reasoning models:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│              NVIDIA's PROVEN RL PIPELINE → AFFINE REPLICATION               │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  NVIDIA's Approach (Nemotron 49B):          Affine's Approach (Scout RL):   │
+│  ──────────────────────────────────         ─────────────────────────────   │
+│                                                                             │
+│  Base: Llama 3.3 70B Instruct               Base: Llama 4 Scout (17B/109B)  │
+│           ↓                                          ↓                      │
+│  ┌─────────────────────────┐                ┌─────────────────────────┐     │
+│  │ 1. SFT (Math/Code/Sci)  │                │ 1. SFT (Domain-Specific)│     │
+│  │ 2. RPO (Chat Alignment) │                │ 2. RPO (Task Alignment) │     │
+│  │ 3. RLVR (Reasoning)     │ ◀── SAME ───▶ │ 3. RLVR (Deep Research) │     │
+│  │ 4. DPO (Tool Calling)   │   PIPELINE     │ 4. DPO (Agent Tasks)    │     │
+│  └─────────────────────────┘                └─────────────────────────┘     │
+│           ↓                                          ↓                      │
+│  Result: Nemotron Super 49B                 Result: Affine-Scout-RL         │
+│  • 97.4% MATH500                            • Target: >97% MATH500          │
+│  • 87.5% AIME 2024                          • 10M context preserved         │
+│  • 128K context                             • MoE efficiency maintained     │
+│  • Dense 49B params                         • Multimodal capabilities       │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**RL Pipeline Stages (Applied to Llama 4 Scout):**
+
+| Stage | NVIDIA's Implementation | Affine's Implementation |
+|-------|-------------------------|-------------------------|
+| **1. SFT** | Supervised Fine-Tuning on Math, Code, Science, Tool Calling datasets | Domain-specific SFT (Healthcare, Finance, Legal, etc.) using [Nemotron Post-Training Dataset](https://huggingface.co/datasets/nvidia/Nemotron-Post-Training-Dataset-v1) |
+| **2. RPO** | [Reward-aware Preference Optimization](https://arxiv.org/abs/2502.00203) for chat alignment | RPO optimized for Deep Research task flows and multi-turn reasoning |
+| **3. RLVR** | Reinforcement Learning with Verifiable Rewards for reasoning | RLVR with Affine's Pareto frontier evaluation and continuous benchmarking |
+| **4. DPO** | Iterative Direct Preference Optimization for tool calling | DPO for 10M-context agentic workflows (codebase analysis, document research) |
+
+**Why This Matters for KubeTEE:**
+
+| Capability | Nemotron 49B (Current) | Affine-Scout-RL (Target) |
+|------------|------------------------|--------------------------|
+| **Context Length** | 128K tokens | **10M tokens** (78x larger) |
+| **Active Parameters** | 49B (dense) | 17B (MoE efficient) |
+| **Inference Cost** | 1x | ~0.35x (3x cheaper) |
+| **Multimodal** | Text only | Text + Images + Video |
+| **Deep Research** | Single documents | Entire repositories/archives |
+
+**Affine's Decentralized Advantage:**
+- **Distributed Training**: RL optimization across Affine's decentralized GPU network
+- **Pareto Frontier Benchmarks**: Continuous evaluation ensures model dominates across all tasks
+- **Sybil-Proof Competition**: Secure, fair incentive mechanism for model improvements
+- **Open Source Output**: Resulting models are fully open, deployed on KubeTEE TEE
+
+---
+
+### 🏆 THE AFFINE SN120 CHALLENGE
+
+**Challenge:** Apply NVIDIA's proven RL methodology to Llama 4 Scout and achieve the same benchmark improvements NVIDIA demonstrated with Llama 3.3 → Nemotron 49B.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    🎯 AFFINE SN120 BENCHMARK CHALLENGE                      │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  NVIDIA's Proof of Concept:                                                 │
+│  ─────────────────────────                                                  │
+│  Llama 3.3 70B ──[SFT+RPO+RLVR+DPO]──▶ Nemotron Super 49B                  │
+│                                                                             │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │  Benchmark       │  Base (3.3 70B)  │  After RL (49B)  │  Δ Gain    │   │
+│  ├──────────────────┼──────────────────┼──────────────────┼────────────┤   │
+│  │  MATH500         │     ~75%         │     97.4%        │  +22.4%    │   │
+│  │  AIME 2024       │     ~35%         │     87.5%        │  +52.5%    │   │
+│  │  GPQA            │     ~50%         │     71.97%       │  +22.0%    │   │
+│  │  LiveCodeBench   │     ~30%         │     73.58%       │  +43.6%    │   │
+│  │  IFEval          │     ~75%         │     88.61%       │  +13.6%    │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                             │
+│  CHALLENGE: Replicate with Llama 4 Scout                                    │
+│  ───────────────────────────────────────                                    │
+│  Llama 4 Scout ──[SFT+RPO+RLVR+DPO]──▶ Affine-Scout-Super                  │
+│                                                                             │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │  Benchmark       │ Scout (Base)  │ Target (RL)   │ Expected Gain   │   │
+│  ├──────────────────┼───────────────┼───────────────┼─────────────────┤   │
+│  │  MATH500         │    82%        │    97%+       │  +15%           │   │
+│  │  AIME 2024       │    30%        │    85%+       │  +55%           │   │
+│  │  GPQA Diamond    │    57%        │    75%+       │  +18%           │   │
+│  │  LiveCodeBench   │    36%        │    75%+       │  +39%           │   │
+│  │  MMLU Pro        │    75%        │    85%+       │  +10%           │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                             │
+│  BONUS: Preserve Scout's unique advantages after RL:                        │
+│  ✅ 10M token context (vs Nemotron's 128K)                                  │
+│  ✅ 17B active params (vs Nemotron's 49B) → 3x cheaper inference            │
+│  ✅ Native multimodal (text + images + video)                               │
+│  ✅ MoE architecture efficiency                                             │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**The Opportunity:**
+
+NVIDIA proved that their RL pipeline can dramatically improve any Llama-based model:
+- **AIME 2024**: +52.5 percentage points (35% → 87.5%)
+- **LiveCodeBench**: +43.6 percentage points (30% → 73.58%)
+- **MATH500**: +22.4 percentage points (75% → 97.4%)
+
+Llama 4 Scout has **even more headroom** for improvement on these benchmarks, while bringing unique advantages that Nemotron 49B doesn't have.
+
+**What Affine SN120 Brings:**
+
+| Capability | NVIDIA (Centralized) | Affine SN120 (Decentralized) |
+|------------|----------------------|------------------------------|
+| **Training Compute** | NVIDIA internal cluster | Distributed Bittensor miners |
+| **Evaluation** | Internal benchmarks | Pareto frontier + continuous benchmarking |
+| **Security** | Proprietary | Sybil-proof, decoy-proof, copy-proof |
+| **Output** | NVIDIA-licensed | Fully open source |
+| **Incentive** | Corporate R&D budget | TAO emissions + competition |
+
+**KubeTEE's Commitment:**
+
+Affine Scout Super will be the **perfect model** for improving the [Leaderboard of Deep Research Agent Benchmark](https://huggingface.co/spaces/muset-ai/DeepResearch-Bench-Leaderboard).
+- Deploy on TEE infrastructure (Intel TDX/SGX + NVIDIA CC)
+- Provide enterprise-grade security for production use
+- Offer domain-specific fine-tuned variants (Healthcare, Finance, Legal, etc.)
+- Integrate with KubeTEE Deep Research Agent
+
+---
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
