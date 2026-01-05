@@ -503,7 +503,7 @@ As Big Tech consolidates AI agents, KubeTEE AI represents the **decentralized al
 
 **🎯 Affine Open Source Reasoning Models** (SN120):
 
-Affine subnet 120 on Bittensor and his owner Jacob Steeve co-creator of Bittensor is a comptetition using Reinforcement Learning to create an **open source models that outperform [NVIDIA Llama 3.3 Nemotron Super 49B V1.5](#nvidia-llama-33-nemotron-super-49b-v15--model-summary)**. This model is trained on Affine's decentralized miners competition and will be deployed for inference on KubeTEE's TEE infrastructure.
+Affine subnet 120 on Bittensor and his owner Jacob Steeves co-creator of Bittensor is a comptetition using Reinforcement Learning to create an **open source models that outperform [NVIDIA Llama 3.3 Nemotron Super 49B V1.5](#nvidia-llama-33-nemotron-super-49b-v15--model-summary)**. This model is trained on Affine's decentralized miners competition and will be deployed for inference on KubeTEE's TEE infrastructure.
 
 **Base Models for RL Optimization:**
 
