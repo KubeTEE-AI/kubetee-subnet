@@ -90,6 +90,7 @@ We also leverage CNCF projects for cloud-native confidential computing:
     - [NVIDIA NeMo Microservices](#nvidia-nemo-microservices)
     - [NVIDIA NIM Models](#nvidia-nim-models)
       - [Language Models](#language-models)
+      - [NVIDIA Llama 3.3 Nemotron Super 49B V1.5 — Model Summary](#nvidia-llama-33-nemotron-super-49b-v15--model-summary)
       - [Retrieval Models](#retrieval-models)
       - [Safety \& Vision Models](#safety--vision-models)
       - [Speech Recognition](#speech-recognition)
@@ -501,7 +502,7 @@ As Big Tech consolidates AI agents, KubeTEE AI represents the **decentralized al
 
 **🎯 Affine Open Source Reasoning Models** (SN120):
 
-Affine uses Reinforcement Learning to create **open source models that outperform NVIDIA Llama 3.3 Nemotron Super 49B V1.5**. These models are trained on Affine's decentralized network and deployed for inference on KubeTEE's TEE infrastructure:
+Affine uses Reinforcement Learning to create **open source models that outperform [NVIDIA Llama 3.3 Nemotron Super 49B V1.5 (STIG/FIPS)](https://catalog.ngc.nvidia.com/orgs/nim/teams/nvidia/containers/llama-3.3-nemotron-super-49b-v1.5-pb25h2?version=1.14.0-pb5.1-stig-fips-x86-64)**. These models are trained on Affine's decentralized network and deployed for inference on KubeTEE's TEE infrastructure:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -732,6 +733,73 @@ This means developers can use **any agentic framework they prefer** (LangChain, 
 - NVIDIA Llama3.3 Nemotron 49B Super V1.5
 - NVIDIA Llama3.3 70B Instruct
 - Mixtral 8x22B Instruct 0.1
+
+---
+
+#### NVIDIA Llama 3.3 Nemotron Super 49B V1.5 — Model Summary
+
+> **Primary Model for KubeTEE AI Deep Research Agent**
+> 
+> [📄 Model Card (Hugging Face)](https://huggingface.co/nvidia/Llama-3_3-Nemotron-Super-49B-v1_5) | [🔒 STIG/FIPS Container (NGC)](https://catalog.ngc.nvidia.com/orgs/nim/teams/nvidia/containers/llama-3.3-nemotron-super-49b-v1.5-pb25h2?version=1.14.0-pb5.1-stig-fips-x86-64) | [📚 Research Paper](https://arxiv.org/abs/2505.00949)
+
+| Property | Value |
+|----------|-------|
+| **Model Developer** | NVIDIA |
+| **Architecture** | Dense decoder-only Transformer (NAS-optimized) |
+| **Base Model** | Meta Llama-3.3-70B-Instruct |
+| **Parameters** | 49 billion |
+| **Context Length** | 128K tokens |
+| **Max I/O Tokens** | 131,072 |
+| **Tensor Type** | BF16 |
+| **Training Period** | November 2024 – July 2025 |
+| **License** | [NVIDIA Open Model License](https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-open-model-license/) + [Llama 3.3 Community License](https://www.llama.com/llama3_3/license/) |
+
+**Key Capabilities:**
+- ✅ **Reasoning Model**: Post-trained for advanced reasoning, human chat preferences, and agentic tasks
+- ✅ **RAG & Tool Calling**: Native support for retrieval-augmented generation and tool use
+- ✅ **Dual Reasoning Modes**: Toggle between reasoning ON (detailed thinking) and reasoning OFF (fast responses)
+- ✅ **Multi-language**: English primary + German, French, Italian, Portuguese, Hindi, Spanish, Thai
+- ✅ **Commercial Ready**: Approved for commercial use
+
+**Neural Architecture Search (NAS) Innovation:**
+The model uses NVIDIA's novel [Puzzle NAS approach](https://arxiv.org/abs/2411.19146) to reduce Meta's 70B model to 49B parameters while maintaining quality:
+- **Skip Attention**: Some blocks skip attention entirely or use single linear layers
+- **Variable FFN**: Different expansion/compression ratios per block
+- **Single GPU Deployment**: Fits on a single H200 GPU at high workloads
+- **Block-wise Distillation**: 40B tokens across FineWeb, Buzz-V1.2, and Dolma datasets
+
+**Multi-Phase Post-Training:**
+1. **Supervised Fine-Tuning (SFT)** — Math, Code, Science, Tool Calling
+2. **Reward-aware Preference Optimization (RPO)** — Chat alignment
+3. **Reinforcement Learning with Verifiable Rewards (RLVR)** — Reasoning enhancement
+4. **Iterative Direct Preference Optimization (DPO)** — Tool calling improvements
+
+**Benchmark Performance (Reasoning ON, avg. over multiple runs):**
+
+| Benchmark | Score |
+|-----------|-------|
+| MATH500 | 97.4 |
+| AIME 2024 | 87.5 |
+| AIME 2025 | 82.71 |
+| GPQA | 71.97 |
+| LiveCodeBench 24.10-25.02 | 73.58 |
+| BFCL v3 (Tool Calling) | 71.75 |
+| IFEval (Strict:Instruction) | 88.61 |
+| ArenaHard | 92.0 |
+| MMLU Pro (CoT) | 79.53 |
+
+**Recommended Settings:**
+- **Reasoning ON**: Temperature `0.6`, Top P `0.95`
+- **Reasoning OFF**: Greedy decoding (set `/no_think` in system prompt)
+
+**Llama Nemotron Family:**
+| Model | Parameters | Use Case |
+|-------|------------|----------|
+| [Llama-3.1-Nemotron-Nano-4B-v1.1](https://huggingface.co/nvidia/Llama-3.1-Nemotron-Nano-4B-v1.1) | 4B | Edge/embedded devices |
+| **Llama-3.3-Nemotron-Super-49B-v1.5** | 49B | **Primary model for KubeTEE** |
+| [Llama-3.1-Nemotron-Ultra-253B-v1](https://huggingface.co/nvidia/Llama-3_1-Nemotron-Ultra-253B-v1) | 253B | Maximum capability |
+
+---
 
 #### Retrieval Models
 - NeMo Retriever Llama 3.2 Embedding NIM
