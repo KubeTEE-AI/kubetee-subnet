@@ -143,6 +143,7 @@ We also leverage CNCF projects for cloud-native confidential computing:
       - [Financial \& Trading Subnets](#financial--trading-subnets)
         - [Subnet 15 — BitQuant (DeFi Analytics)](#subnet-15--bitquant-defi-analytics)
         - [Subnet 79 — τaos (Financial Market Simulation)](#subnet-79--τaos-financial-market-simulation)
+        - [Subnet 6 — Numinous (Superhuman Forecasting)](#subnet-6--numinous-superhuman-forecasting)
     - [AIQ Deep Research Agent — Subnet Data Pipeline](#aiq-deep-research-agent--subnet-data-pipeline)
   - [Research \& Documentation](#research--documentation)
     - [Deep Research Reports](#deep-research-reports)
@@ -2429,15 +2430,13 @@ These subnets provide specialized financial data and analytics for enterprise re
 Integration with BitQuant for financial research capabilities:
 
 - [ ] Integrate BitQuant for DeFi/crypto market analysis
-- [ ] Sensitive market data processing within TEE
 - [ ] Financial research agent fine-tuning data
 - [ ] Real-time trading signal analysis
-- [ ] Privacy-preserving quant strategies in TEE
 
 **TEE Synergy**:
-- Market data and trading signals protected in TEE
-- Quant strategies remain confidential during execution
-- Compliance-friendly financial AI with attestation
+- Market data and trading signals
+- Quant strategies
+- Compliance-friendly financial AI
 
 ##### Subnet 79 — τaos (Financial Market Simulation)
 
@@ -2446,15 +2445,36 @@ Integration with BitQuant for financial research capabilities:
 Integration with τaos for advanced financial modeling:
 
 - [ ] Financial market simulation for research agent training
-- [ ] Model IP protection via TEE-based inference
 - [ ] Backtesting frameworks for financial strategies
 - [ ] Synthetic market data generation
-- [ ] Risk modeling with confidential compute
+- [ ] Risk modeling
 
 **Use Cases**:
-- Train research agents on financial scenarios
-- Protect proprietary trading models during inference
-- Generate synthetic market data for fine-tuning
+- Research agents on financial scenarios
+
+##### Subnet 6 — Numinous (Superhuman Forecasting)
+
+> *Decentralized AI forecasting with prediction market oracle*
+
+[Numinous](https://subnetalpha.ai/subnet/numinous/) is a decentralized forecasting protocol that produces superhuman predictive intelligence through competing AI forecasting agents. The subnet aggregates autonomous forecasting models that compete and evolve to become extremely accurate forecasters, using Brier Score metrics to evaluate and reward top performers.
+
+Integration with Numinous for predictive intelligence capabilities:
+
+- [ ] Integrate Numinous Oracle API for event probability forecasts
+- [ ] Financial event prediction for deep research reports
+- [ ] Prediction market resolution oracle integration
+- [ ] Real-time probability updates for trading signals
+
+**Key Capabilities**:
+- 99%+ accurate prediction market resolutions
+- Superhuman forecasting via AI agent ensemble
+- Real-time probability updates on binary events
+- Integrates with Desearch (SN22) + Chutes (SN64)
+
+**Use Cases**:
+- Investment thesis validation with probabilistic forecasts
+- Risk assessment for enterprise decisions
+- Market event prediction for research reports
 
 ---
 
@@ -2491,8 +2511,8 @@ The following diagram shows how data-focused subnets feed into the AIQ Deep Rese
 │  ┌────────▼─────────┐    ┌──────────────────────────────────────────────┐   │
 │  │  FINANCIAL INTEL │◄───│  SN15 BitQuant (DeFi analysis)               │   │
 │  │  (Domain-specific│◄───│  SN79 τaos (market simulation)               │   │
-│  │   research)      │    └──────────────────────────────────────────────┘   │
-│  └──────────────────┘                                                       │
+│  │   research)      │◄───│  SN06 Numinous (superhuman forecasting)      │   │
+│  └──────────────────┘    └──────────────────────────────────────────────┘   │
 │                                                                             │
 │           ▼ ▼ ▼ ▼ ▼ ▼ ▼ ▼ ▼ ▼ ▼ ▼ ▼ ▼ ▼ ▼ ▼ ▼ ▼ ▼ ▼                         │
 │  ┌──────────────────────────────────────────────────────────────────────┐   │
