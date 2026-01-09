@@ -132,7 +132,6 @@ We also leverage CNCF projects for cloud-native confidential computing:
       - [Subnet 22 — Desearch (Decentralized Web Search)](#subnet-22--desearch-decentralized-web-search)
       - [Subnet 60 — Bitsec (Security Scanning)](#subnet-60--bitsec-security-scanning)
     - [Phase 5: Subnet Integrations](#phase-5-subnet-integrations)
-      - [Subnet 20 — Bounty Hunter (Decentralized Bounty Infrastructure)](#subnet-20--bounty-hunter-decentralized-bounty-infrastructure)
       - [Subnet 3 — Templar (Model Pre-Training)](#subnet-3--templar-model-pre-training)
       - [Subnet 37 — Aurelius (AI Alignment \& Safety)](#subnet-37--aurelius-ai-alignment--safety)
       - [Subnet 56 — Gradients (Decentralized Fine-Tuning)](#subnet-56--gradients-decentralized-fine-tuning)
@@ -2156,55 +2155,6 @@ Integration with [Bitsec](https://bitsec.ai) for decentralized security scanning
 **Benefits**: Decentralized security auditing, AI-powered vulnerability detection, no single point of failure, native Bittensor integration.
 
 ### Phase 5: Subnet Integrations
-
-#### Subnet 20 — Bounty Hunter (Decentralized Bounty Infrastructure)
-
-> *Decentralized bounty and task completion network on Bittensor*
-
-Explore integration with Bounty Hunter (SN20) to enhance or replace our GitHub Issues-based bounty system:
-
-- [ ] Evaluate Bounty Hunter's task distribution and reward mechanisms
-- [ ] Explore cross-subnet bounty posting for KubeTEE open source tasks
-- [ ] Integrate bounty verification and payout infrastructure
-- [ ] Potential migration from GitHub Issues to decentralized bounty platform
-- [ ] Cross-subnet bounty discovery (attract contributors from other subnets)
-
-**Potential Architecture**:
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                    BOUNTY HUNTER (SN20) INTEGRATION                         │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  CURRENT: GitHub Issues + Emissions                                         │
-│  ─────────────────────────────────                                          │
-│  GitHub Issue → Bounty Hotkey → Emissions Accumulate → Winner Paid          │
-│                                                                             │
-│  POTENTIAL: Bounty Hunter Integration                                       │
-│  ────────────────────────────────────                                       │
-│                                                                             │
-│  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐          │
-│  │   KubeTEE       │    │  Bounty Hunter  │    │   Contributor   │          │
-│  │   Bounties      │───▶│     (SN20)      │◀───│   Discovery     │          │
-│  │                 │    │                 │    │                 │          │
-│  │ Post tasks      │    │ • Task matching │    │ Find bounties   │          │
-│  │ Define rewards  │    │ • Verification  │    │ from across     │          │
-│  │ Set criteria    │    │ • Payout mgmt   │    │ Bittensor       │          │
-│  └─────────────────┘    └─────────────────┘    └─────────────────┘          │
-│                                                                             │
-│  Benefits:                                                                  │
-│  • Decentralized bounty discovery (beyond just GitHub watchers)             │
-│  • Cross-subnet contributor pool                                            │
-│  • Native Bittensor payout infrastructure                                   │
-│  • Potential for AI-powered task matching                                   │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-**Exploration Areas**:
-- How does SN20 handle bounty verification vs our AI + CI/CD approach?
-- Can we post KubeTEE bounties to SN20 for broader visibility?
-- Hybrid model: GitHub Issues for transparency + SN20 for discovery?
 
 #### Subnet 3 — Templar (Model Pre-Training)
 
