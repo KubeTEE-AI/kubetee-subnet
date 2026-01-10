@@ -5,14 +5,14 @@
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#76B900', 'primaryTextColor': '#fff', 'primaryBorderColor': '#5a8f00', 'lineColor': '#333', 'secondaryColor': '#006100', 'tertiaryColor': '#fff'}}}%%
 flowchart TB
-    subgraph KUBETEE["🏢 KubeTEE AI Deep Research Agent"]
+    subgraph KUBETEE["🏢 KubeTEE AI"]
         direction TB
-        CORE["🧠 REASONING CORE<br/>Fine-tuned LLM"]
-        GROUND["📚 GROUNDING LAYER<br/>RAG + CyborgDB"]
-        VERIFY["🛡️ VERIFICATION<br/>Safety Layer"]
-        STORAGE["💾 STORAGE LAYER<br/>Decentralized"]
-        FINANCE["💰 FINANCIAL INTEL<br/>Domain Research"]
-        TEE["🔒 TEE INFRASTRUCTURE<br/>Intel TDX / NVIDIA CC"]
+        CORE["🧠 REASONING"]
+        GROUND["📚 RAG"]
+        VERIFY["🛡️ SAFETY"]
+        STORAGE["💾 STORAGE"]
+        FINANCE["💰 FINANCE"]
+        TEE["🔒 TEE"]
     end
 
     subgraph REASONING["🎯 Reasoning & Training"]
