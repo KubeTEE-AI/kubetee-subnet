@@ -67,7 +67,6 @@ We also leverage CNCF projects for cloud-native confidential computing:
     - [Target Market Positioning](#target-market-positioning)
     - [AI Agent Market: Big Tech Consolidation](#ai-agent-market-big-tech-consolidation)
     - [What Makes KubeTEE Deep Research Agent Different](#what-makes-kubetee-deep-research-agent-different)
-    - [🏆 THE AFFINE SN120 CHALLENGE](#-the-affine-sn120-challenge)
   - [Architecture](#architecture)
     - [Infrastructure](#infrastructure)
       - [Kubernetes High Availability](#kubernetes-high-availability)
@@ -127,11 +126,11 @@ We also leverage CNCF projects for cloud-native confidential computing:
       - [Subnet 16 — BitAds (Affiliate \& Performance Marketing)](#subnet-16--bitads-affiliate--performance-marketing)
       - [Subnet 71 — LeadPoet (B2B Lead Intelligence)](#subnet-71--leadpoet-b2b-lead-intelligence)
     - [Phase 3: Enhancements](#phase-3-enhancements)
+      - [🏆 Affine SN120 — Model Benchmark Challenge](#-affine-sn120--model-benchmark-challenge)
       - [Subnet 62 — Ridges (Coding Assistant Tool/MCP Server)](#subnet-62--ridges-coding-assistant-toolmcp-server)
-    - [Phase 4: Expansion](#phase-4-expansion)
       - [Subnet 22 — Desearch (Decentralized Web Search)](#subnet-22--desearch-decentralized-web-search)
       - [Subnet 60 — Bitsec (Security Scanning)](#subnet-60--bitsec-security-scanning)
-    - [Phase 5: Subnet Integrations](#phase-5-subnet-integrations)
+    - [Phase 4: Subnet Integrations](#phase-4-subnet-integrations)
       - [Subnet 3 — Templar (Model Pre-Training)](#subnet-3--templar-model-pre-training)
       - [Subnet 37 — Aurelius (AI Alignment \& Safety)](#subnet-37--aurelius-ai-alignment--safety)
       - [Subnet 56 — Gradients (Decentralized Fine-Tuning)](#subnet-56--gradients-decentralized-fine-tuning)
@@ -145,6 +144,7 @@ We also leverage CNCF projects for cloud-native confidential computing:
         - [Subnet 79 — τaos (Financial Market Simulation)](#subnet-79--τaos-financial-market-simulation)
         - [Subnet 6 — Numinous (Superhuman Forecasting)](#subnet-6--numinous-superhuman-forecasting)
     - [AIQ Deep Research Agent — Subnet Data Pipeline](#aiq-deep-research-agent--subnet-data-pipeline)
+    - [Subnet Ecosystem Overview](#subnet-ecosystem-overview)
   - [Research \& Documentation](#research--documentation)
     - [Deep Research Reports](#deep-research-reports)
     - [Community \& Support](#community--support)
@@ -486,12 +486,16 @@ As Big Tech consolidates AI agents, KubeTEE AI represents the **decentralized al
 
 **🌐 Bittensor Subnet Integrations** (Unique to KubeTEE):
 
+> 📊 See full [Subnet Integrations Diagram](./docs/subnet-integrations-diagram.md) for visual architecture
+
 | Subnet | Name | Integration Purpose |
 |--------|------|---------------------|
 | **SN01** | Apex | Agentic reasoning datasets (millions of tokens/day) |
 | **SN03** | Templar | Model pre-training from scratch |
+| **SN06** | Numinous | Superhuman forecasting oracle for predictions |
 | **SN09** | IOTA | Distributed pre-training orchestration |
 | **SN13** | Data Universe | Decentralized data sourcing (55B+ social posts) |
+| **SN15** | BitQuant | DeFi analytics and crypto market analysis |
 | **SN22** | Desearch | Decentralized web search replacing Tavily |
 | **SN37** | Aurelius | AI alignment — red-teaming and safety verification |
 | **SN52** | Dojo | Human-validated data samples |
@@ -499,199 +503,9 @@ As Big Tech consolidates AI agents, KubeTEE AI represents the **decentralized al
 | **SN60** | Bitsec | Security scanning for code and vulnerabilities |
 | **SN62** | Ridges | AI-powered coding assistance |
 | **SN75** | Hippius | Decentralized cloud storage for datasets/models |
+| **SN79** | τaos | Financial market simulation and backtesting |
 | **SN120** | Affine | RL-trained open source models outperforming Nemotron 49B |
 
-**🎯 Affine Open Source Reasoning Models** (SN120):
-
-Affine subnet 120 on Bittensor and his owner Jacob Steeves co-creator of Bittensor is a comptetition using Reinforcement Learning to create an **open source models that outperform [NVIDIA Llama 3.3 Nemotron Super 49B V1.5](#nvidia-llama-33-nemotron-super-49b-v15--model-summary)**. This model is trained on Affine's decentralized miners competition and will be deployed for inference on KubeTEE's TEE infrastructure.
-
-**KubeTEE AI Inference Models:**
-
-| Status | Model | Parameters | Context | Architecture | Use Case |
-|--------|-------|------------|---------|--------------|----------|
-| ✅ **Current** | [NVIDIA Llama 3.3 Nemotron Super 49B V1.5](#nvidia-llama-33-nemotron-super-49b-v15--model-summary) | 49B | 128K | Dense Transformer | Reasoning, RAG, Tool Calling |
-| 🔜 **Future** | Affine-Scout-Super (RL-optimized [Llama 4 Scout](https://huggingface.co/meta-llama/Llama-4-Scout-17B-16E-Instruct)) | 109B total / 17B active | 10M | MoE (16 experts) | Massive context, Multimodal, Agentic |
-
-**Why Llama 4 Scout?**
-- ✅ **10M Token Context**: Analyze entire codebases, research archives, or legal document collections
-- ✅ **MoE Efficiency**: Only 17B parameters active per token — runs on single H100
-- ✅ **Multimodal**: Native text, image, and video understanding
-- ✅ **Open Weights**: Full fine-tuning and RL optimization capabilities
-- ✅ **Agentic Design**: Built for tool use and complex multi-step reasoning
-
-**🔬 Applying NVIDIA's RL Methodology to Llama 4 Scout:**
-
-NVIDIA created Nemotron Super 49B by applying a multi-phase RL pipeline to Meta's Llama 3.3 70B. Affine SN120 can apply the **same proven methodology** and/or better ones to Llama 4 Scout, creating next-generation reasoning models:
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│              NVIDIA's PROVEN RL PIPELINE → AFFINE REPLICATION               │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  NVIDIA's Approach (Nemotron 49B):          Affine's Approach (Scout RL):   │
-│  ──────────────────────────────────         ─────────────────────────────   │
-│                                                                             │
-│  Base: Llama 3.3 70B Instruct               Base: Llama 4 Scout (17B/109B)  │
-│           ↓                                          ↓                      │
-│  ┌─────────────────────────┐                ┌─────────────────────────┐     │
-│  │ 1. SFT (Math/Code/Sci)  │                │ 1. SFT (Domain-Specific)│     │
-│  │ 2. RPO (Chat Alignment) │                │ 2. RPO (Task Alignment) │     │
-│  │ 3. RLVR (Reasoning)     │ ◀── SAME ───▶  │ 3. RLVR (Deep Research) │     │
-│  │ 4. DPO (Tool Calling)   │   PIPELINE     │ 4. DPO (Agent Tasks)    │     │
-│  └─────────────────────────┘                └─────────────────────────┘     │
-│           ↓                                          ↓                      │
-│  Result: Nemotron Super 49B                 Result: Affine-Scout-RL         │
-│  • 97.4% MATH500                            • Target: >97% MATH500          │
-│  • 87.5% AIME 2024                          • 10M context preserved         │
-│  • 128K context                             • MoE efficiency maintained     │
-│  • Dense 49B params                         • Multimodal capabilities       │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-**RL Pipeline Stages (Applied to Llama 4 Scout):**
-
-| Stage | NVIDIA's Implementation | Affine's Implementation |
-|-------|-------------------------|-------------------------|
-| **1. SFT** | Supervised Fine-Tuning on Math, Code, Science, Tool Calling datasets | Domain-specific SFT (Healthcare, Finance, Legal, etc.) using [Nemotron Post-Training Dataset](https://huggingface.co/datasets/nvidia/Nemotron-Post-Training-Dataset-v1) |
-| **2. RPO** | [Reward-aware Preference Optimization](https://arxiv.org/abs/2502.00203) for chat alignment | RPO optimized for Deep Research task flows and multi-turn reasoning |
-| **3. RLVR** | Reinforcement Learning with Verifiable Rewards for reasoning | RLVR with Affine's Pareto frontier evaluation and continuous benchmarking |
-| **4. DPO** | Iterative Direct Preference Optimization for tool calling | DPO for 10M-context agentic workflows (codebase analysis, document research) |
-
-**Why This Matters for KubeTEE:**
-
-| Capability | Nemotron 49B (Current) | Affine-Scout-RL (Target) |
-|------------|------------------------|--------------------------|
-| **Context Length** | 128K tokens | **10M tokens** (78x larger) |
-| **Active Parameters** | 49B (dense) | 17B (MoE efficient) |
-| **Inference Cost** | 1x | ~0.35x (3x cheaper) |
-| **Multimodal** | Text only | Text + Images + Video |
-| **Deep Research** | Single documents | Entire repositories/archives |
-
-**Affine's Decentralized Advantage:**
-- **Distributed Training**: RL optimization across Affine's decentralized GPU network
-- **Pareto Frontier Benchmarks**: Continuous evaluation ensures model dominates across all tasks
-- **Sybil-Proof Competition**: Secure, fair incentive mechanism for model improvements
-- **Open Source Output**: Resulting models are fully open, deployed on KubeTEE TEE
-
----
-
-### 🏆 THE AFFINE SN120 CHALLENGE
-
-**Challenge:** Apply NVIDIA's proven RL methodology to Llama 4 Scout and achieve the same benchmark improvements NVIDIA demonstrated with Llama 3.3 → Nemotron 49B.
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                    🎯 AFFINE SN120 BENCHMARK CHALLENGE                      │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  NVIDIA's Proof of Concept:                                                 │
-│  ─────────────────────────                                                  │
-│  Llama 3.3 70B ──[SFT+RPO+RLVR+DPO]──▶ Nemotron Super 49B                   │
-│                                                                             │
-│  ┌─────────────────────────────────────────────────────────────────────┐    │
-│  │  Benchmark       │  Base (3.3 70B)  │  After RL (49B)  │  Δ Gain    │    │
-│  ├──────────────────┼──────────────────┼──────────────────┼────────────┤    │
-│  │  MATH500         │     ~75%         │     97.4%        │  +22.4%    │    │
-│  │  AIME 2024       │     ~35%         │     87.5%        │  +52.5%    │    │
-│  │  GPQA            │     ~50%         │     71.97%       │  +22.0%    │    │
-│  │  LiveCodeBench   │     ~30%         │     73.58%       │  +43.6%    │    │
-│  │  IFEval          │     ~75%         │     88.61%       │  +13.6%    │    │
-│  └─────────────────────────────────────────────────────────────────────┘    │
-│                                                                             │
-│  CHALLENGE: Replicate with Llama 4 Scout                                    │
-│  ───────────────────────────────────────                                    │
-│  Llama 4 Scout ──[SFT+RPO+RLVR+DPO]──▶ Affine-Scout-Super                   │
-│                                                                             │
-│  ┌─────────────────────────────────────────────────────────────────────┐    │
-│  │  Benchmark       │ Scout (Base)  │ Target (RL)   │ Expected Gain    │    │
-│  ├──────────────────┼───────────────┼───────────────┼──────────────────┤    │
-│  │  MATH500         │    82%        │    97%+       │  +15%            │    │
-│  │  AIME 2024       │    30%        │    85%+       │  +55%            │    │
-│  │  GPQA Diamond    │    57%        │    75%+       │  +18%            │    │
-│  │  LiveCodeBench   │    36%        │    75%+       │  +39%            │    │
-│  │  MMLU Pro        │    75%        │    85%+       │  +10%            │    │
-│  └─────────────────────────────────────────────────────────────────────┘    │
-│                                                                             │
-│  BONUS: Preserve Scout's unique advantages after RL:                        │
-│  ✅ 10M token context (vs Nemotron's 128K)                                  │
-│  ✅ 17B active params (vs Nemotron's 49B) → 3x cheaper inference            │
-│  ✅ Native multimodal (text + images + video)                               │
-│  ✅ MoE architecture efficiency                                             │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-**The Opportunity:**
-
-NVIDIA proved that their RL pipeline can dramatically improve any Llama-based model:
-- **AIME 2024**: +52.5 percentage points (35% → 87.5%)
-- **LiveCodeBench**: +43.6 percentage points (30% → 73.58%)
-- **MATH500**: +22.4 percentage points (75% → 97.4%)
-
-Llama 4 Scout has **even more headroom** for improvement on these benchmarks, while bringing unique advantages that Nemotron 49B doesn't have.
-
-**What Affine SN120 Brings:**
-
-| Capability | NVIDIA (Centralized) | Affine SN120 (Decentralized) |
-|------------|----------------------|------------------------------|
-| **Training Compute** | NVIDIA internal cluster | Distributed Bittensor miners |
-| **Evaluation** | Internal benchmarks | Pareto frontier + continuous benchmarking |
-| **Security** | Proprietary | Sybil-proof, decoy-proof, copy-proof |
-| **Output** | NVIDIA-licensed | Fully open source |
-| **Incentive** | Corporate R&D budget | TAO emissions + competition |
-
-**KubeTEE's Commitment:**
-
-Affine Scout Super will be the **perfect model** for improving the [Leaderboard of Deep Research Agent Benchmark](https://huggingface.co/spaces/muset-ai/DeepResearch-Bench-Leaderboard).
-- Deploy on TEE infrastructure (Intel TDX/SGX + NVIDIA CC)
-- Provide enterprise-grade security for production use
-- Offer domain-specific fine-tuned variants (Healthcare, Finance, Legal, etc.)
-- Integrate with KubeTEE Deep Research Agent
-
----
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                    AFFINE → KUBETEE INFERENCE PIPELINE                      │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  ┌─────────────────────┐         ┌─────────────────────────────────────┐    │
-│  │   AFFINE (SN120)    │         │   KUBETEE AI INFRASTRUCTURE         │    │
-│  │   Training          │         │   Inference (TEE)                   │    │
-│  ├─────────────────────┤         ├─────────────────────────────────────┤    │
-│  │ • RL optimization   │         │ • Confidential Computing            │    │
-│  │ • Pareto frontier   │────────▶│ • Intel TDX/SGX + NVIDIA CC         │    │
-│  │ • Open source model │         │ • Private data protection           │    │
-│  │ • Outperforms 49B   │         │ • Enterprise deployment             │    │
-│  └─────────────────────┘         └─────────────────────────────────────┘    │
-│                                                                             │
-│  Training: Decentralized (Affine)    Inference: TEE-Protected (KubeTEE)     │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-**Domain-Specific Models** (RL-trained by Affine, inferred on KubeTEE):
-
-| Domain | Model | Use Cases |
-|--------|-------|-----------|
-| **Healthcare** | Affine-Healthcare | Medical research, clinical decision support, Text2SQL |
-| **Finance** | Affine-Finance | Investment analysis, risk assessment, compliance |
-| **Legal** | Affine-Legal | Contract analysis, case research, drafting |
-| **Insurance** | Affine-Insurance | Claims processing, underwriting, policy analysis |
-| **Blockchain** | Affine-Web3 | Smart contracts, DeFi research, on-chain reasoning |
-| **HR/Talent** | Affine-HR | Resume analysis, workforce planning, compliance, talent acquisition |
-| **Supply Chain** | Affine-SupplyChain | Logistics optimization, vendor analysis, manufacturing planning |
-| **Business Logic** | Affine-Business | Process automation, decision support, workflow optimization |
-
-**Why This Matters**:
-- ✅ **Open Source**: Models are open source, not proprietary
-- ✅ **Better Performance**: RL-optimized to outperform Nemotron 49B V1.5
-- ✅ **Pareto Frontier Evaluation**: Affine's benchmark ensures models dominate across all tasks
-- ✅ **Continuous Benchmarking**: Models constantly evaluated and improved via Affine's competitive mechanism
-- ✅ **Secure Mechanism**: Sybil-proof, decoy-proof, copy-proof, overfitting-proof
-- ✅ **Privacy at Inference**: Your queries processed in KubeTEE TEE
-- ✅ **No Training Data Exposure**: Your private data never used for training theses open source models
 
 
 These integrations create a **compounding effect** — each subnet specializes in one capability, and KubeTEE orchestrates them into a unified Deep Research Agent that outperforms monolithic solutions.
@@ -2044,9 +1858,62 @@ Integration with [LeadPoet](https://leadpoet.com/) for B2B lead generation and i
 
 ### Phase 3: Enhancements
 
-- [ ] MCP servers for community projects
+- [ ] Deploy an MCP servers for Bittensor community projects
 - [ ] Add Tools and MCP servers
 - [ ] Improve Design UI interface for chatting with AI agent to launch AI Agents
+- [ ] Affine SN120 Model Reenforcement Learning Improvment
+- [ ] Ridges SN62 Coding AI Agent
+- [ ] Expand benchmark suites
+- [ ] Scale to additional regions
+
+#### 🏆 Affine SN120 — Model Benchmark Challenge
+
+> *Decentralized model optimization to outperform NVIDIA NeMo Super 49B V1.5*
+
+**Challenge:** Improve the base model benchmark of [NVIDIA Llama 3.3 NeMo Super 49B V1.5](https://build.nvidia.com/nvidia/llama-3_3-nemotron-super-49b-v1_5/modelcard) while maintaining full compatibility with the [NVIDIA AIQ Deep Research Blueprint](https://github.com/NVIDIA/AgentIQ/tree/main/examples/deep_research).
+
+**Core Requirements:**
+
+| Requirement | Description |
+|-------------|-------------|
+| **Benchmark Improvement** | Surpass NeMo Super 49B V1.5 on key benchmarks |
+| **Single H200 Inference** | Model must be able to run inference on a single NVIDIA H200 GPU (141GB HBM3e) |
+| **AIQ Blueprint Compatibility** | Model must work seamlessly with the AIQ Deep Research Agent architecture |
+| **Protocol Adaptation** | If the model uses different tool calling or thinking protocols, the blueprint must be modified to handle the model |
+
+**NeMo Super 49B V1.5 Benchmarks to Beat:**
+
+| Benchmark | NeMo Super 49B V1.5 | Target |
+|-----------|---------------------|--------|
+| MATH500 | 97.4% | >97.4% |
+| AIME 2024 | 87.5% | >87.5% |
+| AIME 2025 | 82.71% | >82.71% |
+| GPQA | 71.97% | >71.97% |
+| LiveCodeBench 24.10-25.02 | 73.58% | >73.58% |
+| BFCL v3 (Tool Calling) | 71.75% | >71.75% |
+| IFEval (Strict:Instruction) | 88.61% | >88.61% |
+| ArenaHard | 92.0% | >92.0% |
+| MMLU Pro (CoT) | 79.53% | >79.53% |
+
+**Why This Matters:**
+
+Different models implement tool calling and reasoning in different ways:
+- **Tool Calling Protocols**: Function calling format, parameter schemas, response parsing
+- **Thinking Protocols**: Chain-of-thought markers, reasoning tokens, structured output formats
+- **Response Formats**: JSON vs XML vs natural language tool invocations
+
+The challenge is not just to create a better-performing model, but to ensure the entire AIQ Deep Research Blueprint can adapt to handle models with varying protocols — enabling a plug-and-play architecture for frontier models.
+
+**Success Criteria:**
+
+- [ ] Model achieves higher benchmark scores than NeMo Super 49B V1.5
+- [ ] Model runs inference on a single H200 GPU (141GB HBM3e)
+- [ ] AIQ Deep Research Blueprint modifications to support the model's tool calling protocol
+- [ ] AIQ Deep Research Blueprint modifications to support the model's thinking/reasoning protocol
+- [ ] End-to-end Deep Research Agent functionality preserved
+- [ ] Documentation for blueprint adaptations
+
+**Benefits**: Creates a decentralized pathway for continuous model improvement while building a flexible agent infrastructure that can integrate any high-performing model regardless of its native protocols.
 
 #### Subnet 62 — Ridges (Coding Assistant Tool/MCP Server)
 
@@ -2061,11 +1928,6 @@ Integration with [Ridges](https://ridges.ai) (Subnet 62) as a tool or MCP server
 - [ ] Repository analysis and documentation generation
 
 **Benefits**: Extend KubeTEE Deep Research Agents with powerful coding capabilities, enabling end-to-end software development workflows within the secure TEE environment.
-
-### Phase 4: Expansion
-
-- [ ] Expand benchmark suites
-- [ ] Scale to additional regions
 
 #### Subnet 22 — Desearch (Decentralized Web Search)
 
@@ -2155,7 +2017,7 @@ Integration with [Bitsec](https://bitsec.ai) for decentralized security scanning
 
 **Benefits**: Decentralized security auditing, AI-powered vulnerability detection, no single point of failure, native Bittensor integration.
 
-### Phase 5: Subnet Integrations
+### Phase 4: Subnet Integrations
 
 #### Subnet 3 — Templar (Model Pre-Training)
 
@@ -2520,6 +2382,53 @@ The following diagram shows how data-focused subnets feed into the AIQ Deep Rese
 │  │         Confidential Training → Inference → Deployment               │   │
 │  └──────────────────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Subnet Ecosystem Overview
+
+> 📊 Full diagram with Mermaid source: [docs/subnet-integrations-diagram.md](./docs/subnet-integrations-diagram.md)
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────────┐
+│                            KUBETEE AI — 17 SUBNET INTEGRATIONS                          │
+├─────────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                         │
+│   🎯 REASONING & TRAINING              📊 DATA & GROUNDING           📣 MARKETING       │
+│   ┌─────────────────────────┐          ┌─────────────────────┐      ┌───────────────┐   │
+│   │ SN01  Apex              │          │ SN13  Data Universe │      │ SN16  BitAds  │   │
+│   │ SN03  Templar           │          │ SN22  Desearch      │      │ SN71  LeadPoet│   │
+│   │ SN56  Gradients         │          │ SN52  Dojo          │      │ SN93  Bitcast │   │
+│   │ SN120 Affine            │          │ SN54  MIID          │      └───────┬───────┘   │
+│   └───────────┬─────────────┘          └──────────┬──────────┘              │           │
+│               │                                   │                         │           │
+│               ▼                                   ▼                         │           │
+│   ┌───────────────────────────────────────────────────────────────────────────────────┐ │
+│   │                     🏢 KUBETEE AI DEEP RESEARCH AGENT                             │ │
+│   │  ┌─────────────┐   ┌─────────────┐   ┌─────────────┐   ┌─────────────────────────┐│ │
+│   │  │  REASONING  │──▶│  GROUNDING  │──▶│VERIFICATION │──▶│   FINANCIAL INTEL       ││ │
+│   │  │    CORE     │   │    LAYER    │   │   LAYER     │   │ SN06 SN15 SN79          ││ │
+│   │  └─────────────┘   └─────────────┘   └─────────────┘   └─────────────────────────┘│ │
+│   │                           🔒 TEE INFRASTRUCTURE (Intel TDX / NVIDIA CC)           │ │
+│   └───────────────────────────────────────────────────────────────────────────────────┘ │
+│               ▲                                   ▲                                     │
+│               │                                   │                                     │
+│   ┌───────────┴─────────────┐          ┌─────────┴───────────┐                          │
+│   │ 🔐 SAFETY               │          │ ☁️ INFRASTRUCTURE    │                          │
+│   │ SN37  Aurelius          │          │ SN62  Ridges        │                          │
+│   │ SN60  Bitsec            │          │ SN64  Chutes        │                          │
+│   └─────────────────────────┘          │ SN75  Hippius       │                          │
+│                                        └─────────────────────┘                          │
+│                                                                                         │
+│   ═══════════════════════════════════════════════════════════════════════════════════   │
+│                                    SUBNET CATEGORIES                                    │
+│   ═══════════════════════════════════════════════════════════════════════════════════   │
+│   🎯 Training    │ Model pre-training, fine-tuning, RL optimization                     │
+│   📊 Data        │ Web search, social data, human-validated samples                     │
+│   🔐 Safety      │ AI alignment, security scanning, red-teaming                         │
+│   ☁️ Infra       │ Storage, compute, coding assistance                                  │
+│   📈 Financial   │ Forecasting, DeFi analytics, market simulation                       │
+│   📣 Marketing   │ Affiliate marketing, B2B leads, creator content                      │
+└─────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
