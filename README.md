@@ -188,7 +188,7 @@ We used different AI Deep Research Agents to elaborate the Subnet Architecture:
 ✅ **Multi-Cluster**: Rancher Fleet-managed clusters across Americas, EU, Middle East, Africa, Asia  
 ✅ **Production-Ready**: High availability, automated monitoring, and audit trails  
 ✅ **Open Source**: Transparent development with community-driven improvements  
-✅ **NVIDIA-Powered**: Best-in-class AI models and microservices  
+✅ **SOTA**: Best-in-class SOTA (State Of The Art) AI models and microservices  
 
 ---
 
