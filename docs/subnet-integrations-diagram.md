@@ -81,10 +81,10 @@ flowchart TB
     SN75 --> STORAGE
     SN64 --> CORE
 
-    %% Financial connections (to RAG/Grounding)
-    SN06 --> GROUND
-    SN15 --> GROUND
-    SN79 --> GROUND
+    %% Financial connections (to Reasoning)
+    SN06 --> CORE
+    SN15 --> CORE
+    SN79 --> CORE
 
     %% Internal flow
     CORE --> GROUND
@@ -250,29 +250,35 @@ flowchart TB
 ## Data Flow
 
 ```
-┌──────────────┐    ┌──────────────┐    ┌──────────────┐    ┌──────────────┐
-│   TRAINING   │───▶│   GROUNDING  │───▶│ VERIFICATION │───▶│     TEE      │
-│   SUBNETS    │    │   (RAG)      │    │   SUBNETS    │    │  DEPLOYMENT  │
+                                    ┌──────────────┐
+                         ┌─────────▶│ 🔐 SAFETY    │
+                         │          ├──────────────┤
+                         │          │ SN37 Aurelius│
+                         │          │ SN60 Bitsec  │
+                         │          └──────┬───────┘
+                         │                 │
+                         │                 ▼
+┌──────────────┐    ┌────┴─────────┐    ┌──────────────┐    ┌──────────────┐
+│ 🎯 REASONING │───▶│  📚 RAG      │───▶│ 💾 STORAGE   │───▶│  🔒 TEE      │
+│   TRAINING   │    │  GROUNDING   │    │              │    │  DEPLOYMENT  │
 ├──────────────┤    ├──────────────┤    ├──────────────┤    ├──────────────┤
-│ SN01  Apex   │    │ SN52  Dojo   │    │ SN37 Aurelius│    │ Intel TDX    │
-│ SN03  Templar│    │ SN54  MIID   │    │ SN60 Bitsec  │    │ NVIDIA CC    │
+│ SN01  Apex   │    │ SN52  Dojo   │    │              │    │ Intel TDX    │
+│ SN03  Templar│    │ SN54  MIID   │    │              │    │ NVIDIA CC    │
 │ SN09  IOTA   │    └──────────────┘    └──────────────┘    │ CyborgDB     │
 │ SN56  Grads  │           ▲                                └──────────────┘
 │ SN120 Affine │           │
-└──────────────┘           │
-         │                 │
-         │    ┌────────────┴───┐    ┌──────────────┐    ┌──────────────┐
-         │    │ 📈 FINANCIAL   │    │ 🔧 TOOLS/MCP │    │ ☁️ INFRA     │
-         │    ├────────────────┤    ├──────────────┤    ├──────────────┤
-         │    │ SN06 Numinous  │    │ SN13 DataUniv│    │ SN64 Chutes  │
-         │    │ SN15 BitQuant  │    │ SN22 Desearch│    │ SN75 Hippius │
-         │    │ SN79 τaos      │    │ SN62 Ridges  │    └──────────────┘
-         │    └────────────────┘    └──────────────┘
-         │            │                    │
-         └────────────┴────────────────────┘
-                      │
-                      ▼
-               ALL FEED INTO RAG
+├──────────────┤    ┌──────┴───────┐
+│ 📈 FINANCIAL │    │ 🔧 TOOLS/MCP │
+├──────────────┤    ├──────────────┤
+│ SN06 Numinous│    │ SN13 DataUniv│
+│ SN15 BitQuant│    │ SN22 Desearch│
+│ SN79 τaos    │    │ SN62 Ridges  │
+└──────────────┘    └──────────────┘
+       │                   │
+       └───────────────────┘
+               │
+    FINANCIAL + TOOLS feed REASONING
+    TOOLS also feed RAG (grounding data)
 ```
 
 ## Enterprise RAG Architecture
