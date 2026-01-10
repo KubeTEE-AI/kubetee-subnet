@@ -1904,14 +1904,35 @@ Different models implement tool calling and reasoning in different ways:
 
 The challenge is not just to create a better-performing model, but to ensure the entire AIQ Deep Research Blueprint can adapt to handle models with varying protocols — enabling a plug-and-play architecture for frontier models.
 
+**Private Benchmark Datasets:**
+
+We will create private dataset benchmarks from the base benchmark datasets using [NeMo Data Designer](https://docs.nvidia.com/nemo/microservices/latest/design-synthetic-data-from-scratch-or-seeds/index.html) and store them in NeMo Data Store service on KubeTEE cluster. This prevents overfitting to public benchmarks and ensures genuine model capability improvements.
+
+**KubeTEE Evaluation Infrastructure:**
+
+| Component | Description | Documentation |
+|-----------|-------------|---------------|
+| **LLM Model Targets** | Define evaluation targets pointing to miner LLMs | [LLM Model Targets](https://docs.nvidia.com/nemo/microservices/latest/evaluate/evaluation-targets/llm-model-targets.html) |
+| **Evaluation Configs** | Create benchmark configurations (public + private) | [Create Config](https://docs.nvidia.com/nemo/microservices/latest/evaluate/evaluation-configs/create-config.html) |
+| **Evaluation Jobs** | Run evaluation jobs against miner models | [Create Job](https://docs.nvidia.com/nemo/microservices/latest/evaluate/evaluation-jobs/create-job.html) |
+| **Results to Affine** | Send evaluation results to Affine DB via NeMo Evaluator SDK | Custom integration |
+
 **Success Criteria:**
 
-- [ ] Model achieves higher benchmark scores than NeMo Super 49B V1.5
-- [ ] Model runs inference on a single H200 GPU (141GB HBM3e)
-- [ ] AIQ Deep Research Blueprint modifications to support the model's tool calling protocol
-- [ ] AIQ Deep Research Blueprint modifications to support the model's thinking/reasoning protocol
-- [ ] End-to-end Deep Research Agent functionality preserved
-- [ ] Documentation for blueprint adaptations
+- Model achieves higher benchmark scores than NeMo Super 49B V1.5
+- Model runs inference on a single H200 GPU (141GB HBM3e)
+- AIQ Deep Research Blueprint modifications to support the model's tool calling protocol
+- AIQ Deep Research Blueprint modifications to support the model's thinking/reasoning protocol
+- End-to-end Deep Research Agent functionality preserved
+- Documentation for blueprint adaptations
+
+**Integration tasks**
+- [ ] Create private benchmark datasets using NeMo Data Designer (stored in NeMo Data Store)
+- [ ] Create Model Eval templates and code using NVIDIA NeMo Evaluator SDK to send results to Affine DB
+- [ ] Define LLM Evaluation Targets for miner models
+- [ ] Create Evaluation configs for existing benchmarks + private benchmarks
+- [ ] Create Evaluation Jobs pipeline
+- [ ] Affine deploys evaluation jobs in KubeTEE Cluster to evaluate miner LLMs
 
 **Benefits**: Creates a decentralized pathway for continuous model improvement while building a flexible agent infrastructure that can integrate any high-performing model regardless of its native protocols.
 
