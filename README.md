@@ -17,7 +17,7 @@
 
 ## About
 
-**KubeTEE AI** is part of **NVIDIA Incubated Inception Program**, proud member of the [**Confidential Computing Consortium (CCC)**](https://confidentialcomputing.io/), and active participant in the **[OpenInfra Foundation](https://openinfra.org/)** ecosystem.
+**KubeTEE AI** is part of **NVIDIA Inception Program**, proud member of the [**Confidential Computing Consortium (CCC)**](https://confidentialcomputing.io/), and active participant in the **[OpenInfra Foundation](https://openinfra.org/)** ecosystem.
 
 ### Foundation & Community Partnerships
 
