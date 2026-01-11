@@ -1484,110 +1484,15 @@ Attribution and payments are handled entirely by a smart contract on BASE L2. No
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Smart Contract: `KubeTEEAffiliate.sol`**
+**Smart Contract**: [`KubeTEEPayment.sol`](contracts/KubeTEEPayment.sol) on BASE L2
 
-```solidity
-// SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
-
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-
-contract KubeTEEAffiliate {
-    IERC20 public immutable usdc;
-    address public immutable kubetee;
-    
-    uint256 public constant MIN_PAID_USERS = 2;
-    uint256 public constant COMMISSION_BPS = 5000; // 50%
-    
-    // User → Affiliate (set once at registration)
-    mapping(address => address) public userAffiliate;
-    
-    // Affiliate → Count of users who have paid
-    mapping(address => uint256) public affiliatePaidUsers;
-    
-    // Affiliate → Pending commissions (released at 2-user minimum)
-    mapping(address => uint256) public pendingCommissions;
-    
-    // User → Has made first payment
-    mapping(address => bool) public userHasPaid;
-    
-    event UserRegistered(address indexed user, address indexed affiliate);
-    event PaymentProcessed(address indexed user, uint256 amount, address indexed affiliate);
-    event CommissionsReleased(address indexed affiliate, uint256 amount);
-    
-    constructor(address _usdc, address _kubetee) {
-        usdc = IERC20(_usdc);
-        kubetee = _kubetee;
-    }
-    
-    // Register user with optional affiliate (called by kubeteectl)
-    function registerUser(address user, address affiliate) external {
-        require(userAffiliate[user] == address(0), "Already registered");
-        userAffiliate[user] = affiliate; // address(0) if no affiliate
-        emit UserRegistered(user, affiliate);
-    }
-    
-    // Process payment (called hourly by billing system)
-    function processPayment(address user, uint256 amount) external {
-        require(usdc.transferFrom(msg.sender, address(this), amount), "Transfer failed");
-        
-        address affiliate = userAffiliate[user];
-        
-        // First payment → increment affiliate's paid user count
-        if (!userHasPaid[user] && affiliate != address(0)) {
-            userHasPaid[user] = true;
-            affiliatePaidUsers[affiliate]++;
-            
-            // Release pending if just reached minimum
-            if (affiliatePaidUsers[affiliate] == MIN_PAID_USERS) {
-                _releasePending(affiliate);
-            }
-        }
-        
-        // Calculate and distribute
-        if (affiliate != address(0)) {
-            uint256 commission = (amount * COMMISSION_BPS) / 10000;
-            uint256 kubeteeShare = amount - commission;
-            
-            if (affiliatePaidUsers[affiliate] >= MIN_PAID_USERS) {
-                // Qualified → pay immediately
-                usdc.transfer(affiliate, commission);
-            } else {
-                // Not qualified → hold commission
-                pendingCommissions[affiliate] += commission;
-            }
-            usdc.transfer(kubetee, kubeteeShare);
-        } else {
-            // No affiliate → 100% to KubeTEE
-            usdc.transfer(kubetee, amount);
-        }
-        
-        emit PaymentProcessed(user, amount, affiliate);
-    }
-    
-    function _releasePending(address affiliate) internal {
-        uint256 pending = pendingCommissions[affiliate];
-        if (pending > 0) {
-            pendingCommissions[affiliate] = 0;
-            usdc.transfer(affiliate, pending);
-            emit CommissionsReleased(affiliate, pending);
-        }
-    }
-    
-    // View functions for affiliates
-    function getAffiliateStatus(address affiliate) external view returns (
-        uint256 paidUsers,
-        uint256 pending,
-        bool qualified
-    ) {
-        return (
-            affiliatePaidUsers[affiliate],
-            pendingCommissions[affiliate],
-            affiliatePaidUsers[affiliate] >= MIN_PAID_USERS
-        );
-    }
-}
-```
+**Key Features**:
+- ✅ **Pull-based**: Contract pulls USDC directly from user wallet (no deposits)
+- ✅ **One-time approval**: User signs unlimited approval once at registration
+- ✅ **User control**: Can adjust limit in MetaMask before signing
+- ✅ **Graceful failure**: Emits event on insufficient balance instead of reverting
+- ✅ **Affiliate 2-user minimum**: Commissions held until affiliate has 2 paying users
+- ✅ **Automatic release**: Pending commissions released when threshold met
 
 **CLI Registration Flow**:
 
@@ -1706,36 +1611,97 @@ Reference: [Bittensor Multi-Mechanism Docs](https://docs.learnbittensor.org/subn
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**User Onboarding**:
-1. Connect your BASE wallet address (or create one)
-2. Deposit USDC into `KubeTEEPayment.sol` smart contract on BASE
-3. Receive isolated Project/Namespace in Rancher (linked to your BASE address)
-4. Deploy KubeTEE Blueprints and start using resources
-5. Usage is metered and transferred to KubeTEE address every hour
+**User Onboarding (Pull-Based Billing)**:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                         USER → NAMESPACE → BILLING                          │
+│                    PULL-BASED BILLING MODEL                                 │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│   [1] USER REGISTRATION                                                     │
-│   ─────────────────────────────────────────────────────────────────────     │
-│   User connects BASE wallet (e.g., 0x1234...abcd)                           │
-│   Deposits USDC into KubeTEEPayment.sol smart contract                      │
+│   ONE-TIME APPROVAL → Contract pulls USDC as needed from user wallet        │
 │                                                                             │
-│   [2] NAMESPACE CREATION                                                    │
+│   [1] REGISTRATION (kubeteectl)                                             │
 │   ─────────────────────────────────────────────────────────────────────     │
-│   KubeTEE creates isolated Kubernetes namespace                             │
-│   Namespace labeled with user's BASE address:                               │
-│   └── kubetee.ai/user-address: "0x1234...abcd"                              │
+│   $ kubeteectl register \                                                   │
+│       --base-address 0x5678... \                                            │
+│       --affiliate 0x1234...         # Optional: affiliate's BASE address    │
 │                                                                             │
-│   [3] HOURLY BILLING                                                        │
+│   CLI prompts user to sign ONE transaction:                                 │
+│   → USDC.approve(KubeTEEPayment, MAX_UINT256)                               │
+│                                                                             │
+│   ⚠️ User can adjust limit in MetaMask/wallet before signing if desired     │
+│                                                                             │
+│   [2] ON-CHAIN REGISTRATION                                                 │
 │   ─────────────────────────────────────────────────────────────────────     │
-│   Every hour, subnet job calculate usage per namespace                      │
-│   Smart contract transfers USDC from user deposit → KubeTEE address         │
-│   User notified if balance drops below 24h of estimated usage               │
+│   CLI calls: KubeTEEPayment.registerUser(user, affiliate)                   │
+│   → User address stored on-chain                                            │
+│   → Affiliate attribution stored (if provided)                              │
+│                                                                             │
+│   [3] NAMESPACE CREATION                                                    │
+│   ─────────────────────────────────────────────────────────────────────     │
+│   KubeTEE creates isolated Kubernetes namespace in Rancher                  │
+│   Namespace labels:                                                         │
+│   └── kubetee.ai/user-address: "0x5678..."                                  │
+│   └── kubetee.ai/affiliate: "0x1234..."  (if applicable)                    │
+│                                                                             │
+│   [4] HOURLY BILLING (Automatic Pull)                                       │
+│   ─────────────────────────────────────────────────────────────────────     │
+│   Every hour, billing job:                                                  │
+│   1. Calculates usage per namespace (CPU, GPU, storage, tokens)             │
+│   2. Calls KubeTEEPayment.processPayment(user, amount)                      │
+│   3. Contract pulls USDC directly from user's wallet                        │
+│   4. Splits 50/50 with affiliate (if qualified)                             │
+│                                                                             │
+│   ┌─────────────────────────────────────────────────────────────────────┐   │
+│   │  User Wallet              KubeTEEPayment.sol             Affiliate  │   │
+│   │  (BASE)                   (BASE)                         (BASE)     │   │
+│   │                                                                     │   │
+│   │  $500 USDC  ───────────▶  processPayment($100)                      │   │
+│   │                               │                                     │   │
+│   │                               ├──▶ $50 → KubeTEE                    │   │
+│   │                               └──▶ $50 → Affiliate (if ≥2 users)    │   │
+│   │                                                                     │   │
+│   │  Remaining: $400 USDC                                               │   │
+│   └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                             │
+│   [5] LOW BALANCE ALERTS                                                    │
+│   ─────────────────────────────────────────────────────────────────────     │
+│   If user wallet balance < 24h estimated usage:                             │
+│   → Email notification sent                                                 │
+│   → CLI warning on next command                                             │
+│   → Namespace suspended after 48h grace period                              │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Registration Flow**:
+
+```bash
+# Register with affiliate
+$ kubeteectl register \
+    --base-address 0x5678...efgh \
+    --affiliate 0x1234...abcd
+
+# MetaMask/Wallet popup:
+# "KubeTEE Payment Contract wants to spend your USDC"
+# Amount: Unlimited (user can edit before signing)
+# 
+# [Confirm] [Reject]
+
+# After signing:
+✓ USDC approval granted
+✓ User registered on-chain
+✓ Affiliate attribution: 0x1234...abcd
+✓ Rancher namespace created: kubetee-0x5678efgh
+✓ Ready to deploy blueprints!
+
+# Check status anytime
+$ kubeteectl status
+  Wallet: 0x5678...efgh
+  USDC Balance: $500.00
+  Approval Remaining: Unlimited
+  Affiliate: 0x1234...abcd
+  This Month Usage: $127.50
 ```
 
 ---

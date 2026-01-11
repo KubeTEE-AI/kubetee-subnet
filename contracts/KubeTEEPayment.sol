@@ -1,550 +1,220 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-/**
- * @title KubeTEE Payment Contract
- * @author KubeTEE AI
- * @notice On-chain payment system for Resellers/White Label partners
- * @dev Deployed on Bittensor EVM - designed for future ERC-8004 / x.402 compatibility
- * 
- * ═══════════════════════════════════════════════════════════════════════════
- *                              ARCHITECTURE
- * ═══════════════════════════════════════════════════════════════════════════
- * 
- * RESELLERS/WHITE LABEL:
- * - Category of "miners" that DON'T receive emissions
- * - NOT registered on Bittensor subnet
- * - DO register via KubeTEE CLI → Creates Rancher account
- * - Must have coldkey/hotkey with Alpha
- * - Deposit Alpha/TAO to this contract
- * 
- * VALIDATORS:
- * - Calculate resource usage per reseller per epoch
- * - Submit usage reports on-chain
- * - Trigger transfers from reseller deposits to KubeTEE Owner
- * 
- * PAYMENT FLOW:
- * 1. Reseller deposits Alpha/TAO to this contract
- * 2. Reseller uses KubeTEE services (via Rancher namespace)
- * 3. Validators calculate usage each epoch
- * 4. Validators submit epoch settlement on-chain
- * 5. Contract transfers 50% of usage cost from reseller to KubeTEE Owner
- * 
- * FUTURE COMPATIBILITY:
- * - ERC-8004 (Decentralized Paymaster)
- * - x.402 (HTTP 402 Payment Required protocol)
- * 
- * ═══════════════════════════════════════════════════════════════════════════
- */
-
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-import "@openzeppelin/contracts/security/Pausable.sol";
 
-contract KubeTEEPayment is Ownable, ReentrancyGuard, Pausable {
-    using SafeERC20 for IERC20;
-
-    // ==========================================================================
-    // CONSTANTS
-    // ==========================================================================
+/**
+ * @title KubeTEEPayment
+ * @notice Pull-based payment contract for KubeTEE AI platform on BASE L2
+ * @dev Handles user registration, affiliate tracking, and hourly billing
+ * 
+ * Key features:
+ * - Pull-based billing: Contract pulls USDC from user wallet (requires approval)
+ * - Affiliate system: 50% revenue share with 2-user minimum requirement
+ * - Graceful failure: Emits events on insufficient balance instead of reverting
+ */
+contract KubeTEEPayment is Ownable {
+    IERC20 public immutable usdc;
     
-    /// @notice Resellers pay 50% of retail price
-    uint256 public constant WHOLESALE_DISCOUNT_BPS = 5000; // 50%
+    /// @notice Minimum paid users required for affiliate to receive commissions
+    uint256 public constant MIN_PAID_USERS = 2;
     
-    /// @notice Basis points denominator
-    uint256 public constant BPS_DENOMINATOR = 10000;
+    /// @notice Commission rate in basis points (5000 = 50%)
+    uint256 public constant COMMISSION_BPS = 5000;
     
-    /// @notice Minimum deposit amount
-    uint256 public constant MIN_DEPOSIT = 1e18; // 1 token minimum
-
-    // ==========================================================================
-    // STATE
-    // ==========================================================================
+    // ============ State Variables ============
     
-    /// @notice Payment token (wTAO or Alpha)
-    IERC20 public immutable paymentToken;
+    /// @notice User → Affiliate mapping (set once at registration, immutable)
+    mapping(address => address) public userAffiliate;
     
-    /// @notice KubeTEE Owner address (receives payments from resellers)
-    address public kubeteeOwner;
+    /// @notice User → Is registered
+    mapping(address => bool) public isRegistered;
     
-    /// @notice Current epoch number
-    uint256 public currentEpoch;
+    /// @notice Affiliate → Count of users who have made at least one payment
+    mapping(address => uint256) public affiliatePaidUsers;
     
-    /// @notice Blocks per epoch
-    uint256 public blocksPerEpoch;
+    /// @notice Affiliate → Pending commissions (held until 2-user minimum reached)
+    mapping(address => uint256) public pendingCommissions;
     
-    /// @notice Last epoch settlement block
-    uint256 public lastSettlementBlock;
-
-    // ==========================================================================
-    // RESELLER DATA
-    // ==========================================================================
+    /// @notice User → Has made first payment (counts toward affiliate's paid users)
+    mapping(address => bool) public userHasPaid;
     
-    struct Reseller {
-        // Identity (NOT registered on Bittensor subnet)
-        address wallet;           // EVM wallet address
-        bytes32 hotkey;           // Bittensor hotkey (for Rancher account)
-        bytes32 coldkey;          // Bittensor coldkey
-        
-        // Registration
-        uint256 registeredAt;
-        bool active;
-        
-        // Rancher integration
-        string rancherProjectId;  // Rancher project/namespace ID
-        
-        // Deposits and balance
-        uint256 depositBalance;   // Current available balance
-        uint256 totalDeposited;   // Lifetime deposits
-        uint256 totalSpent;       // Lifetime spending
-        
-        // Usage tracking (updated by validators)
-        uint256 currentEpochUsage;
-        uint256 lastSettledEpoch;
-    }
+    // ============ Events ============
     
-    /// @notice Registered resellers (by wallet address)
-    mapping(address => Reseller) public resellers;
-    
-    /// @notice Reseller wallet by hotkey (for lookup)
-    mapping(bytes32 => address) public hotkeyToWallet;
-    
-    /// @notice List of all reseller addresses
-    address[] public resellerList;
-
-    // ==========================================================================
-    // VALIDATOR DATA
-    // ==========================================================================
-    
-    /// @notice Authorized validators
-    mapping(address => bool) public authorizedValidators;
-    
-    /// @notice Validator count
-    uint256 public validatorCount;
-    
-    /// @notice Required validator confirmations for settlement
-    uint256 public requiredConfirmations;
-
-    // ==========================================================================
-    // EPOCH SETTLEMENT
-    // ==========================================================================
-    
-    struct EpochUsageReport {
-        address reseller;
-        uint256 usageAmount;      // Amount to charge (50% of retail)
-        uint256 tokensProcessed;
-        uint256 gpuSecondsUsed;
-    }
-    
-    struct EpochSettlement {
-        uint256 epoch;
-        uint256 totalUsage;
-        uint256 confirmations;
-        bool finalized;
-        mapping(address => bool) validatorConfirmed;
-        mapping(address => uint256) resellerUsage;
-    }
-    
-    /// @notice Pending epoch settlements
-    mapping(uint256 => EpochSettlement) public epochSettlements;
-
-    // ==========================================================================
-    // EVENTS
-    // ==========================================================================
-    
-    event ResellerRegistered(
-        address indexed wallet,
-        bytes32 indexed hotkey,
-        string rancherProjectId
+    event UserRegistered(address indexed user, address indexed affiliate);
+    event PaymentProcessed(
+        address indexed user, 
+        uint256 amount, 
+        address indexed affiliate, 
+        uint256 commission
     );
-    event ResellerDeactivated(address indexed wallet);
-    
-    event Deposit(address indexed reseller, uint256 amount);
-    event Withdrawal(address indexed reseller, uint256 amount);
-    
-    event UsageReported(
-        uint256 indexed epoch,
-        address indexed validator,
-        address indexed reseller,
-        uint256 amount
+    event CommissionsReleased(address indexed affiliate, uint256 amount);
+    event InsufficientBalance(
+        address indexed user, 
+        uint256 required, 
+        uint256 available
     );
     
-    event EpochSettled(
-        uint256 indexed epoch,
-        uint256 totalTransferred,
-        uint256 resellersCharged
-    );
-    
-    event ValidatorAdded(address indexed validator);
-    event ValidatorRemoved(address indexed validator);
-    
-    event KubeTEEOwnerUpdated(address indexed oldOwner, address indexed newOwner);
-
-    // ==========================================================================
-    // CONSTRUCTOR
-    // ==========================================================================
+    // ============ Constructor ============
     
     /**
-     * @notice Initialize the payment contract
-     * @param _paymentToken Address of payment token (wTAO/Alpha)
-     * @param _kubeteeOwner Address that receives reseller payments
-     * @param _blocksPerEpoch Number of blocks per epoch
-     * @param _requiredConfirmations Number of validator confirmations needed
+     * @notice Deploy KubeTEEPayment contract
+     * @param _usdc Address of USDC token on BASE L2
      */
-    constructor(
-        address _paymentToken,
-        address _kubeteeOwner,
-        uint256 _blocksPerEpoch,
-        uint256 _requiredConfirmations
-    ) Ownable(msg.sender) {
-        require(_paymentToken != address(0), "Invalid token");
-        require(_kubeteeOwner != address(0), "Invalid owner");
-        require(_blocksPerEpoch > 0, "Invalid epoch length");
-        
-        paymentToken = IERC20(_paymentToken);
-        kubeteeOwner = _kubeteeOwner;
-        blocksPerEpoch = _blocksPerEpoch;
-        requiredConfirmations = _requiredConfirmations;
-        
-        currentEpoch = 1;
-        lastSettlementBlock = block.number;
-    }
-
-    // ==========================================================================
-    // RESELLER FUNCTIONS
-    // ==========================================================================
-    
-    /**
-     * @notice Register as a reseller (called via KubeTEE CLI)
-     * @param hotkey Bittensor hotkey (for Rancher account linking)
-     * @param coldkey Bittensor coldkey
-     * @param rancherProjectId Rancher project/namespace ID
-     */
-    function registerReseller(
-        bytes32 hotkey,
-        bytes32 coldkey,
-        string calldata rancherProjectId
-    ) external whenNotPaused {
-        require(resellers[msg.sender].registeredAt == 0, "Already registered");
-        require(hotkeyToWallet[hotkey] == address(0), "Hotkey already used");
-        require(bytes(rancherProjectId).length > 0, "Invalid Rancher ID");
-        
-        resellers[msg.sender] = Reseller({
-            wallet: msg.sender,
-            hotkey: hotkey,
-            coldkey: coldkey,
-            registeredAt: block.timestamp,
-            active: true,
-            rancherProjectId: rancherProjectId,
-            depositBalance: 0,
-            totalDeposited: 0,
-            totalSpent: 0,
-            currentEpochUsage: 0,
-            lastSettledEpoch: currentEpoch
-        });
-        
-        hotkeyToWallet[hotkey] = msg.sender;
-        resellerList.push(msg.sender);
-        
-        emit ResellerRegistered(msg.sender, hotkey, rancherProjectId);
+    constructor(address _usdc) Ownable(msg.sender) {
+        usdc = IERC20(_usdc);
     }
     
-    /**
-     * @notice Deposit tokens to reseller account
-     * @param amount Amount to deposit
-     */
-    function deposit(uint256 amount) external nonReentrant whenNotPaused {
-        require(resellers[msg.sender].active, "Not active reseller");
-        require(amount >= MIN_DEPOSIT, "Below minimum deposit");
-        
-        paymentToken.safeTransferFrom(msg.sender, address(this), amount);
-        
-        resellers[msg.sender].depositBalance += amount;
-        resellers[msg.sender].totalDeposited += amount;
-        
-        emit Deposit(msg.sender, amount);
-    }
+    // ============ User Registration ============
     
     /**
-     * @notice Withdraw unused balance
-     * @param amount Amount to withdraw
+     * @notice Register a new user with optional affiliate attribution
+     * @dev Called by kubeteectl CLI after user approves USDC spending
+     * @param user Address of the user being registered
+     * @param affiliate Address of the affiliate (address(0) if none)
      */
-    function withdraw(uint256 amount) external nonReentrant {
-        Reseller storage reseller = resellers[msg.sender];
-        require(reseller.active, "Not active reseller");
-        require(reseller.depositBalance >= amount, "Insufficient balance");
+    function registerUser(address user, address affiliate) external onlyOwner {
+        require(!isRegistered[user], "Already registered");
+        require(user != affiliate, "Cannot self-refer");
         
-        // Ensure current epoch usage is covered
-        require(
-            reseller.depositBalance - amount >= reseller.currentEpochUsage,
-            "Must cover current epoch usage"
-        );
+        isRegistered[user] = true;
+        if (affiliate != address(0)) {
+            userAffiliate[user] = affiliate;
+        }
         
-        reseller.depositBalance -= amount;
-        paymentToken.safeTransfer(msg.sender, amount);
-        
-        emit Withdrawal(msg.sender, amount);
+        emit UserRegistered(user, affiliate);
     }
     
-    /**
-     * @notice Get reseller balance
-     * @param wallet Reseller wallet address
-     */
-    function getResellerBalance(address wallet) external view returns (uint256) {
-        return resellers[wallet].depositBalance;
-    }
+    // ============ Payment Processing ============
     
     /**
-     * @notice Get reseller by hotkey
-     * @param hotkey Bittensor hotkey
-     */
-    function getResellerByHotkey(bytes32 hotkey) external view returns (address) {
-        return hotkeyToWallet[hotkey];
-    }
-
-    // ==========================================================================
-    // VALIDATOR FUNCTIONS
-    // ==========================================================================
-    
-    /**
-     * @notice Report reseller usage for current epoch
-     * @param reports Array of usage reports
+     * @notice Process hourly payment by pulling USDC from user wallet
+     * @dev Called by KubeTEE billing system every hour
+     * @param user Address of the user being billed
+     * @param amount Amount of USDC to charge (in wei, 6 decimals)
      * 
-     * Called by validators each epoch with usage data from Rancher/Prometheus.
-     * Multiple validators must confirm for settlement to occur.
+     * Payment flow:
+     * 1. Check user balance and allowance
+     * 2. Pull USDC from user wallet
+     * 3. Track first payment for affiliate qualification
+     * 4. Split payment: 50% to affiliate (if qualified), remainder to KubeTEE
+     * 5. Hold commission if affiliate not yet qualified (< 2 paid users)
      */
-    function reportEpochUsage(
-        EpochUsageReport[] calldata reports
-    ) external whenNotPaused {
-        require(authorizedValidators[msg.sender], "Not authorized validator");
+    function processPayment(address user, uint256 amount) external onlyOwner {
+        require(isRegistered[user], "User not registered");
+        require(amount > 0, "Amount must be > 0");
         
-        EpochSettlement storage settlement = epochSettlements[currentEpoch];
-        require(!settlement.validatorConfirmed[msg.sender], "Already reported");
+        // Check user has sufficient balance and allowance
+        uint256 userBalance = usdc.balanceOf(user);
+        uint256 userAllowance = usdc.allowance(user, address(this));
         
-        // Record usage for each reseller
-        for (uint256 i = 0; i < reports.length; i++) {
-            EpochUsageReport calldata report = reports[i];
-            require(resellers[report.reseller].active, "Inactive reseller");
-            
-            // Update reseller's current epoch usage
-            resellers[report.reseller].currentEpochUsage = report.usageAmount;
-            
-            // Update settlement data
-            settlement.resellerUsage[report.reseller] = report.usageAmount;
-            settlement.totalUsage += report.usageAmount;
-            
-            emit UsageReported(currentEpoch, msg.sender, report.reseller, report.usageAmount);
+        if (userBalance < amount || userAllowance < amount) {
+            // Emit event instead of reverting - billing job handles suspension
+            emit InsufficientBalance(
+                user, 
+                amount, 
+                userBalance < userAllowance ? userBalance : userAllowance
+            );
+            return;
         }
         
-        // Mark validator as confirmed
-        settlement.validatorConfirmed[msg.sender] = true;
-        settlement.confirmations++;
-        settlement.epoch = currentEpoch;
+        // Pull USDC from user wallet
+        require(usdc.transferFrom(user, address(this), amount), "Transfer failed");
         
-        // Check if we have enough confirmations to settle
-        if (settlement.confirmations >= requiredConfirmations && !settlement.finalized) {
-            _settleEpoch(currentEpoch);
-        }
-    }
-    
-    /**
-     * @notice Force settle epoch (owner only, for edge cases)
-     * @param epoch Epoch to settle
-     */
-    function forceSettleEpoch(uint256 epoch) external onlyOwner {
-        require(!epochSettlements[epoch].finalized, "Already finalized");
-        _settleEpoch(epoch);
-    }
-    
-    /**
-     * @notice Internal epoch settlement
-     * @param epoch Epoch to settle
-     */
-    function _settleEpoch(uint256 epoch) internal {
-        EpochSettlement storage settlement = epochSettlements[epoch];
-        require(!settlement.finalized, "Already finalized");
+        address affiliate = userAffiliate[user];
         
-        uint256 totalTransferred = 0;
-        uint256 resellersCharged = 0;
-        
-        // Process each reseller
-        for (uint256 i = 0; i < resellerList.length; i++) {
-            address resellerAddr = resellerList[i];
-            Reseller storage reseller = resellers[resellerAddr];
+        // First payment → increment affiliate's paid user count
+        if (!userHasPaid[user] && affiliate != address(0)) {
+            userHasPaid[user] = true;
+            affiliatePaidUsers[affiliate]++;
             
-            if (!reseller.active) continue;
-            
-            uint256 usage = settlement.resellerUsage[resellerAddr];
-            if (usage == 0) continue;
-            
-            // Check if reseller has sufficient balance
-            if (reseller.depositBalance >= usage) {
-                // Deduct from reseller
-                reseller.depositBalance -= usage;
-                reseller.totalSpent += usage;
-                reseller.currentEpochUsage = 0;
-                reseller.lastSettledEpoch = epoch;
-                
-                totalTransferred += usage;
-                resellersCharged++;
-            } else {
-                // Insufficient funds - deactivate reseller
-                reseller.active = false;
-                emit ResellerDeactivated(resellerAddr);
+            // Release pending commissions if affiliate just reached minimum
+            if (affiliatePaidUsers[affiliate] == MIN_PAID_USERS) {
+                _releasePending(affiliate);
             }
         }
         
-        // Transfer total to KubeTEE Owner
-        if (totalTransferred > 0) {
-            paymentToken.safeTransfer(kubeteeOwner, totalTransferred);
-        }
-        
-        // Finalize settlement
-        settlement.finalized = true;
-        
-        // Advance epoch
-        currentEpoch++;
-        lastSettlementBlock = block.number;
-        
-        emit EpochSettled(epoch, totalTransferred, resellersCharged);
-    }
-    
-    /**
-     * @notice Advance to next epoch (if blocks elapsed)
-     */
-    function advanceEpoch() external {
-        require(
-            block.number >= lastSettlementBlock + blocksPerEpoch,
-            "Epoch not complete"
-        );
-        
-        // If previous epoch not settled, settle it first
-        if (!epochSettlements[currentEpoch].finalized) {
-            // Auto-settle with whatever confirmations we have
-            _settleEpoch(currentEpoch);
+        // Calculate and distribute payment
+        if (affiliate != address(0)) {
+            uint256 commission = (amount * COMMISSION_BPS) / 10000;
+            uint256 kubeteeShare = amount - commission;
+            
+            if (affiliatePaidUsers[affiliate] >= MIN_PAID_USERS) {
+                // Affiliate qualified → pay commission immediately
+                usdc.transfer(affiliate, commission);
+                emit PaymentProcessed(user, amount, affiliate, commission);
+            } else {
+                // Affiliate not yet qualified → hold commission in contract
+                pendingCommissions[affiliate] += commission;
+                emit PaymentProcessed(user, amount, affiliate, 0);
+            }
+            usdc.transfer(owner(), kubeteeShare);
+        } else {
+            // No affiliate → 100% to KubeTEE
+            usdc.transfer(owner(), amount);
+            emit PaymentProcessed(user, amount, address(0), 0);
         }
     }
-
-    // ==========================================================================
-    // ADMIN FUNCTIONS
-    // ==========================================================================
+    
+    // ============ Internal Functions ============
     
     /**
-     * @notice Add authorized validator
-     * @param validator Validator address
+     * @notice Release pending commissions to affiliate
+     * @param affiliate Address of the affiliate
      */
-    function addValidator(address validator) external onlyOwner {
-        require(!authorizedValidators[validator], "Already authorized");
-        authorizedValidators[validator] = true;
-        validatorCount++;
-        emit ValidatorAdded(validator);
+    function _releasePending(address affiliate) internal {
+        uint256 pending = pendingCommissions[affiliate];
+        if (pending > 0) {
+            pendingCommissions[affiliate] = 0;
+            usdc.transfer(affiliate, pending);
+            emit CommissionsReleased(affiliate, pending);
+        }
     }
     
-    /**
-     * @notice Remove validator
-     * @param validator Validator address
-     */
-    function removeValidator(address validator) external onlyOwner {
-        require(authorizedValidators[validator], "Not authorized");
-        authorizedValidators[validator] = false;
-        validatorCount--;
-        emit ValidatorRemoved(validator);
-    }
+    // ============ View Functions ============
     
     /**
-     * @notice Update KubeTEE Owner address
-     * @param newOwner New owner address
+     * @notice Get user status including balance and allowance
+     * @param user Address of the user
+     * @return registered Whether user is registered
+     * @return affiliate Address of user's affiliate (address(0) if none)
+     * @return hasPaid Whether user has made at least one payment
+     * @return balance User's USDC balance
+     * @return allowance User's USDC allowance for this contract
      */
-    function setKubeTEEOwner(address newOwner) external onlyOwner {
-        require(newOwner != address(0), "Invalid address");
-        emit KubeTEEOwnerUpdated(kubeteeOwner, newOwner);
-        kubeteeOwner = newOwner;
-    }
-    
-    /**
-     * @notice Update required confirmations
-     * @param _required New requirement
-     */
-    function setRequiredConfirmations(uint256 _required) external onlyOwner {
-        require(_required > 0 && _required <= validatorCount, "Invalid");
-        requiredConfirmations = _required;
-    }
-    
-    /**
-     * @notice Pause contract
-     */
-    function pause() external onlyOwner {
-        _pause();
-    }
-    
-    /**
-     * @notice Unpause contract
-     */
-    function unpause() external onlyOwner {
-        _unpause();
-    }
-    
-    /**
-     * @notice Deactivate a reseller (admin)
-     * @param wallet Reseller wallet
-     */
-    function deactivateReseller(address wallet) external onlyOwner {
-        resellers[wallet].active = false;
-        emit ResellerDeactivated(wallet);
-    }
-
-    // ==========================================================================
-    // VIEW FUNCTIONS
-    // ==========================================================================
-    
-    /**
-     * @notice Get contract statistics
-     */
-    function getStatistics() external view returns (
-        uint256 totalResellers,
-        uint256 activeResellers,
-        uint256 _currentEpoch,
-        uint256 contractBalance,
-        uint256 _validatorCount
+    function getUserStatus(address user) external view returns (
+        bool registered,
+        address affiliate,
+        bool hasPaid,
+        uint256 balance,
+        uint256 allowance
     ) {
-        uint256 active = 0;
-        for (uint256 i = 0; i < resellerList.length; i++) {
-            if (resellers[resellerList[i]].active) active++;
-        }
-        
         return (
-            resellerList.length,
-            active,
-            currentEpoch,
-            paymentToken.balanceOf(address(this)),
-            validatorCount
+            isRegistered[user],
+            userAffiliate[user],
+            userHasPaid[user],
+            usdc.balanceOf(user),
+            usdc.allowance(user, address(this))
         );
     }
     
     /**
-     * @notice Get epoch settlement status
-     * @param epoch Epoch number
+     * @notice Get affiliate status
+     * @param affiliate Address of the affiliate
+     * @return paidUsers Number of users who have made at least one payment
+     * @return pending Amount of commissions held (released when qualified)
+     * @return qualified Whether affiliate has reached 2-user minimum
      */
-    function getEpochStatus(uint256 epoch) external view returns (
-        uint256 totalUsage,
-        uint256 confirmations,
-        bool finalized
+    function getAffiliateStatus(address affiliate) external view returns (
+        uint256 paidUsers,
+        uint256 pending,
+        bool qualified
     ) {
-        EpochSettlement storage settlement = epochSettlements[epoch];
         return (
-            settlement.totalUsage,
-            settlement.confirmations,
-            settlement.finalized
+            affiliatePaidUsers[affiliate],
+            pendingCommissions[affiliate],
+            affiliatePaidUsers[affiliate] >= MIN_PAID_USERS
         );
-    }
-    
-    /**
-     * @notice Get all reseller addresses
-     */
-    function getAllResellers() external view returns (address[] memory) {
-        return resellerList;
     }
 }
-
