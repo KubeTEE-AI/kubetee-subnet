@@ -8,7 +8,7 @@ flowchart TB
     subgraph KUBETEE["🏢 KubeTEE AI"]
         direction TB
         CORE["🧠 REASONING"]
-        GROUND["📚 RAG"]
+        GROUND["📚 GROUNDING"]
         VERIFY["🛡️ SAFETY"]
         STORAGE["💾 STORAGE"]
         TEE["🔒 TEE"]
@@ -146,7 +146,7 @@ flowchart TB
 │  │               ├────────────────────────────────────────┤                 │                  │
 │  │               │ ┌──────────┐   ┌────────────────────┐  │                 │                  │
 │  │               │ │REASONING │──▶│  GROUNDING LAYER   │  │                 │                  │
-│  │               │ │  CORE    │   │  (RAG + CyborgDB)  │  │                 │                  │
+│  │               │ │  CORE    │   │    (CyborgDB)      │  │                 │                  │
 │  │               │ └──────────┘   └─────────┬──────────┘  │                 │                  │
 │  │               │ ┌────────────────────────┴───────────┐ │                 │                  │
 │  │               │ │     VERIFICATION LAYER             │ │                 │                  │
@@ -259,8 +259,8 @@ flowchart TB
                          │                 │
                          │                 ▼
 ┌──────────────┐    ┌────┴─────────┐    ┌──────────────┐    ┌──────────────┐
-│ 🎯 REASONING │───▶│  📚 RAG      │───▶│ 💾 STORAGE   │───▶│  🔒 TEE      │
-│   TRAINING   │    │  GROUNDING   │    │              │    │  DEPLOYMENT  │
+│ 🎯 REASONING │───▶│ 📚 GROUNDING │───▶│ 💾 STORAGE   │───▶│  🔒 TEE      │
+│   TRAINING   │    │  (CyborgDB)  │    │              │    │  DEPLOYMENT  │
 ├──────────────┤    ├──────────────┤    ├──────────────┤    ├──────────────┤
 │ SN01  Apex   │    │ SN52  Dojo   │    │              │    │ Intel TDX    │
 │ SN03  Templar│    │ SN54  MIID   │    │              │    │ NVIDIA CC    │
@@ -278,14 +278,14 @@ flowchart TB
        └───────────────────┘
                │
     FINANCIAL + TOOLS feed REASONING
-    TOOLS also feed RAG (grounding data)
+    TOOLS also feed GROUNDING (data sources)
 ```
 
-## Enterprise RAG Architecture
+## Enterprise Grounding Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                    KUBETEE ENTERPRISE RAG WITH CYBORGDB                     │
+│                 KUBETEE ENTERPRISE GROUNDING WITH CYBORGDB                  │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
 │   ENTERPRISE DATA                          TEE SECURE ENCLAVE               │

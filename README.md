@@ -111,7 +111,14 @@ We also leverage CNCF projects for cloud-native confidential computing:
     - [On-Chain Emission Configuration](#on-chain-emission-configuration)
     - [Staging vs Production](#staging-vs-production)
     - [Revenue Model](#revenue-model)
-    - [Multi-Chain Payment Strategy: BASE + Bittensor EVM](#multi-chain-payment-strategy-base--bittensor-evm)
+      - [Namespace Resource Pricing](#namespace-resource-pricing)
+      - [Shared Microservices Pricing](#shared-microservices-pricing)
+      - [Billing \& Metering](#billing--metering)
+      - [Example Monthly Bills](#example-monthly-bills)
+      - [X.402 Micropayments (No Account Required)](#x402-micropayments-no-account-required)
+      - [Referrer Revenue Share](#referrer-revenue-share)
+      - [Integration Options](#integration-options)
+    - [Payment Strategy: USDC on BASE](#payment-strategy-usdc-on-base)
     - [Automated Buyback \& Burn (Deflationary Mechanism)](#automated-buyback--burn-deflationary-mechanism)
     - [Validation \& Scoring](#validation--scoring)
   - [Client Getting Started](#client-getting-started)
@@ -1347,7 +1354,7 @@ The `KubeTEEReferral.sol` contract handles:
 - Automatic 50% revenue split per transaction
 - Epoch-based batch payouts to referrers
 
-Reference: [Bittensor EVM Documentation](https://docs.learnbittensor.org/evm-tutorials/subnet-precompile)
+Reference: [BASE Documentation](https://docs.base.org/)
 
 ### On-Chain Emission Configuration
 
@@ -1377,7 +1384,7 @@ subtensor.sudo_set_mechanism_emission_split(
 | Open Source Emissions (40%) | Subnet Emissions | Bittensor subnet | Via Yuma Consensus |
 | Reseller Payments | On-Chain Contract | KubeTEE CLI only | Validator epoch settlement → KubeTEE Owner |
 
-**On-Chain Smart Contract**: `KubeTEEPayment.sol` deployed on Bittensor EVM handles all reseller deposits and epoch settlements.
+**On-Chain Smart Contract**: `KubeTEEPayment.sol` deployed on BASE L2 handles all user deposits (USDC) and epoch settlements.
 
 Reference: [Bittensor Multi-Mechanism Docs](https://docs.learnbittensor.org/subnets/understanding-multiple-mech-subnets)
 
@@ -1395,190 +1402,333 @@ Reference: [Bittensor Multi-Mechanism Docs](https://docs.learnbittensor.org/subn
 
 ### Revenue Model
 
+**Pure Usage-Based Pricing** — No subscriptions, pay only for what you use.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    KUBETEE USAGE-BASED PRICING MODEL                        │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│   💳 NO SUBSCRIPTIONS — PAY ONLY FOR WHAT YOU USE                           │
+│                                                                             │
+│   Every user gets:                                                          │
+│   ✅ Isolated Kubernetes namespace (Project)                                │
+│   ✅ Access to all KubeTEE Blueprints (RAG, AIQ, etc.)                      │
+│   ✅ TEE-protected execution (Intel TDX / NVIDIA CC)                        │
+│   ✅ Transparent per-epoch billing                                          │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
 **User Onboarding**:
-1. Hotkey created for user to deposit alpha token
-2. Users receive isolated Project/Namespace in Rancher
-3. Access to deploy KubeTEE Blueprints
-
-**Resource Accounting**:
-- Validators track resource usage per epoch in user Project/namespaces
-- Service metrics tracked per request:
-  - Tokens processed (input + output)
-  - GPU compute time
-  - Request latency
-  - Success/failure status
-- Automatic deduction from user hotkey
-- Transparent billing based on actual usage
-- **50% of billing goes directly to the miner who served the request**
-
-**Pricing Tiers** (USDC on BASE):
-
-| Plan | Price | RAG Storage | RAG GPU | Custom Model GPU | Total GPUs | Fine-Tuning |
-|------|-------|-------------|---------|------------------|------------|-------------|
-| **Pay-as-you-go** | **Usage-based** | — | Shared | Shared | 0 | ❌ None |
-| **Basic** | **$295/month** | 50GB | CPU | — | 0 | ❌ None |
-| **Professional** | **$595/month** | 100GB | 1× H200 | 1× H200 | **2× H200** | ✅ Weekly |
-| **Enterprise** | **$995/month** | 500GB | 1× H200 | 2× H200 | **3× H200** | ✅ Continuous |
-
-**🆕 Pay-as-you-go with X.402 Protocol** (No subscription required):
-
-Anyone can use KubeTEE AI services instantly via the [X.402 Protocol](https://www.x402.org/) — a payment standard enabling HTTP-native micropayments with USDC on BASE.
-
-| Usage Type | Price |
-|------------|-------|
-| LLM Inference | $0.005 per 1K tokens ($5/1M) |
-| Embedding | $0.001 per 1K tokens ($1/1M) |
-| GPU Compute | $2.00 per H200 hour |
-
-- ✅ **No KYC required** — permissionless access for everyone
-- ✅ **Instant payments** — pay per request with USDC on BASE
-- ✅ **No commitment** — use as much or as little as you need
-- ✅ **Shared GPU inference** — access to KubeTEE NVIDIA NIM models
-- ❌ No dedicated namespace or storage
-
-> **Note**: Subscription tiers include 1 namespace and dedicated access to KubeTEE NVIDIA NIM models in TEE.
-
-**Tier Details**:
+1. Connect your BASE wallet address (or create one)
+2. Deposit USDC into `KubeTEEPayment.sol` smart contract on BASE
+3. Receive isolated Project/Namespace in Rancher (linked to your BASE address)
+4. Deploy KubeTEE Blueprints and start using resources
+5. Usage is metered and transferred to KubeTEE address every hour
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                         PRICING TIERS                                       │
+│                         USER → NAMESPACE → BILLING                          │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│  PAY-AS-YOU-GO (X.402 Protocol - No subscription)                           │
-│  ────────────────────────────────────────────────                           │
-│  ✅ Instant access via X.402 micropayments (USDC on BASE)                   │
-│  ✅ No KYC required — permissionless for everyone                           │
-│  ✅ Shared inference on KubeTEE NVIDIA NIM models                           │
-│  ✅ Pay per request: $0.005/1K tokens, $2.00/GPU hour                       │
-│  ❌ No dedicated namespace or storage                                       │
-│  ❌ No custom fine-tuning                                                   │
+│   [1] USER REGISTRATION                                                     │
+│   ─────────────────────────────────────────────────────────────────────     │
+│   User connects BASE wallet (e.g., 0x1234...abcd)                           │
+│   Deposits USDC into KubeTEEPayment.sol smart contract                      │
 │                                                                             │
-│  ═══════════════════════════════════════════════════════════════════════    │
+│   [2] NAMESPACE CREATION                                                    │
+│   ─────────────────────────────────────────────────────────────────────     │
+│   KubeTEE creates isolated Kubernetes namespace                             │
+│   Namespace labeled with user's BASE address:                               │
+│   └── kubetee.ai/user-address: "0x1234...abcd"                              │
 │                                                                             │
-│  SUBSCRIPTION TIERS (dedicated resources):                                  │
-│  ─────────────────────────────────────────                                  │
-│  ✅ 1 dedicated namespace per user                                          │
-│  ✅ Access to shared KubeTEE NVIDIA NIM/AIQ Blueprint models (TEE)          │
-│  ✅ Shared inference on pre-trained models (Llama, Mistral, Nemotron, etc.) │
-│                                                                             │
-│  ═══════════════════════════════════════════════════════════════════════    │
-│                                                                             │
-│  BASIC ($295/month)                                                         │
-│  ─────────────────                                                          │
-│  ✅ RAG Blueprint with 50GB vector storage                                  │
-│  ✅ RAG server on CPU (no dedicated GPU)                                    │
-│  ✅ Shared inference on KubeTEE NVIDIA NIM models                           │
-│  ✅ Community support                                                       │
-│  ❌ No dedicated GPU                                                        │
-│  ❌ No custom fine-tuning                                                   │
-│                                                                             │
-│  PROFESSIONAL ($595/month)                                                  │
-│  ────────────────────────────                                               │
-│  ✅ RAG Blueprint with 100GB vector storage                                 │
-│  ✅ 1× H200 GPU for RAG server (dedicated)                                  │
-│  ✅ 1× H200 GPU for custom model inference (dedicated)                      │
-│  ✅ Weekly custom model fine-tuning                                         │
-│  ✅ Email support, 99.5% SLA                                                │
-│  📊 Total: 2× H200 GPUs dedicated to your namespace                         │
-│                                                                             │
-│  ENTERPRISE ($995/month)                                                    │
-│  ─────────────────────────                                                  │
-│  ✅ RAG Blueprint with 500GB+ vector storage                                │
-│  ✅ 1× H200 GPU for RAG server (dedicated)                                  │
-│  ✅ 2× H200 GPU for custom model inference (dedicated, higher throughput)   │
-│  ✅ Continuous fine-tuning (daily/on-demand)                                │
-│  ✅ 24/7 priority support, 99.9% SLA                                        │
-│  ✅ SSO/SAML, audit logs, custom integrations                               │
-│  📊 Total: 3× H200 GPUs dedicated to your namespace                         │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                    SHARED KUBETEE INFRASTRUCTURE                            │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  All users share access to KubeTEE's NVIDIA NIM/AIQ Blueprint models        │
-│  running in a secure TEE (Trusted Execution Environment):                   │
-│                                                                             │
-│  🔒 SHARED MODELS (TEE Protected):                                          │
-│  ─────────────────────────────────                                          │
-│  • nvidia/llama-3.1-nemotron-70b-instruct                                   │
-│  • nvidia/llama-3.3-70b-instruct                                            │
-│  • mistralai/mistral-large-2-instruct                                       │
-│  • nvidia/nv-embedqa-e5-v5                                                  │
-│  • nvidia/nv-rerankqa-mistral-4b-v3                                         │
-│  • + More NIM models as they become available                               │
-│                                                                             │
-│  These models run on KubeTEE's shared H200 cluster with:                    │
-│  • Hardware-enforced isolation (Intel TDX, NVIDIA CC)                       │
-│  • No data persistence between requests                                     │
-│  • Attestation-verified execution                                           │
+│   [3] HOURLY BILLING                                                        │
+│   ─────────────────────────────────────────────────────────────────────     │
+│   Every hour, subnet job calculate usage per namespace                      │
+│   Smart contract transfers USDC from user deposit → KubeTEE address         │
+│   User notified if balance drops below 24h of estimated usage               │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**GPU Pricing** (for additional usage beyond subscription):
+---
 
-| Resource | Unit | Price (USDC) |
-|----------|------|--------------|
-| **NVIDIA H200 GPU** | Per hour | **$2.00/hour** |
-| Tokens Processed | Per 1K tokens | $0.005 |
-| RAG Storage | Per GB/month | $0.03 |
-| Embedding | Per 1K tokens | $0.001 |
+#### Namespace Resource Pricing
 
-**Professional Tier Value Calculation**:
-- 2× H200 GPUs (730 hours/month each): 2 × 730 × $2.00 = **$2,920 value**
-- 100GB RAG storage: 100 × $0.03 = **$3 value**
-- Weekly fine-tuning (~4 hours/week × 4): 16 × $2.00 = **$32 value**
-- **Total value: ~$2,955** → You pay **$595/month** (80% discount!) ✅
+Resources allocated to your namespace are metered and billed per hour:
 
-**Enterprise Tier Value Calculation**:
-- 3× H200 GPUs (730 hours/month each): 3 × 730 × $2.00 = **$4,380 value**
-- 500GB RAG storage: 500 × $0.03 = **$15 value**
-- Continuous fine-tuning (~20 hours/week × 4): 80 × $2.00 = **$160 value**
-- **Total value: ~$4,555** → You pay **$995/month** (78% discount!) ✅
+| Resource | Unit | Price (USDC) | Description |
+|----------|------|--------------|-------------|
+| **NVIDIA H200 GPU** | Per hour | **$2.00** | Dedicated GPU for inference/training |
+| **NVIDIA H100 GPU** | Per hour | **$1.50** | Dedicated GPU for inference/training |
+| **CPU** | Per vCPU/hour | **$0.02** | Compute (auto-scaled for RAG workloads) |
+| **Memory** | Per GB/hour | **$0.005** | RAM allocation |
+| **Storage (NVMe)** | Per GB/month | **$0.15** | High-performance storage |
 
-**Example Monthly Bills**:
+**RAG Server Configurations**:
 
-| User Type | Subscription | Additional Usage | Total |
-|-----------|--------------|------------------|-------|
-| Basic user (light RAG) | $295 | — | **$295** |
-| Basic user + tokens | $295 | 1M tokens ($5) | **$300** |
-| Pro user (included) | $595 | — | **$595** |
-| Pro user + extra GPU | $595 | 50 GPU-hours ($100) | **$695** |
-
-**Referrer Revenue Share** (50% of all revenue):
-- Referrers earn **50% of subscription + usage revenue** from referred users
-- Basic subscriber: $295 × 50% = **$147.50/month per referral**
-- Pro subscriber: $595 × 50% = **$297.50/month per referral**
-- Enterprise subscriber: $995 × 50% = **$497.50/month per referral**
-
-**Integration Options**:
-- Bring Your Own LLM to KubeTEE with NeMo Microservices
-  - NimCache
-  - NimService
-  - Private Microservices
-
-**Distribution Strategy & Community Value**:
-
-KubeTEE AI provides the Bittensor community with a **production-ready commodity service** that members can offer directly to their customers and integrate into enterprise environments. This creates significant value for the ecosystem:
-
-- **Turnkey Enterprise AI**: Community members can resell or integrate KubeTEE's enterprise-grade AI as a Service without building infrastructure from scratch
-- **Target Market**: System integrators, AI consultants, and solution providers within the Bittensor community and beyond
-- **Revenue Opportunity**: Miners earn 50% of service revenue + emission rewards
-- **Enterprise Adoption**: Provides Bittensor with a compliant, security-certified offering that meets enterprise requirements (FIPS-140-2, TEE, KYC)
-- **Value Chain**: Miners provide infrastructure (earn 50% revenue) → Validators ensure quality → Community integrators deliver to end customers
-
-This model transforms the Bittensor subnet from a purely mining-focused network into a **go-to-market channel** where community members can monetize their relationships and domain expertise by offering world-class AI infrastructure to their customer base.
-
-### Multi-Chain Payment Strategy: BASE + Bittensor EVM
-
-KubeTEE AI implements a **hybrid multi-chain payment architecture** optimized for different use cases:
+Users choose their RAG server configuration at setup. CPU auto-scales vertically based on load:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                    KUBETEE MULTI-CHAIN PAYMENT STRATEGY                     │
+│                       RAG SERVER CONFIGURATIONS                             │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│   OPTION 1: CPU-ONLY (Default)           OPTION 2: GPU-ACCELERATED          │
+│   ─────────────────────────────          ──────────────────────────         │
+│   ┌─────────────────────────┐            ┌─────────────────────────┐        │
+│   │  RAG Server (CPU)       │            │  RAG Server (GPU)       │        │
+│   │  ───────────────────    │            │  ───────────────────    │        │
+│   │  • 1-16 vCPU (auto)     │            │  • 1× H100 GPU          │        │
+│   │  • 2-32GB RAM (auto)    │            │  • 8 vCPU, 32GB RAM     │        │
+│   │  • VPA auto-scaling     │            │  • Fixed allocation     │        │
+│   │                         │            │                         │        │
+│   │  Best for:              │            │  Best for:              │        │
+│   │  • Variable workloads   │            │  • High throughput      │        │
+│   │  • Cost optimization    │            │  • Low latency          │        │
+│   │  • Light-medium usage   │            │  • Heavy inference      │        │
+│   └─────────────────────────┘            └─────────────────────────┘        │
+│                                                                             │
+│   CPU Auto-Scaling (VPA):                                                   │
+│   ─────────────────────────                                                 │
+│   Low Traffic    →    Medium Traffic    →    High Traffic                   │
+│   1 vCPU, 2GB         4 vCPU, 8GB            16 vCPU, 32GB                  │
+│   $0.03/hr            $0.12/hr               $0.48/hr                       │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Upgrade/Downgrade with kubeteectl**:
+
+```bash
+# Check current RAG configuration
+kubeteectl rag status
+
+# Upgrade from CPU-only to GPU-accelerated
+kubeteectl rag upgrade --gpu h100
+
+# Downgrade from GPU to CPU-only
+kubeteectl rag downgrade --cpu-only
+
+# View estimated costs
+kubeteectl rag estimate --config gpu
+```
+
+**RAG Configuration Pricing**:
+
+| Configuration | Resources | Hourly Cost | Monthly Cost (730h) |
+|---------------|-----------|-------------|---------------------|
+| **RAG CPU-only** | 1-16 vCPU (auto), 2-32GB RAM, 50GB NVMe | $0.03-0.48/hr | ~$22-350/month |
+| **RAG + H100 GPU** | 1× H100, 8 vCPU, 32GB RAM, 100GB NVMe | $1.81/hr | ~$1,321/month |
+
+**Fine-Tuning with Data Flywheel**:
+
+The [NVIDIA Data Flywheel Blueprint](https://github.com/KubeTEE-AI-Blueprints/data-flywheel) enables continuous model improvement through automated fine-tuning jobs. When fine-tuning is configured, your fine-tuned model is **automatically deployed to its own NIM with a dedicated H200 GPU**.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    DATA FLYWHEEL FINE-TUNING                                │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│   WHAT YOU GET:                                                             │
+│   ─────────────                                                             │
+│   ✅ Scheduled fine-tuning jobs (daily/weekly/monthly)                      │
+│   ✅ Your fine-tuned model deployed on dedicated NIM (1× H200 GPU)          │
+│   ✅ Automatic model updates after each fine-tuning job                     │
+│   ✅ Pay only for resources consumed during jobs                            │
+│                                                                             │
+│   BILLING:                                                                  │
+│   ────────                                                                  │
+│   • Fine-tuning job: Pay for CPU/GPU usage during job execution             │
+│   • Model inference: 1× H200 GPU ($2.00/hr) while NIM is running            │
+│                                                                             │
+│   EXAMPLE: Weekly Fine-Tuning                                               │
+│   ───────────────────────────────                                           │
+│   ┌─────────────────────────────────────────────────────────────────────┐   │
+│   │  Fine-tuning job (4h/week): ~$8.56/job × 4 = ~$34/month             │   │
+│   │  Model NIM (H200 24/7): $2.00/hr × 730h = ~$1,460/month             │   │
+│   │  ─────────────────────────────────────────────────────              │   │
+│   │  Total: ~$1,494/month                                               │   │
+│   └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+| Schedule | Fine-Tuning Cost | Model NIM (H200) | Total Monthly Cost |
+|----------|------------------|------------------|-------------------|
+| **Daily** | ~$50-100/month | ~$1,460/month | ~$1,510-1,560/month |
+| **Weekly** | ~$35-70/month | ~$1,460/month | ~$1,495-1,530/month |
+| **Monthly** | ~$15-30/month | ~$1,460/month | ~$1,475-1,490/month |
+
+```bash
+# Configure fine-tuning with kubeteectl
+kubeteectl finetune enable --frequency weekly
+kubeteectl finetune status
+kubeteectl finetune run --now  # Trigger immediate job
+```
+
+---
+
+#### Shared Microservices Pricing
+
+Access to KubeTEE's shared NVIDIA NIM models running in TEE:
+
+**Per Token Pricing**:
+
+| Service | Input Tokens | Output Tokens | Notes |
+|---------|--------------|---------------|-------|
+| **LLM Inference** (Nemotron 49B) | $0.003 / 1K | $0.006 / 1K | Reasoning model |
+| **LLM Inference** (Llama 3.3 70B) | $0.002 / 1K | $0.004 / 1K | General purpose |
+| **LLM Inference** (Mistral Large) | $0.002 / 1K | $0.004 / 1K | Fast inference |
+| **Embedding** (NV-EmbedQA) | $0.0005 / 1K | — | Vector generation |
+| **Reranking** (NV-RerankQA) | $0.001 / 1K | — | Search reranking |
+| **OCR/Vision** (Nemotron VL) | $0.004 / 1K | $0.008 / 1K | Document processing |
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    SHARED MICROSERVICES (TEE Protected)                     │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│   🔒 AVAILABLE MODELS:                                                      │
+│   ─────────────────────                                                     │
+│   • nvidia/llama-3.3-nemotron-super-49b-v1.5  (Primary reasoning model)     │
+│   • nvidia/llama-3.3-70b-instruct            (General purpose)              │
+│   • mistralai/mistral-large-2-instruct       (Fast inference)               │
+│   • nvidia/nv-embedqa-e5-v5                  (Embeddings)                   │
+│   • nvidia/nv-rerankqa-mistral-4b-v3         (Reranking)                    │
+│   • nvidia/llama-nemotron-nano-vl-8b         (Vision/OCR)                   │
+│                                                                             │
+│   🛡️ SECURITY GUARANTEES:                                                   │
+│   ─────────────────────────                                                 │
+│   • Hardware-enforced isolation (Intel TDX, NVIDIA CC)                      │
+│   • No data persistence between requests                                    │
+│   • Attestation-verified execution                                          │
+│   • End-to-end encryption                                                   │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+#### Billing & Metering
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                      HOURLY BILLING FLOW (BASE L2)                          │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│   USER NAMESPACE                    VALIDATOR METERING                      │
+│   ───────────────                   ──────────────────                      │
+│                                                                             │
+│   ┌─────────────────┐              ┌─────────────────────────────────────┐  │
+│   │ Your Workloads  │              │  Prometheus Metrics (hourly)        │  │
+│   │                 │              │                                     │  │
+│   │ • RAG Pipeline  │─────────────▶│  • CPU vCPU-hours (VPA actual)     │  │
+│   │ • LLM Requests  │              │  • GPU hours allocated              │  │
+│   │ • Embeddings    │              │  • Memory GB-hours                  │  │
+│   │ • Fine-tuning   │              │  • Storage GB used                  │  │
+│   │ • Custom Models │              │  • Tokens in/out (per model)        │  │
+│   └─────────────────┘              └──────────────┬──────────────────────┘  │
+│                                                   │                         │
+│                                                   ▼                         │
+│   ┌─────────────────────────────────────────────────────────────────────┐   │
+│   │                    SMART CONTRACT SETTLEMENT                        │   │
+│   │                    KubeTEEPayment.sol (BASE L2)                      │   │
+│   │                                                                     │   │
+│   │   Every Hour:                                                       │   │
+│   │   ┌─────────────┐      ┌─────────────┐      ┌─────────────┐         │   │
+│   │   │ User USDC   │─────▶│  Calculate  │─────▶│  KubeTEE    │         │   │
+│   │   │ Deposit     │      │  Usage Cost │      │  Address    │         │   │
+│   │   │ (0x1234...) │      │             │      │  (0xKTEE..) │         │   │
+│   │   └─────────────┘      └─────────────┘      └─────────────┘         │   │
+│   │                                                                     │   │
+│   │   • Validators submit signed usage reports                          │   │
+│   │   • Contract calculates total cost in USDC                          │   │
+│   │   • USDC transferred: User Deposit → KubeTEE Address                │   │
+│   │   • Event emitted for transparency                                  │   │
+│   └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Metering Details**:
+- **Billing Cycle**: Every hour (on the hour, UTC)
+- **Namespace Resources**: Prometheus scrapes resource allocation and usage
+- **Token Counting**: Input/output tokens logged per request via NIM proxy
+- **Storage**: Persistent volume claims measured hourly
+- **Settlement**: USDC transferred from user deposit to KubeTEE address on BASE
+
+**Smart Contract Functions**:
+
+| Function | Description |
+|----------|-------------|
+| `deposit()` | User deposits USDC into their account |
+| `withdraw(amount)` | User withdraws unused USDC balance |
+| `getBalance(address)` | Check user's current USDC balance |
+| `submitUsage(address, amount, signature)` | Validator submits hourly usage |
+| `settleHourly()` | Automated hourly settlement (Chainlink Automation) |
+
+**Low Balance Alerts**:
+- ⚠️ Warning at 24h estimated usage remaining
+- 🛑 Namespace paused at 0 balance (workloads stopped, data preserved)
+- ✅ Auto-resume when user deposits more USDC
+
+---
+
+#### Example Monthly Bills
+
+| User Profile | Namespace Resources | Shared Services | Total |
+|--------------|---------------------|-----------------|-------|
+| **Hobbyist** | 4 vCPU, 8GB RAM ($58) | 500K tokens ($3) | **~$61/month** |
+| **Startup** | 8 vCPU, 32GB, 1× H100 ($1,285) | 5M tokens ($25) | **~$1,310/month** |
+| **Enterprise** | 32 vCPU, 128GB, 2× H200 ($4,380) | 50M tokens ($250) | **~$4,630/month** |
+| **AI-Heavy** | 16 vCPU, 64GB, 4× H200 ($6,500) | 200M tokens ($1,000) | **~$7,500/month** |
+
+---
+
+#### X.402 Micropayments (No Account Required)
+
+For instant, permissionless access via [X.402 Protocol](https://www.x402.org/):
+
+| Service | Price | Notes |
+|---------|-------|-------|
+| **LLM Inference** | $0.005 / 1K tokens | Pay per request, USDC on BASE |
+| **Embedding** | $0.001 / 1K tokens | Instant settlement |
+| **RAG Query** | $0.01 / query | Includes retrieval + generation |
+
+- ✅ **No KYC required** — permissionless for everyone
+- ✅ **No account needed** — pay per request
+- ✅ **AI agent compatible** — autonomous payments
+- ❌ No dedicated namespace (shared resources only)
+
+---
+
+#### Referrer Revenue Share
+
+Referrers earn **50% of all usage revenue** from referred users:
+
+| Referred User Spends | Referrer Earns |
+|----------------------|----------------|
+| $100/month | **$50/month** |
+| $1,000/month | **$500/month** |
+| $10,000/month | **$5,000/month** |
+
+---
+
+#### Integration Options
+
+- **Bring Your Own LLM** via NeMo Microservices (NimCache, NimService)
+- **Custom model fine-tuning** billed at GPU hourly rate
+- **Private microservices** deployed in your namespace
+
+### Payment Strategy: USDC on BASE
+
+KubeTEE AI uses **USDC on BASE** for all user payments — simple, stable, and widely accessible.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                       KUBETEE PAYMENT ARCHITECTURE                          │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
 │   ┌─────────────────────────────────────────────────────────────────────┐   │
@@ -1587,22 +1737,21 @@ KubeTEE AI implements a **hybrid multi-chain payment architecture** optimized fo
 │   │   KubeTEE α Token ◄──AMM──► TAO                                     │   │
 │   │         │                                                           │   │
 │   │         ▼                                                           │   │
-│   │   KubeTEEPayment.sol (Bittensor EVM)                                │   │
-│   │   └── Reseller epoch settlements                                    │   │
-│   │   └── B2B wholesale payments                                        │   │
-│   │   └── Validator consensus                                           │   │
+│   │   Miner Emissions (Infrastructure + Open Source)                    │   │
+│   │   └── Per-block rewards for infrastructure providers                │   │
+│   │   └── Bounty payouts for code contributions                         │   │
 │   └─────────────────────────────────────────────────────────────────────┘   │
-│                              │                                              │
-│                              │ Bridge (LayerZero/Wormhole)                  │
-│                              ▼                                              │
+│                                                                             │
 │   ┌─────────────────────────────────────────────────────────────────────┐   │
 │   │                        BASE L2 (Coinbase)                           │   │
 │   │                                                                     │   │
-│   │   wKUBETEE (Wrapped) ──► Uniswap V3 / Aerodrome Liquidity           │   │
-│   │         │                                                           │   │
-│   │         ▼                                                           │   │
+│   │   USDC Payments                                                     │   │
+│   │   └── User deposits for namespace resources                         │   │
+│   │   └── Per-epoch billing deductions                                  │   │
+│   │   └── Referrer revenue share payouts                                │   │
+│   │                                                                     │   │
 │   │   x402 Protocol Integration                                         │   │
-│   │   └── HTTP 402 micropayments                                        │   │
+│   │   └── HTTP 402 micropayments (USDC)                                 │   │
 │   │   └── AI agent autonomous payments                                  │   │
 │   │   └── Per-request billing                                           │   │
 │   │                                                                     │   │
@@ -1615,31 +1764,25 @@ KubeTEE AI implements a **hybrid multi-chain payment architecture** optimized fo
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Why BASE for L2?**
+**Why USDC on BASE?**
 
-| Factor | BASE Advantage |
-|--------|----------------|
-| **x402 Protocol** | Native support for HTTP micropayments (10.5M+ transactions) |
-| **ERC-8004** | AI agent payment standard (Google A2A extended) |
-| **Coinbase Users** | 100M+ direct access, no bridge friction |
-| **DeFi TVL** | 46% of all L2 DeFi (~$4.6B) |
-| **AI Ecosystem** | Virtuals, agent projects; AI x Crypto mindshare |
+| Factor | Advantage |
+|--------|-----------|
+| **Stability** | No price volatility — users know exactly what they're paying |
+| **Accessibility** | 100M+ Coinbase users can pay directly, no bridges needed |
+| **x402 Protocol** | Native support for HTTP micropayments |
+| **ERC-8004** | AI agent payment standard compatibility |
 | **Gas Costs** | Sub-cent transactions for micropayments |
+| **Enterprise-Friendly** | Stablecoin payments simplify accounting and compliance |
 
-**Payment Model Comparison**:
+**Payment Model Summary**:
 
 | Model | Network | Best For | Settlement |
 |-------|---------|----------|------------|
 | **Emissions** | Bittensor Subnet | Miners (infra + code) | Per block |
-| **Reseller Epoch** | Bittensor EVM | B2B wholesale | Per epoch |
-| **x402 Micropay** | BASE L2 | AI agents, retail | Instant |
-| **ERC-8004 Agents** | BASE L2 | AI-to-AI autonomous | Instant |
-
-**Roadmap**:
-1. ✅ Phase 1: Bittensor native emissions + reseller epoch payments
-2. 🔜 Phase 2: Deploy wKTEE on BASE, Uniswap V3 liquidity
-3. 🔜 Phase 3: x402 Protocol integration for API micropayments  
-4. 🔜 Phase 4: ERC-8004 agent marketplace registration
+| **Usage Billing** | BASE L2 (USDC) | Namespace resources | Per epoch |
+| **x402 Micropay** | BASE L2 (USDC) | AI agents, retail | Instant |
+| **Referrer Payouts** | BASE L2 (USDC) | Revenue share | Per epoch |
 
 Reference: [x402 Protocol](https://www.x402.org/) | [ERC-8004](https://www.erc8021.com/) | [BASE](https://base.org/)
 
