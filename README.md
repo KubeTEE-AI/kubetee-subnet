@@ -103,10 +103,14 @@ We also leverage CNCF projects for cloud-native confidential computing:
     - [Native Bittensor Multiple Incentive Mechanisms](#native-bittensor-multiple-incentive-mechanisms)
     - [Mechanism 0: Infrastructure (60% Emissions)](#mechanism-0-infrastructure-60-emissions)
     - [Mechanism 1: Open Source Competition (40% Emissions)](#mechanism-1-open-source-competition-40-emissions)
+      - [How Validators Set Weights (Mechanism 1)](#how-validators-set-weights-mechanism-1)
+      - [Contributor Registration (GitHub → Bittensor Mapping)](#contributor-registration-github--bittensor-mapping)
       - [GitHub Issues = Bounties](#github-issues--bounties)
-      - [Emission Distribution](#emission-distribution)
+      - [Bounty Age Multiplier](#bounty-age-multiplier-longer-open--higher-reward)
+      - [Weight Calculation Formula](#weight-calculation-formula)
       - [Bounty Lifecycle (Fully Automated)](#bounty-lifecycle-fully-automated)
       - [Security Scanning via Bitsec (Subnet 60)](#security-scanning-via-bitsec-subnet-60)
+      - [Implementation Bounty](#implementation-bounty)
     - [Referrers / Integrators / Resellers: 50% Revenue Share (NO Emissions!)](#referrers--integrators--resellers-50-revenue-share-no-emissions)
     - [On-Chain Emission Configuration](#on-chain-emission-configuration)
     - [Staging vs Production](#staging-vs-production)
@@ -875,12 +879,11 @@ The model uses NVIDIA's novel [Puzzle NAS approach](https://arxiv.org/abs/2411.1
 - **Reasoning ON**: Temperature `0.6`, Top P `0.95`
 - **Reasoning OFF**: Greedy decoding (set `/no_think` in system prompt)
 
-**Llama Nemotron Family:**
-| Model | Parameters | Use Case |
-|-------|------------|----------|
-| [Llama-3.1-Nemotron-Nano-4B-v1.1](https://huggingface.co/nvidia/Llama-3.1-Nemotron-Nano-4B-v1.1) | 4B | Edge/embedded devices |
-| **Llama-3.3-Nemotron-Super-49B-v1.5** | 49B | **Primary model for KubeTEE** |
-| [Llama-3.1-Nemotron-Ultra-253B-v1](https://huggingface.co/nvidia/Llama-3_1-Nemotron-Ultra-253B-v1) | 253B | Maximum capability |
+> **KubeTEE AI wants to improve the model with Bittensor Subnet 120 Affine**
+>
+> Check out the [🏆 Affine SN120 — Model Benchmark Challenge](#-affine-sn120--model-benchmark-challenge).
+> Participate to tune, evaluate, or submit models, and help drive new SOTA. Top-performing models will be integrated into this service!
+//
 
 ---
 
@@ -969,6 +972,8 @@ This provides:
 
 ### Mechanism 0: Infrastructure (60% Emissions)
 
+> 📋 **Implementation Bounty:** [GitHub Issue #2](https://github.com/KubeTEE-AI/kubetee-subnet/issues/2)
+
 **Purpose**: Reward miners for providing Kubernetes infrastructure to serve user AI requests.
 
 **Key Feature**: **Emissions are distributed per resources provided** (GPU nodes)
@@ -1010,9 +1015,97 @@ This provides:
 
 **⚠️ NO "WINNER TAKES ALL"** — We use a **hybrid bounty + continuous contribution model** to avoid drama and ensure fair rewards for all contributors.
 
+#### How Validators Set Weights (Mechanism 1)
+
+Per [Bittensor's multiple mechanism model](https://docs.learnbittensor.org/subnets/understanding-multiple-mech-subnets), validators must set weights on **miner hotkeys** for each mechanism independently.
+
+**🔥 NATIVE BURN MECHANISM**: Unused emissions are **automatically burned** when validators set weight to the **subnet owner key**. This ensures emissions only go to active contributors — the rest is burned, creating deflationary pressure on Alpha supply.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│              VALIDATOR WEIGHT SETTING (MECHANISM 1)                         │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  DATA SOURCES                      VALIDATOR                 WEIGHTS        │
+│  ────────────                      ─────────                 ───────        │
+│                                                                             │
+│  ┌──────────────────┐                                                       │
+│  │  GitHub API      │──┐                                                    │
+│  │  - Merged PRs    │  │     ┌─────────────────────┐                        │
+│  │  - Bounty wins   │  │     │                     │    ┌──────────────┐    │
+│  │  - PR authors    │  ├────▶│  Validator Script   │───▶│  Mechanism 1 │    │
+│  └──────────────────┘  │     │                     │    │   Weights    │    │
+│                        │     │  1. Query GitHub    │    │              │    │
+│  ┌──────────────────┐  │     │  2. Map GitHub →    │    │  Alice: 24   │    │
+│  │  On-Chain Oracle │  │     │     Bittensor HK    │    │  Bob: 5      │    │
+│  │  - GitHub ↔ HK   │──┤     │  3. Calculate       │    │  Charlie: 3  │    │
+│  │    mapping       │  │     │     contribution    │    │  🔥BURN: 68  │    │
+│  └──────────────────┘  │     │     scores          │    └──────────────┘    │
+│                        │     │  4. Remainder →     │                        │
+│  ┌──────────────────┐  │     │     Subnet Owner    │                        │
+│  │  Benchmark       │──┘     │     Key (BURNED)    │                        │
+│  │  Results         │        └─────────────────────┘                        │
+│  └──────────────────┘                                                       │
+│                                                                             │
+│  EMISSION FLOW:                                                             │
+│  ──────────────                                                             │
+│  Mechanism 1 (40%) → Yuma Consensus → Contributors (32%) + Burned (68%)     │
+│                                                                             │
+│  ⚠️ NO EPOCH WITHOUT BURN: Even with active contributors, only a portion    │
+│     of emissions are distributed. Unused weight → Subnet Owner Key → BURNED │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Example Epoch (No Contributions)**:
+```
+Validators set: Subnet Owner Key = 100% weight
+Result: 100% of Mechanism 1 emissions BURNED
+```
+
+**Example Epoch (Active Contributions)**:
+```
+Validators set:
+  - Alice (won bounty:epic): 24%
+  - Bob (merged 5 PRs): 5%
+  - Charlie (benchmark +3%): 3%
+  - Subnet Owner Key: 68% (BURNED)
+
+Result: 32% distributed to contributors, 68% BURNED
+```
+
+#### Contributor Registration (GitHub → Bittensor Mapping)
+
+**⚠️ REQUIRED**: Contributors must link their GitHub account to a Bittensor hotkey to receive emissions.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│              CONTRIBUTOR REGISTRATION FLOW                                  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  1. REGISTER MINER HOTKEY on KubeTEE subnet (netuid: TBD)                   │
+│     └── btcli subnet register --netuid <TBD> --wallet.name <wallet>         │
+│                                                                             │
+│  2. LINK GITHUB to your Bittensor hotkey                                    │
+│     └── Sign message with hotkey, submit via GitHub PR to registry          │
+│     └── Or: Use KubeTEE CLI: kubeteectl link-github --hotkey <HK>           │
+│                                                                             │
+│  3. CONTRIBUTE to KubeTEE-AI repositories                                   │
+│     └── PRs merged = emissions each epoch (weighted by contribution)        │
+│                                                                             │
+│  On-Chain Registry (mapping stored on Bittensor or IPFS):                   │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │  GitHub: @alice         →  Hotkey: 5FHneW46xR...abc123              │    │
+│  │  GitHub: @bob           →  Hotkey: 5GNJqTPy...def456                │    │
+│  │  GitHub: @charlie       →  Hotkey: 5DAAnrj7...ghi789                │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
 #### GitHub Issues = Bounties
 
-**Bounties ARE GitHub Issues** in `KubeTEE-AI` organization repositories. Each bounty has a dedicated **hotkey where emissions accumulate** until the bounty is won.
+**Bounties ARE GitHub Issues** in `KubeTEE-AI` organization repositories. When a bounty is completed, the winner's hotkey receives higher weight from validators.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -1025,8 +1118,8 @@ This provides:
 │  │  Issue #42: "Optimize batch inference pipeline"                     │    │
 │  │                                                                     │    │
 │  │  Labels: [bounty:hard] [category:optimization]                      │    │
-│  │  Bounty Hotkey: 5FHneW46...abc123                                   │    │
-│  │  Accumulated: 47.3 Alpha (receiving emissions each epoch)           │    │
+│  │  Weight Multiplier: 4x (hard bounty)                                │    │
+│  │  Status: OPEN                                                       │    │
 │  │                                                                     │    │
 │  │  Acceptance Criteria:                                               │    │
 │  │  - [ ] Throughput improved by 2x                                    │    │
@@ -1034,52 +1127,141 @@ This provides:
 │  │  - [ ] No memory regression                                         │    │
 │  └─────────────────────────────────────────────────────────────────────┘    │
 │                                                                             │
-│  EMISSION FLOW:                                                             │
-│  ─────────────                                                              │
-│  Subnet → Open Source (40%) → Bounty Pool (60%) → Bounty Hotkeys            │
+│  WEIGHT CALCULATION:                                                        │
+│  ───────────────────                                                        │
+│  Winner's weight += Bounty_Difficulty_Multiplier × Base_Weight              │
 │                                                                             │
-│  The longer a bounty stays open, the more emissions accumulate!             │
-│  Hard/Epic bounties = bigger rewards (higher weight = more emissions/epoch) │
+│  Example: Alice wins bounty:hard (4x) → Validators increase Alice's         │
+│           Mechanism 1 weight by 4x base units for the reward epoch          │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 **GitHub Labels for Bounties**:
 
-| Label | Type | Weight | Description |
-|-------|------|--------|-------------|
+| Label | Type | Base Weight | Description |
+|-------|------|-------------|-------------|
 | `bounty:easy` | Difficulty | 1x | Good for newcomers |
 | `bounty:medium` | Difficulty | 2x | Standard tasks |
 | `bounty:hard` | Difficulty | 4x | Complex improvements |
 | `bounty:epic` | Difficulty | 8x | Major features |
-| `category:bug-fix` | Category | Merged PR | Bug fixes |
-| `category:feature` | Category | Bounty | New features |
-| `category:documentation` | Category | Merged PR | Docs improvements |
-| `category:benchmark` | Category | Bounty | Benchmark improvements |
-| `category:security` | Category | Bounty | Security fixes |
-| `category:optimization` | Category | Bounty | Performance optimizations |
-| `category:testing` | Category | Merged PR | Test coverage |
+| `category:bug-fix` | Category | — | Bug fixes |
+| `category:feature` | Category | — | New features |
+| `category:documentation` | Category | — | Docs improvements |
+| `category:benchmark` | Category | — | Benchmark improvements |
+| `category:security` | Category | — | Security fixes |
+| `category:optimization` | Category | — | Performance optimizations |
+| `category:testing` | Category | — | Test coverage |
 
-#### Emission Distribution
+#### Bounty Age Multiplier (Longer Open = Higher Reward)
+
+**Problem**: How to incentivize completion of older/harder bounties without accumulating emissions in hotkeys?
+
+**Solution**: Apply an **age multiplier** when the bounty is completed. The longer a bounty stays open, the higher the reward for the winner.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                    OPEN SOURCE EMISSIONS (40% of subnet)                    │
+│              BOUNTY AGE MULTIPLIER                                          │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
+│  Formula:                                                                   │
+│  ────────                                                                   │
+│  Winner_Weight = Difficulty_Multiplier × Age_Multiplier                     │
+│                                                                             │
+│  Age_Multiplier = min(Epochs_Open / 10, 5.0)   // Capped at 5x              │
+│                                                                             │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │  Epochs Open    │  Age Multiplier  │  Example (bounty:hard = 4x)   │    │
+│  │─────────────────┼──────────────────┼───────────────────────────────│    │
+│  │  1-9 epochs     │  0.1x - 0.9x     │  4 × 0.5 = 2 weight           │    │
+│  │  10 epochs      │  1.0x            │  4 × 1.0 = 4 weight           │    │
+│  │  20 epochs      │  2.0x            │  4 × 2.0 = 8 weight           │    │
+│  │  30 epochs      │  3.0x            │  4 × 3.0 = 12 weight          │    │
+│  │  40 epochs      │  4.0x            │  4 × 4.0 = 16 weight          │    │
+│  │  50+ epochs     │  5.0x (MAX)      │  4 × 5.0 = 20 weight          │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
+│                                                                             │
+│  EXAMPLE:                                                                   │
+│  ────────                                                                   │
+│  Bounty #42 (bounty:epic = 8x) opened at Epoch 100                          │
+│  Completed at Epoch 140 (40 epochs open)                                    │
+│                                                                             │
+│  Winner_Weight = 8 × min(40/10, 5.0) = 8 × 4.0 = 32                         │
+│                                                                             │
+│  If total contributor weights this epoch = 40:                              │
+│    Winner gets 32/40 = 80% of distributed emissions                         │
+│    (Remainder goes to subnet owner key → BURNED)                            │
+│                                                                             │
+│  WHY THIS WORKS:                                                            │
+│  ───────────────                                                            │
+│  • No accumulation in bounty hotkeys                                        │
+│  • Older bounties = higher weight when completed                            │
+│  • Incentivizes tackling hard/stale issues                                  │
+│  • Emissions burned each epoch until bounty is completed                    │
+│  • Winner gets proportionally large share of THAT epoch's emissions         │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+#### Weight Calculation Formula
+
+Validators calculate weights for each contributor based on three factors, with **unused weight sent to subnet owner key (BURNED)**:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│              MECHANISM 1 WEIGHT CALCULATION                                 │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  MAX_WEIGHT = 100 (per epoch)                                               │
+│                                                                             │
+│  Contributor_Weight = Bounty_Weight + Benchmark_Weight + PR_Weight          │
+│  Burn_Weight = MAX_WEIGHT - Sum(All_Contributor_Weights)                    │
+│                                                                             │
 │  ┌──────────────────┐   ┌──────────────────┐   ┌──────────────────┐         │
-│  │   BOUNTY POOL    │   │   BENCHMARK      │   │   MERGED PRs     │         │
-│  │      50%         │   │      30%         │   │      20%         │         │
+│  │   BOUNTY WINS    │   │   BENCHMARK      │   │   MERGED PRs     │         │
+│  │   (with age      │   │   IMPROVEMENT    │   │                  │         │
+│  │   multiplier)    │   │                  │   │                  │         │
 │  └────────┬─────────┘   └────────┬─────────┘   └────────┬─────────┘         │
 │           │                      │                      │                   │
 │           ▼                      ▼                      ▼                   │
-│  ┌──────────────────┐   ┌──────────────────┐   ┌──────────────────┐         │
-│  │ Bounty Hotkeys   │   │ Benchmark        │   │ PRs merged to    │         │
-│  │ (weighted by     │   │ improvement      │   │ main branch      │         │
-│  │  difficulty)     │   │ bonus            │   │                  │         │
-│  └──────────────────┘   └──────────────────┘   └──────────────────┘         │
+│  Difficulty × Age     % improvement on       1 point per PR                 │
+│  multiplier           DeepResearch Bench     merged                         │
 │                                                                             │
-│  When bounty is WON → Accumulated emissions transfer to winner!             │
+│  EXAMPLE CALCULATION (Epoch N):                                             │
+│  ──────────────────────────────                                             │
+│                                                                             │
+│  Alice:                                                                     │
+│   - Won bounty:epic (8x), open 30 epochs → 8 × 3.0 = 24 points              │
+│   Total Weight = 24                                                         │
+│                                                                             │
+│  Bob:                                                                       │
+│   - Merged 5 PRs = 5 points                                                 │
+│   Total Weight = 5                                                          │
+│                                                                             │
+│  Charlie:                                                                   │
+│   - Improved benchmark by 3% = 3 points                                     │
+│   Total Weight = 3                                                          │
+│                                                                             │
+│  🔥 BURN (Subnet Owner Key):                                                │
+│   - Burn_Weight = 100 - (24 + 5 + 3) = 68                                   │
+│                                                                             │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │  FINAL WEIGHT DISTRIBUTION:                                         │    │
+│  │                                                                     │    │
+│  │    Alice:              24%  →  24% of Mechanism 1 emissions         │    │
+│  │    Bob:                 5%  →   5% of Mechanism 1 emissions         │    │
+│  │    Charlie:             3%  →   3% of Mechanism 1 emissions         │    │
+│  │    🔥 BURNED:          68%  →  68% of Mechanism 1 emissions         │    │
+│  │    ────────────────────────────────────────────────────────────     │    │
+│  │    Total:             100%                                          │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
+│                                                                             │
+│  NET EFFECT:                                                                │
+│  ───────────                                                                │
+│  • 40% of subnet emissions go to Mechanism 1                                │
+│  • Only 32% of that (40% × 32%) = 12.8% of subnet emissions to contributors │
+│  • Remaining 68% of Mechanism 1 = 27.2% of subnet emissions BURNED          │
+│  • Creates deflationary pressure on Alpha supply                            │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -1103,9 +1285,10 @@ This provides:
 │     ├── Benchmark tests run (if category:benchmark)                         │
 │     └── PASS / FAIL                                                         │
 │                                                                             │
-│  4. AI CODE ANALYSIS (Subnet Owner Validator)                               │
+│  4. AI CODE ANALYSIS                                                        │
+│     ├── Qodo self-hosted AI code review                                     │
 │     ├── Code quality score (0-100)                                          │
-│     ├── Security scan  BITSEC (SN60)                                        │
+│     ├── Security scan via Bitsec (SN60)                                     │
 │     ├── Performance analysis                                                │
 │     └── AI generates approval/rejection with reasoning                      │
 │                                                                             │
@@ -1191,6 +1374,10 @@ We integrate with **Bitsec (SN60)** for decentralized security auditing of code 
 - ✅ **Transparent** — All bounties, submissions, and AI analysis public
 - ✅ **Subnet owner authority** — Final decision on edge cases
 - ✅ **Subnet integration** — Bitsec (SN60) for security, Gradients (SN56) for fine-tuning
+
+#### Implementation Bounty
+
+> 📋 **Track progress:** [GitHub Issue #1](https://github.com/KubeTEE-AI/kubetee-subnet/issues/1)
 
 ### Referrers / Integrators / Resellers: 50% Revenue Share (NO Emissions!)
 
@@ -1314,31 +1501,34 @@ response = requests.post(
 )
 ```
 
-**Revenue Share Examples**:
+**Revenue Share Examples** (50/50 Split):
 
-| User Action | Price | Direct User | Referred User (50/50 Split) |
-|-------------|-------|-------------|----------------------------|
-| **Basic Subscription** | **$295/month** | $295 → KubeTEE | $147.50 → KubeTEE, **$147.50 → Referrer** |
-| **Professional Subscription** | **$595/month** | $595 → KubeTEE | $297.50 → KubeTEE, **$297.50 → Referrer** |
-| **Enterprise Subscription** | **$995/month** | $995 → KubeTEE | $497.50 → KubeTEE, **$497.50 → Referrer** |
-| Extra H200 GPU hour | $2.00 | $2.00 → KubeTEE | $1.00 → KubeTEE, **$1.00 → Referrer** |
-| 1K tokens usage | $0.005 | $0.005 → KubeTEE | $0.0025 → KubeTEE, **$0.0025 → Referrer** |
+| Resource Usage | Price | Direct User | Referred User |
+|----------------|-------|-------------|---------------|
+| **H200 GPU hour** | $2.00/hr | $2.00 → KubeTEE | $1.00 → KubeTEE, **$1.00 → Referrer** |
+| **H100 GPU hour** | $1.50/hr | $1.50 → KubeTEE | $0.75 → KubeTEE, **$0.75 → Referrer** |
+| **CPU (vCPU/hour)** | $0.02/hr | $0.02 → KubeTEE | $0.01 → KubeTEE, **$0.01 → Referrer** |
+| **Storage (GB/month)** | $0.15 | $0.15 → KubeTEE | $0.075 → KubeTEE, **$0.075 → Referrer** |
+| **1K tokens (LLM)** | $0.003-0.006 | Full → KubeTEE | 50% → KubeTEE, **50% → Referrer** |
 
-**Referrer Earnings Example**:
-- Refer 10 Basic subscribers (RAG users, no GPU): 10 × $147.50 = **$1,475/month**
-- Refer 5 Professional subscribers (H200 + fine-tuning): 5 × $297.50 = **$1,487.50/month**
-- Refer 2 Enterprise subscribers: 2 × $497.50 = **$995/month**
+**Referrer Earnings by User Profile**:
+
+| User Profile | Typical Monthly Usage | Your 50% Share |
+|--------------|----------------------|----------------|
+| **RAG CPU-only** | ~$100/month | **$50/month** |
+| **RAG + H100 GPU** | ~$1,300/month | **$650/month** |
+| **Fine-Tuning (weekly)** | ~$1,500/month | **$750/month** |
+| **Heavy Inference (H200)** | ~$1,900/month | **$950/month** |
 
 **Scaling Your Referral Income**:
 
-| Referred Subscribers | Tier | Monthly Revenue | Your 50% Share |
-|---------------------|------|-----------------|----------------|
-| 5 | Basic ($295) | $1,475 | **$737.50/month** |
-| 10 | Basic ($295) | $2,950 | **$1,475/month** |
-| 5 | Professional ($595) | $2,975 | **$1,487.50/month** |
-| 10 | Professional ($595) | $5,950 | **$2,975/month** |
-| 2 | Enterprise ($995) | $1,990 | **$995/month** |
-| Mix: 10 Basic + 5 Pro | — | $5,925 | **$2,962.50/month** |
+| Referred Users | Profile | Their Monthly Spend | Your 50% Share |
+|----------------|---------|---------------------|----------------|
+| 10 | RAG CPU-only | $1,000 | **$500/month** |
+| 5 | RAG + H100 GPU | $6,500 | **$3,250/month** |
+| 3 | Fine-Tuning | $4,500 | **$2,250/month** |
+| 2 | Heavy Inference | $3,800 | **$1,900/month** |
+| Mix: 10 CPU + 3 GPU | — | $4,900 | **$2,450/month** |
 
 **Why USDC on BASE?**
 - ✅ **Zero volatility** - Stable earnings for referrers
