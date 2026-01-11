@@ -106,13 +106,12 @@ We also leverage CNCF projects for cloud-native confidential computing:
       - [How Validators Set Weights (Mechanism 1)](#how-validators-set-weights-mechanism-1)
       - [Contributor Registration (GitHub → Bittensor Mapping)](#contributor-registration-github--bittensor-mapping)
       - [GitHub Issues = Bounties](#github-issues--bounties)
-      - [Bounty Age Multiplier](#bounty-age-multiplier-longer-open--higher-reward)
+      - [Bounty Age Multiplier (Longer Open = Higher Reward)](#bounty-age-multiplier-longer-open--higher-reward)
       - [Weight Calculation Formula](#weight-calculation-formula)
       - [Bounty Lifecycle (Fully Automated)](#bounty-lifecycle-fully-automated)
       - [Security Scanning via Bitsec (Subnet 60)](#security-scanning-via-bitsec-subnet-60)
       - [Implementation Bounty](#implementation-bounty)
     - [Referrers / Integrators / Resellers: 50% Revenue Share (NO Emissions!)](#referrers--integrators--resellers-50-revenue-share-no-emissions)
-    - [On-Chain Emission Configuration](#on-chain-emission-configuration)
     - [Staging vs Production](#staging-vs-production)
     - [Revenue Model](#revenue-model)
       - [Namespace Resource Pricing](#namespace-resource-pricing)
@@ -948,23 +947,6 @@ This provides:
 │       │   & Bond Pool       │           │   & Bond Pool       │             │
 │       └─────────────────────┘           └─────────────────────┘             │
 │                                                                             │
-│   ═══════════════════════════════════════════════════════════════════════   │
-│   ║         RESELLERS: ON-CHAIN PAYMENTS (NO EMISSIONS!)                ║   │
-│   ═══════════════════════════════════════════════════════════════════════   │
-│                                                                             │
-│       ┌─────────────────────────────────────────────────────────────────┐   │
-│       │  RESELLERS / WHITE LABEL                                        │   │
-│       │  ─────────────────────────────────────────────────────────────  │   │
-│       │  ✗ NOT registered on Bittensor subnet (no emissions)            │   │
-│       │  ✓ Register via KubeTEE CLI → Creates Rancher account           │   │
-│       │  ✓ Coldkey/Hotkey with Alpha                                    │   │
-│       │  ✓ Deposit Alpha/TAO to on-chain smart contract                 │   │
-│       │  ✓ Validators calculate usage & transfer each epoch             │   │
-│       │  ─────────────────────────────────────────────────────────────  │   │
-│       │  PAY 50% OF RETAIL → KubeTEE Owner Key                          │   │
-│       │  Future: ERC-8004 / x.402 payment protocols                     │   │
-│       └─────────────────────────────────────────────────────────────────┘   │
-│                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -1381,137 +1363,269 @@ We integrate with **Bitsec (SN60)** for decentralized security auditing of code 
 
 ### Referrers / Integrators / Resellers: 50% Revenue Share (NO Emissions!)
 
-**⚠️ IMPORTANT**: Referrers do NOT use emissions and do NOT register on the Bittensor subnet!
+**⚠️ IMPORTANT**: Referrers do NOT register on the Bittensor subnet and do NOT receive emissions!
 
-Instead of a wholesale model where resellers charge different prices, we use a **unified pricing + referral revenue share model**:
+Simple **affiliate program** with email-based tracking and USDC payouts on BASE:
 
 - **All users pay the same retail price** (direct or via referrer)
 - **Referrers earn 50% of revenue** from users they bring in
-- **Simple, transparent, and fair** for everyone
+- **Minimum 2 referred users** required to activate commissions
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                    REFERRAL REVENUE SHARE MODEL (50%)                       │
+│                    AFFILIATE REVENUE SHARE MODEL (50%)                      │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│   ACCESS CHANNELS (Same Retail Price for Everyone!)                         │
-│   ─────────────────────────────────────────────────                         │
+│   REGISTRATION (Simple - No Bittensor Required!)                            │
+│   ──────────────────────────────────────────────                            │
 │                                                                             │
-│   ┌─────────────┐    ┌──────────────────────┐    ┌──────────────────────┐   │
-│   │   DIRECT    │    │  VIA REFERRER        │    │  VIA INTEGRATOR      │   │
-│   │   USERS     │    │  (Affiliate)         │    │  (White-Label API)   │   │
-│   └──────┬──────┘    └──────────┬───────────┘    └──────────┬───────────┘   │
-│          │                      │                           │               │
-│          │ Pay retail           │ Pay retail                │ Pay retail    │
-│          │ price                │ price                     │ price         │
-│          ▼                      ▼                           ▼               │
+│   1. Sign up with email → Get unique affiliate link                         │
+│   2. Add your BASE wallet address for USDC payouts                          │
+│   3. Refer at least 2 users → Commissions activated!                        │
+│                                                                             │
 │   ┌─────────────────────────────────────────────────────────────────────┐   │
-│   │                    KUBETEE PAYMENT SYSTEM (BASE L2)                 │   │
 │   │                                                                     │   │
-│   │   Revenue Distribution (per user payment):                          │   │
-│   │   ┌─────────────────────────────────────────────────────────────┐   │   │
-│   │   │                                                             │   │   │
-│   │   │   DIRECT USER:       100% → KubeTEE Owner                   │   │   │
-│   │   │                                                             │   │   │
-│   │   │   REFERRED USER:     50%  → KubeTEE Owner                   │   │   │
-│   │   │                      50%  → Referrer/Integrator             │   │   │
-│   │   │                                                             │   │   │
-│   │   └─────────────────────────────────────────────────────────────┘   │   │
+│   │   Email: affiliate@example.com                                      │   │
+│   │   BASE Address: 0x1234...abcd                                       │   │
+│   │   Affiliate Link: https://kubetee.ai/signup?ref=ABC123              │   │
+│   │                                                                     │   │
+│   │   Status: ✅ Active (3 referred users)                              │   │
+│   │   Minimum: 2 users required                                         │   │
 │   │                                                                     │   │
 │   └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
-│   BENEFITS:                                                                 │
-│   • Same price for everyone → No customer confusion                         │
-│   • Referrers get passive income → Strong incentive to promote              │
-│   • Simple tracking → On-chain attribution                                  │
-│   • Win-win-win → Users, referrers, and subnet all benefit                  │
+│   REVENUE DISTRIBUTION:                                                     │
+│   ─────────────────────                                                     │
 │                                                                             │
-│   Future Protocols: ERC-8004 (Decentralized Paymaster) / x.402              │
+│   ┌─────────────┐    ┌──────────────────────┐    ┌──────────────────────┐   │
+│   │   DIRECT    │    │  VIA AFFILIATE       │    │  VIA INTEGRATOR      │   │
+│   │   USERS     │    │  (Referral Link)     │    │  (White-Label API)   │   │
+│   └──────┬──────┘    └──────────┬───────────┘    └──────────┬───────────┘   │
+│          │                      │                           │               │
+│          ▼                      ▼                           ▼               │
+│   ┌─────────────────────────────────────────────────────────────────────┐   │
+│   │                                                                     │   │
+│   │   DIRECT USER:       100% → KubeTEE                                 │   │
+│   │                                                                     │   │
+│   │   REFERRED USER:     50%  → KubeTEE                                 │   │
+│   │                      50%  → Affiliate (USDC on BASE)                │   │
+│   │                                                                     │   │
+│   └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Referrer Types**:
+**Affiliate Types**:
 
 | Type | Description | Use Case |
 |------|-------------|----------|
-| **Affiliate** | Refers users via referral link/code | Content creators, influencers |
+| **Affiliate** | Refers users via referral link | Content creators, influencers |
 | **Integrator** | Embeds KubeTEE into their product | SaaS companies, AI platforms |
-| **White-Label** | Rebrands KubeTEE for their customers | Enterprise resellers |
+| **Reseller** | White-labels KubeTEE for customers | Enterprise resellers |
 
-All referrer types earn the same **50% revenue share** on referred users.
+All types earn the same **50% revenue share** on referred users.
 
-**Referrer Requirements** (Very simple!):
+**On-Chain Affiliate System (No Database Required)**:
 
-| Requirement | Referrer | Miner (Infrastructure) |
-|-------------|----------|------------------------|
-| Hotkey/Coldkey | ✅ Yes | ✅ Yes |
-| Wallet (for payouts) | ✅ Yes | ✅ Yes |
-| Kubernetes Infrastructure | ❌ **NO!** | ✅ Yes |
-| GPU/CPU | ❌ **NO!** | ✅ Yes |
-| Technical Operations | ❌ **NO!** | ✅ Yes |
-| Bittensor Subnet Registration | ❌ **NO!** | ✅ Yes (for emissions) |
-| Register via KubeTEE CLI | ✅ Yes | Optional |
+Attribution and payments are handled entirely by a smart contract on BASE L2. No separate affiliate database needed.
 
-**Referrer Onboarding Flow**:
-
-```bash
-# 1. Create/import wallet
-kubetee wallet create
-# Or: kubetee wallet import --private-key <your_key>
-
-# 2. Register as referrer
-kubetee referrer register --name "My Company LLC" --payout-address 0x...
-# → Creates referrer account
-# → Generates unique referral code/link
-
-# 3. Get your referral link
-kubetee referrer link
-# → https://kubetee.ai/signup?ref=ABC123
-# → Or embed in API: X-KubeTEE-Referrer: ABC123
-
-# 4. Share with your users/customers
-# → They sign up and use KubeTEE normally
-# → You earn 50% of their spend automatically
-
-# 5. Check your earnings anytime
-kubetee referrer earnings
-# Shows: Total Referred Users, Total Revenue, Your Share (50%), Pending Payout
-
-# 6. Withdraw your earnings (auto-payout or manual)
-kubetee referrer withdraw
-# → USDC sent to your payout address
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│              ON-CHAIN AFFILIATE ATTRIBUTION (BASE L2)                       │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  USER REGISTRATION (kubeteectl):                                            │
+│  ───────────────────────────────                                            │
+│  $ kubeteectl register \                                                    │
+│      --base-address 0x5678...efgh \                                         │
+│      --affiliate 0x1234...abcd        # Affiliate's BASE address            │
+│                                                                             │
+│  → Calls KubeTEEAffiliate.registerUser(user, affiliate) on BASE             │
+│  → Attribution stored on-chain permanently                                  │
+│  → Creates Rancher namespace for user                                       │
+│                                                                             │
+│  SMART CONTRACT LOGIC:                                                      │
+│  ─────────────────────                                                      │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │  On-Chain State:                                                    │    │
+│  │                                                                     │    │
+│  │  userAffiliate[user] = affiliate     // Permanent attribution       │    │
+│  │  affiliatePaidUsers[affiliate] = N   // Count of paying users       │    │
+│  │  pendingCommissions[affiliate] = X   // Held until 2-user minimum   │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
+│                                                                             │
+│  PAYMENT FLOW (Hourly):                                                     │
+│  ──────────────────────                                                     │
+│                                                                             │
+│  User Payment ($100)                                                        │
+│       │                                                                     │
+│       ▼                                                                     │
+│  ┌─────────────────────────────────────┐                                    │
+│  │  Check: affiliatePaidUsers >= 2 ?   │                                    │
+│  └─────────────────┬───────────────────┘                                    │
+│           ┌───────┴───────┐                                                 │
+│           ▼               ▼                                                 │
+│        YES (≥2)        NO (<2)                                              │
+│           │               │                                                 │
+│           ▼               ▼                                                 │
+│  ┌─────────────┐   ┌──────────────────┐                                     │
+│  │ Split 50/50 │   │ Hold commission  │                                     │
+│  │             │   │ in contract      │                                     │
+│  │ $50 → Aff   │   │                  │                                     │
+│  │ $50 → KT    │   │ pendingComm += $50│                                    │
+│  └─────────────┘   │ KubeTEE gets $50 │                                     │
+│                    └──────────────────┘                                     │
+│                                                                             │
+│  WHEN AFFILIATE REACHES 2 PAID USERS:                                       │
+│  ────────────────────────────────────                                       │
+│  → All pending commissions released automatically                           │
+│  → Future payments split 50/50 immediately                                  │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**For Integrators (API-Based Referral)**:
+**Smart Contract: `KubeTEEAffiliate.sol`**
 
-```python
-# Embed referrer attribution in API calls
-import requests
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
 
-response = requests.post(
-    "https://api.kubetee.ai/v1/chat/completions",
-    headers={
-        "Authorization": "Bearer <user_api_key>",
-        "X-KubeTEE-Referrer": "your_referrer_code"  # Links user to your account
-    },
-    json={
-        "model": "nvidia/llama-3.1-nemotron-70b-instruct",
-        "messages": [{"role": "user", "content": "Hello!"}]
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
+contract KubeTEEAffiliate {
+    IERC20 public immutable usdc;
+    address public immutable kubetee;
+    
+    uint256 public constant MIN_PAID_USERS = 2;
+    uint256 public constant COMMISSION_BPS = 5000; // 50%
+    
+    // User → Affiliate (set once at registration)
+    mapping(address => address) public userAffiliate;
+    
+    // Affiliate → Count of users who have paid
+    mapping(address => uint256) public affiliatePaidUsers;
+    
+    // Affiliate → Pending commissions (released at 2-user minimum)
+    mapping(address => uint256) public pendingCommissions;
+    
+    // User → Has made first payment
+    mapping(address => bool) public userHasPaid;
+    
+    event UserRegistered(address indexed user, address indexed affiliate);
+    event PaymentProcessed(address indexed user, uint256 amount, address indexed affiliate);
+    event CommissionsReleased(address indexed affiliate, uint256 amount);
+    
+    constructor(address _usdc, address _kubetee) {
+        usdc = IERC20(_usdc);
+        kubetee = _kubetee;
     }
-)
+    
+    // Register user with optional affiliate (called by kubeteectl)
+    function registerUser(address user, address affiliate) external {
+        require(userAffiliate[user] == address(0), "Already registered");
+        userAffiliate[user] = affiliate; // address(0) if no affiliate
+        emit UserRegistered(user, affiliate);
+    }
+    
+    // Process payment (called hourly by billing system)
+    function processPayment(address user, uint256 amount) external {
+        require(usdc.transferFrom(msg.sender, address(this), amount), "Transfer failed");
+        
+        address affiliate = userAffiliate[user];
+        
+        // First payment → increment affiliate's paid user count
+        if (!userHasPaid[user] && affiliate != address(0)) {
+            userHasPaid[user] = true;
+            affiliatePaidUsers[affiliate]++;
+            
+            // Release pending if just reached minimum
+            if (affiliatePaidUsers[affiliate] == MIN_PAID_USERS) {
+                _releasePending(affiliate);
+            }
+        }
+        
+        // Calculate and distribute
+        if (affiliate != address(0)) {
+            uint256 commission = (amount * COMMISSION_BPS) / 10000;
+            uint256 kubeteeShare = amount - commission;
+            
+            if (affiliatePaidUsers[affiliate] >= MIN_PAID_USERS) {
+                // Qualified → pay immediately
+                usdc.transfer(affiliate, commission);
+            } else {
+                // Not qualified → hold commission
+                pendingCommissions[affiliate] += commission;
+            }
+            usdc.transfer(kubetee, kubeteeShare);
+        } else {
+            // No affiliate → 100% to KubeTEE
+            usdc.transfer(kubetee, amount);
+        }
+        
+        emit PaymentProcessed(user, amount, affiliate);
+    }
+    
+    function _releasePending(address affiliate) internal {
+        uint256 pending = pendingCommissions[affiliate];
+        if (pending > 0) {
+            pendingCommissions[affiliate] = 0;
+            usdc.transfer(affiliate, pending);
+            emit CommissionsReleased(affiliate, pending);
+        }
+    }
+    
+    // View functions for affiliates
+    function getAffiliateStatus(address affiliate) external view returns (
+        uint256 paidUsers,
+        uint256 pending,
+        bool qualified
+    ) {
+        return (
+            affiliatePaidUsers[affiliate],
+            pendingCommissions[affiliate],
+            affiliatePaidUsers[affiliate] >= MIN_PAID_USERS
+        );
+    }
+}
+```
+
+**CLI Registration Flow**:
+
+```bash
+# User registers WITH affiliate (affiliate shares their BASE address)
+kubeteectl register \
+    --base-address 0x5678...efgh \
+    --affiliate 0x1234...abcd
+
+# User registers WITHOUT affiliate  
+kubeteectl register \
+    --base-address 0x5678...efgh
+
+# Affiliate checks their status (reads from contract)
+kubeteectl affiliate status --address 0x1234...abcd
+# Output:
+#   Paid Users: 1/2 (minimum not reached)
+#   Pending Commissions: $47.50 USDC
+#   Status: Pending (need 1 more paid user)
+
+# After 2nd user pays:
+#   Paid Users: 2/2 ✓
+#   Pending Commissions: $0.00 (released!)
+#   Status: Active
+#   Total Earned: $125.00 USDC
 ```
 
 **Revenue Share Examples** (50/50 Split):
 
 | Resource Usage | Price | Direct User | Referred User |
 |----------------|-------|-------------|---------------|
-| **H200 GPU hour** | $2.00/hr | $2.00 → KubeTEE | $1.00 → KubeTEE, **$1.00 → Referrer** |
-| **H100 GPU hour** | $1.50/hr | $1.50 → KubeTEE | $0.75 → KubeTEE, **$0.75 → Referrer** |
-| **CPU (vCPU/hour)** | $0.02/hr | $0.02 → KubeTEE | $0.01 → KubeTEE, **$0.01 → Referrer** |
-| **Storage (GB/month)** | $0.15 | $0.15 → KubeTEE | $0.075 → KubeTEE, **$0.075 → Referrer** |
-| **1K tokens (LLM)** | $0.003-0.006 | Full → KubeTEE | 50% → KubeTEE, **50% → Referrer** |
+| **H200 GPU hour** | $2.00/hr | $2.00 → KubeTEE | $1.00 → KubeTEE, **$1.00 → Affiliate** |
+| **H100 GPU hour** | $1.50/hr | $1.50 → KubeTEE | $0.75 → KubeTEE, **$0.75 → Affiliate** |
+| **CPU (vCPU/hour)** | $0.02/hr | $0.02 → KubeTEE | $0.01 → KubeTEE, **$0.01 → Affiliate** |
+| **Storage (GB/month)** | $0.15 | $0.15 → KubeTEE | $0.075 → KubeTEE, **$0.075 → Affiliate** |
+| **1K tokens (LLM)** | $0.003-0.006 | Full → KubeTEE | 50% → KubeTEE, **50% → Affiliate** |
 
-**Referrer Earnings by User Profile**:
+**Affiliate Earnings by User Profile** (after 2-user minimum):
 
 | User Profile | Typical Monthly Usage | Your 50% Share |
 |--------------|----------------------|----------------|
@@ -1520,51 +1634,33 @@ response = requests.post(
 | **Fine-Tuning (weekly)** | ~$1,500/month | **$750/month** |
 | **Heavy Inference (H200)** | ~$1,900/month | **$950/month** |
 
-**Scaling Your Referral Income**:
+**Scaling Your Affiliate Income**:
 
 | Referred Users | Profile | Their Monthly Spend | Your 50% Share |
 |----------------|---------|---------------------|----------------|
-| 10 | RAG CPU-only | $1,000 | **$500/month** |
+| 2 (minimum) | RAG CPU-only | $200 | **$100/month** |
 | 5 | RAG + H100 GPU | $6,500 | **$3,250/month** |
-| 3 | Fine-Tuning | $4,500 | **$2,250/month** |
-| 2 | Heavy Inference | $3,800 | **$1,900/month** |
-| Mix: 10 CPU + 3 GPU | — | $4,900 | **$2,450/month** |
+| 10 | Mixed | $5,000 | **$2,500/month** |
+| 20 | Mixed | $15,000 | **$7,500/month** |
 
-**Why USDC on BASE?**
-- ✅ **Zero volatility** - Stable earnings for referrers
-- ✅ **Deep liquidity** - Easy withdrawal to fiat
-- ✅ **Low fees** - More profit, less gas
-- ✅ **x402 compatible** - Future micropayment support
+**On-Chain Affiliate Benefits**:
 
-**Smart Contract (BASE L2)**:
+| Aspect | Details |
+|--------|---------|
+| **Currency** | USDC on BASE L2 |
+| **Database** | None — all data on-chain |
+| **Payout** | Automatic (every billing cycle) |
+| **Minimum users** | 2 paid users to activate |
+| **Attribution** | On-chain, permanent, immutable |
+| **Trust** | Trustless — smart contract enforces split |
 
-The `KubeTEEReferral.sol` contract handles:
-- Referrer registration and code generation
-- User → Referrer attribution (permanent)
-- Automatic 50% revenue split per transaction
-- Epoch-based batch payouts to referrers
-
-Reference: [BASE Documentation](https://docs.base.org/)
-
-### On-Chain Emission Configuration
-
-The emission split is configured on-chain using `sudo_set_mechanism_emission_split`:
-
-```python
-# Only 2 mechanisms use emissions (Resellers use B2B wholesale, no emissions)
-# Emission split vector (value / 65535 = percentage)
-emission_split = [
-    39321,  # Mechanism 0: Infrastructure = 60%
-    26214,  # Mechanism 1: Open Source = 40%
-    # Mechanism 2: Resellers = 0% (B2B wholesale, not emissions!)
-]
-
-subtensor.sudo_set_mechanism_emission_split(
-    wallet=wallet,
-    netuid=netuid,
-    emission_split=emission_split,
-)
-```
+**Why On-Chain on BASE?**
+- ✅ **No database** — Attribution stored in smart contract
+- ✅ **Trustless** — Affiliates don't need to trust KubeTEE
+- ✅ **Transparent** — Anyone can verify on-chain
+- ✅ **Automatic** — Smart contract handles all splits
+- ✅ **Low fees** — ~$0.01 per transaction on BASE
+- ✅ **Instant** — Commissions paid every billing cycle (hourly)
 
 **Emission vs On-Chain Payment Streams**:
 
