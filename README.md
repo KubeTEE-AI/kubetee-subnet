@@ -102,6 +102,7 @@ We also leverage CNCF projects for cloud-native confidential computing:
   - [Subnet Economics](#subnet-economics)
     - [Native Bittensor Multiple Incentive Mechanisms](#native-bittensor-multiple-incentive-mechanisms)
     - [Mechanism 0: Infrastructure (60% Emissions)](#mechanism-0-infrastructure-60-emissions)
+      - [Staging vs Production](#staging-vs-production)
     - [Mechanism 1: Open Source Competition (40% Emissions)](#mechanism-1-open-source-competition-40-emissions)
       - [How Validators Set Weights (Mechanism 1)](#how-validators-set-weights-mechanism-1)
       - [Contributor Registration (GitHub → Bittensor Mapping)](#contributor-registration-github--bittensor-mapping)
@@ -112,7 +113,6 @@ We also leverage CNCF projects for cloud-native confidential computing:
       - [Security Scanning via Bitsec (Subnet 60)](#security-scanning-via-bitsec-subnet-60)
       - [Implementation Bounty](#implementation-bounty)
     - [Referrers / Integrators / Resellers: 50% Revenue Share (NO Emissions!)](#referrers--integrators--resellers-50-revenue-share-no-emissions)
-    - [Staging vs Production](#staging-vs-production)
     - [Revenue Model](#revenue-model)
       - [Namespace Resource Pricing](#namespace-resource-pricing)
       - [Shared Microservices Pricing](#shared-microservices-pricing)
@@ -991,6 +991,18 @@ This provides:
 - ✅ Clear incentive to provide higher-tier GPU nodes
 - ✅ Resource utilization ensures balanced subnet capacity — no over/under provisioning
 
+#### Staging vs Production
+
+**Staging Environment** (Permissionless):
+- Test applications, infrastructure, upgrades, benchmarks
+- Gateway to Production environment
+- Kata Containers Community Staging infrastructure
+
+**Production Environment** (KYC Required):
+- Multi-Clusters (one per data center per miner)
+- Must pass Staging validation
+- KYC mandatory for laws & regulations
+
 ### Mechanism 1: Open Source Competition (40% Emissions)
 
 **Purpose**: Reward miners for improving the KubeTEE tech stack and NVIDIA Blueprints.
@@ -1578,18 +1590,6 @@ kubeteectl affiliate status --address 0x1234...abcd
 **On-Chain Smart Contract**: `KubeTEEPayment.sol` deployed on BASE L2 handles all user deposits (USDC) and epoch settlements.
 
 Reference: [Bittensor Multi-Mechanism Docs](https://docs.learnbittensor.org/subnets/understanding-multiple-mech-subnets)
-
-### Staging vs Production
-
-**Staging Environment** (Permissionless):
-- Test applications, infrastructure, upgrades, benchmarks
-- Gateway to Production environment
-- Kata Containers Community Staging infrastructure
-
-**Production Environment** (KYC Required):
-- Multi-Clusters (one per data center per miner)
-- Must pass Staging validation
-- KYC mandatory for laws & regulations
 
 ### Revenue Model
 
