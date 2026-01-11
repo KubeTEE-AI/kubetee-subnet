@@ -1377,7 +1377,7 @@ We integrate with **Bitsec (SN60)** for decentralized security auditing of code 
 
 **⚠️ IMPORTANT**: Referrers do NOT register on the Bittensor subnet and do NOT receive emissions!
 
-Simple **affiliate program** with email-based tracking and USDC payouts on BASE:
+Simple **affiliate program** with USDC payouts on BASE:
 
 - **All users pay the same retail price** (direct or via referrer)
 - **Referrers earn 50% of revenue** from users they bring in
@@ -1391,18 +1391,16 @@ Simple **affiliate program** with email-based tracking and USDC payouts on BASE:
 │   REGISTRATION (Simple - No Bittensor Required!)                            │
 │   ──────────────────────────────────────────────                            │
 │                                                                             │
-│   1. Sign up with email → Get unique affiliate link                         │
-│   2. Add your BASE wallet address for USDC payouts                          │
-│   3. Refer at least 2 users → Commissions activated!                        │
+│   1. Share your BASE wallet address with users you refer                    │
+│   2. Users run: kubeteectl register --affiliate 0x1234...abcd               │
+│   3. Get 2 paying users → Commissions activated!                            │
 │                                                                             │
 │   ┌─────────────────────────────────────────────────────────────────────┐   │
 │   │                                                                     │   │
-│   │   Email: affiliate@example.com                                      │   │
-│   │   BASE Address: 0x1234...abcd                                       │   │
-│   │   Affiliate Link: https://kubetee.ai/signup?ref=ABC123              │   │
+│   │   Your Affiliate Address: 0x1234...abcd                             │   │
 │   │                                                                     │   │
-│   │   Status: ✅ Active (3 referred users)                              │   │
-│   │   Minimum: 2 users required                                         │   │
+│   │   Status: ✅ Active (3 paying users)                                │   │
+│   │   Minimum: 2 paying users required                                  │   │
 │   │                                                                     │   │
 │   └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
@@ -1411,7 +1409,7 @@ Simple **affiliate program** with email-based tracking and USDC payouts on BASE:
 │                                                                             │
 │   ┌─────────────┐    ┌──────────────────────┐    ┌──────────────────────┐   │
 │   │   DIRECT    │    │  VIA AFFILIATE       │    │  VIA INTEGRATOR      │   │
-│   │   USERS     │    │  (Referral Link)     │    │  (White-Label API)   │   │
+│   │   USERS     │    │  (BASE Address)      │    │  (White-Label API)   │   │
 │   └──────┬──────┘    └──────────┬───────────┘    └──────────┬───────────┘   │
 │          │                      │                           │               │
 │          ▼                      ▼                           ▼               │
@@ -1480,13 +1478,13 @@ Attribution and payments are handled entirely by a smart contract on BASE L2. No
 │        YES (≥2)        NO (<2)                                              │
 │           │               │                                                 │
 │           ▼               ▼                                                 │
-│  ┌─────────────┐   ┌──────────────────┐                                     │
-│  │ Split 50/50 │   │ Hold commission  │                                     │
-│  │             │   │ in contract      │                                     │
-│  │ $50 → Aff   │   │                  │                                     │
+│  ┌─────────────┐   ┌───────────────────┐                                     │
+│  │ Split 50/50 │   │ Hold commission   │                                     │
+│  │             │   │ in contract       │                                     │
+│  │ $50 → Aff   │   │                   │                                     │
 │  │ $50 → KT    │   │ pendingComm += $50│                                    │
-│  └─────────────┘   │ KubeTEE gets $50 │                                     │
-│                    └──────────────────┘                                     │
+│  └─────────────┘   │ KubeTEE gets $50  │                                     │
+│                    └───────────────────┘                                     │
 │                                                                             │
 │  WHEN AFFILIATE REACHES 2 PAID USERS:                                       │
 │  ────────────────────────────────────                                       │
