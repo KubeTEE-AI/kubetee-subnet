@@ -106,7 +106,7 @@ We also leverage CNCF projects for cloud-native confidential computing:
     - [Mechanism 1: Benchmark Competition (30% Emissions)](#mechanism-1-benchmark-competition-30-emissions)
       - [Lifetime Score with Decay](#lifetime-score-with-decay)
       - [How Validators Set Weights (Mechanism 1)](#how-validators-set-weights-mechanism-1)
-      - [Contributor Registration (GitHub → Bittensor Mapping)](#contributor-registration-github--bittensor-mapping)
+      - [Contributor Registration (On-Chain via Bittensor EVM)](#contributor-registration-on-chain-via-bittensor-evm)
       - [Benchmark Score Calculation](#benchmark-score-calculation)
       - [Implementation Bounty](#implementation-bounty)
     - [Mechanism 2: Bounty Treasury (10% Emissions)](#mechanism-2-bounty-treasury-10-emissions)
@@ -129,8 +129,8 @@ We also leverage CNCF projects for cloud-native confidential computing:
     - [Prerequisites](#prerequisites)
     - [Deployment Steps](#deployment-steps)
   - [For Miners (Benchmark Competition)](#for-miners-benchmark-competition)
-    - [Bounty Participation](#bounty-participation)
     - [Development Process](#development-process)
+    - [Bounty Participation](#bounty-participation)
   - [For Miners (Infrastructure)](#for-miners-infrastructure)
   - [Evaluation \& Benchmarks](#evaluation--benchmarks)
     - [Primary Benchmark](#primary-benchmark)
@@ -1011,8 +1011,6 @@ This provides:
 **Purpose**: Reward miners for improving the KubeTEE AI performance on the [DeepResearch Benchmark](https://huggingface.co/spaces/Ayanami0730/DeepResearch-Leaderboard).
 
 **Key Feature**: **Lifetime Score with Decay** — Early benchmark improvers continue earning even after others improve further. This rewards pioneers while keeping the ecosystem dynamic.
-
-> 📖 **Detailed Analysis**: See [Lifetime Score with Decay Model](./docs/mecanism1_analyze.md) for the complete design specification.
 
 #### Lifetime Score with Decay
 
