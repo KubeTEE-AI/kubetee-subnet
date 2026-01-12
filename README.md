@@ -1081,58 +1081,147 @@ Per [Bittensor's multiple mechanism model](https://docs.learnbittensor.org/subne
 │  ────────────                      ─────────                 ───────        │
 │                                                                             │
 │  ┌──────────────────┐                                                       │
-│  │  DeepResearch    │──┐                                                    │
-│  │  Benchmark       │  │     ┌─────────────────────┐                        │
-│  │  Results         │  │     │                     │    ┌──────────────┐    │
+│  │  GitHub API      │──┐                                                    │
+│  │  - PR authors    │  │     ┌─────────────────────┐                        │
+│  │  - Benchmark PRs │  │     │                     │    ┌──────────────┐    │
 │  └──────────────────┘  │     │  Validator Script   │───▶│  Mechanism 1 │    │
 │                        ├────▶│                     │    │   Weights    │    │
-│  ┌──────────────────┐  │     │  1. Query scores    │    │              │    │
-│  │  On-Chain Oracle │  │     │  2. Apply decay     │    │  Alice: 35   │    │
-│  │  - GitHub ↔ HK   │──┤     │  3. Calculate       │    │  Bob: 25     │    │
-│  │    mapping       │  │     │     lifetime scores │    │  Charlie: 15 │    │
-│  └──────────────────┘  │     │  4. Set weights     │    │  🔥BURN: 25  │    │
-│                        │     │  5. Remainder →     │    └──────────────┘    │
-│  ┌──────────────────┐  │     │     Subnet Owner    │                        │
-│  │  Lifetime Score  │──┘     │     Key (BURNED)    │                        │
-│  │  Registry        │        └─────────────────────┘                        │
-│  └──────────────────┘                                                       │
+│  ┌──────────────────┐  │     │  1. Query GitHub    │    │              │    │
+│  │  Bittensor EVM   │  │     │     for merged PRs  │    │  Alice: 35   │    │
+│  │  KubeTEERegistry │──┤     │  2. Query EVM for   │    │  Bob: 25     │    │
+│  │  - GitHub ↔ HK   │  │     │     GitHub→Hotkey   │    │  Charlie: 15 │    │
+│  │  - Lifetime      │  │     │  3. Read lifetime   │    │  🔥BURN: 25  │    │
+│  │    Scores        │  │     │     scores from EVM │    └──────────────┘    │
+│  └──────────────────┘  │     │  4. Update scores   │                        │
+│                        │     │     on EVM contract │                        │
+│  ┌──────────────────┐  │     │  5. Set weights     │                        │
+│  │  DeepResearch    │──┘     │  6. Remainder →     │                        │
+│  │  Benchmark       │        │     Subnet Owner    │                        │
+│  │  Results         │        │     Key (BURNED)    │                        │
+│  └──────────────────┘        └─────────────────────┘                        │
 │                                                                             │
 │  EMISSION FLOW:                                                             │
 │  ──────────────                                                             │
 │  Mechanism 1 (30%) → Yuma Consensus → Benchmark Improvers + Burned          │
 │                                                                             │
+│  EVM INTERACTIONS:                                                          │
+│  ─────────────────                                                          │
+│  VALIDATORS (read-only):                                                    │
+│  • Read: getContributor(github) → Get hotkey + lifetime score               │
+│  • Read: getAllContributors() → List all registered contributors            │
+│                                                                             │
+│  SUBNET OWNER (write access):                                               │
+│  • Write: updateScore(github, improvement) → Add benchmark improvement      │
+│  • Write: applyDecay(github) → Apply monthly 5% decay                       │
+│                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-#### Contributor Registration (GitHub → Bittensor Mapping)
+#### Contributor Registration (On-Chain via Bittensor EVM)
 
 **⚠️ REQUIRED**: Benchmark contributors must link their GitHub account to a Bittensor hotkey to receive emissions.
 
+The mapping is stored **on-chain** via a smart contract on **Bittensor EVM** (`KubeTEERegistry.sol`). This ensures:
+- Fully decentralized, trustless registry
+- Immutable history of all registrations
+- Validators read from single source of truth
+- Lifetime scores stored and decayed on-chain
+
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│              CONTRIBUTOR REGISTRATION FLOW                                  │
+│              CONTRIBUTOR REGISTRATION (BITTENSOR EVM)                       │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│  1. REGISTER MINER HOTKEY on KubeTEE subnet (netuid: TBD)                   │
+│  SMART CONTRACT: KubeTEERegistry.sol on Bittensor EVM                       │
+│  ─────────────────────────────────────────────────────                      │
+│                                                                             │
+│  struct Contributor {                                                       │
+│      bytes32 hotkey;           // Bittensor hotkey (SS58 encoded)           │
+│      uint256 lifetimeScore;    // Current lifetime score (scaled 1e18)      │
+│      uint256 lastDecayEpoch;   // Last epoch decay was applied              │
+│      uint256 registeredAt;     // Block timestamp of registration           │
+│  }                                                                          │
+│                                                                             │
+│  REGISTRATION FLOW:                                                         │
+│  ──────────────────                                                         │
+│                                                                             │
+│  1. REGISTER HOTKEY on KubeTEE subnet (netuid: TBD)                         │
 │     └── btcli subnet register --netuid <TBD> --wallet.name <wallet>         │
 │                                                                             │
-│  2. LINK GITHUB to your Bittensor hotkey                                    │
-│     └── Sign message with hotkey, submit via GitHub PR to registry          │
-│     └── Or: Use KubeTEE CLI: kubeteectl link-github --hotkey <HK>           │
+│  2. LINK GITHUB on Bittensor EVM                                            │
+│     └── Call: KubeTEERegistry.register("your-github-username", hotkey)      │
+│     └── Or: kubeteectl link-github --hotkey <HK> --github <username>        │
+│     └── One-time gas fee on Bittensor EVM                                   │
 │                                                                             │
 │  3. IMPROVE BENCHMARKS on KubeTEE-AI repositories                           │
 │     └── Submit PRs that improve DeepResearch Benchmark scores               │
-│     └── Lifetime Score accumulates with each verified improvement           │
+│     └── Subnet Owner updates your on-chain Lifetime Score each epoch        │
 │                                                                             │
-│  On-Chain Registry (mapping stored on Bittensor or IPFS):                   │
+│  ON-CHAIN REGISTRY STATE:                                                   │
 │  ┌─────────────────────────────────────────────────────────────────────┐    │
-│  │  GitHub: @alice         →  Hotkey: 5FHneW46xR...abc123              │    │
-│  │  GitHub: @bob           →  Hotkey: 5GNJqTPy...def456                │    │
-│  │  GitHub: @charlie       →  Hotkey: 5DAAnrj7...ghi789                │    │
+│  │  contributors["alice"] = {                                          │    │
+│  │    hotkey: 0x5FHneW46xR...abc123,                                   │    │
+│  │    lifetimeScore: 15000000000000000000,  // 15.0 (scaled)           │    │
+│  │    lastDecayEpoch: 1705084800,                                      │    │
+│  │    registeredAt: 1704480000                                         │    │
+│  │  }                                                                  │    │
 │  └─────────────────────────────────────────────────────────────────────┘    │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
+
+**Contract Functions**:
+
+| Function | Access | Description |
+|----------|--------|-------------|
+| `register(github, hotkey)` | Anyone | Link GitHub to hotkey (one-time) |
+| `updateScore(github, increase)` | **Subnet Owner only** | Add benchmark improvement score |
+| `applyDecay(github)` | Anyone | Apply monthly 5% decay |
+| `getContributor(github)` | Anyone | Read contributor data |
+| `getAllContributors()` | Anyone | List all registered contributors |
+
+**Access Control**:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│              SUBNET OWNER AS REGISTRY WRITER                                │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  WHY SUBNET OWNER ONLY?                                                     │
+│  ──────────────────────                                                     │
+│  • Simple: Single source of truth, no consensus complexity                  │
+│  • Trusted: Subnet owner already controls emission configuration            │
+│  • Auditable: All writes visible on-chain, anyone can verify               │
+│  • Efficient: No multi-sig overhead, lower gas costs                        │
+│                                                                             │
+│  WRITE FLOW:                                                                │
+│  ───────────                                                                │
+│                                                                             │
+│  GitHub API ──▶ Subnet Owner ──▶ KubeTEERegistry.updateScore()              │
+│  (PR merged)    (calculates      (writes to Bittensor EVM)                  │
+│                  score)                                                     │
+│                                                                             │
+│  CONTRACT MODIFIER:                                                         │
+│  ──────────────────                                                         │
+│  modifier onlyOwner() {                                                     │
+│      require(msg.sender == subnetOwner, "Only subnet owner");               │
+│      _;                                                                     │
+│  }                                                                          │
+│                                                                             │
+│  function updateScore(string github, uint256 increase) onlyOwner { ... }    │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Anti-Gaming Rules (Enforced by Contract)**:
+
+| Rule | Implementation |
+|------|----------------|
+| One hotkey per GitHub | `require(hotkeyToGithub[hotkey] == "")` |
+| One GitHub per hotkey | Check existing mapping before register |
+| 30-day cooldown on changes | `require(block.timestamp - registeredAt > 30 days)` |
+| Decay floor (30%) | Score never drops below 30% of peak |
+| GitHub account age | Account must be > 30 days old |
 
 #### Benchmark Score Calculation
 
@@ -1619,7 +1708,13 @@ kubeteectl affiliate status --address 0x1234...abcd
 | Bounty Treasury (10%) | Subnet Emissions | Bittensor subnet | Manual payout by subnet owner |
 | Reseller Payments | On-Chain Contract | KubeTEE CLI only | Validator epoch settlement → KubeTEE Owner |
 
-**On-Chain Smart Contract**: `KubeTEEPayment.sol` deployed on BASE L2 handles all user deposits (USDC) and epoch settlements.
+**On-Chain Smart Contracts**:
+
+| Contract | Chain | Purpose |
+|----------|-------|---------|
+| `KubeTEEPayment.sol` | BASE L2 | User deposits (USDC), epoch settlements, referrer payouts |
+| `KubeTEERegistry.sol` | Bittensor EVM | GitHub→Hotkey mapping, Lifetime Benchmark Scores |
+| `KubeTEEBuybackBurn.sol` | BASE L2 | Automated buyback and burn of Alpha tokens |
 
 Reference: [Bittensor Multi-Mechanism Docs](https://docs.learnbittensor.org/subnets/understanding-multiple-mech-subnets)
 

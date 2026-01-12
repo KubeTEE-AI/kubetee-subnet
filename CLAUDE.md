@@ -113,6 +113,8 @@ This subnet implements **native Bittensor multiple incentive mechanisms** with t
    - Rewards DeepResearch Benchmark improvements
    - **Lifetime Score with Decay** model (5% monthly decay, 30% floor)
    - Early improvers continue earning even after others improve
+   - **On-chain registry**: `KubeTEERegistry.sol` on Bittensor EVM stores GitHub→Hotkey mappings + scores
+   - **Write access**: Subnet Owner only (validators read-only)
    - Location: `template/mechanisms/benchmark.py`
 
 3. **Mechanism 2: Bounty Treasury (10% emissions)**
@@ -193,7 +195,8 @@ REVENUE TRACKING
 - `template/mechanisms/definitions.py` - Emission splits (60/40/0), mechanism configurations
 - `template/mechanisms/manager.py` - MechanismManager coordinates all mechanisms
 - `template/mechanisms/infrastructure.py` - InfrastructureScorer (health, latency, TEE, revenue)
-- `template/mechanisms/open_source.py` - OpenSourceScorer (benchmark scores, code quality)
+- `template/mechanisms/benchmark.py` - BenchmarkScorer (reads from Bittensor EVM registry)
+- `template/mechanisms/bounty_treasury.py` - Treasury accumulation for bounties
 - `template/reseller/referral.py` - ReferralManager (50% revenue share, NO emissions)
 
 **Protocol and Base:**
@@ -202,10 +205,11 @@ REVENUE TRACKING
 - `template/__init__.py` - Version management (`__version__ = "0.0.0"`)
 
 **Smart Contracts:**
-- `contracts/KubeTEEPayment.sol` - Payment processing
-- `contracts/KubeTEEBuybackBurn.sol` - Deflationary tokenomics
-- `contracts/KubeTEEEscrow.sol` - Miner payment escrow
-- `contracts/KubeTEEReseller.sol` - Referrer tracking
+- `contracts/KubeTEEPayment.sol` - Payment processing (BASE L2)
+- `contracts/KubeTEEBuybackBurn.sol` - Deflationary tokenomics (BASE L2)
+- `contracts/KubeTEEEscrow.sol` - Miner payment escrow (BASE L2)
+- `contracts/KubeTEEReseller.sol` - Referrer tracking (BASE L2)
+- `contracts/KubeTEERegistry.sol` - **Bittensor EVM** - GitHub→Hotkey mapping + Lifetime Benchmark Scores
 
 **Hardware Requirements:**
 - `min_compute.yml` - Miner: 8x H100/H200/B200 GPUs with TEE attestation, Validator: no GPU needed
