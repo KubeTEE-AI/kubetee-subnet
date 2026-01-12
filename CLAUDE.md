@@ -101,7 +101,7 @@ btcli stake add --wallet.name validator --wallet.hotkey default
 
 ### Multi-Mechanism Incentive System
 
-This subnet implements **native Bittensor multiple incentive mechanisms** with three distinct economic models:
+This subnet implements **native Bittensor multiple incentive mechanisms** with three on-chain mechanisms plus an off-chain referral program:
 
 1. **Mechanism 0: Infrastructure (60% emissions)**
    - Rewards miners providing Kubernetes infrastructure
@@ -109,19 +109,25 @@ This subnet implements **native Bittensor multiple incentive mechanisms** with t
    - Miners receive **50% revenue share** from service requests
    - Location: `template/mechanisms/infrastructure.py`
 
-2. **Mechanism 1: Open Source Competition (40% emissions)**
-   - Rewards code contributions and benchmark improvements
-   - Competition-based scoring using DeepResearch Benchmark
-   - GitHub issue-based bounty system
-   - Location: `template/mechanisms/open_source.py`
+2. **Mechanism 1: Benchmark Competition (30% emissions)**
+   - Rewards DeepResearch Benchmark improvements
+   - **Lifetime Score with Decay** model (5% monthly decay, 30% floor)
+   - Early improvers continue earning even after others improve
+   - Location: `template/mechanisms/benchmark.py`
 
-3. **Mechanism 2: Referrers (NO emissions, 50% revenue share)**
+3. **Mechanism 2: Bounty Treasury (10% emissions)**
+   - Treasury key accumulates emissions for development bounties
+   - Fixed TAO values (paid in Alpha tokens) per bounty
+   - Manual payout by subnet owner when PR is merged
+   - Location: `template/mechanisms/bounty_treasury.py`
+
+4. **Referrers (NO emissions, 50% revenue share)**
    - NOT registered on Bittensor subnet (no emissions)
    - Register via CLI, get unique referral code
    - Earn 50% of revenue from referred users
    - Location: `template/reseller/referral.py`
 
-**Critical Detail:** Only 2 mechanisms use emissions (Infrastructure 60%, OpenSource 40%). Referrers use pure revenue share with NO emissions. Each mechanism has separate weight matrices and independent Yuma Consensus calculations.
+**Critical Detail:** Three mechanisms use emissions (Infrastructure 60%, Benchmark 30%, Bounty Treasury 10%). Referrers use pure revenue share with NO emissions. Each mechanism has separate weight matrices and independent Yuma Consensus calculations.
 
 ### Core Architecture Layers
 
@@ -142,10 +148,10 @@ Protocol Definitions (template/protocol.py)
         ↓
 Mechanism Coordination (template/mechanisms/)
   ├── manager.py - MechanismManager (coordinates all mechanisms)
-  ├── definitions.py - Mechanism configurations
-  ├── infrastructure.py - Infrastructure scoring
-  ├── open_source.py - Benchmark scoring
-  └── bounty_system.py - GitHub issue automation
+  ├── definitions.py - Mechanism configurations (60/30/10 split)
+  ├── infrastructure.py - Infrastructure scoring (Mechanism 0)
+  ├── benchmark.py - Benchmark scoring with Lifetime Decay (Mechanism 1)
+  └── bounty_treasury.py - Treasury accumulation for bounties (Mechanism 2)
         ↓
 Validator Logic (template/validator/)
   ├── forward.py - Query miners, track revenue
@@ -385,13 +391,15 @@ btcli wallet overview --wallet.name miner
 
 ## Key Takeaways
 
-1. This subnet uses **three economic models** but only two receive emissions (Infrastructure 60%, OpenSource 40%, Referrers get 50% revenue share with NO emissions)
+1. This subnet uses **four economic models** with three receiving emissions (Infrastructure 60%, Benchmark 30%, Bounty Treasury 10%) plus Referrers (50% revenue share, NO emissions)
 2. **Separate weight matrices** per mechanism with independent Yuma Consensus
-3. **TEE is mandatory** for miners (Intel TDX/SGX, NVIDIA Confidential Computing)
-4. **NVIDIA partnership** is central - leverages NeMo, NIM, and AI Blueprints
-5. **Multi-chain strategy** - BASE L2 for payments, Bittensor EVM for emissions
-6. **Revenue share** - Miners get 50%, Referrers get 50%, KubeTEE gets remainder
-7. **Development workflow** - Feature → Staging → Main with CircleCI automation
-8. **Hardware requirements** are extreme - 8x H100/H200/B200 GPUs minimum for miners
-9. **Current version 0.0.0** indicates template stage - production deployment requires significant additional work
-10. **Security-first design** - FIPS-140-2, CCC membership, confidential computing throughout
+3. **Lifetime Score with Decay** for benchmark competition - early improvers continue earning (5% monthly decay, 30% floor)
+4. **Bounty Treasury** accumulates 10% emissions for manual payouts on merged PRs (fixed TAO values in Alpha)
+5. **TEE is mandatory** for miners (Intel TDX/SGX, NVIDIA Confidential Computing)
+6. **NVIDIA partnership** is central - leverages NeMo, NIM, and AI Blueprints
+7. **Multi-chain strategy** - BASE L2 for payments, Bittensor EVM for emissions
+8. **Revenue share** - Miners get 50%, Referrers get 50%, KubeTEE gets remainder
+9. **Development workflow** - Feature → Staging → Main with CircleCI automation
+10. **Hardware requirements** are extreme - 8x H100/H200/B200 GPUs minimum for miners
+11. **Current version 0.0.0** indicates template stage - production deployment requires significant additional work
+12. **Security-first design** - FIPS-140-2, CCC membership, confidential computing throughout

@@ -103,15 +103,16 @@ We also leverage CNCF projects for cloud-native confidential computing:
     - [Native Bittensor Multiple Incentive Mechanisms](#native-bittensor-multiple-incentive-mechanisms)
     - [Mechanism 0: Infrastructure (60% Emissions)](#mechanism-0-infrastructure-60-emissions)
       - [Staging vs Production](#staging-vs-production)
-    - [Mechanism 1: Open Source Competition (40% Emissions)](#mechanism-1-open-source-competition-40-emissions)
+    - [Mechanism 1: Benchmark Competition (30% Emissions)](#mechanism-1-benchmark-competition-30-emissions)
+      - [Lifetime Score with Decay](#lifetime-score-with-decay)
       - [How Validators Set Weights (Mechanism 1)](#how-validators-set-weights-mechanism-1)
       - [Contributor Registration (GitHub → Bittensor Mapping)](#contributor-registration-github--bittensor-mapping)
-      - [GitHub Issues = Bounties](#github-issues--bounties)
-      - [Bounty Age Multiplier (Longer Open = Higher Reward)](#bounty-age-multiplier-longer-open--higher-reward)
-      - [Weight Calculation Formula](#weight-calculation-formula)
-      - [Bounty Lifecycle (Fully Automated)](#bounty-lifecycle-fully-automated)
-      - [Security Scanning via Bitsec (Subnet 60)](#security-scanning-via-bitsec-subnet-60)
+      - [Benchmark Score Calculation](#benchmark-score-calculation)
       - [Implementation Bounty](#implementation-bounty)
+    - [Mechanism 2: Bounty Treasury (10% Emissions)](#mechanism-2-bounty-treasury-10-emissions)
+      - [Treasury Accumulation](#treasury-accumulation)
+      - [Bounty Lifecycle](#bounty-lifecycle)
+      - [Security Scanning via Bitsec (Subnet 60)](#security-scanning-via-bitsec-subnet-60)
     - [Referrers / Integrators / Resellers: 50% Revenue Share (NO Emissions!)](#referrers--integrators--resellers-50-revenue-share-no-emissions)
     - [Revenue Model](#revenue-model)
       - [Namespace Resource Pricing](#namespace-resource-pricing)
@@ -127,7 +128,8 @@ We also leverage CNCF projects for cloud-native confidential computing:
   - [Client Getting Started](#client-getting-started)
     - [Prerequisites](#prerequisites)
     - [Deployment Steps](#deployment-steps)
-  - [For Miners (Open Source Competition)](#for-miners-open-source-competition)
+  - [For Miners (Benchmark Competition)](#for-miners-benchmark-competition)
+    - [Bounty Participation](#bounty-participation)
     - [Development Process](#development-process)
   - [For Miners (Infrastructure)](#for-miners-infrastructure)
   - [Evaluation \& Benchmarks](#evaluation--benchmarks)
@@ -609,7 +611,7 @@ As Big Tech consolidates AI agents, KubeTEE AI represents the **decentralized al
 - Unlike Manus (Claude) or OpenAI (GPT-4), KubeTEE uses **only open source models**
 - No vendor lock-in to proprietary model providers
 - Full transparency and auditability of model behavior
-- Community-driven model improvements via Open Source Competition mechanism
+- Community-driven model improvements via Benchmark Competition and Bounty mechanisms
 
 **🌐 Bittensor Subnet Integrations** (Unique to KubeTEE):
 
@@ -927,30 +929,31 @@ This provides:
 │   ║                 ON-CHAIN SUBNET EMISSIONS (100%)                    ║   │
 │   ═══════════════════════════════════════════════════════════════════════   │
 │                                    │                                        │
-│                 ┌──────────────────┴──────────────────┐                     │
-│                 ▼                                     ▼                     │
-│       ┌─────────────────────┐           ┌─────────────────────┐             │
-│       │   MECHANISM 0       │           │   MECHANISM 1       │             │
-│       │   INFRASTRUCTURE    │           │   OPEN SOURCE       │             │
-│       │      (60%)          │           │      (40%)          │             │
-│       ├─────────────────────┤           ├─────────────────────┤             │
-│       │ • K8s Infra         │           │ • Code Quality      │             │
-│       │ • TEE Compliance    │           │ • Benchmarks        │             │
-│       │ • Service QoS       │           │ • CI/CD             │             │
-│       │ • Uptime            │           │ • Security fixes    │             │
-│       └─────────────────────┘           └─────────────────────┘             │
-│                 │                                     │                     │
-│                 ▼                                     ▼                     │
-│       ┌─────────────────────┐           ┌─────────────────────┐             │
-│       │   Independent       │           │   Independent       │             │
-│       │   Weight Matrix     │           │   Weight Matrix     │             │
-│       │   & Bond Pool       │           │   & Bond Pool       │             │
-│       └─────────────────────┘           └─────────────────────┘             │
+│          ┌─────────────────────────┼─────────────────────────┐              │
+│          ▼                         ▼                         ▼              │
+│  ┌───────────────────┐   ┌───────────────────┐   ┌───────────────────┐      │
+│  │   MECHANISM 0     │   │   MECHANISM 1     │   │   MECHANISM 2     │      │
+│  │   INFRASTRUCTURE  │   │   BENCHMARK       │   │   BOUNTY          │      │
+│  │      (60%)        │   │   COMPETITION     │   │   TREASURY        │      │
+│  │                   │   │      (30%)        │   │      (10%)        │      │
+│  ├───────────────────┤   ├───────────────────┤   ├───────────────────┤      │
+│  │ • K8s Infra       │   │ • DeepResearch    │   │ • GitHub Issues   │      │
+│  │ • TEE Compliance  │   │   Benchmark       │   │ • Fixed TAO Value │      │
+│  │ • Service QoS     │   │ • Lifetime Score  │   │ • Manual Payout   │      │
+│  │ • Uptime          │   │   with Decay      │   │ • Subnet Owner    │      │
+│  └───────────────────┘   └───────────────────┘   └───────────────────┘      │
+│          │                         │                         │              │
+│          ▼                         ▼                         ▼              │
+│  ┌───────────────────┐   ┌───────────────────┐   ┌───────────────────┐      │
+│  │   Independent     │   │   Independent     │   │   Treasury Key    │      │
+│  │   Weight Matrix   │   │   Weight Matrix   │   │   Accumulates     │      │
+│  │   & Bond Pool     │   │   & Bond Pool     │   │   Emissions       │      │
+│  └───────────────────┘   └───────────────────┘   └───────────────────┘      │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Miners can participate in BOTH mechanisms simultaneously!** If you provide infrastructure AND contribute code improvements, you earn from both emission pools.
+**Miners can participate in ALL mechanisms!** Provide infrastructure (Mechanism 0), improve benchmarks (Mechanism 1), and complete bounties (Mechanism 2) to earn from multiple emission pools.
 
 ### Mechanism 0: Infrastructure (60% Emissions)
 
@@ -1003,74 +1006,107 @@ This provides:
 - Must pass Staging validation
 - KYC mandatory for laws & regulations
 
-### Mechanism 1: Open Source Competition (40% Emissions)
+### Mechanism 1: Benchmark Competition (30% Emissions)
 
-**Purpose**: Reward miners for improving the KubeTEE tech stack and NVIDIA Blueprints.
+**Purpose**: Reward miners for improving the KubeTEE AI performance on the [DeepResearch Benchmark](https://huggingface.co/spaces/Ayanami0730/DeepResearch-Leaderboard).
 
-**⚠️ NO "WINNER TAKES ALL"** — We use a **hybrid bounty + continuous contribution model** to avoid drama and ensure fair rewards for all contributors.
+**Key Feature**: **Lifetime Score with Decay** — Early benchmark improvers continue earning even after others improve further. This rewards pioneers while keeping the ecosystem dynamic.
 
-#### How Validators Set Weights (Mechanism 1)
+> 📖 **Detailed Analysis**: See [Lifetime Score with Decay Model](./docs/mecanism1_analyze.md) for the complete design specification.
 
-Per [Bittensor's multiple mechanism model](https://docs.learnbittensor.org/subnets/understanding-multiple-mech-subnets), validators must set weights on **miner hotkeys** for each mechanism independently.
+#### Lifetime Score with Decay
 
-**🔥 NATIVE BURN MECHANISM**: Unused emissions are **automatically burned** when validators set weight to the **subnet owner key**. This ensures emissions only go to active contributors — the rest is burned, creating deflationary pressure on Alpha supply.
+**Core Principle**: Your contribution value persists but gradually fades, like academic citations.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│              VALIDATOR WEIGHT SETTING (MECHANISM 1)                         │
+│              LIFETIME SCORE WITH DECAY MODEL                                │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  PHILOSOPHY:                                                                │
+│  ───────────                                                                │
+│  • Each benchmark improvement earns PERMANENT scoring rights                │
+│  • Scores DECAY SLOWLY (5% monthly) to keep ecosystem dynamic               │
+│  • DECAY FLOOR (30%) ensures historical contributions never become worthless│
+│  • System rewards QUALITY over quantity while remaining fair to newcomers   │
+│                                                                             │
+│  MATHEMATICAL FLOW:                                                         │
+│  ──────────────────                                                         │
+│                                                                             │
+│  Initial State:    Lifetime Score = 0                                       │
+│                                                                             │
+│  After Improvement: Score = 0 + 5.0 = 5.0                                   │
+│                     (5% benchmark improvement)                              │
+│                                                                             │
+│  Month 1:          Score = 5.0 × 0.95 = 4.75                                │
+│  Month 2:          Score = 4.75 × 0.95 = 4.51                               │
+│  Month 3:          Score = 4.51 × 0.95 = 4.29                               │
+│  ...                                                                        │
+│  Month 12:         Score = 5.0 × (0.95)^12 = 2.71                           │
+│  ...                                                                        │
+│  Month 24+:        Score = 1.5 (FLOOR: 30% of original)                     │
+│                                                                             │
+│  After Another     Score = 2.71 + 3.0 = 5.71                                │
+│  Improvement:      (old decayed + new contribution)                         │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Decay Parameters** (Recommended Configuration):
+
+| Parameter | Value | Rationale |
+|-----------|-------|-----------|
+| **Decay Rate** | 5%/month | Balanced dynamics — ~12 month half-life |
+| **Decay Floor** | 30% | Fair legacy reward — contributions never hit zero |
+| **Decay Frequency** | Monthly | Simple, predictable for miners |
+
+**Why This Works**:
+- ✅ **Fair to pioneers** — Early improvers earn for months/years
+- ✅ **Newcomers can compete** — Decay prevents early-miner dominance
+- ✅ **Quality incentives** — Larger improvements = larger scores
+- ✅ **Sustainable growth** — System scales as subnet matures
+
+#### How Validators Set Weights (Mechanism 1)
+
+Per [Bittensor's multiple mechanism model](https://docs.learnbittensor.org/subnets/understanding-multiple-mech-subnets), validators must set weights on **miner hotkeys** based on their **Lifetime Benchmark Scores**.
+
+**🔥 NATIVE BURN MECHANISM**: Unused emissions are **automatically burned** when validators set weight to the **subnet owner key**. This ensures emissions only go to active benchmark improvers — the rest is burned.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│              VALIDATOR WEIGHT SETTING (MECHANISM 1 - BENCHMARKS)            │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
 │  DATA SOURCES                      VALIDATOR                 WEIGHTS        │
 │  ────────────                      ─────────                 ───────        │
 │                                                                             │
 │  ┌──────────────────┐                                                       │
-│  │  GitHub API      │──┐                                                    │
-│  │  - Merged PRs    │  │     ┌─────────────────────┐                        │
-│  │  - Bounty wins   │  │     │                     │    ┌──────────────┐    │
-│  │  - PR authors    │  ├────▶│  Validator Script   │───▶│  Mechanism 1 │    │
-│  └──────────────────┘  │     │                     │    │   Weights    │    │
-│                        │     │  1. Query GitHub    │    │              │    │
-│  ┌──────────────────┐  │     │  2. Map GitHub →    │    │  Alice: 24   │    │
-│  │  On-Chain Oracle │  │     │     Bittensor HK    │    │  Bob: 5      │    │
-│  │  - GitHub ↔ HK   │──┤     │  3. Calculate       │    │  Charlie: 3  │    │
-│  │    mapping       │  │     │     contribution    │    │  🔥BURN: 68  │    │
-│  └──────────────────┘  │     │     scores          │    └──────────────┘    │
-│                        │     │  4. Remainder →     │                        │
+│  │  DeepResearch    │──┐                                                    │
+│  │  Benchmark       │  │     ┌─────────────────────┐                        │
+│  │  Results         │  │     │                     │    ┌──────────────┐    │
+│  └──────────────────┘  │     │  Validator Script   │───▶│  Mechanism 1 │    │
+│                        ├────▶│                     │    │   Weights    │    │
+│  ┌──────────────────┐  │     │  1. Query scores    │    │              │    │
+│  │  On-Chain Oracle │  │     │  2. Apply decay     │    │  Alice: 35   │    │
+│  │  - GitHub ↔ HK   │──┤     │  3. Calculate       │    │  Bob: 25     │    │
+│  │    mapping       │  │     │     lifetime scores │    │  Charlie: 15 │    │
+│  └──────────────────┘  │     │  4. Set weights     │    │  🔥BURN: 25  │    │
+│                        │     │  5. Remainder →     │    └──────────────┘    │
 │  ┌──────────────────┐  │     │     Subnet Owner    │                        │
-│  │  Benchmark       │──┘     │     Key (BURNED)    │                        │
-│  │  Results         │        └─────────────────────┘                        │
+│  │  Lifetime Score  │──┘     │     Key (BURNED)    │                        │
+│  │  Registry        │        └─────────────────────┘                        │
 │  └──────────────────┘                                                       │
 │                                                                             │
 │  EMISSION FLOW:                                                             │
 │  ──────────────                                                             │
-│  Mechanism 1 (40%) → Yuma Consensus → Contributors (32%) + Burned (68%)     │
-│                                                                             │
-│  ⚠️ NO EPOCH WITHOUT BURN: Even with active contributors, only a portion    │
-│     of emissions are distributed. Unused weight → Subnet Owner Key → BURNED │
+│  Mechanism 1 (30%) → Yuma Consensus → Benchmark Improvers + Burned          │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Example Epoch (No Contributions)**:
-```
-Validators set: Subnet Owner Key = 100% weight
-Result: 100% of Mechanism 1 emissions BURNED
-```
-
-**Example Epoch (Active Contributions)**:
-```
-Validators set:
-  - Alice (won bounty:epic): 24%
-  - Bob (merged 5 PRs): 5%
-  - Charlie (benchmark +3%): 3%
-  - Subnet Owner Key: 68% (BURNED)
-
-Result: 32% distributed to contributors, 68% BURNED
-```
-
 #### Contributor Registration (GitHub → Bittensor Mapping)
 
-**⚠️ REQUIRED**: Contributors must link their GitHub account to a Bittensor hotkey to receive emissions.
+**⚠️ REQUIRED**: Benchmark contributors must link their GitHub account to a Bittensor hotkey to receive emissions.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -1084,8 +1120,9 @@ Result: 32% distributed to contributors, 68% BURNED
 │     └── Sign message with hotkey, submit via GitHub PR to registry          │
 │     └── Or: Use KubeTEE CLI: kubeteectl link-github --hotkey <HK>           │
 │                                                                             │
-│  3. CONTRIBUTE to KubeTEE-AI repositories                                   │
-│     └── PRs merged = emissions each epoch (weighted by contribution)        │
+│  3. IMPROVE BENCHMARKS on KubeTEE-AI repositories                           │
+│     └── Submit PRs that improve DeepResearch Benchmark scores               │
+│     └── Lifetime Score accumulates with each verified improvement           │
 │                                                                             │
 │  On-Chain Registry (mapping stored on Bittensor or IPFS):                   │
 │  ┌─────────────────────────────────────────────────────────────────────┐    │
@@ -1097,215 +1134,224 @@ Result: 32% distributed to contributors, 68% BURNED
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-#### GitHub Issues = Bounties
+#### Benchmark Score Calculation
 
-**Bounties ARE GitHub Issues** in `KubeTEE-AI` organization repositories. When a bounty is completed, the winner's hotkey receives higher weight from validators.
+Validators calculate weights based on **Lifetime Benchmark Scores** with decay applied:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                    GITHUB ISSUES = BOUNTIES                                 │
+│              BENCHMARK SCORE CALCULATION                                    │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│  Example GitHub Issue:                                                      │
-│  ─────────────────────                                                      │
-│  ┌─────────────────────────────────────────────────────────────────────┐    │
-│  │  Issue #42: "Optimize batch inference pipeline"                     │    │
-│  │                                                                     │    │
-│  │  Labels: [bounty:hard] [category:optimization]                      │    │
-│  │  Weight Multiplier: 4x (hard bounty)                                │    │
-│  │  Status: OPEN                                                       │    │
-│  │                                                                     │    │
-│  │  Acceptance Criteria:                                               │    │
-│  │  - [ ] Throughput improved by 2x                                    │    │
-│  │  - [ ] All CI tests pass                                            │    │
-│  │  - [ ] No memory regression                                         │    │
-│  └─────────────────────────────────────────────────────────────────────┘    │
+│  SCORE FORMULA:                                                             │
+│  ──────────────                                                             │
+│  Benchmark_Score = Improvement_Percentage × Quality_Multiplier              │
 │                                                                             │
-│  WEIGHT CALCULATION:                                                        │
+│  Where:                                                                     │
+│  • Improvement_Percentage = (New_Score - Old_Score) / Old_Score × 100       │
+│  • Quality_Multiplier based on benchmark category (1.0x - 3.0x)             │
+│                                                                             │
+│  QUALITY MULTIPLIERS:                                                       │
+│  ────────────────────                                                       │
+│  │  Category                │  Multiplier  │  Description                │  │
+│  │──────────────────────────┼──────────────┼─────────────────────────────│  │
+│  │  DeepResearch Overall    │  3.0x        │  Primary benchmark          │  │
+│  │  GAIA Benchmark          │  2.5x        │  General AI assistant       │  │
+│  │  Inference Speed         │  2.0x        │  Performance optimization   │  │
+│  │  Memory Efficiency       │  1.5x        │  Resource optimization      │  │
+│  │  Other Benchmarks        │  1.0x        │  Secondary metrics          │  │
+│                                                                             │
+│  MONTHLY DECAY:                                                             │
+│  ──────────────                                                             │
+│  New_Lifetime_Score = Old_Lifetime_Score × 0.95                             │
+│  Floor: Never below 30% of original contribution                            │
+│                                                                             │
+│  EXAMPLE (Multi-Miner Ecosystem Over 6 Months):                             │
+│  ───────────────────────────────────────────────                            │
+│                                                                             │
+│  Month 0:                                                                   │
+│    Alice improves DeepResearch by 5% (3.0x multiplier)                      │
+│    Alice Score: 15.0                                                        │
+│    Total Network: 15.0 → Alice Share: 100%                                  │
+│                                                                             │
+│  Month 2:                                                                   │
+│    Alice Score: 13.5 (decayed)                                              │
+│    Bob improves by 3% → Bob Score: 9.0                                      │
+│    Total Network: 22.5 → Alice: 60%, Bob: 40%                               │
+│                                                                             │
+│  Month 6:                                                                   │
+│    Alice Score: 11.4 (still earning from original contribution!)            │
+│    Bob Score: 7.7                                                           │
+│    Charlie improves by 2% → Charlie Score: 6.0                              │
+│    Total Network: 25.1 → Alice: 45%, Bob: 31%, Charlie: 24%                 │
+│                                                                             │
+│  KEY INSIGHT: Alice STILL earns 45% despite not contributing for 6 months!  │
+│               Her pioneer contribution continues generating emissions.      │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Daily Emission Distribution Example**:
+
+```
+Today's Network State:
+Total Lifetime Score: 25.1
+Mechanism 1 Daily Emission: 300 TAO (30% of 1000 TAO/day)
+
+Individual Calculations:
+
+Alice (11.4 score):
+├─ Share: 11.4 / 25.1 = 45.4%
+└─ Daily Emission: 136 TAO
+
+Bob (7.7 score):
+├─ Share: 7.7 / 25.1 = 30.7%
+└─ Daily Emission: 92 TAO
+
+Charlie (6.0 score):
+├─ Share: 6.0 / 25.1 = 23.9%
+└─ Daily Emission: 72 TAO
+```
+
+**How to Participate** (Benchmark Improvement Workflow):
+
+1. **Study the benchmark**: Review [DeepResearch Benchmark](https://huggingface.co/spaces/Ayanami0730/DeepResearch-Leaderboard) methodology
+2. **Identify improvements**: Find optimization opportunities in KubeTEE's AI stack
+3. **Submit PR**: Include benchmark results showing improvement percentage
+4. **Wait for validation**: CI/CD runs benchmark tests automatically
+5. **Earn continuously**: Lifetime Score accumulates, decays slowly over time
+
+#### Implementation Bounty
+
+> 📋 **Track progress:** [GitHub Issue #1](https://github.com/KubeTEE-AI/kubetee-subnet/issues/1)
+
+---
+
+### Mechanism 2: Bounty Treasury (10% Emissions)
+
+**Purpose**: Fund development bounties for improving the KubeTEE tech stack, NVIDIA Blueprints, and ecosystem tooling.
+
+**Key Feature**: **Treasury Accumulation** — 10% of emissions flow to a treasury key controlled by the subnet owner. Bounties have **fixed TAO values** (paid in Alpha tokens) and are paid **manually** when PRs are merged.
+
+#### Treasury Accumulation
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│              BOUNTY TREASURY MODEL                                          │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  EMISSION FLOW:                                                             │
+│  ──────────────                                                             │
+│                                                                             │
+│  Subnet Emissions (100%)                                                    │
+│         │                                                                   │
+│         ├─── 60% → Mechanism 0 (Infrastructure Miners)                      │
+│         ├─── 30% → Mechanism 1 (Benchmark Improvers)                        │
+│         └─── 10% → Mechanism 2 (Treasury Key)                               │
+│                          │                                                  │
+│                          ▼                                                  │
+│              ┌───────────────────────┐                                      │
+│              │   TREASURY KEY        │                                      │
+│              │   (Subnet Owner)      │                                      │
+│              │                       │                                      │
+│              │   Accumulates Alpha   │                                      │
+│              │   tokens continuously │                                      │
+│              └───────────┬───────────┘                                      │
+│                          │                                                  │
+│                          ▼                                                  │
+│              ┌───────────────────────┐                                      │
+│              │   MANUAL PAYOUTS      │                                      │
+│              │                       │                                      │
+│              │   When PR is merged   │                                      │
+│              │   and validated,      │                                      │
+│              │   subnet owner        │                                      │
+│              │   transfers Alpha     │                                      │
+│              │   to bounty winner    │                                      │
+│              └───────────────────────┘                                      │
+│                                                                             │
+│  WHY TREASURY MODEL:                                                        │
 │  ───────────────────                                                        │
-│  Winner's weight += Bounty_Difficulty_Multiplier × Base_Weight              │
-│                                                                             │
-│  Example: Alice wins bounty:hard (4x) → Validators increase Alice's         │
-│           Mechanism 1 weight by 4x base units for the reward epoch          │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-**GitHub Labels for Bounties**:
-
-| Label | Type | Base Weight | Description |
-|-------|------|-------------|-------------|
-| `bounty:easy` | Difficulty | 1x | Good for newcomers |
-| `bounty:medium` | Difficulty | 2x | Standard tasks |
-| `bounty:hard` | Difficulty | 4x | Complex improvements |
-| `bounty:epic` | Difficulty | 8x | Major features |
-| `category:bug-fix` | Category | — | Bug fixes |
-| `category:feature` | Category | — | New features |
-| `category:documentation` | Category | — | Docs improvements |
-| `category:benchmark` | Category | — | Benchmark improvements |
-| `category:security` | Category | — | Security fixes |
-| `category:optimization` | Category | — | Performance optimizations |
-| `category:testing` | Category | — | Test coverage |
-
-#### Bounty Age Multiplier (Longer Open = Higher Reward)
-
-**Problem**: How to incentivize completion of older/harder bounties without accumulating emissions in hotkeys?
-
-**Solution**: Apply an **age multiplier** when the bounty is completed. The longer a bounty stays open, the higher the reward for the winner.
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│              BOUNTY AGE MULTIPLIER                                          │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  Formula:                                                                   │
-│  ────────                                                                   │
-│  Winner_Weight = Difficulty_Multiplier × Age_Multiplier                     │
-│                                                                             │
-│  Age_Multiplier = min(Epochs_Open / 10, 5.0)   // Capped at 5x              │
-│                                                                             │
-│  ┌─────────────────────────────────────────────────────────────────────┐    │
-│  │  Epochs Open    │  Age Multiplier  │  Example (bounty:hard = 4x)   │    │
-│  │─────────────────┼──────────────────┼───────────────────────────────│    │
-│  │  1-9 epochs     │  0.1x - 0.9x     │  4 × 0.5 = 2 weight           │    │
-│  │  10 epochs      │  1.0x            │  4 × 1.0 = 4 weight           │    │
-│  │  20 epochs      │  2.0x            │  4 × 2.0 = 8 weight           │    │
-│  │  30 epochs      │  3.0x            │  4 × 3.0 = 12 weight          │    │
-│  │  40 epochs      │  4.0x            │  4 × 4.0 = 16 weight          │    │
-│  │  50+ epochs     │  5.0x (MAX)      │  4 × 5.0 = 20 weight          │    │
-│  └─────────────────────────────────────────────────────────────────────┘    │
-│                                                                             │
-│  EXAMPLE:                                                                   │
-│  ────────                                                                   │
-│  Bounty #42 (bounty:epic = 8x) opened at Epoch 100                          │
-│  Completed at Epoch 140 (40 epochs open)                                    │
-│                                                                             │
-│  Winner_Weight = 8 × min(40/10, 5.0) = 8 × 4.0 = 32                         │
-│                                                                             │
-│  If total contributor weights this epoch = 40:                              │
-│    Winner gets 32/40 = 80% of distributed emissions                         │
-│    (Remainder goes to subnet owner key → BURNED)                            │
-│                                                                             │
-│  WHY THIS WORKS:                                                            │
-│  ───────────────                                                            │
-│  • No accumulation in bounty hotkeys                                        │
-│  • Older bounties = higher weight when completed                            │
-│  • Incentivizes tackling hard/stale issues                                  │
-│  • Emissions burned each epoch until bounty is completed                    │
-│  • Winner gets proportionally large share of THAT epoch's emissions         │
+│  • Simpler than automated bounty hotkeys                                    │
+│  • Fixed TAO values provide clear incentives                                │
+│  • Subnet owner has flexibility on bounty amounts                           │
+│  • No complex age multiplier calculations                                   │
+│  • Transparent — all payouts visible on-chain                               │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-#### Weight Calculation Formula
+**Bounty Value System**:
 
-Validators calculate weights for each contributor based on three factors, with **unused weight sent to subnet owner key (BURNED)**:
+Subnet owner sets TAO value per bounty (paid in Alpha tokens at current rate):
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│              MECHANISM 1 WEIGHT CALCULATION                                 │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  MAX_WEIGHT = 100 (per epoch)                                               │
-│                                                                             │
-│  Contributor_Weight = Bounty_Weight + Benchmark_Weight + PR_Weight          │
-│  Burn_Weight = MAX_WEIGHT - Sum(All_Contributor_Weights)                    │
-│                                                                             │
-│  ┌──────────────────┐   ┌──────────────────┐   ┌──────────────────┐         │
-│  │   BOUNTY WINS    │   │   BENCHMARK      │   │   MERGED PRs     │         │
-│  │   (with age      │   │   IMPROVEMENT    │   │                  │         │
-│  │   multiplier)    │   │                  │   │                  │         │
-│  └────────┬─────────┘   └────────┬─────────┘   └────────┬─────────┘         │
-│           │                      │                      │                   │
-│           ▼                      ▼                      ▼                   │
-│  Difficulty × Age     % improvement on       1 point per PR                 │
-│  multiplier           DeepResearch Bench     merged                         │
-│                                                                             │
-│  EXAMPLE CALCULATION (Epoch N):                                             │
-│  ──────────────────────────────                                             │
-│                                                                             │
-│  Alice:                                                                     │
-│   - Won bounty:epic (8x), open 30 epochs → 8 × 3.0 = 24 points              │
-│   Total Weight = 24                                                         │
-│                                                                             │
-│  Bob:                                                                       │
-│   - Merged 5 PRs = 5 points                                                 │
-│   Total Weight = 5                                                          │
-│                                                                             │
-│  Charlie:                                                                   │
-│   - Improved benchmark by 3% = 3 points                                     │
-│   Total Weight = 3                                                          │
-│                                                                             │
-│  🔥 BURN (Subnet Owner Key):                                                │
-│   - Burn_Weight = 100 - (24 + 5 + 3) = 68                                   │
-│                                                                             │
-│  ┌─────────────────────────────────────────────────────────────────────┐    │
-│  │  FINAL WEIGHT DISTRIBUTION:                                         │    │
-│  │                                                                     │    │
-│  │    Alice:              24%  →  24% of Mechanism 1 emissions         │    │
-│  │    Bob:                 5%  →   5% of Mechanism 1 emissions         │    │
-│  │    Charlie:             3%  →   3% of Mechanism 1 emissions         │    │
-│  │    🔥 BURNED:          68%  →  68% of Mechanism 1 emissions         │    │
-│  │    ────────────────────────────────────────────────────────────     │    │
-│  │    Total:             100%                                          │    │
-│  └─────────────────────────────────────────────────────────────────────┘    │
-│                                                                             │
-│  NET EFFECT:                                                                │
-│  ───────────                                                                │
-│  • 40% of subnet emissions go to Mechanism 1                                │
-│  • Only 32% of that (40% × 32%) = 12.8% of subnet emissions to contributors │
-│  • Remaining 68% of Mechanism 1 = 27.2% of subnet emissions BURNED          │
-│  • Creates deflationary pressure on Alpha supply                            │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
+| Label | Typical TAO Value | Description |
+|-------|-------------------|-------------|
+| `bounty-value:5τ` | 5 TAO | Quick fixes, documentation |
+| `bounty-value:20τ` | 20 TAO | Standard features, bug fixes |
+| `bounty-value:50τ` | 50 TAO | Complex improvements |
+| `bounty-value:100τ` | 100 TAO | Major features |
+| `bounty-value:custom` | Variable | Subnet owner sets custom amount |
 
-#### Bounty Lifecycle (Fully Automated)
+**Category Labels** (for organization):
+
+| Label | Description |
+|-------|-------------|
+| `category:bug-fix` | Bug fixes |
+| `category:feature` | New features |
+| `category:documentation` | Docs improvements |
+| `category:security` | Security fixes |
+| `category:optimization` | Performance optimizations |
+| `category:testing` | Test coverage |
+| `category:integration` | Subnet integrations |
+
+#### Bounty Lifecycle
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                    AUTOMATED BOUNTY VALIDATION FLOW                         │
+│                    BOUNTY LIFECYCLE (TREASURY MODEL)                        │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│  1. GITHUB ISSUE CREATED with bounty:* label                                │
-│     └── System generates bounty hotkey (emissions start accumulating)       │
+│  1. GITHUB ISSUE CREATED with bounty-value:* label                          │
+│     └── Subnet owner creates issue with fixed TAO value                     │
+│     └── Example: Issue #42 with [bounty-value:50τ] [category:feature]       │
 │                                                                             │
-│  2. MINER SUBMITS PR with "Fixes #42" in commit                             │
-│     └── PR linked to issue/bounty automatically                             │
+│  2. CONTRIBUTOR SUBMITS PR with "Fixes #42" in commit                       │
+│     └── PR linked to issue automatically                                    │
+│     └── Multiple contributors can compete (first merged wins)               │
 │                                                                             │
 │  3. AUTOMATED CI/CD PIPELINE (GitHub Actions)                               │
 │     ├── Unit tests run                                                      │
 │     ├── Integration tests run                                               │
-│     ├── Benchmark tests run (if category:benchmark)                         │
 │     └── PASS / FAIL                                                         │
 │                                                                             │
 │  4. AI CODE ANALYSIS                                                        │
 │     ├── Qodo self-hosted AI code review                                     │
 │     ├── Code quality score (0-100)                                          │
 │     ├── Security scan via Bitsec (SN60)                                     │
-│     ├── Performance analysis                                                │
-│     └── AI generates approval/rejection with reasoning                      │
+│     └── AI generates approval/suggestions with reasoning                    │
 │                                                                             │
-│  5. SUBNET OWNER FINAL DECISION                                             │
-│     ├── If CI PASS + AI Score >= 70 → AUTO-APPROVE                          │
-│     ├── If CI FAIL → AUTO-REJECT                                            │
-│     └── Edge cases → Subnet owner manual review                             │
+│  5. SUBNET OWNER REVIEW                                                     │
+│     ├── If CI PASS + AI Score >= 70 → Review and merge                      │
+│     ├── Request changes if needed                                           │
+│     └── Merge when satisfied                                                │
 │                                                                             │
-│  6. PAYOUT                                                                  │
-│     ├── Accumulated emissions transfer from bounty hotkey to winner         │
-│     ├── GitHub Issue closed automatically                                   │
-│     └── bounty:completed label added                                        │
+│  6. MANUAL PAYOUT                                                           │
+│     ├── Subnet owner transfers Alpha tokens from treasury                   │
+│     ├── Amount: TAO value × current Alpha rate                              │
+│     ├── Transaction recorded on-chain                                       │
+│     └── GitHub Issue closed with bounty:completed label                     │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 **How to Participate** (GitHub-Native Workflow):
 
-1. **Browse bounties**: Go to [github.com/KubeTEE-AI](https://github.com/KubeTEE-AI) and look for issues with `bounty:*` labels
-2. **Comment to claim** (optional): Comment "I'm working on this" to make aware how many are participating on this bounty
-3. **Submit PR**: Include `Fixes #42` in your commit message to link to the issue
-4. **Wait for validation**: CI/CD + Bitsec security scan + AI analysis run automatically
-5. **Get paid**: If approved, accumulated emissions transfer to your hotkey!
+1. **Browse bounties**: Go to [github.com/KubeTEE-AI](https://github.com/KubeTEE-AI) and look for issues with `bounty-value:*` labels
+2. **Check the TAO value**: Each bounty shows its fixed reward (e.g., `bounty-value:50τ`)
+3. **Comment to claim** (optional): Comment "I'm working on this" to signal interest
+4. **Submit PR**: Include `Fixes #42` in your commit message to link to the issue
+5. **Wait for review**: CI/CD + Qodo code analysis + Bitsec security scan runs automatically
+6. **Get paid**: When merged, subnet owner manually transfers Alpha tokens to your wallet
 
 **Automated Validation Criteria**:
 
@@ -1313,11 +1359,10 @@ Validators calculate weights for each contributor based on three factors, with *
 |-------|------|-----------|
 | Unit Tests | pytest | 100% pass |
 | Integration Tests | pytest | 100% pass |
-| Code Quality | AI Analysis (Claude/GPT) | Score >= 70/100 |
+| **Code Quality** | **Qodo (self-hosted)** | **Score >= 70/100** |
 | **Security Scan** | **Bitsec (Subnet 60)** | **0 high/critical issues** |
 | Test Coverage | Coverage.py | >= 80% (if tests added) |
 | Documentation | AI Analysis | Required for new features |
-| Benchmark Delta | DeepResearch Bench | >= 0% (no regression) |
 
 #### Security Scanning via Bitsec (Subnet 60)
 
@@ -1353,25 +1398,13 @@ We integrate with **Bitsec (SN60)** for decentralized security auditing of code 
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Benefits of Bitsec Integration**:
-- 🔒 **Decentralized security** — No single point of failure
-- 🤖 **AI-powered** — Advanced vulnerability detection
-- ⚡ **Fast** — Automated scanning on every PR
-- 🔗 **Bittensor native** — Subnet-to-subnet integration
-
-**Why This Model Works**:
-- ✅ **No drama** — Clear criteria, automated validation
-- ✅ **No human in the loop** — Validators run automated checks
-- ✅ **Fair for newcomers** — Easy bounties to start
-- ✅ **Rewards consistency** — Continuous contributions add up
-- ✅ **Multiple winners** — Not winner-takes-all
-- ✅ **Transparent** — All bounties, submissions, and AI analysis public
-- ✅ **Subnet owner authority** — Final decision on edge cases
-- ✅ **Subnet integration** — Bitsec (SN60) for security, Gradients (SN56) for fine-tuning
-
-#### Implementation Bounty
-
-> 📋 **Track progress:** [GitHub Issue #1](https://github.com/KubeTEE-AI/kubetee-subnet/issues/1)
+**Benefits of Treasury + Qodo + Bitsec Model**:
+- ✅ **Simple** — Fixed TAO values, no complex calculations
+- ✅ **Transparent** — All payouts visible on-chain
+- ✅ **Flexible** — Subnet owner sets bounty values based on priority
+- ✅ **Quality** — Qodo AI code review ensures high code standards
+- ✅ **Secure** — Bitsec (SN60) integration for automated security scanning
+- ✅ **Fair** — First to merge wins, clear acceptance criteria
 
 ### Referrers / Integrators / Resellers: 50% Revenue Share (NO Emissions!)
 
@@ -1582,7 +1615,8 @@ kubeteectl affiliate status --address 0x1234...abcd
 | Revenue Stream | Type | Registration | Distribution |
 |----------------|------|--------------|--------------|
 | Infrastructure Emissions (60%) | Subnet Emissions | Bittensor subnet | Via Yuma Consensus |
-| Open Source Emissions (40%) | Subnet Emissions | Bittensor subnet | Via Yuma Consensus |
+| Benchmark Emissions (30%) | Subnet Emissions | Bittensor subnet | Via Yuma Consensus (Lifetime Score) |
+| Bounty Treasury (10%) | Subnet Emissions | Bittensor subnet | Manual payout by subnet owner |
 | Reseller Payments | On-Chain Contract | KubeTEE CLI only | Validator epoch settlement → KubeTEE Owner |
 
 **On-Chain Smart Contract**: `KubeTEEPayment.sol` deployed on BASE L2 handles all user deposits (USDC) and epoch settlements.
@@ -2201,20 +2235,30 @@ Using the KubeTEE CLI (one command deployment):
 
 ---
 
-## For Miners (Open Source Competition)
+## For Miners (Benchmark Competition)
 
 ### Development Process
 
-**Miners are incentivized to improve the Subnet Tech Stack and Blueprints**
+**Miners are incentivized to improve the DeepResearch Benchmark scores**
 
 1. **Create Repository**: Fork public repository on GitHub
 2. **Register Coldkey/Hotkey to the subnet**: using Bittensor CLI (BTCLI)
-3. **Register Repository**: Using KUBETEECTL to the miner hotkey
+3. **Link GitHub Account**: Using KUBETEECTL to map GitHub → Bittensor hotkey
 4. **CI/CD Setup**: Automated deployment when committed to the staging branch
 5. **Code Analysis**: Pass AI Agent analysis for code compliance
 6. **Security Checks**: Pass CI workflow for vulnerability & basic tests
 7. **Staging Deploy**: Pass Staging deployment without errors
-8. **Benchmarking**: Pass benchmarks and receive scoring
+8. **Benchmarking**: Pass benchmarks and earn Lifetime Score (with decay)
+
+### Bounty Participation
+
+**Contribute to bounties for fixed TAO rewards (paid in Alpha)**
+
+1. **Browse Bounties**: Check [github.com/KubeTEE-AI](https://github.com/KubeTEE-AI) for `bounty-value:*` labels
+2. **Check Value**: Each bounty shows fixed TAO reward (e.g., `bounty-value:50τ`)
+3. **Submit PR**: Include `Fixes #XX` in commit to link to bounty issue
+4. **Wait for Merge**: Pass CI/CD, security scan, and subnet owner review
+5. **Get Paid**: Subnet owner manually transfers Alpha tokens from treasury
 
 ## For Miners (Infrastructure)
 
