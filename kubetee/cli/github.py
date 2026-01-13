@@ -15,6 +15,28 @@ from typing import Optional
 
 import click
 import httpx
+from rich.console import Console
+from rich.panel import Panel
+from rich.text import Text
+
+# ASCII Art Banner
+KUBETEE_BANNER = r"""
+██╗  ██╗██╗   ██╗██████╗ ███████╗████████╗███████╗███████╗
+██║ ██╔╝██║   ██║██╔══██╗██╔════╝╚══██╔══╝██╔════╝██╔════╝
+█████╔╝ ██║   ██║██████╔╝█████╗     ██║   █████╗  █████╗
+██╔═██╗ ██║   ██║██╔══██╗██╔══╝     ██║   ██╔══╝  ██╔══╝
+██║  ██╗╚██████╔╝██████╔╝███████╗   ██║   ███████╗███████╗
+╚═╝  ╚═╝ ╚═════╝ ╚═════╝ ╚══════╝   ╚═╝   ╚══════╝╚══════╝"""
+
+KUBETEE_SUBTITLE = "Confidential AI Computing on Bittensor | Subnet 62"
+
+
+def show_banner():
+    """Display the KubeTEE ASCII banner with rich formatting."""
+    console = Console()
+    console.print(KUBETEE_BANNER, style="bold green")
+    console.print(KUBETEE_SUBTITLE, style="dim white")
+    console.print()
 
 # Mechanism ID to name mapping
 MECHANISM_NAMES = {
@@ -185,14 +207,25 @@ def display_error(error_code: str, error_message: str):
     click.echo()
 
 
-@click.group()
+class KubeTEEGroup(click.Group):
+    """Custom Click group that shows ASCII banner on help."""
+
+    def format_help(self, ctx, formatter):
+        """Override to show banner before help text."""
+        show_banner()
+        super().format_help(ctx, formatter)
+
+
+@click.group(cls=KubeTEEGroup)
 @click.version_option(version="0.1.0", prog_name="kubetee")
 def cli():
     """
     KubeTEE CLI - Miner tools for subnet 62.
-    
+
     Use these commands to interact with the KubeTEE subnet,
     including linking your GitHub account to your miner hotkey.
+
+    NVIDIA Inception Program | Confidential Computing Consortium
     """
     pass
 

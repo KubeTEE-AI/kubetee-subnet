@@ -7,8 +7,34 @@ name = "kubetee-subnet"
 version = "0.1.0"
 description = "KubeTEE Bittensor Subnet 62"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.13"
 license = {text = "MIT"}
+dependencies = [
+    "click>=8.0.0",
+    "httpx>=0.24.0",
+    "rich>=13",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.0.0",
+    "coverage[toml]>=7.0.0",
+    "black>=23.0.0",
+    "pylint>=3.0.0",
+]
+full = [
+    "fastapi>=0.100.0",
+    "starlette>=0.30.0",
+    "pydantic>=2",
+    "uvicorn>=0.22.0",
+    "torch>=2",
+    "numpy>=1",
+    "bittensor-wallet>=4.0.0",
+    "bittensor>=9.11.1",
+    "web3>=6.0.0",
+]
 
 [project.scripts]
 kubetee = "kubetee.cli:main"

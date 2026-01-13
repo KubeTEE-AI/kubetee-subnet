@@ -12,18 +12,92 @@ KubeTEE AI is an enterprise-grade AI-as-a-Service (AIaaS) platform built on the 
 - OpenInfra Foundation contributor (Kata Containers)
 - Direct collaboration with Intel and NVIDIA engineers
 
-**Current Version:** 0.0.0 (early development/template stage)
+**Current Version:** 0.1.0
 
-## Common Development Commands
+## Development Environment
 
-### Installation and Setup
+**IMPORTANT: WSL Only** - This project is developed exclusively on Linux (WSL2 on Windows). Do NOT use Windows native commands or paths. All development, testing, and deployment happens within WSL.
+
+**Python Version:** 3.13+ (required)
+
+### Package Manager: uv
+
+This project uses **uv** as the package manager and Python environment manager. uv is a fast, reliable Python package installer and resolver.
 
 ```bash
-# Install subnet package in development mode
-pip install -e .
+# Install uv (if not already installed)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
 
-# Install dependencies
-pip install -r requirements.txt
+### Quick Install (Users)
+
+Install `kubetee` CLI globally (no venv activation needed, just like `btcli`):
+
+```bash
+# Install uv first (if not installed)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Install kubetee globally from PyPI (when published)
+uv tool install kubetee-subnet
+
+# Or install from GitHub
+uv tool install git+https://github.com/kubetee/kubetee-subnet.git
+
+# Or install from local source
+uv tool install -e /path/to/kubetee-subnet
+
+# Verify installation
+kubetee --help
+
+# Upgrade to latest version
+uv tool upgrade kubetee-subnet
+
+# Uninstall
+uv tool uninstall kubetee-subnet
+```
+
+### Developer Setup
+
+For contributing or running validators/miners:
+
+```bash
+# Clone and enter the repo
+git clone https://github.com/kubetee/kubetee-subnet.git
+cd kubetee-subnet
+
+# Create virtual environment with Python 3.13
+uv venv --python 3.13
+
+# Activate virtual environment
+source .venv/bin/activate
+
+# Install CLI only (minimal dependencies)
+uv pip install -e .
+
+# Install with full dependencies (validator/miner)
+uv pip install -e ".[full]"
+
+# Install with dev dependencies (testing, linting)
+uv pip install -e ".[dev]"
+
+# Install everything
+uv pip install -e ".[full,dev]"
+```
+
+### CLI Commands
+
+```bash
+# Show help with ASCII banner
+kubetee --help
+
+# Link GitHub account to hotkey
+kubetee link-github --gist-url https://gist.github.com/user/abc --mechanism-id 3
+
+# Check link status
+kubetee status --hotkey 5Grwva...
+
+# Show version
+kubetee --version
 ```
 
 ### Code Quality Checks
