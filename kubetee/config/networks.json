@@ -1,0 +1,41 @@
+{
+  "testnet": {
+    "name": "Bittensor EVM Testnet",
+    "chainId": 945,
+    "rpcUrl": "https://test.chain.opentensor.ai",
+    "explorer": "",
+    "contracts": {
+      "githubRegistry": {
+        "proxy": "",
+        "implementation": ""
+      }
+    },
+    "notes": "Deploy using: npx hardhat run scripts/deploy.js --network bittensorTestnet"
+  },
+  "mainnet": {
+    "name": "Bittensor EVM Mainnet",
+    "chainId": 964,
+    "rpcUrl": "https://chain.opentensor.ai",
+    "explorer": "",
+    "contracts": {
+      "githubRegistry": {
+        "proxy": "",
+        "implementation": ""
+      }
+    },
+    "notes": "⚠️ MAINNET - Use with caution! Ensure all tests pass before deployment."
+  },
+  "localhost": {
+    "name": "Local Hardhat Node",
+    "chainId": 31337,
+    "rpcUrl": "http://127.0.0.1:8545",
+    "explorer": "",
+    "contracts": {
+      "githubRegistry": {
+        "proxy": "",
+        "implementation": ""
+      }
+    },
+    "notes": "Start with: cd kubetee/contracts && npx hardhat node"
+  }
+}

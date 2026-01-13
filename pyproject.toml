@@ -1,0 +1,64 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kubetee-subnet"
+version = "0.1.0"
+description = "KubeTEE Bittensor Subnet 62"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+
+[project.scripts]
+kubetee = "kubetee.cli:main"
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+asyncio_mode = "auto"
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "--tb=short",
+    "-ra",
+]
+markers = [
+    "asyncio: mark test as async",
+    "slow: mark test as slow running",
+    "integration: mark test as integration test",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
+]
+
+[tool.coverage.run]
+source = ["kubetee"]
+branch = true
+omit = [
+    "*/tests/*",
+    "*/__pycache__/*",
+    "*/contracts/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "if typing.TYPE_CHECKING:",
+]
+show_missing = true
+precision = 2
+
+[tool.coverage.html]
+directory = "coverage_html"
+
+[tool.coverage.xml]
+output = "coverage.xml"

@@ -2,6 +2,8 @@
 
 > Enterprise-Grade AI as a Service (AIaaS) with Trusted Execution Environment (TEE) on Decentralized Kubernetes Infrastructure
 
+[![Tests](https://github.com/KubeTEE-AI/kubetee-subnet/actions/workflows/test.yml/badge.svg)](https://github.com/KubeTEE-AI/kubetee-subnet/actions/workflows/test.yml)
+[![codecov](https://codecov.io/gh/KubeTEE-AI/kubetee-subnet/branch/main/graph/badge.svg)](https://codecov.io/gh/KubeTEE-AI/kubetee-subnet)
 [![DeepResearch Leaderboard](https://img.shields.io/badge/DeepResearch-Ranked-blue)](https://huggingface.co/spaces/Ayanami0730/DeepResearch-Leaderboard)
 [![FIPS-140-2](https://img.shields.io/badge/FIPS--140--2-Compliant-green)](https://docs.rke2.io/security/fips_support)
 [![Confidential Computing](https://img.shields.io/badge/Confidential%20Computing-Enabled-brightgreen)](https://confidentialcomputing.io/)
