@@ -1,8 +1,8 @@
 const { expect } = require("chai");
 const { ethers, upgrades } = require("hardhat");
 
-describe("KubeTEEEscrowV2", function () {
-    let KubeTEEEscrowV2;
+describe("KubeTEEEscrow", function () {
+    let KubeTEEEscrow;
     let escrow;
     let mockToken;
     let owner;
@@ -31,10 +31,10 @@ describe("KubeTEEEscrowV2", function () {
         await mockToken.mint(reseller1.address, RESELLER_BALANCE);
         await mockToken.mint(reseller2.address, RESELLER_BALANCE);
         
-        // Deploy KubeTEEEscrowV2
-        KubeTEEEscrowV2 = await ethers.getContractFactory("KubeTEEEscrowV2");
+        // Deploy KubeTEEEscrow
+        KubeTEEEscrow = await ethers.getContractFactory("KubeTEEEscrow");
         escrow = await upgrades.deployProxy(
-            KubeTEEEscrowV2,
+            KubeTEEEscrow,
             [await mockToken.getAddress(), treasury.address],
             { kind: "uups" }
         );
@@ -403,7 +403,7 @@ describe("KubeTEEEscrowV2", function () {
 
     describe("Upgradeability", function () {
         it("Should upgrade to V3 successfully", async function () {
-            const KubeTEEEscrowV3 = await ethers.getContractFactory("KubeTEEEscrowV2");
+            const KubeTEEEscrowV3 = await ethers.getContractFactory("KubeTEEEscrow");
             const upgraded = await upgrades.upgradeProxy(await escrow.getAddress(), KubeTEEEscrowV3);
             expect(await upgraded.getAddress()).to.equal(await escrow.getAddress());
         });
@@ -411,7 +411,7 @@ describe("KubeTEEEscrowV2", function () {
         it("Should preserve state after upgrade", async function () {
             await escrow.connect(reseller1).deposit(ethers.parseUnits("100", 18));
             
-            const KubeTEEEscrowV3 = await ethers.getContractFactory("KubeTEEEscrowV2");
+            const KubeTEEEscrowV3 = await ethers.getContractFactory("KubeTEEEscrow");
             const upgraded = await upgrades.upgradeProxy(await escrow.getAddress(), KubeTEEEscrowV3);
             
             expect(await upgraded.getResellerBalance(reseller1.address)).to.equal(ethers.parseUnits("100", 18));

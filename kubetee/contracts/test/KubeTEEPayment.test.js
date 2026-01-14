@@ -1,8 +1,8 @@
 const { expect } = require("chai");
 const { ethers, upgrades } = require("hardhat");
 
-describe("KubeTEEPaymentV2", function () {
-    let KubeTEEPaymentV2;
+describe("KubeTEEPayment", function () {
+    let KubeTEEPayment;
     let payment;
     let mockUsdc;
     let owner;
@@ -30,10 +30,10 @@ describe("KubeTEEPaymentV2", function () {
         await mockUsdc.mint(user1.address, USER_BALANCE);
         await mockUsdc.mint(user2.address, USER_BALANCE);
         
-        // Deploy KubeTEEPaymentV2 as upgradeable proxy
-        KubeTEEPaymentV2 = await ethers.getContractFactory("KubeTEEPaymentV2");
+        // Deploy KubeTEEPayment as upgradeable proxy
+        KubeTEEPayment = await ethers.getContractFactory("KubeTEEPayment");
         payment = await upgrades.deployProxy(
-            KubeTEEPaymentV2,
+            KubeTEEPayment,
             [await mockUsdc.getAddress(), treasury.address],
             { kind: "uups" }
         );
@@ -269,10 +269,10 @@ describe("KubeTEEPaymentV2", function () {
     });
 
     describe("Upgradeability", function () {
-        it("Should upgrade to V3 successfully", async function () {
-            // Deploy mock V3
-            const KubeTEEPaymentV3 = await ethers.getContractFactory("KubeTEEPaymentV2"); // Same contract for test
-            const upgraded = await upgrades.upgradeProxy(await payment.getAddress(), KubeTEEPaymentV3);
+        it("Should upgrade to V2 successfully", async function () {
+            // Deploy mock V2
+            const KubeTEEPaymentV2 = await ethers.getContractFactory("KubeTEEPayment"); // Same contract for test
+            const upgraded = await upgrades.upgradeProxy(await payment.getAddress(), KubeTEEPaymentV2);
             expect(await upgraded.getAddress()).to.equal(await payment.getAddress());
         });
         
@@ -281,8 +281,8 @@ describe("KubeTEEPaymentV2", function () {
             await payment.connect(operator).registerUser(user1.address, affiliate.address);
             
             // Upgrade
-            const KubeTEEPaymentV3 = await ethers.getContractFactory("KubeTEEPaymentV2");
-            const upgraded = await upgrades.upgradeProxy(await payment.getAddress(), KubeTEEPaymentV3);
+            const KubeTEEPaymentV2 = await ethers.getContractFactory("KubeTEEPayment");
+            const upgraded = await upgrades.upgradeProxy(await payment.getAddress(), KubeTEEPaymentV2);
             
             // Check state preserved
             const status = await upgraded.getUserStatus(user1.address);
@@ -290,9 +290,9 @@ describe("KubeTEEPaymentV2", function () {
         });
         
         it("Should reject unauthorized upgrade", async function () {
-            const KubeTEEPaymentV3 = await ethers.getContractFactory("KubeTEEPaymentV2", nonOperator);
+            const KubeTEEPaymentV2 = await ethers.getContractFactory("KubeTEEPayment", nonOperator);
             await expect(
-                upgrades.upgradeProxy(await payment.getAddress(), KubeTEEPaymentV3)
+                upgrades.upgradeProxy(await payment.getAddress(), KubeTEEPaymentV2)
             ).to.be.reverted;
         });
     });
@@ -357,27 +357,3 @@ describe("KubeTEEPaymentV2", function () {
         });
     });
 });
-
-// Mock ERC20 for testing
-const MockERC20Contract = `
-// SPDX-License-Identifier: MIT
-pragma solidity ^0.8.22;
-
-import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-
-contract MockERC20 is ERC20 {
-    uint8 private _decimals;
-    
-    constructor(string memory name, string memory symbol, uint8 decimals_) ERC20(name, symbol) {
-        _decimals = decimals_;
-    }
-    
-    function decimals() public view override returns (uint8) {
-        return _decimals;
-    }
-    
-    function mint(address to, uint256 amount) external {
-        _mint(to, amount);
-    }
-}
-`;

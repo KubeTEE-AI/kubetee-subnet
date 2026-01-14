@@ -10,7 +10,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 /**
- * @title KubeTEEBuybackBurnV2
+ * @title KubeTEEBuybackBurn
  * @notice Automated daily USDC → TAO → Alpha → Burn mechanism
  * @dev Upgradeable (UUPS pattern), uses Admin/Operator access control model
  * 
@@ -61,7 +61,7 @@ interface IWTAOBridge {
     function bridgeToBittensor(uint256 amount, string calldata bittensorAddress) external;
 }
 
-contract KubeTEEBuybackBurnV2 is
+contract KubeTEEBuybackBurn is
     Initializable,
     OwnableUpgradeable,
     UUPSUpgradeable,

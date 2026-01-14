@@ -2,8 +2,8 @@ const { expect } = require("chai");
 const { ethers, upgrades } = require("hardhat");
 const { time } = require("@nomicfoundation/hardhat-network-helpers");
 
-describe("KubeTEEResellerV2", function () {
-    let KubeTEEResellerV2;
+describe("KubeTEEReseller", function () {
+    let KubeTEEReseller;
     let reseller;
     let mockUsdc;
     let owner;
@@ -31,10 +31,10 @@ describe("KubeTEEResellerV2", function () {
         await mockUsdc.mint(resellerUser1.address, RESELLER_BALANCE);
         await mockUsdc.mint(resellerUser2.address, RESELLER_BALANCE);
         
-        // Deploy KubeTEEResellerV2
-        KubeTEEResellerV2 = await ethers.getContractFactory("KubeTEEResellerV2");
+        // Deploy KubeTEEReseller
+        KubeTEEReseller = await ethers.getContractFactory("KubeTEEReseller");
         reseller = await upgrades.deployProxy(
-            KubeTEEResellerV2,
+            KubeTEEReseller,
             [await mockUsdc.getAddress(), treasury.address, EPOCH_DURATION],
             { kind: "uups" }
         );
@@ -303,7 +303,7 @@ describe("KubeTEEResellerV2", function () {
 
     describe("Upgradeability", function () {
         it("Should upgrade to V3 successfully", async function () {
-            const KubeTEEResellerV3 = await ethers.getContractFactory("KubeTEEResellerV2");
+            const KubeTEEResellerV3 = await ethers.getContractFactory("KubeTEEReseller");
             const upgraded = await upgrades.upgradeProxy(await reseller.getAddress(), KubeTEEResellerV3);
             expect(await upgraded.getAddress()).to.equal(await reseller.getAddress());
         });
@@ -311,7 +311,7 @@ describe("KubeTEEResellerV2", function () {
         it("Should preserve state after upgrade", async function () {
             await reseller.connect(resellerUser1).register("namespace1", "Business 1");
             
-            const KubeTEEResellerV3 = await ethers.getContractFactory("KubeTEEResellerV2");
+            const KubeTEEResellerV3 = await ethers.getContractFactory("KubeTEEReseller");
             const upgraded = await upgrades.upgradeProxy(await reseller.getAddress(), KubeTEEResellerV3);
             
             expect(await upgraded.isReseller(resellerUser1.address)).to.be.true;

@@ -8,7 +8,7 @@ import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 /**
- * @title KubeTEEPaymentV2
+ * @title KubeTEEPayment
  * @notice Pull-based payment contract for KubeTEE AI platform on BASE L2
  * @dev Upgradeable (UUPS pattern), uses Admin/Operator access control model
  * 
@@ -22,7 +22,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
  * - Graceful failure: Emits events on insufficient balance instead of reverting
  * - UUPS Upgradeability: Safe proxy pattern for future upgrades
  */
-contract KubeTEEPaymentV2 is
+contract KubeTEEPayment is
     Initializable,
     OwnableUpgradeable,
     UUPSUpgradeable,

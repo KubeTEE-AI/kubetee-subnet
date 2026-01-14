@@ -2,8 +2,8 @@ const { expect } = require("chai");
 const { ethers, upgrades } = require("hardhat");
 const { time } = require("@nomicfoundation/hardhat-network-helpers");
 
-describe("KubeTEEBuybackBurnV2", function () {
-    let KubeTEEBuybackBurnV2;
+describe("KubeTEEBuybackBurn", function () {
+    let KubeTEEBuybackBurn;
     let buyback;
     let mockUsdc;
     let mockWtao;
@@ -43,10 +43,10 @@ describe("KubeTEEBuybackBurnV2", function () {
         // Mint USDC to depositor
         await mockUsdc.mint(depositor.address, INITIAL_SUPPLY);
         
-        // Deploy KubeTEEBuybackBurnV2
-        KubeTEEBuybackBurnV2 = await ethers.getContractFactory("KubeTEEBuybackBurnV2");
+        // Deploy KubeTEEBuybackBurn
+        KubeTEEBuybackBurn = await ethers.getContractFactory("KubeTEEBuybackBurn");
         buyback = await upgrades.deployProxy(
-            KubeTEEBuybackBurnV2,
+            KubeTEEBuybackBurn,
             [await mockUsdc.getAddress(), await mockRouter.getAddress(), BITTENSOR_ADDRESS],
             { kind: "uups" }
         );
@@ -275,7 +275,7 @@ describe("KubeTEEBuybackBurnV2", function () {
         it("Should reject buyback when wTAO not configured", async function () {
             // Deploy new contract without wTAO
             const newBuyback = await upgrades.deployProxy(
-                KubeTEEBuybackBurnV2,
+                KubeTEEBuybackBurn,
                 [await mockUsdc.getAddress(), await mockRouter.getAddress(), BITTENSOR_ADDRESS],
                 { kind: "uups" }
             );
@@ -346,7 +346,7 @@ describe("KubeTEEBuybackBurnV2", function () {
 
     describe("Upgradeability", function () {
         it("Should upgrade to V3 successfully", async function () {
-            const KubeTEEBuybackBurnV3 = await ethers.getContractFactory("KubeTEEBuybackBurnV2");
+            const KubeTEEBuybackBurnV3 = await ethers.getContractFactory("KubeTEEBuybackBurn");
             const upgraded = await upgrades.upgradeProxy(await buyback.getAddress(), KubeTEEBuybackBurnV3);
             expect(await upgraded.getAddress()).to.equal(await buyback.getAddress());
         });
@@ -354,7 +354,7 @@ describe("KubeTEEBuybackBurnV2", function () {
         it("Should preserve state after upgrade", async function () {
             await buyback.connect(depositor).depositUsdc(ethers.parseUnits("200", 6));
             
-            const KubeTEEBuybackBurnV3 = await ethers.getContractFactory("KubeTEEBuybackBurnV2");
+            const KubeTEEBuybackBurnV3 = await ethers.getContractFactory("KubeTEEBuybackBurn");
             const upgraded = await upgrades.upgradeProxy(await buyback.getAddress(), KubeTEEBuybackBurnV3);
             
             const state = await upgraded.getState();

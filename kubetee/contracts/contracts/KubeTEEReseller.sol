@@ -10,7 +10,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 /**
- * @title KubeTEEResellerV2
+ * @title KubeTEEReseller
  * @notice SIMPLIFIED on-chain payment system for Resellers on BASE
  * @dev Upgradeable (UUPS pattern), uses Admin/Operator access control model
  * 
@@ -24,7 +24,7 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
  * - Wholesale discount: 50% of retail
  * - Epoch-based billing (hourly by default)
  */
-contract KubeTEEResellerV2 is
+contract KubeTEEReseller is
     Initializable,
     OwnableUpgradeable,
     UUPSUpgradeable,

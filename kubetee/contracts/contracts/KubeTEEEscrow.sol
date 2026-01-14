@@ -9,7 +9,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 /**
- * @title KubeTEEEscrowV2
+ * @title KubeTEEEscrow
  * @notice Trustless escrow for reseller deposits and miner payments
  * @dev Upgradeable (UUPS pattern), uses Admin/Operator access control model
  * 
@@ -22,7 +22,7 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
  * - MINERS provide the infrastructure that resellers use
  * - Payment split: 50% to miner, 50% to treasury
  */
-contract KubeTEEEscrowV2 is
+contract KubeTEEEscrow is
     Initializable,
     OwnableUpgradeable,
     UUPSUpgradeable,
