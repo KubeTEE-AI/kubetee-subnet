@@ -42,13 +42,21 @@ pylint --fail-on=W,E,F --exit-zero ./
 ### Running Nodes
 
 **Miner (requires 8x H100/H200/B200 GPUs with TEE attestation):**
+
+Infrastructure miners register their Kubernetes clusters via the KubeTEE CLI. No separate miner process is required - the validator communicates directly with the registered cluster via Rancher Fleet.
+
 ```bash
-python neurons/miner.py \
-  --netuid <NETUID> \
-  --subtensor.chain_endpoint <ENDPOINT> \
+# Register as infrastructure miner
+kubetee register \
   --wallet.name <WALLET_NAME> \
   --wallet.hotkey <HOTKEY> \
-  --logging.debug
+  --kubeconfig <FILE_PATH>
+
+# Link GitHub account (for benchmark emissions)
+kubetee link-github --hotkey <HOTKEY>
+
+# Check registration status
+kubetee status --wallet.name <WALLET_NAME>
 ```
 
 **Validator:**
@@ -135,13 +143,13 @@ This subnet implements **native Bittensor multiple incentive mechanisms** with t
 
 ```
 Entry Points (neurons/)
-  ├── validator.py - Main validator loop
-  └── miner.py - Main miner loop
+  └── validator.py - Main validator loop
+CLI (kubetee/)
+  └── cli/ - KubeTEE CLI for miner registration
         ↓
 Base Abstractions (template/base/)
   ├── neuron.py - BaseNeuron (core lifecycle)
-  ├── validator.py - BaseValidatorNeuron
-  └── miner.py - BaseMinerNeuron
+  └── validator.py - BaseValidatorNeuron
         ↓
 Protocol Definitions (template/protocol.py)
   ├── ServiceRequest - AI inference with revenue tracking
@@ -189,7 +197,7 @@ REVENUE TRACKING
 
 **Entry Points:**
 - `neurons/validator.py` - Validator main loop, initializes MechanismManager, runs forward pass, sets weights
-- `neurons/miner.py` - Miner main loop, implements forward() to process requests
+- `kubetee/cli/` - KubeTEE CLI for miner registration (replaces traditional miner neuron)
 
 **Core Mechanisms:**
 - `template/mechanisms/definitions.py` - Emission splits (60/40/0), mechanism configurations
@@ -328,7 +336,7 @@ class MyProtocol(bt.Synapse):
         return self
 ```
 
-2. Add handler in miner's `forward()` (`neurons/miner.py`)
+2. Validators query miners via Rancher Fleet API (no miner process needed)
 3. Add query logic in validator's `forward()` (`template/validator/forward.py`)
 
 ### Adding a New Mechanism
@@ -408,12 +416,11 @@ btcli wallet overview --wallet.name miner
 - TEE attestation service integration
 - DeepResearch Benchmark integration
 
-**Miner Implementation:** The current miner (`neurons/miner.py`) is a template. Production miners need to implement:
-- Kubernetes cluster management
-- TEE attestation reporting
-- AI model serving (NVIDIA NIM integration)
-- Health metrics reporting
-- Revenue tracking
+**Miner Implementation:** Infrastructure miners register via `kubetee register` CLI command. No separate miner process is needed - validators communicate directly with registered Kubernetes clusters via Rancher Fleet. Miners must provide:
+- Kubernetes cluster with Rancher Fleet agent
+- TEE attestation (Intel TDX/SGX or NVIDIA CC)
+- 8x H100/H200/B200 GPUs minimum
+- Health metrics exposed via Prometheus
 
 **Validator Implementation:** The validator handles:
 - Multi-mechanism coordination via MechanismManager
