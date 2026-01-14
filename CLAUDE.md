@@ -250,6 +250,38 @@ REVENUE TRACKING
 
 All PRs must pass: black, pylint, and build checks.
 
+### Claude GitHub Actions
+
+Every PR triggers **Claude Code GitHub Actions** for automated AI-powered review and validation:
+
+**Security Checks:**
+- Vulnerability scanning in dependencies
+- Secret detection (API keys, credentials)
+- Smart contract security analysis
+- Supply chain attack prevention
+
+**Code Quality:**
+- AI-powered code review with context-aware suggestions
+- Architecture consistency validation
+- Best practices enforcement
+- Documentation completeness check
+
+**Testing:**
+- Test coverage analysis
+- Edge case identification
+- Integration test validation
+- Regression risk assessment
+
+**Automated Workflows:**
+- PR description generation and enhancement
+- Commit message quality checks
+- Breaking change detection
+- Dependency update recommendations
+
+**Configuration:** `.github/workflows/claude.yml`
+
+All PRs require Claude Code review approval in addition to CircleCI checks.
+
 ## Technology Stack
 
 **Core Framework:**
@@ -403,7 +435,7 @@ btcli wallet overview --wallet.name miner
 6. **NVIDIA partnership** is central - leverages NeMo, NIM, and AI Blueprints
 7. **Multi-chain strategy** - BASE L2 for payments, Bittensor EVM for emissions
 8. **Revenue share** - Miners get 50%, Referrers get 50%, KubeTEE gets remainder
-9. **Development workflow** - Feature → Staging → Main with CircleCI automation
+9. **Development workflow** - Feature → Staging → Main with CircleCI + Claude GitHub Actions automation
 10. **Hardware requirements** are extreme - 8x H100/H200/B200 GPUs minimum for miners
 11. **Current version 0.0.0** indicates template stage - production deployment requires significant additional work
 12. **Security-first design** - FIPS-140-2, CCC membership, confidential computing throughout

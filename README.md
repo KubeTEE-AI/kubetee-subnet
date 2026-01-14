@@ -1412,7 +1412,7 @@ Subnet owner sets TAO value per bounty (paid in Alpha tokens at current rate):
 │     └── PASS / FAIL                                                         │
 │                                                                             │
 │  4. AI CODE ANALYSIS                                                        │
-│     ├── Qodo self-hosted AI code review                                     │
+│     ├── Claude Code GitHub Actions AI code review                           │
 │     ├── Code quality score (0-100)                                          │
 │     ├── Security scan via Bitsec (SN60)                                     │
 │     └── AI generates approval/suggestions with reasoning                    │
@@ -1437,7 +1437,7 @@ Subnet owner sets TAO value per bounty (paid in Alpha tokens at current rate):
 2. **Check the TAO value**: Each bounty shows its fixed reward (e.g., `bounty-value:50τ`)
 3. **Comment to claim** (optional): Comment "I'm working on this" to signal interest
 4. **Submit PR**: Include `Fixes #42` in your commit message to link to the issue
-5. **Wait for review**: CI/CD + Qodo code analysis + Bitsec security scan runs automatically
+5. **Wait for review**: CI/CD + Claude Code analysis + Bitsec security scan runs automatically
 6. **Get paid**: When merged, subnet owner manually transfers Alpha tokens to your wallet
 
 **Automated Validation Criteria**:
@@ -1446,7 +1446,7 @@ Subnet owner sets TAO value per bounty (paid in Alpha tokens at current rate):
 |-------|------|-----------|
 | Unit Tests | pytest | 100% pass |
 | Integration Tests | pytest | 100% pass |
-| **Code Quality** | **Qodo (self-hosted)** | **Score >= 70/100** |
+| **Code Quality** | **Claude Code GitHub Actions** | **Score >= 70/100** |
 | **Security Scan** | **Bitsec (Subnet 60)** | **0 high/critical issues** |
 | Test Coverage | Coverage.py | >= 80% (if tests added) |
 | Documentation | AI Analysis | Required for new features |
@@ -1485,11 +1485,11 @@ We integrate with **Bitsec (SN60)** for decentralized security auditing of code 
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Benefits of Treasury + Qodo + Bitsec Model**:
+**Benefits of Treasury + Claude Code + Bitsec Model**:
 - ✅ **Simple** — Fixed TAO values, no complex calculations
 - ✅ **Transparent** — All payouts visible on-chain
 - ✅ **Flexible** — Subnet owner sets bounty values based on priority
-- ✅ **Quality** — Qodo AI code review ensures high code standards
+- ✅ **Quality** — Claude Code AI review ensures high code standards
 - ✅ **Secure** — Bitsec (SN60) integration for automated security scanning
 - ✅ **Fair** — First to merge wins, clear acceptance criteria
 
