@@ -246,7 +246,7 @@ REVENUE TRACKING
 - `check_compatibility` - Python 3.8-3.11 compatibility
 - `build` - Install and validate package
 
-**Python Version Support:** 3.8, 3.9, 3.10, 3.11
+**Python Version Support:** 3.13+
 
 All PRs must pass: black, pylint, and build checks.
 
