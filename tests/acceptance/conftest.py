@@ -212,36 +212,37 @@ class MockGitHubRegistry:
         hotkey: str,
         mechanism_id: int,
         github_username: str,
-        validator_key: str
+        validator_private_key: str = None,
+        **kwargs
     ) -> tuple[Optional[str], str]:
         """
         Link a GitHub username to a hotkey.
-        
+
         Returns (tx_hash, status) where status is "created", "updated", or "unchanged".
         """
         existing = self.get_github(hotkey, mechanism_id)
-        
+
         if existing == github_username:
             return (None, "unchanged")
-        
+
         status = "created" if existing is None else "updated"
-        
+
         # Store the link
         if hotkey not in self.links:
             self.links[hotkey] = {}
         self.links[hotkey][mechanism_id] = github_username
-        
+
         # Record event
         tx_hash = f"0x{hash((hotkey, mechanism_id, github_username)):064x}"[-66:]
         self.events.append({
             "hotkey": hotkey,
             "mechanism_id": mechanism_id,
             "github_username": github_username,
-            "validator": validator_key,
+            "validator": validator_private_key,
             "timestamp": int(time.time()),
             "tx_hash": tx_hash
         })
-        
+
         return (tx_hash, status)
     
     def get_all_links(self) -> list:

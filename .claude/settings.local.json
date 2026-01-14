@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm test:*)",
+      "Bash(uv venv:*)",
+      "Bash(source:*)",
+      "Bash(uv pip install:*)",
+      "Bash(kubetee --help:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git config:*)",
+      "Bash(uv python:*)",
+      "Bash(git push)",
+      "Bash(git remote set-url:*)",
+      "Bash(kubetee link-github:*)",
+      "Bash(kubetee:*)",
+      "Bash(git fetch:*)",
+      "Bash(uv tool list:*)",
+      "Bash(uv tool install:*)",
+      "Bash(python -m pytest:*)",
+      "Bash(.venv/bin/python:*)",
+      "Bash(.venv/bin/pip install:*)",
+      "Bash(curl:*)",
+      "Bash(pkill:*)",
+      "Bash(ls:*)"
+    ]
+  }
+}

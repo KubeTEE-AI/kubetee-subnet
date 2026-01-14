@@ -1,0 +1,260 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag_version:
+        description: 'Tag version (e.g., 0.1.0)'
+        required: true
+        default: '0.1.0'
+      force_base_build:
+        description: 'Force rebuild of Base Image'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  check-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      base: ${{ steps.filter.outputs.base }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            base:
+              - 'requirements.txt'
+              - 'Dockerfile.base'
+
+  build-base:
+    name: Build Base Docker Image
+    needs: check-changes
+    if: needs.check-changes.outputs.base == 'true' || inputs.force_base_build == true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free up disk space
+        run: |
+          df -h
+          docker system prune -af --volumes
+          df -h
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set Base Image Tags
+        id: set_base_tags
+        run: |
+          TAGS="ghcr.io/${{ github.repository }}-base:latest"
+          echo "tags=$TAGS" >> $GITHUB_OUTPUT
+
+      - name: Build and Push Base Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: './Dockerfile.base'
+          push: true
+          tags: ${{ steps.set_base_tags.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Make Base Image Public
+        run: |
+          PACKAGE_NAME=$(echo "${{ github.repository }}-base" | sed 's/.*\///')
+          curl -X PATCH \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/orgs/${{ github.repository_owner }}/packages/container/${PACKAGE_NAME}/visibility" \
+            -d '{"visibility":"public"}' || \
+          curl -X PATCH \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/users/${{ github.repository_owner }}/packages/container/${PACKAGE_NAME}/visibility" \
+            -d '{"visibility":"public"}'
+
+  create-tag:
+    name: Create Git Tag
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create and Push Tag
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          tag_version="${{ github.event.inputs.tag_version }}"
+
+          # Check if tag exists on remote
+          if git ls-remote --tags origin | grep -q "refs/tags/v${tag_version}$"; then
+            echo "Error: Tag v${tag_version} already exists on remote. Delete it manually if you want to recreate it."
+            exit 1
+          fi
+
+          # Create tag locally
+          git tag "v${tag_version}"
+
+          # Push tag to remote
+          git push origin "v${tag_version}"
+
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: create-tag
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch tags
+        run: git fetch --tags
+
+      - name: Get tag name
+        id: get_tag
+        run: |
+          TAG="v${{ github.event.inputs.tag_version }}"
+          echo "TAG=$TAG" >> $GITHUB_ENV
+          echo "TAG_VERSION=${{ github.event.inputs.tag_version }}" >> $GITHUB_ENV
+          echo "Release tag: $TAG"
+
+      - name: Delete existing release if exists
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          release_id=$(curl -s -H "Authorization: token $GITHUB_TOKEN" "https://api.github.com/repos/${{ github.repository }}/releases/tags/${TAG}" | jq -r .id)
+          if [ "$release_id" != "null" ] && [ "$release_id" != "" ]; then
+            curl -X DELETE -H "Authorization: token $GITHUB_TOKEN" "https://api.github.com/repos/${{ github.repository }}/releases/$release_id"
+          fi
+
+      - name: Extract Release Notes from CHANGELOG.md
+        id: extract_notes
+        run: |
+          TAG_VERSION="${{ github.event.inputs.tag_version }}"
+          if [ -f "CHANGELOG.md" ]; then
+            RELEASE_NOTES=$(awk '/^## \[?'"$TAG_VERSION"'\]?/{flag=1;next}/^## /{flag=0}flag' CHANGELOG.md)
+            if [ -z "$RELEASE_NOTES" ]; then RELEASE_NOTES="Release $TAG_VERSION"; fi
+          else
+            RELEASE_NOTES="Release $TAG_VERSION - KubeTEE AI Subnet"
+          fi
+          echo "RELEASE_NOTES<<EOF" >> $GITHUB_ENV
+          echo "$RELEASE_NOTES" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ env.TAG }}
+          name: Release ${{ env.TAG }}
+          body: ${{ env.RELEASE_NOTES }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish-docker-image:
+    name: Build & Publish Docker Image (Final)
+    runs-on: ubuntu-latest
+    needs: [create-release, build-base]
+    if: always() && needs.create-release.result == 'success' && (needs.build-base.result == 'success' || needs.build-base.result == 'skipped')
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Free up disk space
+        run: |
+          df -h
+          docker system prune -af --volumes
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+          df -h
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate date tag
+        id: date
+        run: echo "date=$(date +'%Y-%m-%d-%H%M')" >> $GITHUB_OUTPUT
+
+      - name: Set Docker Tags
+        id: set_tags
+        run: |
+          TAG_VERSION="${{ github.event.inputs.tag_version }}"
+          DATE_TAG="${{ steps.date.outputs.date }}"
+          TAGS="ghcr.io/${{ github.repository }}:latest"
+          TAGS="$TAGS,ghcr.io/${{ github.repository }}:v${TAG_VERSION}"
+          TAGS="$TAGS,ghcr.io/${{ github.repository }}:${DATE_TAG}"
+
+          echo "tags=$TAGS" >> $GITHUB_OUTPUT
+
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.set_tags.outputs.tags }}
+          build-args: |
+            BASE_IMAGE=ghcr.io/${{ github.repository }}-base:latest
+          labels: |
+            org.opencontainers.image.title=KubeTEE AI Subnet
+            org.opencontainers.image.description=Enterprise AI-as-a-Service on Bittensor with TEE and Kubernetes
+            org.opencontainers.image.version=v${{ github.event.inputs.tag_version }}
+            org.opencontainers.image.created=${{ steps.date.outputs.date }}
+            org.opencontainers.image.source=${{ github.repositoryUrl }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64
+
+      - name: Make Final Image Public
+        run: |
+          PACKAGE_NAME=$(echo "${{ github.repository }}" | sed 's/.*\///')
+          curl -X PATCH \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/orgs/${{ github.repository_owner }}/packages/container/${PACKAGE_NAME}/visibility" \
+            -d '{"visibility":"public"}' || \
+          curl -X PATCH \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/users/${{ github.repository_owner }}/packages/container/${PACKAGE_NAME}/visibility" \
+            -d '{"visibility":"public"}'
+
+      - name: Image digest
+        run: |
+          echo "Docker image published successfully!"
+          echo "Tags: ${{ steps.set_tags.outputs.tags }}"

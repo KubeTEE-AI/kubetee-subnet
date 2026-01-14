@@ -1,0 +1,244 @@
+# Docker Compose Configuration for KubeTEE AI Subnet
+# See ops/README.md for detailed usage instructions and deployment guide
+#
+# Quick Start:
+#   docker compose up -d
+#
+# With local build:
+#   docker compose up -d --build
+
+services:
+
+  # =============================================================================
+  # Core Infrastructure Services
+  # =============================================================================
+
+  # Hardhat Node - Local Ethereum development blockchain
+  kubetee-hardhat:
+    container_name: kubetee-hardhat
+    image: node:20-alpine
+    working_dir: /app
+    command: sh -c "npm install && npx hardhat node"
+    ports:
+      - "8545:8545"
+    volumes:
+      - ../../kubetee/contracts:/app
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8545"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - default
+
+  # Redis - Caching and session management
+  kubetee-redis:
+    container_name: kubetee-redis
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - kubetee-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - default
+
+  # =============================================================================
+  # KubeTEE API Services
+  # =============================================================================
+
+  # GitHub Linking API - REST API for GitHub account linking
+  kubetee-api:
+    container_name: kubetee-api
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    image: ${IMAGE:-ghcr.io/kubetee-ai/kubetee-subnet:latest}
+    command: >
+      python -m kubetee.api.main
+      --host 0.0.0.0
+      --port 8000
+    environment:
+      # Blockchain Configuration
+      - RPC_URL=${RPC_URL:-http://kubetee-hardhat:8545}
+      - GITHUB_REGISTRY_CONTRACT_ADDRESS=${GITHUB_REGISTRY_CONTRACT_ADDRESS:-}
+      - VALIDATOR_PRIVATE_KEY=${VALIDATOR_PRIVATE_KEY:-}
+      # GitHub Configuration
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
+      # Logging
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+    depends_on:
+      kubetee-hardhat:
+        condition: service_healthy
+    networks:
+      - default
+      - subnet
+
+  # GitHub Linking API (Mock Mode) - For development/testing
+  kubetee-api-mock:
+    container_name: kubetee-api-mock
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    image: ${IMAGE:-ghcr.io/kubetee-ai/kubetee-subnet:latest}
+    command: >
+      python -m kubetee.api.main
+      --host 0.0.0.0
+      --port 8000
+      --mock
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    ports:
+      - "8001:8000"
+    restart: unless-stopped
+    profiles:
+      - mock
+    networks:
+      - default
+
+  # =============================================================================
+  # Bittensor Nodes
+  # =============================================================================
+
+  # Validator Node - Bittensor validator neuron
+  kubetee-validator:
+    container_name: kubetee-validator
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    image: ${IMAGE:-ghcr.io/kubetee-ai/kubetee-subnet:latest}
+    user: "0:0"  # Run as root for wallet access
+    command: >
+      python neurons/validator.py
+      --netuid ${NETUID:-62}
+      --wallet.name ${WALLET_NAME:-validator}
+      --wallet.hotkey ${WALLET_HOTKEY:-default}
+      --subtensor.network ${SUBTENSOR_NETWORK:-test}
+      --logging.debug
+    environment:
+      # Blockchain Configuration
+      - RPC_URL=${RPC_URL:-http://kubetee-hardhat:8545}
+      - GITHUB_REGISTRY_CONTRACT_ADDRESS=${GITHUB_REGISTRY_CONTRACT_ADDRESS:-}
+      - VALIDATOR_PRIVATE_KEY=${VALIDATOR_PRIVATE_KEY:-}
+      # GitHub Configuration
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
+      # Logging
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    volumes:
+      - ${BITTENSOR_VOLUME_PATH:-~/.bittensor}:/root/.bittensor
+    restart: unless-stopped
+    profiles:
+      - validator
+    depends_on:
+      kubetee-hardhat:
+        condition: service_healthy
+    networks:
+      - default
+      - subnet
+
+  # Miner Node - Bittensor miner neuron
+  kubetee-miner:
+    container_name: kubetee-miner
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    image: ${IMAGE:-ghcr.io/kubetee-ai/kubetee-subnet:latest}
+    user: "0:0"  # Run as root for wallet access
+    command: >
+      python neurons/miner.py
+      --netuid ${NETUID:-62}
+      --wallet.name ${MINER_WALLET_NAME:-miner}
+      --wallet.hotkey ${MINER_WALLET_HOTKEY:-default}
+      --subtensor.network ${SUBTENSOR_NETWORK:-test}
+      --logging.debug
+    volumes:
+      - ${BITTENSOR_VOLUME_PATH:-~/.bittensor}:/root/.bittensor
+    restart: unless-stopped
+    profiles:
+      - miner
+    networks:
+      - default
+      - subnet
+
+  # =============================================================================
+  # Contract Deployment & Management
+  # =============================================================================
+
+  # Deploy Contracts - One-time deployment service
+  kubetee-deploy-contracts:
+    container_name: kubetee-deploy-contracts
+    image: node:20-alpine
+    working_dir: /app
+    command: sh -c "npm install && npx hardhat run scripts/deploy.js --network localhost"
+    environment:
+      - DEPLOYER_PRIVATE_KEY=${DEPLOYER_PRIVATE_KEY:-0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80}
+    volumes:
+      - ../../kubetee/contracts:/app
+    depends_on:
+      kubetee-hardhat:
+        condition: service_healthy
+    restart: "no"
+    networks:
+      - default
+
+  # Run Contract Tests
+  kubetee-contract-tests:
+    container_name: kubetee-contract-tests
+    image: node:20-alpine
+    working_dir: /app
+    command: sh -c "npm install && npm test"
+    volumes:
+      - ../../kubetee/contracts:/app
+    restart: "no"
+    profiles:
+      - test
+    networks:
+      - default
+
+  # =============================================================================
+  # Observability Services
+  # =============================================================================
+
+  # Dozzle - Real-time Docker log viewer (http://localhost:8888)
+  kubetee-logger:
+    container_name: kubetee-logger
+    image: amir20/dozzle:latest
+    environment:
+      - DOZZLE_LEVEL=info
+      - DOZZLE_TAILSIZE=300
+      - DOZZLE_FILTER=status=running
+    ports:
+      - "8888:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    restart: unless-stopped
+    profiles:
+      - observability
+    networks:
+      - default
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  default:
+    driver: bridge
+  subnet:
+    name: kubetee-subnet
+    driver: bridge
+
+# =============================================================================
+# Volumes
+# =============================================================================
+volumes:
+  kubetee-redis-data:
+    name: kubetee-redis-data

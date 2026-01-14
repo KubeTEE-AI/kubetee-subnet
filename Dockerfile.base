@@ -1,0 +1,40 @@
+# syntax=docker/dockerfile:1
+# Base image with system dependencies and Python packages
+# Build this image when requirements.txt changes:
+#   docker build -f Dockerfile.base -t kubetee/kubetee-subnet-base:latest .
+
+FROM python:3.13-slim
+
+WORKDIR /app
+
+# Install system dependencies required by the application
+# git: Clone repositories and version control
+# curl: HTTP requests and health checks
+# build-essential: Compile native extensions
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    curl \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install uv - use official standalone installer
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+# Set Python environment variables
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app \
+    UV_SYSTEM_PYTHON=1
+
+# Copy requirements first for better layer caching
+COPY requirements.txt .
+
+# Install dependencies using uv with cache mount for faster rebuilds
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install -r requirements.txt
+
+# Create non-root user for security
+RUN groupadd -r appuser -g 1000 && \
+    useradd -r -u 1000 -g appuser -m -d /home/appuser appuser && \
+    chown -R appuser:appuser /app
+
+USER appuser
