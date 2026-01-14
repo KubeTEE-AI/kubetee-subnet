@@ -148,6 +148,8 @@ We also leverage CNCF projects for cloud-native confidential computing:
       - [Subnet 22 — Desearch (Decentralized Web Search)](#subnet-22--desearch-decentralized-web-search)
       - [Subnet 60 — Bitsec (Security Scanning)](#subnet-60--bitsec-security-scanning)
     - [Phase 4: Subnet Integrations](#phase-4-subnet-integrations)
+    - [Phase 5: Experimental Integrations](#phase-5-experimental-integrations)
+      - [Subnet 121 — Sundae Bar (Enterprise AI Agent Marketplace)](#subnet-121--sundae-bar-enterprise-ai-agent-marketplace)
       - [Subnet 3 — Templar (Model Pre-Training)](#subnet-3--templar-model-pre-training)
       - [Subnet 37 — Aurelius (AI Alignment \& Safety)](#subnet-37--aurelius-ai-alignment--safety)
       - [Subnet 56 — Gradients (Decentralized Fine-Tuning)](#subnet-56--gradients-decentralized-fine-tuning)
@@ -157,7 +159,6 @@ We also leverage CNCF projects for cloud-native confidential computing:
         - [Subnet 54 — MIID (Synthetic Identities)](#subnet-54--miid-synthetic-identities)
         - [Subnet 75 — Hippius (Decentralized Cloud Storage)](#subnet-75--hippius-decentralized-cloud-storage)
       - [Financial \& Trading Subnets](#financial--trading-subnets)
-        - [Subnet 15 — BitQuant (DeFi Analytics)](#subnet-15--bitquant-defi-analytics)
         - [Subnet 79 — τaos (Financial Market Simulation)](#subnet-79--τaos-financial-market-simulation)
         - [Subnet 6 — Numinous (Superhuman Forecasting)](#subnet-6--numinous-superhuman-forecasting)
     - [AIQ Deep Research Agent — Subnet Data Pipeline](#aiq-deep-research-agent--subnet-data-pipeline)
@@ -624,7 +625,6 @@ As Big Tech consolidates AI agents, KubeTEE AI represents the **decentralized al
 | **SN06** | Numinous | Superhuman forecasting oracle for predictions |
 | **SN09** | IOTA | Distributed pre-training orchestration |
 | **SN13** | Data Universe | Decentralized data sourcing (55B+ social posts) |
-| **SN15** | BitQuant | DeFi analytics and crypto market analysis |
 | **SN22** | Desearch | Decentralized web search replacing Tavily |
 | **SN37** | Aurelius | AI alignment — red-teaming and safety verification |
 | **SN52** | Dojo | Human-validated data samples |
@@ -2954,21 +2954,6 @@ Integration with [Hippius](https://hippius.com) for decentralized storage:
 
 These subnets provide specialized financial data and analytics for enterprise research capabilities:
 
-##### Subnet 15 — BitQuant (DeFi Analytics)
-
-> *Decentralized DeFi analysis with sensitive market data protection*
-
-Integration with BitQuant for financial research capabilities:
-
-- [ ] Integrate BitQuant for DeFi/crypto market analysis
-- [ ] Financial research agent fine-tuning data
-- [ ] Real-time trading signal analysis
-
-**TEE Synergy**:
-- Market data and trading signals
-- Quant strategies
-- Compliance-friendly financial AI
-
 ##### Subnet 79 — τaos (Financial Market Simulation)
 
 > *Financial market simulation with model IP protection*
@@ -3009,6 +2994,40 @@ Integration with Numinous for predictive intelligence capabilities:
 
 ---
 
+### Phase 5: Experimental Integrations
+
+These subnets are being evaluated for future integration:
+
+##### Subnet 121 — Sundae Bar (Enterprise AI Agent Marketplace)
+
+> *🧪 EXPERIMENTAL: AI Agent marketplace for enterprise workflows*
+
+[Sundae Bar](https://subnetalpha.ai/subnet/sundae_bar/) (SN121) is an "App Store for AI Agents" — a unified marketplace where AI agents can be listed by their creators and easily discovered and utilized by businesses. The platform connects AI agent developers with enterprises, enabling them to discover, deploy, and monetize autonomous AI "teammates" for various tasks (HR, marketing, finance, coding assistants, etc.).
+
+**Planned MCP Server Integration**:
+
+- [ ] Integrate Sundae Bar as MCP server for AI agent discovery
+- [ ] Enable enterprise users to browse and deploy curated AI agents
+- [ ] Agent matchmaking based on workflow requirements
+- [ ] Access pre-built agents (HR, Sales, Marketing, Ops automation)
+- [ ] TEE-protected agent deployment for sensitive enterprise workflows
+
+**Key Capabilities**:
+- Performance-based rewards via Bittensor (Yuma Consensus)
+- Enterprise-grade compliance (KYC/AML verification)
+- Real-world deployment metrics for agent quality
+- Agent orchestration with natural language
+
+**Use Cases**:
+- Discover specialized AI agents for enterprise tasks
+- Deploy HR automation agents (recruiting, onboarding)
+- Access marketing content generation agents
+- Integrate trading/analytics agents for financial workflows
+
+**Integration Status**: 🧪 Experimental — evaluating for Phase 5+
+
+---
+
 ### AIQ Deep Research Agent — Subnet Data Pipeline
 
 The following diagram shows how data-focused subnets feed into the AIQ Deep Research Agent:
@@ -3040,8 +3059,8 @@ The following diagram shows how data-focused subnets feed into the AIQ Deep Rese
 │  └────────┬─────────┘    └──────────────────────────────────────────────┘   │
 │           │                                                                 │
 │  ┌────────▼─────────┐    ┌──────────────────────────────────────────────┐   │
-│  │  FINANCIAL INTEL │◄───│  SN15 BitQuant (DeFi analysis)               │   │
-│  │  (Domain-specific│◄───│  SN79 τaos (market simulation)               │   │
+│  │  FINANCIAL INTEL │◄───│  SN79 τaos (market simulation)               │   │
+│  │  (Domain-specific│◄───│                                              │   │
 │  │   research)      │◄───│  SN06 Numinous (superhuman forecasting)      │   │
 │  └──────────────────┘    └──────────────────────────────────────────────┘   │
 │                                                                             │
@@ -3075,7 +3094,7 @@ The following diagram shows how data-focused subnets feed into the AIQ Deep Rese
 │   │                     🏢 KUBETEE AI DEEP RESEARCH AGENT                             │ │
 │   │  ┌─────────────┐   ┌─────────────┐   ┌─────────────┐   ┌─────────────────────────┐│ │
 │   │  │  REASONING  │──▶│  GROUNDING  │──▶│VERIFICATION │──▶│   FINANCIAL INTEL       ││ │
-│   │  │    CORE     │   │    LAYER    │   │   LAYER     │   │ SN06 SN15 SN79          ││ │
+│   │  │    CORE     │   │    LAYER    │   │   LAYER     │   │ SN06 SN79               ││ │
 │   │  └─────────────┘   └─────────────┘   └─────────────┘   └─────────────────────────┘│ │
 │   │                           🔒 TEE INFRASTRUCTURE (Intel TDX / NVIDIA CC)           │ │
 │   └───────────────────────────────────────────────────────────────────────────────────┘ │

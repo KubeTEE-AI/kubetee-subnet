@@ -183,13 +183,11 @@ Validator Logic (template/validator/)
 ```
 USER REQUEST
      ↓
-VALIDATOR (processes request)
-     ↓
 MINER (serves request)
      ↓
 REVENUE TRACKING
-     ├─→ Infrastructure Miner: 50% of revenue
-     ├─→ KubeTEE Owner: 50% (or 25% if referred)
+     ├─→ Infrastructure Miner: Bittensor Subnet Emission mechanism
+     ├─→ KubeTEE Subnet Tao Inflow : 100% (or 50% if referred)
      └─→ Referrer: 50% of revenue (if user was referred)
 ```
 

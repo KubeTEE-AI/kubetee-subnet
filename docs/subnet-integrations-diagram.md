@@ -45,7 +45,6 @@ flowchart TB
 
     subgraph FINANCIAL["📈 Financial Intelligence"]
         SN06["SN06 Numinous<br/>Forecasting Oracle"]
-        SN15["SN15 BitQuant<br/>DeFi Analytics"]
         SN79["SN79 τaos<br/>Market Simulation"]
     end
 
@@ -53,6 +52,10 @@ flowchart TB
         SN16["SN16 BitAds<br/>Affiliate Marketing"]
         SN71["SN71 LeadPoet<br/>B2B Leads"]
         SN93["SN93 Bitcast<br/>Creator Marketing"]
+    end
+
+    subgraph EXPERIMENTAL["🧪 Experimental"]
+        SN121["SN121 Sundae Bar<br/>AI Agent Marketplace"]
     end
 
     %% Reasoning connections
@@ -83,7 +86,6 @@ flowchart TB
 
     %% Financial connections (to Reasoning)
     SN06 --> CORE
-    SN15 --> CORE
     SN79 --> CORE
 
     %% Internal flow
@@ -96,6 +98,9 @@ flowchart TB
     SN16 -.-> KUBETEE
     SN71 -.-> KUBETEE
     SN93 -.-> KUBETEE
+
+    %% Experimental connections
+    SN121 -.-> CORE
 
     %% Cross-subnet integrations
     SN22 -.-> SN06
@@ -116,8 +121,10 @@ flowchart TB
     class SN37,SN60 safety
     class SN13,SN22,SN62 tools
     class SN75,SN64 infra
-    class SN06,SN15,SN79 financial
+    class SN06,SN79 financial
     class SN16,SN71,SN93 marketing
+    classDef experimental fill:#9E9E9E,stroke:#757575,color:#fff
+    class SN121 experimental
 ```
 
 ## ASCII Diagram (for README)
@@ -165,9 +172,9 @@ flowchart TB
 │  │  🔐 VERIFICATION & SAFETY  │  │  📈 FINANCIAL INTELLIGENCE │  │    🔧 TOOLS & MCP        │  │
 │  ├────────────────────────────┤  ├────────────────────────────┤  ├──────────────────────────┤  │
 │  │ SN37  Aurelius (Alignment) │  │ SN06  Numinous (Forecast)  │  │ SN13  Data Universe      │  │
-│  │ SN60  Bitsec (Security)    │  │ SN15  BitQuant (DeFi)      │  │ SN22  Desearch (Search)  │  │
-│  └────────────────────────────┘  │ SN79  τaos (Simulation)    │  │ SN62  Ridges (Coding)    │  │
-│                                  └────────────────────────────┘  └──────────────────────────┘  │
+│  │ SN60  Bitsec (Security)    │  │ SN79  τaos (Simulation)    │  │ SN22  Desearch (Search)  │  │
+│  └────────────────────────────┘  └────────────────────────────┘  │ SN62  Ridges (Coding)    │  │
+│                                                                  └──────────────────────────┘  │
 │                 ▲                                                                              │
 │                 │                                                                              │
 │  ┌──────────────┴─────────────┐                                                                │
@@ -192,7 +199,7 @@ flowchart TB
 │                                                                                                │
 │  ───────────────────────────────────────────────────────────────────────────────────────────── │
 │                                                                                                │
-│  TOTAL: 18 SUBNET INTEGRATIONS                                                                 │
+│  TOTAL: 17 SUBNET INTEGRATIONS (+1 EXPERIMENTAL)                                               │
 │                                                                                                │
 │  ┌───────────────┐ ┌───────────────┐ ┌───────────────┐ ┌───────────────┐ ┌───────────────┐     │
 │  │ 🎯 REASONING  │ │ 📊 DATA       │ │ 🔐 SAFETY     │ │ 🔧 TOOLS/MCP  │ │ ☁️ INFRA      │     │
@@ -205,9 +212,9 @@ flowchart TB
 │  └───────────────┘  │ 📈 FINANCIAL  │ │ 📣 MARKETING  │                                        │
 │                     ├───────────────┤ ├───────────────┤                                        │
 │                     │ SN06 Numinous │ │ SN16 BitAds   │                                        │
-│                     │ SN15 BitQuant │ │ SN71 LeadPoet │                                        │
-│                     │ SN79 τaos     │ │ SN93 Bitcast  │                                        │
-│                     └───────────────┘ └───────────────┘                                        │
+│                     │ SN79 τaos     │ │ SN71 LeadPoet │                                        │
+│                     └───────────────┘ │ SN93 Bitcast  │                                        │
+│                                       └───────────────┘                                        │
 │                                                                                                │
 └────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -231,11 +238,11 @@ flowchart TB
 | **☁️ Infrastructure** | SN64 | Chutes | Serverless AI compute |
 | | SN75 | Hippius | Decentralized cloud storage |
 | **📈 Financial** | SN06 | Numinous | Superhuman forecasting oracle |
-| | SN15 | BitQuant | DeFi analytics & market data |
 | | SN79 | τaos | Financial market simulation |
 | **📣 Marketing** | SN16 | BitAds | Affiliate & performance marketing |
 | | SN71 | LeadPoet | B2B lead intelligence |
 | | SN93 | Bitcast | Creator marketing & awareness |
+| **🧪 Experimental** | SN121 | Sundae Bar | Enterprise AI Agent Marketplace / MCP server |
 
 ## Technology Stack
 
@@ -271,9 +278,9 @@ flowchart TB
 │ 📈 FINANCIAL │    │ 🔧 TOOLS/MCP │
 ├──────────────┤    ├──────────────┤
 │ SN06 Numinous│    │ SN13 DataUniv│
-│ SN15 BitQuant│    │ SN22 Desearch│
-│ SN79 τaos    │    │ SN62 Ridges  │
-└──────────────┘    └──────────────┘
+│ SN79 τaos    │    │ SN22 Desearch│
+└──────────────┘    │ SN62 Ridges  │
+                    └──────────────┘
        │                   │
        └───────────────────┘
                │
