@@ -1,15 +1,28 @@
 {
   "name": "kubetee-contracts",
-  "version": "1.0.0",
+  "version": "2.0.0",
+  "description": "KubeTEE AI Smart Contracts - UUPS Upgradeable with Admin/Operator Model",
   "scripts": {
     "compile": "hardhat compile",
     "test": "hardhat test",
+    "test:payment": "hardhat test test/KubeTEEPaymentV2.test.js",
+    "test:reseller": "hardhat test test/KubeTEEResellerV2.test.js",
+    "test:escrow": "hardhat test test/KubeTEEEscrowV2.test.js",
+    "test:buyback": "hardhat test test/KubeTEEBuybackBurnV2.test.js",
+    "test:github": "hardhat test test/KubeTEEGitHubRegistry.test.js",
+    "coverage": "hardhat coverage",
     "node": "hardhat node",
     "deploy:local": "hardhat run scripts/deploy.js --network localhost",
-    "deploy:testnet": "hardhat run scripts/deploy.js --network bittensor_testnet"
+    "deploy:testnet": "hardhat run scripts/deploy.js --network bittensor_testnet",
+    "deploy:payment": "hardhat run scripts/deploy-payment.js",
+    "deploy:reseller": "hardhat run scripts/deploy-reseller.js",
+    "deploy:escrow": "hardhat run scripts/deploy-escrow.js",
+    "deploy:buyback": "hardhat run scripts/deploy-buyback.js"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "^4.0.0",
+    "@nomicfoundation/hardhat-network-helpers": "^1.0.0",
+    "@openzeppelin/contracts": "^5.0.0",
     "@openzeppelin/contracts-upgradeable": "^5.0.0",
     "@openzeppelin/hardhat-upgrades": "^3.0.0",
     "hardhat": "^2.19.0"
