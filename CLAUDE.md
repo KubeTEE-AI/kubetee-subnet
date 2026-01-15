@@ -14,6 +14,42 @@ KubeTEE AI is an enterprise-grade AI-as-a-Service (AIaaS) platform built on the 
 
 **Current Version:** 0.0.0 (early development/template stage)
 
+## Bittensor Subnet Documentation
+
+Comprehensive Bittensor subnet development documentation is available in `docs/Chi/docs/`. This is essential reading for understanding subnet architecture, incentive design, and implementation patterns.
+
+**Start Here:**
+- `docs/Chi/docs/17-writing-a-subnet.md` - Simplicity-first approach, "what am I measuring?"
+- `docs/Chi/docs/15-validator-only-development.md` - **CRITICAL**: Validator-only development philosophy
+
+**Foundational Concepts:**
+- `docs/Chi/docs/01-overview.md` - What Bittensor is, key roles, network structure
+- `docs/Chi/docs/02-core-concepts.md` - Subnets, neurons, keys, tokens, stake, metagraph
+- `docs/Chi/docs/03-architecture.md` - Chain layer, SDK layer, communication primitives
+
+**Subnet Development:**
+- `docs/Chi/docs/04-mechanism-patterns.md` - **CRITICAL**: Production mechanism architectures (NOT just dendrite/synapse)
+- `docs/Chi/docs/06-building-miners.md` - Implementing miners across different patterns
+- `docs/Chi/docs/07-building-validators.md` - Scoring algorithms and weight setting
+- `docs/Chi/docs/08-incentive-design.md` - Designing effective reward mechanisms
+
+**Technical Reference:**
+- `docs/Chi/docs/09-python-sdk.md` - SDK classes, methods, usage patterns
+- `docs/Chi/docs/10-btcli-reference.md` - Command-line interface reference
+- `docs/Chi/docs/11-hyperparameters.md` - Configurable subnet parameters
+- `docs/Chi/docs/12-epoch-mechanism.md` - On-chain consensus and emissions
+
+**Deployment:**
+- `docs/Chi/docs/13-local-development.md` - Running localnet for development
+- `docs/Chi/docs/14-deployment.md` - Testnet and mainnet deployment
+- `docs/Chi/docs/16-how-to-use-template.md` - Step-by-step guide to creating a subnet
+
+**Key Insights from Chi Docs:**
+1. Most production subnets do NOT use traditional dendrite/synapse patterns - see `04-mechanism-patterns.md`
+2. **NEVER write miner code** - only write `validator.py`, miners read it to understand the interface
+3. Keep subnets minimal - focus on the validator (the "referee"), leave ingenuity to miners
+4. 256 UID slots per subnet with dynamic registration costs provide sybil resistance
+
 ## Common Development Commands
 
 ### Installation and Setup
