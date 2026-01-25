@@ -123,7 +123,7 @@ We also leverage CNCF projects for cloud-native confidential computing:
       - [Referrer Revenue Share](#referrer-revenue-share)
       - [Integration Options](#integration-options)
     - [Payment Strategy: USDC on BASE](#payment-strategy-usdc-on-base)
-    - [Automated Buyback \& Burn (Deflationary Mechanism)](#automated-buyback--burn-deflationary-mechanism)
+    - [Automated Buyback \& Treasury (Sustainable Mechanism)](#automated-buyback--treasury-sustainable-mechanism)
     - [Validation \& Scoring](#validation--scoring)
   - [Client Getting Started](#client-getting-started)
     - [Prerequisites](#prerequisites)
@@ -148,8 +148,6 @@ We also leverage CNCF projects for cloud-native confidential computing:
       - [Subnet 22 — Desearch (Decentralized Web Search)](#subnet-22--desearch-decentralized-web-search)
       - [Subnet 60 — Bitsec (Security Scanning)](#subnet-60--bitsec-security-scanning)
     - [Phase 4: Subnet Integrations](#phase-4-subnet-integrations)
-    - [Phase 5: Experimental Integrations](#phase-5-experimental-integrations)
-      - [Subnet 121 — Sundae Bar (Enterprise AI Agent Marketplace)](#subnet-121--sundae-bar-enterprise-ai-agent-marketplace)
       - [Subnet 3 — Templar (Model Pre-Training)](#subnet-3--templar-model-pre-training)
       - [Subnet 37 — Aurelius (AI Alignment \& Safety)](#subnet-37--aurelius-ai-alignment--safety)
       - [Subnet 56 — Gradients (Decentralized Fine-Tuning)](#subnet-56--gradients-decentralized-fine-tuning)
@@ -161,6 +159,8 @@ We also leverage CNCF projects for cloud-native confidential computing:
       - [Financial \& Trading Subnets](#financial--trading-subnets)
         - [Subnet 79 — τaos (Financial Market Simulation)](#subnet-79--τaos-financial-market-simulation)
         - [Subnet 6 — Numinous (Superhuman Forecasting)](#subnet-6--numinous-superhuman-forecasting)
+    - [Phase 5: Experimental Integrations](#phase-5-experimental-integrations)
+        - [Subnet 121 — Sundae Bar (Enterprise AI Agent Marketplace)](#subnet-121--sundae-bar-enterprise-ai-agent-marketplace)
     - [AIQ Deep Research Agent — Subnet Data Pipeline](#aiq-deep-research-agent--subnet-data-pipeline)
     - [Subnet Ecosystem Overview](#subnet-ecosystem-overview)
   - [Research \& Documentation](#research--documentation)
@@ -1068,7 +1068,7 @@ This provides:
 
 Per [Bittensor's multiple mechanism model](https://docs.learnbittensor.org/subnets/understanding-multiple-mech-subnets), validators must set weights on **miner hotkeys** based on their **Lifetime Benchmark Scores**.
 
-**🔥 NATIVE BURN MECHANISM**: Unused emissions are **automatically burned** when validators set weight to the **subnet owner key**. This ensures emissions only go to active benchmark improvers — the rest is burned.
+**♻️ NATIVE RECYCLE MECHANISM**: Unused emissions are **automatically recycled** back to the emission pool when validators set weight to **UID 0** or the **subnet owner key**. This ensures emissions only go to active benchmark improvers — the remainder is recycled and redistributed in the next epoch.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -1088,19 +1088,26 @@ Per [Bittensor's multiple mechanism model](https://docs.learnbittensor.org/subne
 │  │  Bittensor EVM   │  │     │     for merged PRs  │    │  Alice: 35   │    │
 │  │  KubeTEERegistry │──┤     │  2. Query EVM for   │    │  Bob: 25     │    │
 │  │  - GitHub ↔ HK   │  │     │     GitHub→Hotkey   │    │  Charlie: 15 │    │
-│  │  - Lifetime      │  │     │  3. Read lifetime   │    │  🔥BURN: 25  │    │
+│  │  - Lifetime      │  │     │  3. Read lifetime   │    │  ♻️RECYCLE:25│    │
 │  │    Scores        │  │     │     scores from EVM │    └──────────────┘    │
 │  └──────────────────┘  │     │  4. Update scores   │                        │
 │                        │     │     on EVM contract │                        │
 │  ┌──────────────────┐  │     │  5. Set weights     │                        │
 │  │  DeepResearch    │──┘     │  6. Remainder →     │                        │
-│  │  Benchmark       │        │     Subnet Owner    │                        │
-│  │  Results         │        │     Key (BURNED)    │                        │
+│  │  Benchmark       │        │     UID 0 (RECYCLED │                        │
+│  │  Results         │        │     to emission pool)│                       │
 │  └──────────────────┘        └─────────────────────┘                        │
 │                                                                             │
 │  EMISSION FLOW:                                                             │
 │  ──────────────                                                             │
-│  Mechanism 1 (30%) → Yuma Consensus → Benchmark Improvers + Burned          │
+│  Mechanism 1 (30%) → Yuma Consensus → Benchmark Improvers + Recycled        │
+│                                                                             │
+│  RECYCLE DESTINATION (via UID 0):                                           │
+│  ─────────────────────────────────                                          │
+│  Recycled Alpha → Emission Pool → Next Epoch Distribution:                  │
+│    • 41% → Miners (based on weights)                                        │
+│    • 41% → Validators (based on bonds)                                      │
+│    • 18% → Subnet Owner                                                     │
 │                                                                             │
 │  EVM INTERACTIONS:                                                          │
 │  ─────────────────                                                          │
@@ -1189,7 +1196,7 @@ The mapping is stored **on-chain** via a smart contract on **Bittensor EVM** (`K
 │  ──────────────────────                                                     │
 │  • Simple: Single source of truth, no consensus complexity                  │
 │  • Trusted: Subnet owner already controls emission configuration            │
-│  • Auditable: All writes visible on-chain, anyone can verify               │
+│  • Auditable: All writes visible on-chain, anyone can verify                │
 │  • Efficient: No multi-sig overhead, lower gas costs                        │
 │                                                                             │
 │  WRITE FLOW:                                                                │
@@ -1712,7 +1719,7 @@ kubeteectl affiliate status --address 0x1234...abcd
 |----------|-------|---------|
 | `KubeTEEPayment.sol` | BASE L2 | User deposits (USDC), epoch settlements, referrer payouts |
 | `KubeTEERegistry.sol` | Bittensor EVM | GitHub→Hotkey mapping, Lifetime Benchmark Scores |
-| `KubeTEEBuybackBurn.sol` | BASE L2 | Automated buyback and burn of Alpha tokens |
+| `KubeTEEBuybackTreasury.sol` | BASE L2 | Automated buyback and treasury transfer of Alpha tokens |
 
 Reference: [Bittensor Multi-Mechanism Docs](https://docs.learnbittensor.org/subnets/understanding-multiple-mech-subnets)
 
@@ -2163,19 +2170,24 @@ KubeTEE AI uses **USDC on BASE** for all user payments — simple, stable, and w
 
 Reference: [x402 Protocol](https://www.x402.org/) | [ERC-8004](https://www.erc8021.com/) | [BASE](https://base.org/)
 
-### Automated Buyback & Burn (Deflationary Mechanism)
+### Automated Buyback & Treasury (Sustainable Mechanism)
 
-KubeTEE implements an **automated daily buyback and burn** mechanism that converts reseller USDC revenue to Alpha tokens and burns them, creating deflationary pressure.
+KubeTEE implements an **automated daily buyback** mechanism that converts revenue to Alpha tokens and transfers them to a **Treasury Hotkey**. The Treasury allocates Alpha for:
+1. **Operations** — Subnet infrastructure costs
+2. **Bounties** — Development rewards
+3. **Recycle** — Remainder goes back to emission pool via UID 0
+
+Unlike burning (which destroys tokens), this model keeps Alpha in circulation while funding operations and rewarding active participants.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                    DAILY BUYBACK & BURN FLOW                                │
+│                    DAILY BUYBACK & TREASURY FLOW                            │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
 │   [STEP 1] COLLECT USDC (BASE L2)                                           │
 │   ─────────────────────────────────────────────────────────────────────     │
 │   Reseller payments accumulate in KubeTEEReseller.sol                       │
-│   Transferred to KubeTEEBuybackBurn.sol daily                               │
+│   Transferred to KubeTEEBuybackTreasury.sol daily                           │
 │                                    │                                        │
 │                                    ▼                                        │
 │   [STEP 2] SWAP USDC → wTAO (Chainlink Automation)                          │
@@ -2195,18 +2207,38 @@ KubeTEE implements an **automated daily buyback and burn** mechanism that conver
 │   Swaps TAO → Alpha via subnet native AMM                                   │
 │                                    │                                        │
 │                                    ▼                                        │
-│   [STEP 5] 🔥 BURN ALPHA                                                    │
+│   [STEP 5] ♻️ TRANSFER ALPHA TO TREASURY                                    │
 │   ─────────────────────────────────────────────────────────────────────     │
-│   Send Alpha to burn address (unrecoverable):                               │
-│   5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuyUpnhM                          │
+│   buyback_bot.py transfers Alpha to Treasury Hotkey                         │
+│                                    │                                        │
+│                                    ▼                                        │
+│   [STEP 6] TREASURY DISTRIBUTION                                            │
+│   ─────────────────────────────────────────────────────────────────────     │
+│   Treasury Alpha is allocated:                                              │
+│     • Operations — Subnet infrastructure costs                              │
+│     • Bounties — Development rewards (fixed TAO value in Alpha)             │
+│     • Remainder → ♻️ RECYCLED (to emission pool)                  │
 │                                                                             │
 │   ════════════════════════════════════════════════════════════════════      │
-│   RESULT: Deflationary pressure on Alpha token                              │
-│   More reseller usage = More Alpha burned = Higher Alpha value              │
+│   BENEFITS OF TREASURY + RECYCLE MODEL:                                     │
+│   • Creates buying pressure on Alpha (price support)                        │
+│   • Funds subnet operations and bounties                                    │
+│   • Remainder recycled → rewards active participants                        │
+│   • Self-sustaining ecosystem (no value destruction)                        │
 │   ════════════════════════════════════════════════════════════════════      │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
+
+**Why Treasury + Recycle Instead of Burn?**
+
+| Aspect | Burn 🔥 | Treasury + Recycle ♻️ |
+|--------|---------|----------------------|
+| Token supply | Decreases (deflationary) | Stays constant |
+| Value destination | Destroyed forever | Operations → Bounties → Recycle |
+| Price support | Via scarcity | Via buying pressure |
+| Ecosystem benefit | Passive holders gain | Funds operations + rewards participants |
+| Flexibility | None (permanent) | Strategic allocation |
 
 **Automation Stack**:
 
@@ -2216,7 +2248,7 @@ KubeTEE implements an **automated daily buyback and burn** mechanism that conver
 | USDC→wTAO swap | Uniswap V3 (BASE) | Best liquidity, low slippage |
 | Bridge | wTAO Bridge | Cross-chain transfer |
 | TAO→Alpha swap | Bittensor AMM | Native subnet liquidity |
-| Burn execution | buyback_bot.py | Off-chain monitoring & execution |
+| Treasury transfer | buyback_bot.py | Off-chain monitoring & transfer to Treasury |
 
 **Kubernetes Deployment (Fleet GitOps)**:
 
@@ -2266,13 +2298,13 @@ kubectl port-forward -n kubetee-system svc/buyback-bot 9090:9090
 | `buyback_tao_balance` | Current TAO balance |
 | `buyback_alpha_balance` | Current Alpha balance |
 | `buyback_tao_swapped_total` | Total TAO swapped (counter) |
-| `buyback_alpha_burned_total` | Total Alpha burned (counter) |
+| `buyback_alpha_transferred_total` | Total Alpha transferred to Treasury (counter) |
 | `buyback_last_swap_timestamp` | Unix timestamp of last swap |
-| `buyback_last_burn_timestamp` | Unix timestamp of last burn |
+| `buyback_last_transfer_timestamp` | Unix timestamp of last treasury transfer |
 
 **Alerts** (via PrometheusRule):
 - `BuybackBotNoSwaps` - No swaps in 48 hours
-- `BuybackBotNoBurns` - No burns in 48 hours
+- `BuybackBotNoTransfers` - No treasury transfers in 48 hours
 - `BuybackBotHighRestarts` - Pod restarting frequently
 
 **Configuration**:
@@ -2283,7 +2315,7 @@ kubectl port-forward -n kubetee-system svc/buyback-bot 9090:9090
 | `maxSlippageBps` | 200 (2%) | Maximum swap slippage |
 | `buybackInterval` | 24 hours | Time between buybacks |
 | `MIN_TAO_THRESHOLD` | 0.1 TAO | Min TAO to trigger swap |
-| `MIN_ALPHA_THRESHOLD` | 0.1 Alpha | Min Alpha to trigger burn |
+| `MIN_ALPHA_THRESHOLD` | 0.1 Alpha | Min Alpha to trigger treasury transfer |
 
 ### Validation & Scoring
 

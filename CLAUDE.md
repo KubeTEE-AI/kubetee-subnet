@@ -248,7 +248,7 @@ REVENUE TRACKING
 
 **Smart Contracts:**
 - `contracts/KubeTEEPayment.sol` - Payment processing (BASE L2)
-- `contracts/KubeTEEBuybackBurn.sol` - Deflationary tokenomics (BASE L2)
+- `contracts/KubeTEEBuybackTreasury.sol` - Buyback & treasury transfer (BASE L2)
 - `contracts/KubeTEEEscrow.sol` - Miner payment escrow (BASE L2)
 - `contracts/KubeTEEReseller.sol` - Referrer tracking (BASE L2)
 - `contracts/KubeTEERegistry.sol` - **Bittensor EVM** - GitHub→Hotkey mapping + Lifetime Benchmark Scores
