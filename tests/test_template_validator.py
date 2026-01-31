@@ -23,7 +23,12 @@ import bittensor as bt
 import torch
 
 from neurons.validator import Validator
-from template.base.validator import BaseValidatorNeuron
+# Legacy test - base removed in this branch for v11 redesign.
+# See scripts/owner_validator.py and new test_owner_validator.py
+import pytest
+pytest.skip("Legacy template.base removed. New v11 pyramid tests in test_owner_validator.py", allow_module_level=True)
+
+from template.base.validator import BaseValidatorNeuron  # will not reach
 from template.protocol import Dummy
 from template.utils.uids import get_random_uids
 from template.validator.reward import get_rewards

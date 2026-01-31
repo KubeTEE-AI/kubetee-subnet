@@ -73,8 +73,15 @@ from pathlib import Path
 # Bittensor
 import bittensor as bt
 
-# import base validator class which takes care of most of the boilerplate
-from template.base.validator import BaseValidatorNeuron
+# LEGACY REMOVED (v10 template/base)
+# This file still references old BaseValidatorNeuron for mechanisms.
+# For v11 owner-recycle use case see scripts/owner_validator.py
+# TODO: refactor mechanisms to new structure (no BaseValidatorNeuron).
+raise ImportError(
+    "Legacy template.base removed. "
+    "Use scripts/owner_validator.py for the emission recycle validator. "
+    "See docs and testing pyramid for v11 refactor plan."
+)
 
 # Multi-mechanism support (2 emission mechanisms only)
 from template.mechanisms import (

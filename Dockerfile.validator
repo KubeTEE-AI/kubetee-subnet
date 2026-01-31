@@ -1,0 +1,28 @@
+# Dockerfile for KubeTEE validator (and stub miners)
+# Builds a container with current requirements + the subnet code
+# For v11 Bittensor: uses the unified bittensor package
+
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# System deps for bittensor / substrate if needed
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    gcc \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy source (for now includes legacy; will clean in follow-ups)
+COPY . .
+
+# Default to the owner validator entry for emission recycle use case
+# Override CMD for other uses
+CMD ["python", "-m", "neurons.validator"]
+
+# Health for compose
+HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
+  CMD python -c "import bittensor as bt; print('ok')" || exit 1

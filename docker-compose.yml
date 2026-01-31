@@ -1,0 +1,85 @@
+# KubeTEE Subnet Local Testing Stack
+# - Local Subtensor chain (fast blocks for dev)
+# - Validator (owner validator for emission recycle use case)
+# - Dozzle for live log viewing of all containers
+#
+# Usage:
+#   docker compose up -d
+#   docker compose logs -f validator
+#   open http://localhost:8080 for dozzle
+#
+# For testing pyramid:
+#   - Use --profile with-miners for additional mock miners
+#   - Localnet provides single-node testnet equivalent
+#
+# Localnet image choice:
+#   Default uses the working opentensor localnet image (RaoFoundation localnet dev images
+#   currently return 403/not found on GHCR for the devnet tag).
+#   You can override with env var to test Rao path if/when it becomes available:
+#     LOCALNET_IMAGE=ghcr.io/raofoundation/subtensor-localnet:devnet docker compose up -d chain
+#   Or pin a digest:
+#     LOCALNET_IMAGE=ghcr.io/opentensor/subtensor-localnet@sha256:...
+#   See SUBNET.md for details.
+
+services:
+  chain:
+    image: ${LOCALNET_IMAGE:-ghcr.io/opentensor/subtensor-localnet:latest}
+    container_name: kubetee-chain
+    ports:
+      - "9944:9944"
+    environment:
+      - FAST_BLOCKS=true  # 0.25s blocks for fast testing; set false for realistic tempo
+    # Localnet health is best checked by the setup script or btcli.
+    # We use a simple depends + sleep in validator if needed.
+    restart: unless-stopped
+
+  validator:
+    build:
+      context: .
+      dockerfile: Dockerfile.validator
+    container_name: kubetee-validator
+    depends_on:
+      chain:
+        condition: service_started
+    environment:
+      - BT_NETWORK=ws://chain:9944
+      - BT_WALLET=owner
+      - BT_WALLET_HOTKEY=default
+      - KUBETEE_SUBNET_NETUID=1
+      - OWNER_HOTKEY=5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
+      - TARGET_UID=0
+      - LOG_LEVEL=INFO
+    volumes:
+      - ~/.bittensor:/root/.bittensor  # wallets
+      - ./logs:/app/logs
+    restart: unless-stopped
+    command: ["python", "scripts/owner_validator.py"]  # entry for the recycle use case (v11 owner weights)
+
+  # Optional: simple mock miner containers for testing comms/scoring (extend as needed)
+  miner-1:
+    build:
+      context: .
+      dockerfile: Dockerfile.validator  # reuse or make miner image; for now stub
+    container_name: kubetee-miner-1
+    profiles: ["with-miners"]
+    environment:
+      - BT_NETWORK=ws://chain:9944
+      - ROLE=miner
+    depends_on:
+      - chain
+    restart: "no"
+
+  dozzle:
+    image: amir20/dozzle:latest
+    container_name: kubetee-dozzle
+    ports:
+      - "8080:8080"
+    environment:
+      - DOZZLE_NO_ANALYTICS=true
+      - DOZZLE_LEVEL=info
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    restart: unless-stopped
+
+volumes:
+  chain-data:  # if needed for persistence, but localnet usually ephemeral for tests
