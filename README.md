@@ -204,7 +204,9 @@ As a proud member of the [Confidential Computing Consortium (CCC)](https://confi
 
 ## Overview
 
-KubeTEE AI provides Enterprise-Grade AI as a Service (AIaaS) featuring the world's best Open Source Deep Research Agent in a Trusted Execution Environment (TEE) on a Decentralized Multi-Clusters Kubernetes RKE2 FIPS-140-2 U.S. Federal Government Grade Security Decentralized Infrastructure.
+KubeTEE AI provides Enterprise-Grade AI as a Service (AIaaS) featuring the world's best Open Source Deep Research Agent with private data in a Trusted Execution Environment (TEE) on a Decentralized Multi-Clusters Kubernetes RKE2 FIPS-140-2 U.S. Federal Government Grade Security Decentralized Infrastructure.
+
+**RAG (Retrieval-Augmented Generation)** enhances AI responses by retrieving relevant information from your private data sources before generating answers. KubeTEE's Private Data RAG features **automated ingestion** pipelines that securely process and index multi-modal enterprise data including documents (PDF, Word, Excel, PowerPoint), video, audio, images, emails, databases, APIs, and knowledge bases—all within TEE-protected environments ensuring your data is protected **at rest, in transit, and in use** and never leaves confidential computing boundaries.
 
 ### Performance & Rankings
 
