@@ -9,7 +9,7 @@
 [![Intel SGX](https://img.shields.io/badge/Intel%20SGX-Supported-blueviolet)](https://www.intel.com/content/www/us/en/architecture-and-technology/software-guard-extensions.html)
 [![Trusted Execution Environment](https://img.shields.io/badge/Trusted%20Execution%20Environment-TEE-green)](https://en.wikipedia.org/wiki/Trusted_execution_environment)
 [![NVIDIA](https://img.shields.io/badge/NVIDIA-GPU%20Optimized-green)](https://developer.nvidia.com/)
-[![NVIDIA Incubated](https://img.shields.io/badge/NVIDIA-Incubated-76B900)](https://www.nvidia.com/)
+[![NVIDIA Inception](https://img.shields.io/badge/NVIDIA-Inception-76B900)](https://www.nvidia.com/startups/)
 [![CCC Member](https://img.shields.io/badge/Confidential%20Computing%20Consortium-Member-blue)](https://confidentialcomputing.io/)
 [![OpenInfra](https://img.shields.io/badge/OpenInfra%20Foundation-Kata%20Containers-DA1A32)](https://openinfra.org/)
 
@@ -17,7 +17,7 @@
 
 ## About
 
-**KubeTEE AI** is part of **NVIDIA Inception Program**, proud member of the [**Confidential Computing Consortium (CCC)**](https://confidentialcomputing.io/), and active participant in the **[OpenInfra Foundation](https://openinfra.org/)** ecosystem.
+**KubeTEE AI** is part of **NVIDIA Inception Program**, proud member of the [**Confidential Computing Consortium (CCC)**](https://confidentialcomputing.io/), active participant in the **[OpenInfra Foundation](https://openinfra.org/)** ecosystem, and leverages **[CNCF](https://www.cncf.io/)** projects for cloud-native infrastructure.
 
 ### Foundation & Community Partnerships
 
@@ -31,7 +31,37 @@ KubeTEE AI actively contributes to and builds upon the [OpenInfra Foundation's](
 We also leverage CNCF projects for cloud-native confidential computing:
 - **[Confidential Containers (CoCo)](https://github.com/confidential-containers/confidential-containers)**: CNCF Sandbox project enabling transparent deployment of unmodified containers in Trusted Execution Environments (TEEs) with support for Intel TDX/SGX and other hardware platforms
 
-**Mission**: To provide decentralized, enterprise-grade AI Deep Search Agent with privacy data and infrastructure of the highest standards of security, compliance, and performance—combining the power of NVIDIA's AI platform with the trust guarantees of Confidential Computing and the collaborative innovation 
+### Confidential Computing Consortium Resources
+
+As a proud member of the [Confidential Computing Consortium (CCC)](https://confidentialcomputing.io/), we recommend the following resources from the consortium:
+
+- **[Protecting Agentic AI Workloads with Confidential Computing](https://confidentialcomputing.io/2026/01/20/protecting-agentic-ai-workloads-with-confidential-computing/)** (January 2026)  
+  This article by Mike Bursell, Executive Director of the CCC, explains how Confidential Computing addresses critical security challenges for Agentic AI workloads. Key takeaways:
+  - **The Security Problem**: Agents operating in environments not owned by the Agent's owner are at risk from people and applications with sufficient permissions who can read or change data or the application itself
+  - **Isolation Requirements**: Agents need identity integrity protection and capability confidentiality protection, breaking the standard model where infrastructure controllers control workloads
+  - **Confidential Computing Solution**: Hardware-based isolation rooted in silicon provides protection of data and applications in-use, with remote attestation capabilities for verification
+  - **Perfect Fit for Agentic AI**: Allows owners to trust their Agents and enables interaction verification that data has not been compromised or exfiltrated
+
+  This directly aligns with KubeTEE AI's architecture, which uses Intel TDX/SGX and NVIDIA Confidential Computing to protect AI workloads in decentralized Kubernetes infrastructure.
+
+- **[Gartner Top 10 Strategic Technology Trends for 2026](https://www.gartner.com/en/articles/top-technology-trends-2026)** (Gartner IT Symposium/Xpo 2026)  
+  Gartner ranks **Confidential Computing as #3** on their Top 10 Strategic Technology Trends for 2026, alongside other trends directly relevant to KubeTEE AI:
+  1. AI-Native Development Platforms
+  2. AI Supercomputing Platforms
+  3. **Confidential Computing** — protects sensitive data while in use, enabling secure AI and analytics across untrusted infrastructure
+  4. **Multiagent Systems** — modular AI agents collaborate on complex tasks, improving automation and scalability
+  5. Domain-Specific Language Models
+  6. Physical AI
+  7. Preemptive Cybersecurity
+  8. Digital Provenance
+  9. AI Security Platforms
+  10. Geopatriation
+
+  Gartner organizes these trends into three themes: **The Architect** (AI platforms and infrastructure), **The Synthesist** (AI application and orchestration), and **The Vanguard** (security, trust and governance). KubeTEE AI operates across all three themes with TEE-enabled infrastructure, multi-agent AI research capabilities, and enterprise-grade security compliance.
+
+### Mission & Vision
+
+**Mission**: To provide decentralized, enterprise-grade AI Deep Search Agent with privacy data and infrastructure of the highest standards of security, compliance, and performance—combining the power of NVIDIA's AI platform with the trust guarantees of Confidential Computing and the collaborative innovation of open source communities.
 
 **Key Differentiators**:
 - 🔒 **Security-First**: TEE-enabled infrastructure with FIPS-140-2 certification and Kata Containers isolation
@@ -48,6 +78,8 @@ We also leverage CNCF projects for cloud-native confidential computing:
 - [KubeTEE AI Bittensor Deep Research Agent Subnet](#kubetee-ai-bittensor-deep-research-agent-subnet)
   - [About](#about)
     - [Foundation \& Community Partnerships](#foundation--community-partnerships)
+    - [Confidential Computing Consortium Resources](#confidential-computing-consortium-resources)
+    - [Mission \& Vision](#mission--vision)
   - [Table of Contents](#table-of-contents)
   - [Overview](#overview)
     - [Performance \& Rankings](#performance--rankings)
