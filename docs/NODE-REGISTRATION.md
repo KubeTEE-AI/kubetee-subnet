@@ -8,7 +8,7 @@ Before registering your node, ensure the infrastructure setup is complete:
 
 1. ✅ **Kernel settings configured** (see [MINER_INFRA.md](MINER_INFRA.md))
 2. ✅ **Node meets minimum requirements**:
-   - Ubuntu 24.04
+   - Ubuntu 26.04
    - etcd user/group created
    - Minimum resources: 8 CPU cores, 16 GB RAM
    - Minimum storage: 800 GB OS disk + 3 TB data disk

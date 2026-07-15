@@ -1,9 +1,14 @@
-# KubeTEE AI Bittensor Deep Research Agent Subnet
+# KubeTEE AI Factory — Confidential Compute for Decentralized AI Jobs
 
-> Enterprise-Grade AI as a Service (AIaaS) with Trusted Execution Environment (TEE) on Decentralized Kubernetes Infrastructure
+> Enterprise-Grade Confidential Computing AI Factory on Decentralized Kubernetes Infrastructure, scheduled by Armada across Bittensor miner clusters
 
-[![DeepResearch Leaderboard](https://img.shields.io/badge/DeepResearch-Ranked-blue)](https://huggingface.co/spaces/Ayanami0730/DeepResearch-Leaderboard)
-[![FIPS-140-2](https://img.shields.io/badge/FIPS--140--2-Compliant-green)](https://docs.rke2.io/security/fips_support)
+[![FIPS-140-3 Target](https://img.shields.io/badge/FIPS--140--3-Target-blue)](https://docs.rke2.io/security/fips_support)
+[![FIPS-140-2](https://img.shields.io/badge/FIPS--140--2-Validated-green)](https://docs.rke2.io/security/fips_support)
+[![Kata Containers](https://img.shields.io/badge/Kata%20Containers-TEE%20Runtime-blue)](https://katacontainers.io/)
+[![Confidential Containers](https://img.shields.io/badge/Confidential%20Containers-CoCo-9b59b6)](https://github.com/confidential-containers/confidential-containers)
+[![RKE2](https://img.shields.io/badge/RKE2-Kubernetes-3FDD43)](https://docs.rke2.io/)
+[![Rancher](https://img.shields.io/badge/Rancher-Multi--Cluster-0075A8)](https://www.rancher.io/)
+[![Armada](https://img.shields.io/badge/Armada-Multi--Cluster%20Scheduler-blue)](https://armadaproject.io/)
 [![Confidential Computing](https://img.shields.io/badge/Confidential%20Computing-Enabled-brightgreen)](https://confidentialcomputing.io/)
 [![Intel TDX](https://img.shields.io/badge/Intel%20TDX-Supported-lightgrey)](https://www.intel.com/content/www/us/en/developer/tools/tdx/overview.html)
 [![Intel SGX](https://img.shields.io/badge/Intel%20SGX-Supported-blueviolet)](https://www.intel.com/content/www/us/en/architecture-and-technology/software-guard-extensions.html)
@@ -17,13 +22,27 @@
 
 ## About
 
-**KubeTEE AI** is part of **NVIDIA Inception Program**, proud member of the [**Confidential Computing Consortium (CCC)**](https://confidentialcomputing.io/), active participant in the **[OpenInfra Foundation](https://openinfra.org/)** ecosystem, and leverages **[CNCF](https://www.cncf.io/)** projects for cloud-native infrastructure.
+**KubeTEE AI** is the **AI Factory** of the Bittensor network: it turns decentralized GPU clusters into a confidential batch-job factory. AI workloads are scheduled across miner clusters by [Armada](https://armadaproject.io/) — a CNCF Sandbox multi-cluster Kubernetes batch scheduler — and executed inside hardware-secured Trusted Execution Environments (TEE) using [Kata Containers](https://katacontainers.io/) and [Confidential Containers (CoCo)](https://github.com/confidential-containers/confidential-containers).
 
-### Foundation & Community Partnerships
+KubeTEE AI is registered with the [**NVIDIA Inception Program**](https://www.nvidia.com/startups/) and is an active contributor to both the [**Kata Containers**](https://katacontainers.io/) and [**Confidential Containers (CoCo)**](https://github.com/confidential-containers/confidential-containers) ecosystems. It also leverages [**CNCF**](https://www.cncf.io/) projects for cloud-native infrastructure.
 
-As part of NVIDIA's Inception Program, KubeTEE AI leverages cutting-edge NVIDIA technologies including NeMo Microservices, NIM models, and AI Blueprints to deliver enterprise-grade AI solutions. Our membership in the Confidential Computing Consortium reinforces our commitment to advancing hardware-based security technologies that protect data in use, including Intel TDX/SGX, and NVIDIA Hopper/Blackwell Confidential Computing capabilities.
+### Bittensor Community Partnerships
 
-**Direct Engineering Collaboration**: KubeTEE AI works directly with **INTEL** and **NVIDIA** engineers throughout the development and testing process of the NVIDIA technology stack. This close collaboration ensures optimal integration of confidential computing features, early access to emerging technologies, and validation of our implementation against the most stringent security and performance standards.
+As part of Bittensor ecosystem as a miner since Febuary 2024, Pierre known as the french miner from Cyprus by Targon was the first to provide Confidential Computing nodes on Subnet 3. We helped Chutes Subnet 64 to onboard B200/B300 nodes and helped Lium Subnet 51 to deploy recently Confidential Computing working with their stack.
+
+I was also the first to provide Confidential Computing to Telegram Cocoon and Phala Network.
+
+### Background
+
+With 40 years of expertise, Started in 1986 to install Linux and Novell servers and in 1992 one of the first internet provider in Canada, as an Infrastructure architect deploying internet in Moroco and managing tech stack at scale in cloud providers. My specialty is security and I did security audits for Fortune 500 companies.
+
+### Motivation
+
+My expertise for Confidential Computing, Kubernetes, networking and security at Kernel and hardware level can benefit Bittensor ecosystem and I want to help every subnets in the ecosystem by providing the most secure and efficient AI Factory stack to elevate Bittensor offering of decentrilized Artifical Inteligence.
+
+Providing High Quality infrastructure to the 3 Computing subnet on Bittensor for more than 2.5 years (Chutes #64, Targon #3 and Lium #51) with monitoring, upgrades and my help to improve each stack. I wanted to offer different tech stack that I belive Bittensor ecosystem can use and extend from.
+
+**Direct Engineering Collaboration**: KubeTEE AI works directly with **INTEL** and **NVIDIA** engineers throughout the development and testing process of the NVIDIA technology especialy Kata/CoCo Containers. This close collaboration ensures optimal integration of confidential computing features, early access to emerging technologies, and validation of our implementation against the most stringent security and performance standards.
 
 KubeTEE AI actively contributes to and builds upon the [OpenInfra Foundation's](https://openinfra.org/) open source infrastructure projects, particularly:
 - **[Kata Containers](https://katacontainers.io/)**: Secure, lightweight CRI-compatible virtualized containers that provide the TEE foundation for our confidential computing infrastructure
@@ -31,9 +50,11 @@ KubeTEE AI actively contributes to and builds upon the [OpenInfra Foundation's](
 We also leverage CNCF projects for cloud-native confidential computing:
 - **[Confidential Containers (CoCo)](https://github.com/confidential-containers/confidential-containers)**: CNCF Sandbox project enabling transparent deployment of unmodified containers in Trusted Execution Environments (TEEs) with support for Intel TDX/SGX and other hardware platforms
 
+We schedule workloads across miner clusters with **[Armada](https://armadaproject.io/)** ([GitHub](https://github.com/armadaproject/armada)), a CNCF Sandbox multi-cluster Kubernetes batch scheduler used in production to run millions of jobs per day across tens of thousands of nodes.
+
 ### Confidential Computing Consortium Resources
 
-As a proud member of the [Confidential Computing Consortium (CCC)](https://confidentialcomputing.io/), we recommend the following resources from the consortium:
+As a member of the [Confidential Computing Consortium (CCC)](https://confidentialcomputing.io/), we recommend the following resources from the consortium:
 
 - **[Protecting Agentic AI Workloads with Confidential Computing](https://confidentialcomputing.io/2026/01/20/protecting-agentic-ai-workloads-with-confidential-computing/)** (January 2026)  
   This article by Mike Bursell, Executive Director of the CCC, explains how Confidential Computing addresses critical security challenges for Agentic AI workloads. Key takeaways:
@@ -52,61 +73,47 @@ As a proud member of the [Confidential Computing Consortium (CCC)](https://confi
   4. **Multiagent Systems** — modular AI agents collaborate on complex tasks, improving automation and scalability
   5. Domain-Specific Language Models
   6. Physical AI
-  7. Preemptive Cybersecurity
-  8. Digital Provenance
-  9. AI Security Platforms
+  7. **Preemptive Cybersecurity**
+  8. **Digital Provenance**
+  9. **AI Security Platforms**
   10. Geopatriation
 
-  Gartner organizes these trends into three themes: **The Architect** (AI platforms and infrastructure), **The Synthesist** (AI application and orchestration), and **The Vanguard** (security, trust and governance). KubeTEE AI operates across all three themes with TEE-enabled infrastructure, multi-agent AI research capabilities, and enterprise-grade security compliance.
+  Gartner organizes these trends into three themes: **The Architect** (AI platforms and infrastructure), **The Synthesist** (AI application and orchestration), and **The Vanguard** (security, trust and governance). KubeTEE AI operates across all three themes with TEE-enabled infrastructure, multi-agent AI workloads, and enterprise-grade security compliance.
 
 ### Mission & Vision
 
-**Mission**: To provide decentralized, enterprise-grade AI Deep Search Agent with privacy data and infrastructure of the highest standards of security, compliance, and performance—combining the power of NVIDIA's AI platform with the trust guarantees of Confidential Computing and the collaborative innovation of open source communities.
+**Mission**: To turn decentralized GPU clusters into a confidential batch-job factory — running AI training, inference, and data-processing jobs in Trusted Execution Environments, scheduled fairly across Bittensor miner clusters by Armada, with the highest standards of security, compliance, and performance.
 
 **Key Differentiators**:
-- 🔒 **Security-First**: TEE-enabled infrastructure with FIPS-140-2 certification and Kata Containers isolation
-- 🚀 **NVIDIA-Powered**: Best-in-class AI models, microservices, and blueprints
-- 🌐 **Decentralized**: Multi-cluster Kubernetes infrastructure across global regions
-- 🏆 **Performance**: Ranked on DeepResearch Benchmark Leaderboard
-- 🛡️ **Compliance**: CCC member driving confidential computing standards
-- 🤝 **Open Source**: Built on OpenInfra Foundation projects with community-driven innovation
+- **Security-First**: TEE-enabled infrastructure with FIPS-140-3 as the Early Access target (FIPS-140-2 validated RKE2 baseline) and Kata Containers isolation
+- **Armada-Scheduled**: multi-cluster batch scheduling with fair-use queuing, gang scheduling, and preemption across decentralized clusters
+- **NVIDIA-Powered**: NeMo Microservices, NIM models, and AI Blueprints as first-class confidential job types
+- **Decentralized**: one hotkey per cluster, nodes co-located in a single data center, expanding across global regions
+- **Open Source**: Built on OpenInfra Foundation and CNCF projects with community-driven innovation
 
 ---
 
 ## Table of Contents
 
-- [KubeTEE AI Bittensor Deep Research Agent Subnet](#kubetee-ai-bittensor-deep-research-agent-subnet)
+- [KubeTEE AI Factory — Confidential Compute for Decentralized AI Jobs](#kubetee-ai-factory--confidential-compute-for-decentralized-ai-jobs)
   - [About](#about)
-    - [Foundation \& Community Partnerships](#foundation--community-partnerships)
+    - [Bittensor Community Partnerships](#bittensor-community-partnerships)
+    - [Background](#background)
+    - [Motivation](#motivation)
     - [Confidential Computing Consortium Resources](#confidential-computing-consortium-resources)
     - [Mission \& Vision](#mission--vision)
   - [Table of Contents](#table-of-contents)
   - [Overview](#overview)
-    - [Performance \& Rankings](#performance--rankings)
-    - [AI Deep Research Reports](#ai-deep-research-reports)
-  - [Key Features](#key-features)
-  - [🔐 Enterprise RAG: Private Data Deep Research](#-enterprise-rag-private-data-deep-research)
-    - [Why Enterprise RAG is Different](#why-enterprise-rag-is-different)
-    - [Enterprise RAG Comparison](#enterprise-rag-comparison)
-    - [KubeTEE RAG Architecture](#kubetee-rag-architecture)
-    - [Enterprise RAG Capabilities](#enterprise-rag-capabilities)
-  - [The Enterprise AI Challenge: Problems We Solve](#the-enterprise-ai-challenge-problems-we-solve)
-    - [The Current State of Enterprise AI](#the-current-state-of-enterprise-ai)
-      - [1. **SMB Enterprises Locked Out of Advanced AI**](#1-smb-enterprises-locked-out-of-advanced-ai)
-      - [2. **Regulated Enterprises Unable to Deploy AI Safely**](#2-regulated-enterprises-unable-to-deploy-ai-safely)
-      - [3. **Private Data Processing Without Compromise**](#3-private-data-processing-without-compromise)
-      - [4. **Data and Model Privacy Through Confidential Computing**](#4-data-and-model-privacy-through-confidential-computing)
-      - [5. **Trust in Decentralized Infrastructure**](#5-trust-in-decentralized-infrastructure)
+    - [Early Access](#early-access)
+  - [The Confidential Compute Challenge: Problems We Solve](#the-confidential-compute-challenge-problems-we-solve)
+    - [1. Private Data and Models Must Stay Private](#1-private-data-and-models-must-stay-private)
+    - [2. Regulated Workloads Need Verifiable Compute](#2-regulated-workloads-need-verifiable-compute)
+    - [3. Trust in Decentralized Infrastructure](#3-trust-in-decentralized-infrastructure)
     - [The KubeTEE Value Proposition](#the-kubetee-value-proposition)
-  - [KubeTEE AI vs Palantir: Enterprise AI Comparison](#kubetee-ai-vs-palantir-enterprise-ai-comparison)
-    - [Key Differentiators](#key-differentiators)
-    - [Complementary Use Cases](#complementary-use-cases)
-    - [Target Market Positioning](#target-market-positioning)
-    - [AI Agent Market: Big Tech Consolidation](#ai-agent-market-big-tech-consolidation)
-    - [What Makes KubeTEE Deep Research Agent Different](#what-makes-kubetee-deep-research-agent-different)
   - [Architecture](#architecture)
     - [Infrastructure](#infrastructure)
       - [Kubernetes High Availability](#kubernetes-high-availability)
+      - [Armada Multi-Cluster Batch Scheduling](#armada-multi-cluster-batch-scheduling)
     - [Security \& Compliance](#security--compliance)
       - [Confidential Computing Features](#confidential-computing-features)
       - [Network Security](#network-security)
@@ -115,88 +122,29 @@ As a proud member of the [Confidential Computing Consortium (CCC)](https://confi
     - [Multi-Cluster Topology](#multi-cluster-topology)
       - [Subnet Owner Infrastructure](#subnet-owner-infrastructure)
       - [Miner Infrastructure](#miner-infrastructure)
-  - [AI Technology Stack](#ai-technology-stack)
-    - [Core Blueprints](#core-blueprints)
-      - [1. NVIDIA AIQ Research Assistant](#1-nvidia-aiq-research-assistant)
-      - [2. NVIDIA RAG Blueprint](#2-nvidia-rag-blueprint)
-      - [3. NVIDIA Streaming Data to RAG](#3-nvidia-streaming-data-to-rag)
-      - [4. NVIDIA NeMo Retriever Microservice](#4-nvidia-nemo-retriever-microservice)
-      - [5. NVIDIA Data Flywheel](#5-nvidia-data-flywheel)
-      - [6. NVIDIA Video Search and Summarization](#6-nvidia-video-search-and-summarization)
-      - [Additional Services](#additional-services)
+    - [Early Access Topology](#early-access-topology)
+  - [Supported AI Workloads (Job Types)](#supported-ai-workloads-job-types)
     - [NVIDIA NeMo Microservices](#nvidia-nemo-microservices)
-    - [NVIDIA NIM Models](#nvidia-nim-models)
-      - [Language Models](#language-models)
-      - [NVIDIA Llama 3.3 Nemotron Super 49B V1.5 — Model Summary](#nvidia-llama-33-nemotron-super-49b-v15--model-summary)
-      - [Retrieval Models](#retrieval-models)
-      - [Safety \& Vision Models](#safety--vision-models)
-      - [Speech Recognition](#speech-recognition)
   - [Subnet Economics](#subnet-economics)
-    - [Native Bittensor Multiple Incentive Mechanisms](#native-bittensor-multiple-incentive-mechanisms)
-    - [Mechanism 0: Infrastructure (60% Emissions)](#mechanism-0-infrastructure-60-emissions)
+    - [Incentive Mechanism: Infrastructure (Early Access)](#incentive-mechanism-infrastructure-early-access)
       - [Staging vs Production](#staging-vs-production)
-    - [Mechanism 1: Benchmark Competition (30% Emissions)](#mechanism-1-benchmark-competition-30-emissions)
-      - [Lifetime Score with Decay](#lifetime-score-with-decay)
-      - [How Validators Set Weights (Mechanism 1)](#how-validators-set-weights-mechanism-1)
-      - [Contributor Registration (On-Chain via Bittensor EVM)](#contributor-registration-on-chain-via-bittensor-evm)
-      - [Benchmark Score Calculation](#benchmark-score-calculation)
-      - [Implementation Bounty](#implementation-bounty)
-    - [Mechanism 2: Bounty Treasury (10% Emissions)](#mechanism-2-bounty-treasury-10-emissions)
-      - [Treasury Accumulation](#treasury-accumulation)
-      - [Bounty Lifecycle](#bounty-lifecycle)
-      - [Security Scanning via Bitsec (Subnet 60)](#security-scanning-via-bitsec-subnet-60)
-    - [Referrers / Integrators / Resellers: 50% Revenue Share (NO Emissions!)](#referrers--integrators--resellers-50-revenue-share-no-emissions)
-    - [Revenue Model](#revenue-model)
-      - [Namespace Resource Pricing](#namespace-resource-pricing)
-      - [Shared Microservices Pricing](#shared-microservices-pricing)
-      - [Billing \& Metering](#billing--metering)
-      - [Example Monthly Bills](#example-monthly-bills)
-      - [X.402 Micropayments (No Account Required)](#x402-micropayments-no-account-required)
-      - [Referrer Revenue Share](#referrer-revenue-share)
-      - [Integration Options](#integration-options)
-    - [Payment Strategy: USDC on BASE](#payment-strategy-usdc-on-base)
-    - [Automated Buyback \& Treasury (Sustainable Mechanism)](#automated-buyback--treasury-sustainable-mechanism)
-    - [Validation \& Scoring](#validation--scoring)
-  - [Client Getting Started](#client-getting-started)
-    - [Prerequisites](#prerequisites)
-    - [Deployment Steps](#deployment-steps)
-  - [For Miners (Benchmark Competition)](#for-miners-benchmark-competition)
-    - [Development Process](#development-process)
-    - [Bounty Participation](#bounty-participation)
+    - [Payments \& Revenue (Roadmap)](#payments--revenue-roadmap)
+  - [Validator Scoring \& Attestation](#validator-scoring--attestation)
+    - [TEE Attestation](#tee-attestation)
+    - [Armada Job Metrics](#armada-job-metrics)
+    - [Infrastructure Health](#infrastructure-health)
+    - [Weight Setting](#weight-setting)
+  - [Submitting a Confidential Job](#submitting-a-confidential-job)
+    - [Miner Registration](#miner-registration)
   - [For Miners (Infrastructure)](#for-miners-infrastructure)
-  - [Evaluation \& Benchmarks](#evaluation--benchmarks)
-    - [Primary Benchmark](#primary-benchmark)
-    - [Evaluation Criteria](#evaluation-criteria)
-    - [Additional Planned Benchmarks](#additional-planned-benchmarks)
   - [Roadmap](#roadmap)
-    - [Phase 1: Foundation (Current)](#phase-1-foundation-current)
-    - [Phase 2: Launch](#phase-2-launch)
-      - [Subnet 93 — Bitcast (Marketing \& Awareness)](#subnet-93--bitcast-marketing--awareness)
-      - [Subnet 16 — BitAds (Affiliate \& Performance Marketing)](#subnet-16--bitads-affiliate--performance-marketing)
-      - [Subnet 71 — LeadPoet (B2B Lead Intelligence)](#subnet-71--leadpoet-b2b-lead-intelligence)
-    - [Phase 3: Enhancements](#phase-3-enhancements)
-      - [🏆 Affine SN120 — Model Benchmark Challenge](#-affine-sn120--model-benchmark-challenge)
-      - [Subnet 62 — Ridges (Coding Assistant Tool/MCP Server)](#subnet-62--ridges-coding-assistant-toolmcp-server)
-      - [Subnet 22 — Desearch (Decentralized Web Search)](#subnet-22--desearch-decentralized-web-search)
-      - [Subnet 60 — Bitsec (Security Scanning)](#subnet-60--bitsec-security-scanning)
-    - [Phase 4: Subnet Integrations](#phase-4-subnet-integrations)
-      - [Subnet 3 — Templar (Model Pre-Training)](#subnet-3--templar-model-pre-training)
-      - [Subnet 37 — Aurelius (AI Alignment \& Safety)](#subnet-37--aurelius-ai-alignment--safety)
-      - [Subnet 56 — Gradients (Decentralized Fine-Tuning)](#subnet-56--gradients-decentralized-fine-tuning)
-      - [Data-Focused Subnets](#data-focused-subnets)
-        - [Subnet 13 — Data Universe (Macrocosmos) ⭐ CRITICAL](#subnet-13--data-universe-macrocosmos--critical)
-        - [Subnet 52 — Dojo (Tensorplex)](#subnet-52--dojo-tensorplex)
-        - [Subnet 54 — MIID (Synthetic Identities)](#subnet-54--miid-synthetic-identities)
-        - [Subnet 75 — Hippius (Decentralized Cloud Storage)](#subnet-75--hippius-decentralized-cloud-storage)
-      - [Financial \& Trading Subnets](#financial--trading-subnets)
-        - [Subnet 79 — τaos (Financial Market Simulation)](#subnet-79--τaos-financial-market-simulation)
-        - [Subnet 6 — Numinous (Superhuman Forecasting)](#subnet-6--numinous-superhuman-forecasting)
-    - [Phase 5: Experimental Integrations](#phase-5-experimental-integrations)
-        - [Subnet 121 — Sundae Bar (Enterprise AI Agent Marketplace)](#subnet-121--sundae-bar-enterprise-ai-agent-marketplace)
-    - [AIQ Deep Research Agent — Subnet Data Pipeline](#aiq-deep-research-agent--subnet-data-pipeline)
-    - [Subnet Ecosystem Overview](#subnet-ecosystem-overview)
+    - [Phase 0 — Early Access (Current)](#phase-0--early-access-current)
+    - [Phase 1 — Expansion](#phase-1--expansion)
+    - [Phase 2 — Paid Jobs](#phase-2--paid-jobs)
+    - [Phase 3 — Job-Type Growth](#phase-3--job-type-growth)
   - [Research \& Documentation](#research--documentation)
-    - [Deep Research Reports](#deep-research-reports)
+    - [Documentation](#documentation)
+    - [External Resources](#external-resources)
     - [Community \& Support](#community--support)
   - [License](#license)
 
@@ -204,244 +152,76 @@ As a proud member of the [Confidential Computing Consortium (CCC)](https://confi
 
 ## Overview
 
-KubeTEE AI provides Enterprise-Grade AI as a Service (AIaaS) featuring the world's best Open Source Deep Research Agent with private data in a Trusted Execution Environment (TEE) on a Decentralized Multi-Clusters Kubernetes RKE2 FIPS-140-2 U.S. Federal Government Grade Security Decentralized Infrastructure.
+KubeTEE AI Factory provides Enterprise-Grade Confidential Computing for AI batch jobs on a Decentralized Multi-Cluster Kubernetes RKE2 infrastructure. Jobs are submitted to Armada queues and scheduled across miner clusters, executing inside Trusted Execution Environments (TEE) so that data and models are protected **at rest, in transit, and in use** — and never leave the confidential computing boundary.
 
-**RAG (Retrieval-Augmented Generation)** enhances AI responses by retrieving relevant information from your private data sources before generating answers. KubeTEE's Private Data RAG features **automated ingestion** pipelines that securely process and index multi-modal enterprise data including documents (PDF, Word, Excel, PowerPoint), video, audio, images, emails, databases, APIs, and knowledge bases—all within TEE-protected environments ensuring your data is protected **at rest, in transit, and in use** and never leaves confidential computing boundaries.
+Each miner cluster is identified by a permanent Bittensor **hotkey/coldkey** pair. Armada dispatches batch jobs to these clusters as Kubernetes pods; the pods run under a confidential `runtimeClassName` (`kata-qemu-nvidia-gpu-tdx` for GPU TEE, `kata-qemu-tdx` for CPU TEE) so the workload is hardware-isolated and attested. CoCo provides transparent confidential image decryption and remote attestation — unmodified containers run inside the TEE without changes.
 
-### Performance & Rankings
+### Early Access
 
-**AI Deep Research Agents**: Ranked on [DeepResearch Benchmark Leaderboard](https://huggingface.co/spaces/Ayanami0730/DeepResearch-Leaderboard) using Open Source code and Fine-Tuned Open Source Models, part of the AGI Benchmarks.
+KubeTEE is in **Early Access**. The first deployment targets **two clusters in the USA**, each operated by 1-Horizon hotkeys with all nodes co-located in two data center. Early Access focuses on:
 
-**GAIA Benchmark** (General AI Assistants): KubeTEE targets [GAIA Benchmark](https://huggingface.co/spaces/gaia-benchmark/leaderboard) — the industry standard for evaluating AI agents on real-world tasks across three difficulty levels.
-
-**Benchmark Resources**:
-- [DeepResearch Benchmark White Paper](https://arxiv.org/pdf/2506.11763)
-- [DeepResearch Benchmark Website](https://deepresearch-bench.github.io/)
-- [GitHub Deep Research Bench Code](https://github.com/Ayanami0730/deep_research_bench)
-- [GAIA Benchmark Leaderboard](https://huggingface.co/spaces/gaia-benchmark/leaderboard)
-
-### AI Deep Research Reports
-
-We used different AI Deep Research Agents to elaborate the Subnet Architecture:
-- [Grok xAI Deep Research Report](./docs/Grok_XAI_Research.md)
-- [Claude Deep Research Project Architecture Report](./docs/Claude_Deep_Research.md)
+- Standing up the Armada multi-cluster batch scheduler across miner clusters
+- Running confidential AI jobs (NeMo / NIM / Blueprints) in Kata + CoCo TEE pods
+- The **validator incentive mechanism**: scoring miners on TEE attestation, Armada job success, and uptime
+- **Emissions-only** rewards (no USDC job billing yet — see [Roadmap](#roadmap))
+- **Security**: Confidential Computing TEE with FIPS-140-3 as the Early Access target on a FIPS-140-2 validated RKE2 baseline
 
 ---
 
-## Key Features
+## The Confidential Compute Challenge: Problems We Solve
 
-✅ **Enterprise-Grade Security**: FIPS-140-2 certified, TEE-enabled infrastructure  
-✅ **Confidential Computing**: Intel TDX/SGX, NVIDIA Hopper/Blackwell PCIe Protected Mode  
-✅ **Multi-Cluster**: Rancher Fleet-managed clusters across Americas, EU, Middle East, Africa, Asia  
-✅ **Production-Ready**: High availability, automated monitoring, and audit trails  
-✅ **Open Source**: Transparent development with community-driven improvements  
-✅ **SOTA**: Best-in-class SOTA (State Of The Art) AI models and microservices  
+Most organizations that need to run sensitive AI workloads — training, fine-tuning, inference, and data processing — face an impossible choice between security, cost, and trust.
 
----
+### 1. Private Data and Models Must Stay Private
 
-## 🔐 Enterprise RAG: Private Data Deep Research
-
-> **The Only Deep Research Agent That Keeps Your Private Data Private**
-
-KubeTEE AI is fundamentally different from every other AI Deep Research agent on the market. While competitors require you to upload your sensitive enterprise data to their cloud infrastructure, KubeTEE processes your private data inside hardware-secured **Trusted Execution Environments (TEE)** — meaning even KubeTEE infrastructure operators cannot access your data.
-
-### Why Enterprise RAG is Different
-
-**The Enterprise RAG Problem:**
-
-Every enterprise wants AI that can reason over their private data — contracts, financial records, patient data, proprietary research, internal communications. But current solutions force an impossible choice:
-
-| Option | Trade-off |
-|--------|-----------|
-| **Cloud AI (OpenAI, Anthropic, Perplexity)** | ❌ Must upload sensitive data to third-party clouds |
-| **Enterprise Search (Glean, Microsoft Copilot)** | ❌ Data processed on vendor infrastructure, compliance concerns |
-| **Self-Hosted Open Source** | ❌ Requires massive infrastructure investment and AI expertise |
-| **Palantir AIP** | ❌ $2M-$10M+ annual contracts, vendor lock-in |
-
-**KubeTEE's Breakthrough:**
-
-✅ **Private Data Never Leaves Your Control** — processed inside TEE hardware enclaves  
-✅ **[CyborgDB](https://www.cyborg.co/) Encrypted Vectors** — embeddings encrypted at rest, in transit, AND in-use  
-✅ **Cryptographic Attestation** — mathematically verify what code runs on your data  
-✅ **Enterprise Compliance Built-In** — HIPAA, SOC2, GDPR, FedRAMP-ready architecture  
-✅ **No Vendor Lock-In** — 100% open source, deploy on your infrastructure or ours  
-
-### Enterprise RAG Comparison
-
-| Feature | KubeTEE AI | Glean | Perplexity Enterprise | Microsoft Copilot | Google Vertex AI | Palantir AIP |
-|---------|------------|-------|----------------------|-------------------|------------------|--------------|
-| **Private Data RAG** | ✅ TEE-Protected | ⚠️ Vendor Cloud | ⚠️ Vendor Cloud | ⚠️ Microsoft Cloud | ⚠️ Google Cloud | ⚠️ Palantir Cloud |
-| **Data Never Leaves Your Control** | ✅ Hardware Enforced | ❌ | ❌ | ❌ | ❌ | ❌ |
-| **Confidential Computing** | ✅ Intel TDX/SGX + NVIDIA CC | ❌ | ❌ | ❌ | ⚠️ Limited | ❌ |
-| **Cryptographic Attestation** | ✅ Verifiable | ❌ | ❌ | ❌ | ❌ | ❌ |
-| **Open Source** | ✅ 100% | ❌ Proprietary | ❌ Proprietary | ❌ Proprietary | ⚠️ Partial | ❌ Proprietary |
-| **Self-Hosted Option** | ✅ Full Control | ❌ | ❌ | ⚠️ Limited | ⚠️ Limited | ⚠️ On-Prem Available |
-| **HIPAA Compliant** | ✅ TEE Architecture | ⚠️ BAA Required | ❌ | ⚠️ BAA Required | ⚠️ BAA Required | ✅ |
-| **FedRAMP Ready** | ✅ FIPS-140-2 | ⚠️ In Progress | ❌ | ✅ | ✅ | ✅ |
-| **Custom Model Fine-Tuning** | ✅ TEE-Protected | ❌ | ❌ | ❌ | ✅ Cloud-Based | ✅ |
-| **Vendor Lock-In** | ✅ None | ❌ High | ❌ High | ❌ High | ❌ High | ❌ Very High |
-| **Pricing** | 💰 Pay-as-you-go | 💰💰 Per seat | 💰 Per seat | 💰💰 Per seat | 💰💰 Usage-based | 💰💰💰💰 $2M+/year |
-| **Deep Research Capability** | ✅ Multi-step reasoning | ⚠️ Search focused | ✅ Web research | ⚠️ Copilot tasks | ⚠️ RAG focused | ✅ Full analytics |
-
-### KubeTEE RAG Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                    KUBETEE ENTERPRISE RAG ARCHITECTURE                      │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│   YOUR ENTERPRISE DATA                      TRUSTED EXECUTION ENVIRONMENT   │
-│   ───────────────────                       ─────────────────────────────   │
-│                                                                             │
-│   ┌─────────────────┐                      ┌─────────────────────────────┐  │
-│   │ 📄 Documents    │                      │  🔐 TEE SECURE ENCLAVE      │  │
-│   │ 📊 Databases    │ ──► Encrypted ──────►│                             │  │
-│   │ 📧 Emails       │     Transfer         │  ┌─────────────────────┐    │  │
-│   │ 💼 Contracts    │                      │  │ NeMo Ingestor       │    │  │
-│   │ 🏥 Patient Data │                      │  │ (PDF, Images, Video)│    │  │
-│   │ 💰 Financials   │                      │  └──────────┬──────────┘    │  │
-│   └─────────────────┘                      │             │               │  │
-│                                            │             ▼               │  │
-│                                            │  ┌─────────────────────┐    │  │
-│                                            │  │ CyborgDB Encrypted  │    │  │
-│   ISOLATION GUARANTEES:                    │  │ Vector Database     │    │  │
-│   • Hardware-level isolation               │  └──────────┬──────────┘    │  │
-│   • Memory encryption (Intel TME)          │             │               │  │
-│   • Even admins cannot access              │             ▼               │  │
-│   • Cryptographic attestation              │  ┌─────────────────────┐    │  │
-│                                            │  │ Deep Research Agent │    │  │
-│                                            │  │ (NVIDIA NIM + AIQ)  │    │  │
-│                                            │  └──────────┬──────────┘    │  │
-│                                            │             │               │  │
-│                                            └─────────────┼───────────────┘  │
-│                                                          │                  │
-│   ┌─────────────────────────────────────────────────────┐                   │
-│   │                    YOUR INSIGHTS                    │ ◄─────────────────┘
-│   │  • Research reports on your private data            │                   │
-│   │  • Answers grounded in your documents               │                   │
-│   │  • Analysis without data exposure                   │                   │
-│   └─────────────────────────────────────────────────────┘                   │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-### Enterprise RAG Capabilities
-
-| Capability | Description | Technology |
-|------------|-------------|------------|
-| **Multi-Format Ingestion** | PDFs, Word, Excel, images, audio, video, web pages | [NeMo Retriever Microservice](https://docs.nvidia.com/nemo/microservices/) |
-| **Private Vector Store** | Your embeddings isolated in your namespace, end-to-end encrypted | [CyborgDB](https://www.cyborg.co/) Confidential Vector Database |
-| **Semantic Search** | Natural language queries across all your data | NVIDIA NV-EmbedQA-E5-v5 |
-| **Multi-Step Reasoning** | Complex research requiring multiple retrieval steps | NVIDIA AIQ Deep Research Blueprint |
-| **Source Attribution** | Every answer traced back to source documents | Grounded generation with citations |
-| **Real-Time Ingestion** | Stream new documents as they arrive | [NeMo Streaming Data to RAG](https://github.com/NVIDIA/GenerativeAIExamples/tree/main/RAG/examples/streaming_data_to_rag_pipeline) |
-| **Custom Fine-Tuning** | Train domain-specific models on your data | [NeMo Data Flywheel](https://github.com/NVIDIA/GenerativeAIExamples/tree/main/RAG/examples/data_flywheel) |
-| **Compliance Audit Trail** | Complete logging of all queries and responses | OpenTelemetry + secure logging |
-
-**Industry-Specific RAG Applications:**
-
-| Industry | Use Case | Compliance |
-|----------|----------|------------|
-| **Healthcare** | Patient record analysis, clinical decision support, research literature | HIPAA, HITECH |
-| **Finance** | Contract analysis, regulatory compliance, risk assessment | SOX, GLBA, SEC |
-| **Legal** | Case research, contract review, due diligence | Attorney-client privilege |
-| **Government** | Classified document analysis, policy research | FedRAMP, ITAR, CMMC |
-| **Insurance** | Claims processing, policy analysis, fraud detection | State regulations |
-| **Pharmaceutical** | Drug research, clinical trial analysis, regulatory submissions | FDA 21 CFR Part 11 |
-
----
-
-## The Enterprise AI Challenge: Problems We Solve
-
-### The Current State of Enterprise AI
-
-Most small and medium-sized businesses (SMBs) and regulated enterprises face insurmountable barriers to adopting advanced AI:
-
-#### 1. **SMB Enterprises Locked Out of Advanced AI**
-
-**The Problem:**
-- Enterprise AI solutions like Palantir cost $2M-$10M+ annually—prohibitive for SMBs
-- Cloud AI services (OpenAI, Anthropic) require sending sensitive data to third parties
-- Building in-house AI infrastructure requires $500K-$2M+ in initial investment and specialized talent
-- Limited access to cutting-edge models and tools reserved for large enterprises
-
-**KubeTEE's Solution:**
-- **Pay-as-you-go pricing** with usage-based Alpha token economics—start small, scale as needed
-- **One-command deployment** eliminates the need for large AI/DevOps teams
-- **Enterprise-grade capabilities** at SMB-accessible prices
-- **Best-in-class NVIDIA models** available to all, regardless of company size
-
-#### 2. **Regulated Enterprises Unable to Deploy AI Safely**
-
-**The Problem:**
-- Healthcare (HIPAA), Finance (SOC2, PCI-DSS), Government (FedRAMP) face strict compliance requirements
-- Public cloud AI services cannot guarantee data isolation and compliance
-- Traditional solutions require extensive security audits and certifications
-- Compliance burden makes AI adoption too risky or expensive
-
-**KubeTEE's Solution:**
-- **FIPS-140-2 certification** meets U.S. Federal Government security standards
-- **Trusted Execution Environment (TEE)** with hardware-enforced isolation (Intel TDX/SGX, NVIDIA CC)
-- **Confidential Computing Consortium member** driving industry security standards
-- **Audit trails and monitoring** built-in for compliance reporting
-- **Isolated namespaces** ensure complete tenant separation
-- **mTLS Encrypted comminication** Ensure all network/cluster communications are secure
-
-#### 3. **Private Data Processing Without Compromise**
-
-**The Problem:**
-- Enterprises cannot send proprietary data to public cloud AI services
-- Customer PII, trade secrets, and sensitive documents exposed to third-party risks
-- Data residency requirements (GDPR, data localization laws) restrict cloud AI usage
-- No guarantee that data won't be used to train public models
-
-**KubeTEE's Solution:**
-- **On-infrastructure deployment** via decentralized Kubernetes clusters—data never leaves your control plane
-- **Geographic sovereignty** with multi-region deployment (Americas, EU, Middle East, Africa, Asia)
-- **Private namespaces** ensure complete data isolation between tenants
-- **Bring Your Own LLM** with NeMo Microservices—deploy custom models on private data
-- **Zero data leakage** to model providers or third parties
-
-#### 4. **Data and Model Privacy Through Confidential Computing**
-
-**The Problem:**
-- Traditional cloud deployments expose data in memory during processing
+**The Problem**:
+- Enterprises cannot send proprietary data or models to public cloud AI services
+- Traditional deployments expose data in memory during processing
 - Insider threats and cloud provider access to sensitive data
-- Model theft and intellectual property concerns
-- No cryptographic guarantees that data remains private during inference
+- No cryptographic guarantee that data remains private during compute
 
-**KubeTEE's Solution:**
+**KubeTEE's Solution**:
 - **Hardware-enforced Trusted Execution Environment (TEE)** encrypts data in use, not just at rest and in transit
 - **Intel TDX/SGX** creates isolated memory enclaves invisible to hypervisors and OS
-- **NVIDIA Hopper/Blackwell Confidential Computing** protects GPU workloads during AI inference
+- **NVIDIA Hopper/Blackwell Confidential Computing** protects GPU workloads during AI compute
 - **Kata Containers** isolate workloads at the VM level with cryptographic validation
-- **End-to-end encryption** from data ingestion through model inference to results
+- **CoCo remote attestation** lets you verify the exact code running on your data
+- **End-to-end encryption** from job submission through compute to results
 
-#### 5. **Trust in Decentralized Infrastructure**
+### 2. Regulated Workloads Need Verifiable Compute
 
-**The Problem:**
+**The Problem**:
+- Healthcare (HIPAA), Finance (SOC2, PCI-DSS), Government (FedRAMP) face strict compliance requirements
+- Public cloud AI services cannot guarantee data isolation and compliance
+- No verifiable proof that infrastructure ran the expected workload
+
+**KubeTEE's Solution**:
+- **FIPS-140-3** as the Early Access security target, on a **FIPS-140-2 validated RKE2** baseline
+- **Trusted Execution Environment (TEE)** with hardware-enforced isolation (Intel TDX/SGX, NVIDIA CC)
+- **Cryptographic attestation** — validators verify each cluster's TEE and the unmodified container image
+- **Audit trails and monitoring** built-in for compliance reporting (Prometheus, Kubernetes events)
+- **Isolated namespaces** ensure complete tenant separation
+
+### 3. Trust in Decentralized Infrastructure
+
+**The Problem**:
 - Centralized cloud providers represent single points of failure and control
 - Vendor lock-in limits flexibility and negotiating power
-- Concerns about cloud provider access to proprietary data and models
 - No transparency into infrastructure operations and data handling
-- Geopolitical risks and jurisdiction concerns
 
-**KubeTEE's Solution:**
+**KubeTEE's Solution**:
 - **Decentralized multi-cluster architecture** eliminates single points of failure
-- **Bittensor incentive mechanism** aligns infrastructure providers with customer success
-- **Open source transparency**—inspect code, audit security, verify operations
-- **Community validation** through Bittensor subnet ensures honest behavior
-- **Geographic distribution** across multiple regions and providers reduces risk
-- **Cryptographic verification** of workload integrity via Confidential Containers
-- **Validator monitoring** provides objective quality and uptime metrics
-- **No vendor lock-in**—open standards (Kubernetes, OpenInfra) enable migration
+- **Bittensor incentive mechanism** aligns infrastructure providers with reliable job execution
+- **Validator attestation** provides objective, cryptographic proof of confidential compute
+- **Open source transparency** — inspect code, audit security, verify operations
+- **No vendor lock-in** — open standards (Kubernetes, Armada, Kata, CoCo)
 
 ### The KubeTEE Value Proposition
 
-KubeTEE AI uniquely combines **enterprise-grade security**, **decentralized trust**, and **SMB-accessible pricing** to democratize access to confidential AI infrastructure. We solve the "impossible triangle" that has prevented SMBs and regulated enterprises from adopting advanced AI:
+KubeTEE AI Factory uniquely combines **confidential security**, **decentralized trust**, and **accessible pricing** to democratize access to confidential AI compute.
 
 ```
-        Enterprise Security
+        Confidential Security
                /\
               /  \
              /    \
@@ -449,229 +229,16 @@ KubeTEE AI uniquely combines **enterprise-grade security**, **decentralized trus
            /        \
           /          \
          /____________\
-    Affordable      Trustworthy
-     Pricing       Decentralized
+    Accessible      Trustworthy
+     Pricing        Decentralized
 ```
 
 Traditional solutions force you to choose two:
-- **Cloud AI**: Affordable + Decentralized ❌ Security
-- **Palantir**: Security + Centralized ❌ Affordable
-- **Build Your Own**: Security + Expensive ❌ Decentralized
+- **Public cloud AI**: Accessible + scalable ✗ Confidential security & decentralization
+- **Build your own TEE cluster**: Security + control ✗ Accessible & decentralized
+- **Single-vendor confidential platform**: Security + accessible ✗ Decentralized trust
 
-**KubeTEE AI delivers all three.**
-
----
-
-## KubeTEE AI vs Palantir: Enterprise AI Comparison
-
-Understanding how KubeTEE AI compares to established enterprise solutions like Palantir helps position our value proposition for system integrators and enterprises.
-
-| **Aspect** | **Palantir** | **KubeTEE AI** |
-|-----------|--------------|----------------|
-| **Business Model** | Proprietary, closed-source with high licensing fees ($2M+ annual contracts) | Open source, decentralized infrastructure with pay-as-you-go pricing |
-| **Technology Stack** | Proprietary platforms (Gotham, Foundry, AIP) | Open source NVIDIA stack (NeMo, NIM, AI Blueprints) |
-| **Infrastructure** | Cloud or on-premises deployment on customer infrastructure | Decentralized multi-cluster Kubernetes across global regions |
-| **Security** | Government-grade security, compliance certifications | FIPS-140-2, TEE (Intel TDX/SGX, NVIDIA CC), Confidential Computing Consortium member |
-| **AI Capabilities** | Proprietary AI/ML, recently added AIP (AI Platform) | Best-in-class NVIDIA AI models, #1 ranked Deep Research Agent |
-| **Deployment Time** | 6-18 months typical implementation | One-command deployment via KubeTEE CLI |
-| **Vendor Lock-in** | High - proprietary technology and data formats | None - open source, standards-based (Kubernetes, OpenInfra) |
-| **Cost Structure** | Multi-million dollar upfront + annual licensing | Usage-based pricing with Alpha token economics |
-| **Customization** | Limited - requires Palantir engineering engagement | Full control - fork, modify, deploy custom solutions |
-| **Data Ownership** | Customer owned but platform-dependent | Customer owned with full control and portability |
-| **Community** | Closed - Palantir employees only | Open - Bittensor community, NVIDIA ecosystem, OpenInfra Foundation |
-| **Integration Approach** | Top-down, enterprise sales | Bottom-up, community integrators and solution providers |
-| **Compliance** | FedRAMP, IL5, various government certifications | FIPS-140-2, working towards FedRAMP, CCC member |
-| **Scalability** | Vertical scaling, centralized | Horizontal scaling, decentralized across global clusters |
-
-### Key Differentiators
-
-**Why Palantir?**
-- Established reputation with government and Fortune 500
-- Proven track record in complex data integration scenarios
-- Deep domain expertise in defense and intelligence sectors
-- Comprehensive support and professional services
-
-**Why KubeTEE AI?**
-- **10-100x Cost Savings**: Pay only for actual usage vs. multi-million dollar contracts
-- **Zero Vendor Lock-in**: Open source stack, migrate anytime
-- **Faster Time-to-Value**: Deploy in hours/days vs. months/years
-- **Best-in-Class AI**: NVIDIA's cutting-edge models and microservices
-- **Community-Driven Innovation**: Bittensor ecosystem accelerates development
-- **Decentralized Resilience**: Multi-region infrastructure with no single point of failure
-- **Distribution Channel**: System integrators can resell and customize
-
-### Complementary Use Cases
-
-KubeTEE AI and Palantir can coexist in enterprise environments:
-
-- **Palantir**: Complex data integration, legacy system connectivity, defense/intelligence operations
-- **KubeTEE AI**: AI workloads, deep research, RAG pipelines, LLM deployment, edge computing
-
-### Target Market Positioning
-
-**Palantir**: Large enterprises and government agencies with $10M+ AI budgets  
-**KubeTEE AI**: 
-- SMBs and mid-market enterprises ($100K-$5M AI budgets)
-- System integrators building solutions for clients
-- Bittensor community members monetizing AI services
-- Organizations seeking open source alternatives
-- Edge computing and multi-region deployments
-
-### AI Agent Market: Big Tech Consolidation
-
-The AI agent market is rapidly consolidating as Big Tech acquires emerging startups at massive valuations:
-
-| **Acquisition** | **Buyer** | **Valuation** | **Date** | **Notable** |
-|----------------|-----------|---------------|----------|-------------|
-| **Manus AI** | Meta | **$2 Billion** | Dec 2025 | Claimed to outperform OpenAI Deep Research |
-| Character.AI | Google | $2.7 Billion | 2024 | Conversational AI agents |
-| Inflection AI | Microsoft | $650 Million | 2024 | Pi chatbot |
-
-**Meta's Manus Acquisition** ([TechCrunch, Dec 29 2025](https://techcrunch.com/2025/12/29/meta-just-bought-manus-an-ai-startup-everyone-has-been-talking-about/)):
-- Singapore-based AI startup founded by Chinese entrepreneurs
-- Demo showed AI agent screening job candidates, planning vacations, analyzing portfolios
-- Raised $75M from Benchmark at $500M valuation in April 2025
-- Grew to $100M+ ARR with millions of users before acquisition
-- Meta will integrate Manus agents into Facebook, Instagram, WhatsApp
-
-**Manus Technical Architecture** ([Helicone Analysis](https://www.helicone.ai/blog/manus-benchmark-operator-comparison)):
-- **GAIA Benchmark**: Achieved state-of-the-art performance across all difficulty levels, surpassing OpenAI Deep Research
-- **Multi-Agent System**: Executor Agent, Planner Agent, Knowledge Agent working in coordination
-- **Powered by Claude** with 29 different tools for browsing, coding, data analysis, and media creation
-- **Sandbox Environment**: Isolated Linux-based sandbox with browser, Python interpreter, and file system
-- **Capabilities**: Autonomous browsing, code execution, research, data visualization, web deployment
-- **Pricing**: $79/month Professional plan vs OpenAI Operator at $200/month
-
-**Why This Matters for KubeTEE AI**:
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                    AI AGENT MARKET CONSOLIDATION                            │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  PROPRIETARY (Big Tech Owned)          OPEN SOURCE (KubeTEE Alternative)    │
-│  ────────────────────────────          ─────────────────────────────────    │
-│                                                                             │
-│  • Manus (Meta) - $2B                  • KubeTEE Deep Research Agent        │
-│  • Character.AI (Google) - $2.7B       • Decentralized, no single owner     │
-│  • Inflection (Microsoft) - $650M      • Community-driven development       │
-│  • OpenAI (Microsoft invested)         • TEE-secured, trustless             │
-│  • Anthropic (Google/Amazon)           • No vendor lock-in                  │
-│                                                                             │
-│  Risk: Acquired startups become        Benefit: Open source can't be        │
-│        locked into Big Tech            acquired—the network owns itself     │
-│        ecosystems                                                           │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-**KubeTEE's Decentralized Advantage**:
-- ✅ **No platform lock-in** — Unlike Manus (now locked to Meta ecosystem)
-- ✅ **Privacy-first** — TEE ensures data never leaves secure enclave
-- ✅ **Open innovation** — Anyone can contribute and monetize
-- ✅ **Censorship-resistant** — No single entity can shut it down
-
-As Big Tech consolidates AI agents, KubeTEE AI represents the **decentralized alternative** for organizations that want cutting-edge Deep Research capabilities without platform dependency.
-
-### What Makes KubeTEE Deep Research Agent Different
-
-> **🔑 KEY DIFFERENTIATOR: Privacy & Compliance** — KubeTEE is the only Deep Research Agent where your private data **never leaves your control** and is processed inside hardware-secured Trusted Execution Environments.
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│              KUBETEE vs OTHER DEEP RESEARCH AGENTS                          │
-├──────────────────┬──────────────────┬──────────────┬────────────────────────┤
-│ Feature          │ Manus/OpenAI     │ Perplexity   │ KubeTEE AI             │
-├──────────────────┼──────────────────┼──────────────┼────────────────────────┤
-│ Private Data RAG │ ⚠️ Data upload   │ ❌ No        │ ✅ TEE-Protected       │
-├──────────────────┼──────────────────┼──────────────┼────────────────────────┤
-│ Data Privacy     │ ❌ Their cloud   │ ❌ Cloud     │ ✅ Confidential Compute│
-├──────────────────┼──────────────────┼──────────────┼────────────────────────┤
-│ Open Source      │ ❌ Proprietary   │ ❌ GPT       │ ✅ 100% Open Source    │
-├──────────────────┼──────────────────┼──────────────┼────────────────────────┤
-│ Subnet Integ.    │ ❌ None          │ ❌ None      │ ✅ Bittensor ecosystem │
-├──────────────────┼──────────────────┼──────────────┼────────────────────────┤
-│ Self-Hosted      │ ❌ No            │ ❌ No        │ ✅ Your infrastructure │
-└──────────────────┴──────────────────┴──────────────┴────────────────────────┘
-```
-
-**⚠️ The Problem with Manus/OpenAI RAG**:
-- They **CAN** do RAG on your data, but you must either:
-  - 📤 **Upload your private data** to their cloud servers
-  - 🔓 **Grant API access** to your internal systems
-- Your data is processed on **their non confidential infrastructure** — you trust them not to:
-  - Use your data for training
-  - Expose it to breaches
-  - Share with third parties
-- **No regulatory compliance** for sensitive industries (healthcare, finance, government)
-
-**🔐 KubeTEE's Privacy-First RAG** (Subscription Tiers):
-- **NeMo Ingestor**: Ingest all unstructured data types (PDFs, images, videos, audio, documents)
-- **[CyborgDB](https://www.cyborg.co/) Encrypted Vector Store**: End-to-end encrypted embeddings — at rest, in transit, and in-use
-- **TEE-Protected**: All processing happens inside Trusted Execution Environment
-  - Even KubeTEE infrastructure operators **cannot access your data**
-  - Hardware-level isolation (Intel TDX/SGX, NVIDIA Confidential Computing)
-- **Enterprise Compliance**: HIPAA, SOC2, GDPR, FedRAMP-ready
-- **Cryptographic Attestation**: Verify the exact code running on your data
-
-**🧠 Your Own Custom LLM** (via NVIDIA Data Flywheel):
-- **Fine-tune on your private data**: Train a custom LLM model using your proprietary data
-- **The model is yours only**: Your fine-tuned model is never shared with anyone else
-- **TEE-Protected Training**: Fine-tuning happens inside Trusted Execution Environment
-- **Encrypted Storage**: Model weights stored encrypted, accessible only by you
-- **Continuous Improvement**: Data Flywheel automatically improves your model from usage patterns
-- **No data leakage**: Unlike cloud fine-tuning services, your training data never leaves the secure enclave
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                    YOUR PRIVATE DATA FLYWHEEL                               │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│   Your Private Data ──► NeMo Ingestor ──► TEE-Protected Fine-Tuning         │
-│         │                                          │                        │
-│         │                                          ▼                        │
-│         │                              ┌─────────────────────┐              │
-│         │                              │  YOUR CUSTOM LLM    │              │
-│         │                              │  (Encrypted Storage)│              │
-│         │                              │  Only YOU can access│              │
-│         │                              └─────────────────────┘              │
-│         │                                          │                        │
-│         └──────────────────────────────────────────┘                        │
-│                     Continuous improvement loop                             │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-**🔓 100% Open Source LLM Models**:
-- Unlike Manus (Claude) or OpenAI (GPT-4), KubeTEE uses **only open source models**
-- No vendor lock-in to proprietary model providers
-- Full transparency and auditability of model behavior
-- Community-driven model improvements via Benchmark Competition and Bounty mechanisms
-
-**🌐 Bittensor Subnet Integrations** (Unique to KubeTEE):
-
-> 📊 See full [Subnet Integrations Diagram](./docs/subnet-integrations-diagram.md) for visual architecture
-
-| Subnet | Name | Integration Purpose |
-|--------|------|---------------------|
-| **SN01** | Apex | Agentic reasoning datasets (millions of tokens/day) |
-| **SN03** | Templar | Model pre-training from scratch |
-| **SN06** | Numinous | Superhuman forecasting oracle for predictions |
-| **SN09** | IOTA | Distributed pre-training orchestration |
-| **SN13** | Data Universe | Decentralized data sourcing (55B+ social posts) |
-| **SN22** | Desearch | Decentralized web search replacing Tavily |
-| **SN37** | Aurelius | AI alignment — red-teaming and safety verification |
-| **SN52** | Dojo | Human-validated data samples |
-| **SN56** | Gradients | Decentralized fine-tuning |
-| **SN60** | Bitsec | Security scanning for code and vulnerabilities |
-| **SN62** | Ridges | AI-powered coding assistance |
-| **SN75** | Hippius | Decentralized cloud storage for datasets/models |
-| **SN79** | τaos | Financial market simulation and backtesting |
-| **SN120** | Affine | RL-trained open source models outperforming Nemotron 49B |
-
-
-
-These integrations create a **compounding effect** — each subnet specializes in one capability, and KubeTEE orchestrates them into a unified Deep Research Agent that outperforms monolithic solutions.
+**KubeTEE AI Factory delivers all three.**
 
 ---
 
@@ -682,7 +249,7 @@ These integrations create a **compounding effect** — each subnet specializes i
 #### Kubernetes High Availability
 
 **RKE2 Rancher Kubernetes**
-- [FIPS-140-2](https://docs.rke2.io/security/fips_support) U.S. Federal Government Grade Security
+- [FIPS-140-2 validated](https://docs.rke2.io/security/fips_support) U.S. Federal Government Grade Security, with FIPS-140-3 as the Early Access target
 - Fully conformant distribution focused on security and compliance
 
 **Multi-Cluster Management**
@@ -695,13 +262,31 @@ These integrations create a **compounding effect** — each subnet specializes i
 - Project-based resource isolation
 - Fleet workspaces for multi-tenancy
 
+#### Armada Multi-Cluster Batch Scheduling
+
+[Armada](https://armadaproject.io/) ([GitHub](https://github.com/armadaproject/armada)) is a CNCF Sandbox multi-cluster Kubernetes batch scheduler. It transforms Kubernetes into a high-throughput batch platform while remaining compatible with service workloads, and is used in production to run millions of jobs per day across tens of thousands of nodes.
+
+**Component placement**:
+- **Armada Server** (controller, scheduler, lookout + Pulsar/Redis/Postgres) runs on the **subnet-owner control plane** alongside the validator
+- **Armada Executor + Installer** run on **each miner cluster**, turning the cluster into a scheduling target (pool)
+- Jobs are submitted to **Armada queues** and scheduled across miner clusters with **fair-use queuing**, **gang scheduling**, and **preemption**
+
+**Confidential execution**:
+- Jobs land on nodes with a confidential `runtimeClassName`:
+  - `kata-qemu-nvidia-gpu-tdx` — Confidential GPU (Intel TDX + NVIDIA GPU passthrough)
+  - `kata-qemu-tdx` — Confidential CPU-only (Intel TDX, no GPU)
+  - `nvidia` — Non-confidential GPU (staging/dev only)
+- **CoCo** handles transparent confidential image decryption and remote attestation via the KBS, so unmodified containers run inside the TEE
+
+Armada addresses Kubernetes batch limitations that matter for the Factory: single-cluster scaling limits, etcd throughput ceilings, and the lack of fair-use / gang scheduling in the default kube-scheduler.
+
 ### Security & Compliance
 
 #### Confidential Computing Features
 
 **Trusted Execution Environment (TEE)**
 - Intel TDX/SGX
-- NVIDIA Hopper/Blackwell PCIe Protected Mode
+- NVIDIA Hopper/Blackwell/Vera Ruben
 - Kata Containers for workload isolation
 - Confidential Containers with Workload Identity Validation
 
@@ -713,7 +298,7 @@ These integrations create a **compounding effect** — each subnet specializes i
 #### Data Protection
 - **Rancher Longhorn**: Encrypted Storage with 3 Replicas
 - Encrypted Container Repository
-- External Secrets Manager (Vault)
+- External Secrets Manager (Vault & CoCo KBS Trustee)
 
 #### Monitoring & Audit
 - Prometheus Metrics
@@ -726,1709 +311,163 @@ These integrations create a **compounding effect** — each subnet specializes i
 #### Subnet Owner Infrastructure
 - Global Multi-Cluster Control Plane with Rancher on Confidential Computing TEE
 - Rancher Multi-Cluster Management with Fleet for GitOps
-  - RKE2 Rancher Kubernetes with FIPS-140-2 deployment
+  - RKE2 Rancher Kubernetes with FIPS-140-3 target (FIPS-140-2 validated baseline)
   - Kata Containers (TEE)
   - [Confidential Containers](https://confidentialcontainers.org/docs/overview/) Operator
+  - Armada Server (controller, scheduler, lookout + Pulsar/Redis/Postgres)
 
 #### Miner Infrastructure
 - RKE2 Rancher Kubernetes
 - One Cluster per Miner (identified by hotkey/coldkey, not UID)
+  - One data center per cluster — all nodes co-located in a single DC
   - Regional deployment (One Region/Zone Control Plane with same region workers)
   - Cluster labeled with `kubetee.ai/` prefixed labels for permanent identification
   - Required labels: `kubetee.ai/continent`, `kubetee.ai/country`, `kubetee.ai/city`, `kubetee.ai/miner-hotkey`, `kubetee.ai/miner-coldkey`, `kubetee.ai/miner-uid`
 - Kata Containers and CoCo Containers (TEE)
+- Armada Executor + Installer (scheduled by the subnet-owner Armada Server)
 - Fleet Agent for automated deployments
 
 **Important**: Clusters are labeled with `kubetee.ai/miner-hotkey` and `kubetee.ai/miner-coldkey` for permanent identification. These labels never change, while `kubetee.ai/miner-uid` can be updated if a miner deregisters and re-registers on the subnet.
 
+### Early Access Topology
+
+The first deployment targets two clusters in the USA, one hotkey each, all nodes co-located in a single data center per cluster:
+
+```mermaid
+flowchart LR
+    subgraph owner["Subnet Owner Control Plane (stagingrancher)"]
+        Validator["Validator\nweights + emissions"]
+        ArmadaServer["Armada Server\nscheduler + queues\nPulsar/Redis/Postgres"]
+    end
+    subgraph clusterA["Miner Cluster A — 1 hotkey, 1 DC (USA)"]
+        ExecA["Armada Executor"]
+        NodeA["GPU nodes\nkata-qemu-nvidia-gpu-tdx"]
+    end
+    subgraph clusterB["Miner Cluster B — 1 hotkey, 1 DC (USA)"]
+        ExecB["Armada Executor"]
+        NodeB["GPU nodes\nkata-qemu-nvidia-gpu-tdx"]
+    end
+    Client["Job Submitter\nNeMo/NIM/Blueprint job"] -->|submit| ArmadaServer
+    ArmadaServer -->|schedule| ExecA
+    ArmadaServer -->|schedule| ExecB
+    ExecA --> NodeA
+    ExecB --> NodeB
+    NodeA -.->|attestation + metrics| Validator
+    NodeB -.->|attestation + metrics| Validator
+    Validator -->|set weights| Chain["Bittensor\nemissions"]
+```
+
 ---
 
-## AI Technology Stack
+## Supported AI Workloads (Job Types)
 
-### Core Blueprints
+KubeTEE AI Factory schedules AI workloads as Armada batch jobs that execute inside Kata + CoCo TEE pods. The Factory ships with first-class job templates built on the NVIDIA AI stack — NeMo Microservices, NIM models, and AI Blueprints — and any containerized batch job can be submitted to an Armada queue.
 
-#### 1. NVIDIA AIQ Research Assistant
-
-[NVIDIA AIQ Research Assistant Blueprint](https://github.com/KubeTEE-AI-Blueprints/aiq-research-assistant) - Best-in-class Open Source Tech Stack using Open Source Models
-
-**Framework-Agnostic Architecture:**
-
-Built on the [**NVIDIA NeMo Agent Toolkit**](https://github.com/NVIDIA/NeMo-Agent-Toolkit), an open-source library that is **framework-agnostic** and designed to efficiently connect and optimize teams of AI agents. The toolkit complements any existing agentic framework you're using and isn't tied to any specific framework, long-term memory, or data source.
-
-**Supported Agentic Frameworks:**
-- **[LangGraph](https://github.com/langchain-ai/langgraph)** & **[LangChain](https://github.com/langchain-ai/langchain)**: Primary framework used in AIQ for building the deep research agent with human-in-the-loop capabilities
-- **[CrewAI](https://github.com/joaomdmoura/crewAI)**: Multi-agent collaboration framework
-- **[LlamaIndex](https://github.com/run-llama/llama_index)**: Data framework for LLM applications
-- **[Semantic Kernel](https://github.com/microsoft/semantic-kernel)**: Microsoft's AI orchestration framework
-- **[Google Agent Development Kit (ADK)](https://github.com/google/agent-dev-kit)**: Google's framework for building AI agents
-- **Custom Frameworks**: Integrate with any agentic framework of your choice
-
-**Built-in Integrations:**
-- **Observability Platforms**: Arize Phoenix, Weights & Biases (W&B) Weave, Langfuse, plus OpenTelemetry compatibility
-- **Model Context Protocol (MCP)**: Full MCP support as both client and server
-- **Memory Systems**: Mem0ai and custom memory solutions
-- **Evaluation Tools**: RAGAS for RAG evaluation and built-in evaluation system
-- **Storage**: Redis, MinIO, and custom data sources
-
-**Key Capabilities:**
-- 🔗 **Framework-Agnostic**: Works with your existing tools and frameworks
-- 🔁 **Reusable Components**: Every agent, tool, and workflow exists as composable function calls
-- ⚡ **Rapid Development**: Start with pre-built agents and customize to your needs
-- 📈 **Profiling & Observability**: Track performance, tokens, timings, and execution flows
-- 🧪 **Built-in Evaluation**: Validate and maintain accuracy of agentic workflows
-- 💬 **User Interface**: Chat interface to interact with agents and debug workflows
-
-This means developers can use **any agentic framework they prefer** (LangChain, CrewAI, LlamaIndex, Semantic Kernel, etc.) and easily extend, customize, and integrate the AIQ Research Assistant into their existing workflows and applications.
-
-#### 2. NVIDIA RAG Blueprint
-
-[NVIDIA RAG Blueprint](https://github.com/KubeTEE-AI-Blueprints/rag) - Enterprise RAG pipeline with industry-leading performance
-
-![NVIDIA RAG Blueprint Architecture](https://assets.ngc.nvidia.com/products/api-catalog/build-an-enterprise-rag-pipeline/diagram.jpg)
-
-**Key Components**:
-- [NV-INGEST](https://github.com/KubeTEE-AI/nv-ingest) - Automated Ingestion of Enterprise Data
-- NVIDIA Llama Nemotron VL 8B - [#1 OCRBench V2 Leaderboard](https://huggingface.co/spaces/ling99/OCRBench-v2-leaderboard)
-
-#### 3. NVIDIA Streaming Data to RAG
-
-[KubeTEE Streaming Data to RAG](https://github.com/KubeTEE-AI-Blueprints/streaming-data-to-rag) - Stream data ingestion ETL pipeline with [Context Aware RAG](https://github.com/KubeTEE-AI-Blueprints/context-aware-rag)
-
-![Streaming Data to RAG Architecture](https://github.com/KubeTEE-AI-Blueprints/streaming-data-to-rag/raw/main/docs/arch-diagram.png)
-
-#### 4. NVIDIA NeMo Retriever Microservice
-
-[NVIDIA NeMo Retriever](https://developer.nvidia.com/nemo-retriever) - Sets new standards for enterprise RAG applications with first-place performance across three top visual document retrieval leaderboards:
-- [ViDoRe V1 & V2](https://huggingface.co/spaces/vidore/vidore-leaderboard)
-- [MTEB VisualDocumentRetrieval](https://huggingface.co/spaces/mteb/leaderboard)
-
-#### 5. NVIDIA Data Flywheel
-
-[NVIDIA Data Flywheel](https://github.com/KubeTEE-AI-Blueprints/data-flywheel) - Autonomous self-improvement through Reinforcement Learning (RL) from prompt response logs in ElasticSearch
-
-#### 6. NVIDIA Video Search and Summarization
-
-[NVIDIA Video Search and Summarization Blueprint](https://github.com/KubeTEE-AI-Blueprints/video-search-and-summarization) - Ingest massive volumes of live or archived videos and extract insights for summarization and interactive Q&A
-
-**Key Capabilities**:
-- 🎥 **Video Analytics AI Agent**: Natural language tasks for complex operations like video summarization and visual question-answering
-- 🔍 **Multi-hop Reasoning**: Deeper contextual understanding with graph and vector databases
-- 📊 **Scalable Architecture**: Efficient management of extensive video data with short-term (chat history) and long-term memory (vector/graph DB)
-
-**Software Components**:
-- **VLM**: Cosmos Reason1 7B for visual understanding
-- **LLM**: Llama 3.1 70B/8B for language processing
-- **Embeddings**: llama-3.2-nv-embedqa-1b-v2
-- **Reranker**: llama-3.2-nv-rerankqa-1b-v2
-
-**Supported GPU Topologies**: 8xH100, 8xH200, 8xB200
-
-#### Additional Services
-
-- [Tavily Web Search](https://www.tavily.com/) - Real-time web search capabilities
-- Implement [Subnet 22 deSearch](https://desearch.ai/)
 
 ### NVIDIA NeMo Microservices
 
-> Each cluster will provide a shared mTLS secure and High Availability NeMo Microservices infrastructure
-
-[NVIDIA NeMo Microservices](https://docs.nvidia.com/nemo/microservices/latest/about/index.html) - API-first modular tools for customizing, evaluating, and securing LLMs and embedding models on Kubernetes with TEE
-
-![NVIDIA NeMo Microservices Architecture](https://docs.nvidia.com/nemo/microservices/latest/_images/architecture-topology.png)
-
-**Available Microservices**:
-
-| Service | Description |
-|---------|-------------|
-| **NeMo Customizer** | Fine-tuning of LLMs and embedding models using full-supervised and parameter-efficient techniques |
-| **NeMo Evaluator** | Comprehensive evaluation capabilities supporting academic benchmarks, custom evaluations, and LLM-as-a-Judge |
-| **NeMo Guardrails** | Safety checks and content moderation protecting against hallucinations, harmful content, and vulnerabilities |
-| **NeMo Data Designer** | (Early Access) High-quality synthetic dataset generation |
-| **NeMo Auditor** | (Early Access) Security and harmful content auditing for models and agentic applications |
-| **NeMo Data Store** | Default file storage compatible with Hugging Face Hub client (HfApi) |
-| **NeMo Entity Store** | Management tools for namespaces, projects, datasets, and models |
-| **NeMo Deployment Management** | API for deploying and managing NIM via NIM Operator |
-| **NeMo NIM Proxy** | Unified endpoint for accessing all deployed NIM for inference |
-| **NeMo Operator** | Manages custom resource definitions (CRDs) for fine-tuning jobs |
-
-### NVIDIA NIM Models
-
-#### Language Models
-- NVIDIA Llama3.3 Nemotron 49B Super V1.5
-
----
-
-#### NVIDIA Llama 3.3 Nemotron Super 49B V1.5 — Model Summary
-
-> **Primary Model for KubeTEE AI Deep Research Agent**
-> 
-> [📄 Model Card (Hugging Face)](https://huggingface.co/nvidia/Llama-3_3-Nemotron-Super-49B-v1_5) | [🔒 STIG/FIPS Container (NGC)](https://catalog.ngc.nvidia.com/orgs/nim/teams/nvidia/containers/llama-3.3-nemotron-super-49b-v1.5-pb25h2?version=1.14.0-pb5.1-stig-fips-x86-64) | [📚 Research Paper](https://arxiv.org/abs/2505.00949)
-
-| Property | Value |
-|----------|-------|
-| **Model Developer** | NVIDIA |
-| **Architecture** | Dense decoder-only Transformer (NAS-optimized) |
-| **Base Model** | Meta Llama-3.3-70B-Instruct |
-| **Parameters** | 49 billion |
-| **Context Length** | 128K tokens |
-| **Max I/O Tokens** | 131,072 |
-| **Tensor Type** | BF16 |
-| **Training Period** | November 2024 – July 2025 |
-| **License** | [NVIDIA Open Model License](https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-open-model-license/) + [Llama 3.3 Community License](https://www.llama.com/llama3_3/license/) |
-
-**Key Capabilities:**
-- ✅ **Reasoning Model**: Post-trained for advanced reasoning, human chat preferences, and agentic tasks
-- ✅ **RAG & Tool Calling**: Native support for retrieval-augmented generation and tool use
-- ✅ **Dual Reasoning Modes**: Toggle between reasoning ON (detailed thinking) and reasoning OFF (fast responses)
-- ✅ **Multi-language**: English primary + German, French, Italian, Portuguese, Hindi, Spanish, Thai
-- ✅ **Commercial Ready**: Approved for commercial use
-
-**Neural Architecture Search (NAS) Innovation:**
-The model uses NVIDIA's novel [Puzzle NAS approach](https://arxiv.org/abs/2411.19146) to reduce Meta's 70B model to 49B parameters while maintaining quality:
-- **Skip Attention**: Some blocks skip attention entirely or use single linear layers
-- **Variable FFN**: Different expansion/compression ratios per block
-- **Single GPU Deployment**: Fits on a single H200 GPU at high workloads
-- **Block-wise Distillation**: 40B tokens across FineWeb, Buzz-V1.2, and Dolma datasets
-
-**Multi-Phase Post-Training:**
-1. **Supervised Fine-Tuning (SFT)** — Math, Code, Science, Tool Calling
-2. **Reward-aware Preference Optimization (RPO)** — Chat alignment
-3. **Reinforcement Learning with Verifiable Rewards (RLVR)** — Reasoning enhancement
-4. **Iterative Direct Preference Optimization (DPO)** — Tool calling improvements
-
-**Benchmark Performance (Reasoning ON, avg. over multiple runs):**
-
-| Benchmark | Score |
-|-----------|-------|
-| MATH500 | 97.4 |
-| AIME 2024 | 87.5 |
-| AIME 2025 | 82.71 |
-| GPQA | 71.97 |
-| LiveCodeBench 24.10-25.02 | 73.58 |
-| BFCL v3 (Tool Calling) | 71.75 |
-| IFEval (Strict:Instruction) | 88.61 |
-| ArenaHard | 92.0 |
-| MMLU Pro (CoT) | 79.53 |
-
-**Recommended Settings:**
-- **Reasoning ON**: Temperature `0.6`, Top P `0.95`
-- **Reasoning OFF**: Greedy decoding (set `/no_think` in system prompt)
-
-> **KubeTEE AI wants to improve the model with Bittensor Subnet 120 Affine**
->
-> Check out the [🏆 Affine SN120 — Model Benchmark Challenge](#-affine-sn120--model-benchmark-challenge).
-> Participate to tune, evaluate, or submit models, and help drive new SOTA. Top-performing models will be integrated into this service!
-//
-
----
-
-#### Retrieval Models
-- NeMo Retriever Llama 3.2 Embedding NIM
-- NeMo Retriever Llama 3.2 Reranking NIM
-- NeMo Retriever Page Elements NIM
-- NeMo Retriever Table Structure NIM
-- NeMo Retriever Graphic Elements NIM
-- NeMo Retriever OCR v1 NIM (Replaces PaddleOCR)
-- NeMo Retriever Parse NIM
-
-#### Safety & Vision Models
-- Llama 3.1 NemoGuard 8B Content Safety NIM
-- Llama 3.1 NemoGuard 8B Topic Control NIM
-- Llama 3.2 11B Vision Instruct NIM
-- Llama Nemotron Nano VL 8B
-
-#### Speech Recognition
-- NVIDIA Riva ASR NIM
+[NVIDIA NeMo Microservices](https://docs.nvidia.com/nemo/microservices/latest/about/index.html) are API-first, modular tools for customizing, evaluating, and securing LLMs and embedding models on Kubernetes. A goal of the KubeTEE AI Factory is to run the full NVIDIA AI stack — NeMo Microservices, NIM models, and AI Blueprints — inside Confidential Computing (Kata + CoCo TEE), scheduled as Armada batch jobs. Each cluster exposes a shared mTLS-secured, high-availability NeMo Microservices infrastructure.
 
 ---
 
 ## Subnet Economics
 
-### Native Bittensor Multiple Incentive Mechanisms
+### Incentive Mechanism: Infrastructure (Early Access)
 
-KubeTEE AI uses the **native Bittensor Multiple Incentive Mechanisms** feature as documented at [docs.learnbittensor.org](https://docs.learnbittensor.org/subnets/understanding-multiple-mech-subnets).
+KubeTEE Early Access uses a **single Infrastructure incentive mechanism**. Miners earn Bittensor emissions by providing confidential compute capacity and reliably executing Armada-scheduled jobs. Emissions are **emissions-only** in Early Access — Alpha, Subnet Alpha, TAO, USDC job billing are a Roadmap item (Phase 2).
 
-This provides:
-- **Independent weight matrices** per mechanism
-- **Separate bond pools** (independent Yuma Consensus)
-- **On-chain emission splits** (transparent configuration)
-- **Independent scoring** per mechanism
+**Purpose**: Reward miners for providing Kubernetes infrastructure that runs confidential AI jobs scheduled by Armada.
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│              KubeTEE AI Multi-Mechanism Incentive Model                     │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│   ═══════════════════════════════════════════════════════════════════════   │
-│   ║                 ON-CHAIN SUBNET EMISSIONS (100%)                    ║   │
-│   ═══════════════════════════════════════════════════════════════════════   │
-│                                    │                                        │
-│          ┌─────────────────────────┼─────────────────────────┐              │
-│          ▼                         ▼                         ▼              │
-│  ┌───────────────────┐   ┌───────────────────┐   ┌───────────────────┐      │
-│  │   MECHANISM 0     │   │   MECHANISM 1     │   │   MECHANISM 2     │      │
-│  │   INFRASTRUCTURE  │   │   BENCHMARK       │   │   BOUNTY          │      │
-│  │      (60%)        │   │   COMPETITION     │   │   TREASURY        │      │
-│  │                   │   │      (30%)        │   │      (10%)        │      │
-│  ├───────────────────┤   ├───────────────────┤   ├───────────────────┤      │
-│  │ • K8s Infra       │   │ • DeepResearch    │   │ • GitHub Issues   │      │
-│  │ • TEE Compliance  │   │   Benchmark       │   │ • Fixed TAO Value │      │
-│  │ • Service QoS     │   │ • Lifetime Score  │   │ • Manual Payout   │      │
-│  │ • Uptime          │   │   with Decay      │   │ • Subnet Owner    │      │
-│  └───────────────────┘   └───────────────────┘   └───────────────────┘      │
-│          │                         │                         │              │
-│          ▼                         ▼                         ▼              │
-│  ┌───────────────────┐   ┌───────────────────┐   ┌───────────────────┐      │
-│  │   Independent     │   │   Independent     │   │   Treasury Key    │      │
-│  │   Weight Matrix   │   │   Weight Matrix   │   │   Accumulates     │      │
-│  │   & Bond Pool     │   │   & Bond Pool     │   │   Emissions       │      │
-│  └───────────────────┘   └───────────────────┘   └───────────────────┘      │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
+**Key Feature**: Emissions are distributed per resources provided (GPU nodes), weighted by attested TEE health, job-execution quality, and uptime.
 
-**Miners can participate in ALL mechanisms!** Provide infrastructure (Mechanism 0), improve benchmarks (Mechanism 1), and complete bounties (Mechanism 2) to earn from multiple emission pools.
-
-### Mechanism 0: Infrastructure (60% Emissions)
-
-> 📋 **Implementation Bounty:** [GitHub Issue #2](https://github.com/KubeTEE-AI/kubetee-subnet/issues/2)
-
-**Purpose**: Reward miners for providing Kubernetes infrastructure to serve user AI requests.
-
-**Key Feature**: **Emissions are distributed per resources provided** (GPU nodes)
-
-**⚠️ Mandatory Requirement**:
+**Mandatory Requirement**:
 - **TEE Attestation** (Intel TDX/SGX, NVIDIA CC) must be proven — **no attestation = no emissions**
 
-**Emission Allocation** (per node type with 8 GPUs):
-
-| GPU Node Type | Base Weight | Description |
-|---------------|-------------|-------------|
-| **H100** | 1.0x | Base tier |
-| **H200** | 1.5x | Higher memory bandwidth |
-| **B200** | 2.0x | Next-gen Blackwell |
-| **B300** | 2.5x | Top-tier Blackwell |
-
-**Quality Multipliers** (applied to base weight):
-
-| Criteria | Weight | Description |
-|----------|--------|-------------|
-| **Resource Utilization** | 35% | Most important — target 80% capacity (±5% tolerance) |
-| **Uptime** | 30% | Target 99.9%+ availability |
-| **Bandwidth** | 20% | Network throughput — 10Gbps baseline |
-| **Latency** | 15% | Response time quality |
-
-**⚠️ Resource Utilization Penalties**:
-- **Above 85% capacity**: Penalized — cluster is overloaded, cannot serve additional requests
+**Resource Utilization Guidance**:
 - **Below 75% capacity**: Penalized — underutilized, not contributing proportionally to subnet demand
-- **Target: 80% capacity**: Optimal — ensures miners provide exactly what the subnet needs
+- **Target ~80% capacity**: Optimal — ensures miners provide exactly what the subnet needs
 
 **Benefits**:
-- ✅ TEE compliance is enforced, not optional
-- ✅ Clear incentive to provide higher-tier GPU nodes
-- ✅ Resource utilization ensures balanced subnet capacity — no over/under provisioning
+- TEE compliance is enforced, not optional
+- Clear incentive to provide higher-tier GPU nodes
+- Job-execution quality rewards miners that reliably run confidential workloads
+- Resource utilization ensures balanced subnet capacity — no over/under provisioning
 
 #### Staging vs Production
 
 **Staging Environment** (Permissionless):
 - Test applications, infrastructure, upgrades, benchmarks
 - Gateway to Production environment
-- Kata Containers Community Staging infrastructure
+- Community Staging jobs
 
-**Production Environment** (KYC Required):
-- Multi-Clusters (one per data center per miner)
-- Must pass Staging validation
-- KYC mandatory for laws & regulations
+**Production Environment** (After Staging testing Period):
+- Multi-Clusters (one per data center per miner hotkey)
+- Must pass Staging validation period
+- Optional KYC for regulated workloads.
 
-### Mechanism 1: Benchmark Competition (30% Emissions)
+### Payments & Revenue (Roadmap)
 
-**Purpose**: Reward miners for improving the KubeTEE AI performance on the [DeepResearch Benchmark](https://huggingface.co/spaces/Ayanami0730/DeepResearch-Leaderboard).
+Early Access is **emissions-only**. The following payment and revenue mechanisms are designed and drafted (smart contracts in [`contracts/`](contracts/)) and will activate in Phase 2 (see [Roadmap](#roadmap)):
 
-**Key Feature**: **Lifetime Score with Decay** — Early benchmark improvers continue earning even after others improve further. This rewards pioneers while keeping the ecosystem dynamic.
-
-#### Lifetime Score with Decay
-
-**Core Principle**: Your contribution value persists but gradually fades, like academic citations.
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│              LIFETIME SCORE WITH DECAY MODEL                                │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  PHILOSOPHY:                                                                │
-│  ───────────                                                                │
-│  • Each benchmark improvement earns PERMANENT scoring rights                │
-│  • Scores DECAY SLOWLY (5% monthly) to keep ecosystem dynamic               │
-│  • DECAY FLOOR (30%) ensures historical contributions never become worthless│
-│  • System rewards QUALITY over quantity while remaining fair to newcomers   │
-│                                                                             │
-│  MATHEMATICAL FLOW:                                                         │
-│  ──────────────────                                                         │
-│                                                                             │
-│  Initial State:    Lifetime Score = 0                                       │
-│                                                                             │
-│  After Improvement: Score = 0 + 5.0 = 5.0                                   │
-│                     (5% benchmark improvement)                              │
-│                                                                             │
-│  Month 1:          Score = 5.0 × 0.95 = 4.75                                │
-│  Month 2:          Score = 4.75 × 0.95 = 4.51                               │
-│  Month 3:          Score = 4.51 × 0.95 = 4.29                               │
-│  ...                                                                        │
-│  Month 12:         Score = 5.0 × (0.95)^12 = 2.71                           │
-│  ...                                                                        │
-│  Month 24+:        Score = 1.5 (FLOOR: 30% of original)                     │
-│                                                                             │
-│  After Another     Score = 2.71 + 3.0 = 5.71                                │
-│  Improvement:      (old decayed + new contribution)                         │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-**Decay Parameters** (Recommended Configuration):
-
-| Parameter | Value | Rationale |
-|-----------|-------|-----------|
-| **Decay Rate** | 5%/month | Balanced dynamics — ~12 month half-life |
-| **Decay Floor** | 30% | Fair legacy reward — contributions never hit zero |
-| **Decay Frequency** | Monthly | Simple, predictable for miners |
-
-**Why This Works**:
-- ✅ **Fair to pioneers** — Early improvers earn for months/years
-- ✅ **Newcomers can compete** — Decay prevents early-miner dominance
-- ✅ **Quality incentives** — Larger improvements = larger scores
-- ✅ **Sustainable growth** — System scales as subnet matures
-
-#### How Validators Set Weights (Mechanism 1)
-
-Per [Bittensor's multiple mechanism model](https://docs.learnbittensor.org/subnets/understanding-multiple-mech-subnets), validators must set weights on **miner hotkeys** based on their **Lifetime Benchmark Scores**.
-
-**♻️ NATIVE RECYCLE MECHANISM**: Unused emissions are **automatically recycled** back to the emission pool when validators set weight to **UID 0** or the **subnet owner key**. This ensures emissions only go to active benchmark improvers — the remainder is recycled and redistributed in the next epoch.
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│              VALIDATOR WEIGHT SETTING (MECHANISM 1 - BENCHMARKS)            │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  DATA SOURCES                      VALIDATOR                 WEIGHTS        │
-│  ────────────                      ─────────                 ───────        │
-│                                                                             │
-│  ┌──────────────────┐                                                       │
-│  │  GitHub API      │──┐                                                    │
-│  │  - PR authors    │  │     ┌─────────────────────┐                        │
-│  │  - Benchmark PRs │  │     │                     │    ┌──────────────┐    │
-│  └──────────────────┘  │     │  Validator Script   │───▶│  Mechanism 1 │    │
-│                        ├────▶│                     │    │   Weights    │    │
-│  ┌──────────────────┐  │     │  1. Query GitHub    │    │              │    │
-│  │  Bittensor EVM   │  │     │     for merged PRs  │    │  Alice: 35   │    │
-│  │  KubeTEERegistry │──┤     │  2. Query EVM for   │    │  Bob: 25     │    │
-│  │  - GitHub ↔ HK   │  │     │     GitHub→Hotkey   │    │  Charlie: 15 │    │
-│  │  - Lifetime      │  │     │  3. Read lifetime   │    │  ♻️RECYCLE:25│    │
-│  │    Scores        │  │     │     scores from EVM │    └──────────────┘    │
-│  └──────────────────┘  │     │  4. Update scores   │                        │
-│                        │     │     on EVM contract │                        │
-│  ┌──────────────────┐  │     │  5. Set weights     │                        │
-│  │  DeepResearch    │──┘     │  6. Remainder →     │                        │
-│  │  Benchmark       │        │     UID 0 (RECYCLED │                        │
-│  │  Results         │        │     to emission pool)│                       │
-│  └──────────────────┘        └─────────────────────┘                        │
-│                                                                             │
-│  EMISSION FLOW:                                                             │
-│  ──────────────                                                             │
-│  Mechanism 1 (30%) → Yuma Consensus → Benchmark Improvers + Recycled        │
-│                                                                             │
-│  RECYCLE DESTINATION (via UID 0):                                           │
-│  ─────────────────────────────────                                          │
-│  Recycled Alpha → Emission Pool → Next Epoch Distribution:                  │
-│    • 41% → Miners (based on weights)                                        │
-│    • 41% → Validators (based on bonds)                                      │
-│    • 18% → Subnet Owner                                                     │
-│                                                                             │
-│  EVM INTERACTIONS:                                                          │
-│  ─────────────────                                                          │
-│  VALIDATORS (read-only):                                                    │
-│  • Read: getContributor(github) → Get hotkey + lifetime score               │
-│  • Read: getAllContributors() → List all registered contributors            │
-│                                                                             │
-│  SUBNET OWNER (write access):                                               │
-│  • Write: updateScore(github, improvement) → Add benchmark improvement      │
-│  • Write: applyDecay(github) → Apply monthly 5% decay                       │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-#### Contributor Registration (On-Chain via Bittensor EVM)
-
-**⚠️ REQUIRED**: Benchmark contributors must link their GitHub account to a Bittensor hotkey to receive emissions.
-
-The mapping is stored **on-chain** via a smart contract on **Bittensor EVM** (`KubeTEERegistry.sol`). This ensures:
-- Fully decentralized, trustless registry
-- Immutable history of all registrations
-- Validators read from single source of truth
-- Lifetime scores stored and decayed on-chain
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│              CONTRIBUTOR REGISTRATION (BITTENSOR EVM)                       │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  SMART CONTRACT: KubeTEERegistry.sol on Bittensor EVM                       │
-│  ─────────────────────────────────────────────────────                      │
-│                                                                             │
-│  struct Contributor {                                                       │
-│      bytes32 hotkey;           // Bittensor hotkey (SS58 encoded)           │
-│      uint256 lifetimeScore;    // Current lifetime score (scaled 1e18)      │
-│      uint256 lastDecayEpoch;   // Last epoch decay was applied              │
-│      uint256 registeredAt;     // Block timestamp of registration           │
-│  }                                                                          │
-│                                                                             │
-│  REGISTRATION FLOW:                                                         │
-│  ──────────────────                                                         │
-│                                                                             │
-│  1. REGISTER HOTKEY on KubeTEE subnet (netuid: TBD)                         │
-│     └── btcli subnet register --netuid <TBD> --wallet.name <wallet>         │
-│                                                                             │
-│  2. LINK GITHUB on Bittensor EVM                                            │
-│     └── Call: KubeTEERegistry.register("your-github-username", hotkey)      │
-│     └── Or: kubeteectl link-github --hotkey <HK> --github <username>        │
-│     └── One-time gas fee on Bittensor EVM                                   │
-│                                                                             │
-│  3. IMPROVE BENCHMARKS on KubeTEE-AI repositories                           │
-│     └── Submit PRs that improve DeepResearch Benchmark scores               │
-│     └── Subnet Owner updates your on-chain Lifetime Score each epoch        │
-│                                                                             │
-│  ON-CHAIN REGISTRY STATE:                                                   │
-│  ┌─────────────────────────────────────────────────────────────────────┐    │
-│  │  contributors["alice"] = {                                          │    │
-│  │    hotkey: 0x5FHneW46xR...abc123,                                   │    │
-│  │    lifetimeScore: 15000000000000000000,  // 15.0 (scaled)           │    │
-│  │    lastDecayEpoch: 1705084800,                                      │    │
-│  │    registeredAt: 1704480000                                         │    │
-│  │  }                                                                  │    │
-│  └─────────────────────────────────────────────────────────────────────┘    │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-**Contract Functions**:
-
-| Function | Access | Description |
-|----------|--------|-------------|
-| `register(github, hotkey)` | Anyone | Link GitHub to hotkey (one-time) |
-| `updateScore(github, increase)` | **Subnet Owner only** | Add benchmark improvement score |
-| `applyDecay(github)` | Anyone | Apply monthly 5% decay |
-| `getContributor(github)` | Anyone | Read contributor data |
-| `getAllContributors()` | Anyone | List all registered contributors |
-
-**Access Control**:
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│              SUBNET OWNER AS REGISTRY WRITER                                │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  WHY SUBNET OWNER ONLY?                                                     │
-│  ──────────────────────                                                     │
-│  • Simple: Single source of truth, no consensus complexity                  │
-│  • Trusted: Subnet owner already controls emission configuration            │
-│  • Auditable: All writes visible on-chain, anyone can verify                │
-│  • Efficient: No multi-sig overhead, lower gas costs                        │
-│                                                                             │
-│  WRITE FLOW:                                                                │
-│  ───────────                                                                │
-│                                                                             │
-│  GitHub API ──▶ Subnet Owner ──▶ KubeTEERegistry.updateScore()              │
-│  (PR merged)    (calculates      (writes to Bittensor EVM)                  │
-│                  score)                                                     │
-│                                                                             │
-│  CONTRACT MODIFIER:                                                         │
-│  ──────────────────                                                         │
-│  modifier onlyOwner() {                                                     │
-│      require(msg.sender == subnetOwner, "Only subnet owner");               │
-│      _;                                                                     │
-│  }                                                                          │
-│                                                                             │
-│  function updateScore(string github, uint256 increase) onlyOwner { ... }    │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-**Anti-Gaming Rules (Enforced by Contract)**:
-
-| Rule | Implementation |
-|------|----------------|
-| One hotkey per GitHub | `require(hotkeyToGithub[hotkey] == "")` |
-| One GitHub per hotkey | Check existing mapping before register |
-| 30-day cooldown on changes | `require(block.timestamp - registeredAt > 30 days)` |
-| Decay floor (30%) | Score never drops below 30% of peak |
-| GitHub account age | Account must be > 30 days old |
-
-#### Benchmark Score Calculation
-
-Validators calculate weights based on **Lifetime Benchmark Scores** with decay applied:
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│              BENCHMARK SCORE CALCULATION                                    │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  SCORE FORMULA:                                                             │
-│  ──────────────                                                             │
-│  Benchmark_Score = Improvement_Percentage × Quality_Multiplier              │
-│                                                                             │
-│  Where:                                                                     │
-│  • Improvement_Percentage = (New_Score - Old_Score) / Old_Score × 100       │
-│  • Quality_Multiplier based on benchmark category (1.0x - 3.0x)             │
-│                                                                             │
-│  QUALITY MULTIPLIERS:                                                       │
-│  ────────────────────                                                       │
-│  │  Category                │  Multiplier  │  Description                │  │
-│  │──────────────────────────┼──────────────┼─────────────────────────────│  │
-│  │  DeepResearch Overall    │  3.0x        │  Primary benchmark          │  │
-│  │  GAIA Benchmark          │  2.5x        │  General AI assistant       │  │
-│  │  Inference Speed         │  2.0x        │  Performance optimization   │  │
-│  │  Memory Efficiency       │  1.5x        │  Resource optimization      │  │
-│  │  Other Benchmarks        │  1.0x        │  Secondary metrics          │  │
-│                                                                             │
-│  MONTHLY DECAY:                                                             │
-│  ──────────────                                                             │
-│  New_Lifetime_Score = Old_Lifetime_Score × 0.95                             │
-│  Floor: Never below 30% of original contribution                            │
-│                                                                             │
-│  EXAMPLE (Multi-Miner Ecosystem Over 6 Months):                             │
-│  ───────────────────────────────────────────────                            │
-│                                                                             │
-│  Month 0:                                                                   │
-│    Alice improves DeepResearch by 5% (3.0x multiplier)                      │
-│    Alice Score: 15.0                                                        │
-│    Total Network: 15.0 → Alice Share: 100%                                  │
-│                                                                             │
-│  Month 2:                                                                   │
-│    Alice Score: 13.5 (decayed)                                              │
-│    Bob improves by 3% → Bob Score: 9.0                                      │
-│    Total Network: 22.5 → Alice: 60%, Bob: 40%                               │
-│                                                                             │
-│  Month 6:                                                                   │
-│    Alice Score: 11.4 (still earning from original contribution!)            │
-│    Bob Score: 7.7                                                           │
-│    Charlie improves by 2% → Charlie Score: 6.0                              │
-│    Total Network: 25.1 → Alice: 45%, Bob: 31%, Charlie: 24%                 │
-│                                                                             │
-│  KEY INSIGHT: Alice STILL earns 45% despite not contributing for 6 months!  │
-│               Her pioneer contribution continues generating emissions.      │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-**Daily Emission Distribution Example**:
-
-```
-Today's Network State:
-Total Lifetime Score: 25.1
-Mechanism 1 Daily Emission: 300 TAO (30% of 1000 TAO/day)
-
-Individual Calculations:
-
-Alice (11.4 score):
-├─ Share: 11.4 / 25.1 = 45.4%
-└─ Daily Emission: 136 TAO
-
-Bob (7.7 score):
-├─ Share: 7.7 / 25.1 = 30.7%
-└─ Daily Emission: 92 TAO
-
-Charlie (6.0 score):
-├─ Share: 6.0 / 25.1 = 23.9%
-└─ Daily Emission: 72 TAO
-```
-
-**How to Participate** (Benchmark Improvement Workflow):
-
-1. **Study the benchmark**: Review [DeepResearch Benchmark](https://huggingface.co/spaces/Ayanami0730/DeepResearch-Leaderboard) methodology
-2. **Identify improvements**: Find optimization opportunities in KubeTEE's AI stack
-3. **Submit PR**: Include benchmark results showing improvement percentage
-4. **Wait for validation**: CI/CD runs benchmark tests automatically
-5. **Earn continuously**: Lifetime Score accumulates, decays slowly over time
-
-#### Implementation Bounty
-
-> 📋 **Track progress:** [GitHub Issue #1](https://github.com/KubeTEE-AI/kubetee-subnet/issues/1)
-
----
-
-### Mechanism 2: Bounty Treasury (10% Emissions)
-
-**Purpose**: Fund development bounties for improving the KubeTEE tech stack, NVIDIA Blueprints, and ecosystem tooling.
-
-**Key Feature**: **Treasury Accumulation** — 10% of emissions flow to a treasury key controlled by the subnet owner. Bounties have **fixed TAO values** (paid in Alpha tokens) and are paid **manually** when PRs are merged.
-
-#### Treasury Accumulation
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│              BOUNTY TREASURY MODEL                                          │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  EMISSION FLOW:                                                             │
-│  ──────────────                                                             │
-│                                                                             │
-│  Subnet Emissions (100%)                                                    │
-│         │                                                                   │
-│         ├─── 60% → Mechanism 0 (Infrastructure Miners)                      │
-│         ├─── 30% → Mechanism 1 (Benchmark Improvers)                        │
-│         └─── 10% → Mechanism 2 (Treasury Key)                               │
-│                          │                                                  │
-│                          ▼                                                  │
-│              ┌───────────────────────┐                                      │
-│              │   TREASURY KEY        │                                      │
-│              │   (Subnet Owner)      │                                      │
-│              │                       │                                      │
-│              │   Accumulates Alpha   │                                      │
-│              │   tokens continuously │                                      │
-│              └───────────┬───────────┘                                      │
-│                          │                                                  │
-│                          ▼                                                  │
-│              ┌───────────────────────┐                                      │
-│              │   MANUAL PAYOUTS      │                                      │
-│              │                       │                                      │
-│              │   When PR is merged   │                                      │
-│              │   and validated,      │                                      │
-│              │   subnet owner        │                                      │
-│              │   transfers Alpha     │                                      │
-│              │   to bounty winner    │                                      │
-│              └───────────────────────┘                                      │
-│                                                                             │
-│  WHY TREASURY MODEL:                                                        │
-│  ───────────────────                                                        │
-│  • Simpler than automated bounty hotkeys                                    │
-│  • Fixed TAO values provide clear incentives                                │
-│  • Subnet owner has flexibility on bounty amounts                           │
-│  • No complex age multiplier calculations                                   │
-│  • Transparent — all payouts visible on-chain                               │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-**Bounty Value System**:
-
-Subnet owner sets TAO value per bounty (paid in Alpha tokens at current rate):
-
-| Label | Typical TAO Value | Description |
-|-------|-------------------|-------------|
-| `bounty-value:5τ` | 5 TAO | Quick fixes, documentation |
-| `bounty-value:20τ` | 20 TAO | Standard features, bug fixes |
-| `bounty-value:50τ` | 50 TAO | Complex improvements |
-| `bounty-value:100τ` | 100 TAO | Major features |
-| `bounty-value:custom` | Variable | Subnet owner sets custom amount |
-
-**Category Labels** (for organization):
-
-| Label | Description |
-|-------|-------------|
-| `category:bug-fix` | Bug fixes |
-| `category:feature` | New features |
-| `category:documentation` | Docs improvements |
-| `category:security` | Security fixes |
-| `category:optimization` | Performance optimizations |
-| `category:testing` | Test coverage |
-| `category:integration` | Subnet integrations |
-
-#### Bounty Lifecycle
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                    BOUNTY LIFECYCLE (TREASURY MODEL)                        │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  1. GITHUB ISSUE CREATED with bounty-value:* label                          │
-│     └── Subnet owner creates issue with fixed TAO value                     │
-│     └── Example: Issue #42 with [bounty-value:50τ] [category:feature]       │
-│                                                                             │
-│  2. CONTRIBUTOR SUBMITS PR with "Fixes #42" in commit                       │
-│     └── PR linked to issue automatically                                    │
-│     └── Multiple contributors can compete (first merged wins)               │
-│                                                                             │
-│  3. AUTOMATED CI/CD PIPELINE (GitHub Actions)                               │
-│     ├── Unit tests run                                                      │
-│     ├── Integration tests run                                               │
-│     └── PASS / FAIL                                                         │
-│                                                                             │
-│  4. AI CODE ANALYSIS                                                        │
-│     ├── Claude Code GitHub Actions AI code review                           │
-│     ├── Code quality score (0-100)                                          │
-│     ├── Security scan via Bitsec (SN60)                                     │
-│     └── AI generates approval/suggestions with reasoning                    │
-│                                                                             │
-│  5. SUBNET OWNER REVIEW                                                     │
-│     ├── If CI PASS + AI Score >= 70 → Review and merge                      │
-│     ├── Request changes if needed                                           │
-│     └── Merge when satisfied                                                │
-│                                                                             │
-│  6. MANUAL PAYOUT                                                           │
-│     ├── Subnet owner transfers Alpha tokens from treasury                   │
-│     ├── Amount: TAO value × current Alpha rate                              │
-│     ├── Transaction recorded on-chain                                       │
-│     └── GitHub Issue closed with bounty:completed label                     │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-**How to Participate** (GitHub-Native Workflow):
-
-1. **Browse bounties**: Go to [github.com/KubeTEE-AI](https://github.com/KubeTEE-AI) and look for issues with `bounty-value:*` labels
-2. **Check the TAO value**: Each bounty shows its fixed reward (e.g., `bounty-value:50τ`)
-3. **Comment to claim** (optional): Comment "I'm working on this" to signal interest
-4. **Submit PR**: Include `Fixes #42` in your commit message to link to the issue
-5. **Wait for review**: CI/CD + Claude Code analysis + Bitsec security scan runs automatically
-6. **Get paid**: When merged, subnet owner manually transfers Alpha tokens to your wallet
-
-**Automated Validation Criteria**:
-
-| Check | Tool | Threshold |
-|-------|------|-----------|
-| Unit Tests | pytest | 100% pass |
-| Integration Tests | pytest | 100% pass |
-| **Code Quality** | **Claude Code GitHub Actions** | **Score >= 70/100** |
-| **Security Scan** | **Bitsec (Subnet 60)** | **0 high/critical issues** |
-| Test Coverage | Coverage.py | >= 80% (if tests added) |
-| Documentation | AI Analysis | Required for new features |
-
-#### Security Scanning via Bitsec (Subnet 60)
-
-We integrate with **Bitsec (SN60)** for decentralized security auditing of code submissions. Bitsec uses AI to find code exploits and vulnerabilities in blockchain projects.
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                    BITSEC (SUBNET 60) INTEGRATION                           │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  CODE SUBMISSION                                                            │
-│       │                                                                     │
-│       ▼                                                                     │
-│  ┌─────────────────────────────────────────────────────────────────────┐    │
-│  │                   BITSEC (SN60)                                     │    │
-│  │                                                                     │    │
-│  │   • AI-powered vulnerability detection                              │    │
-│  │   • Smart contract security analysis                                │    │
-│  │   • Code exploit finder                                             │    │
-│  │   • Decentralized security network                                  │    │
-│  │                                                                     │    │
-│  └──────────────────────────────┬──────────────────────────────────────┘    │
-│                                 │                                           │
-│                                 ▼                                           │
-│  ┌─────────────────────────────────────────────────────────────────────┐    │
-│  │  SECURITY REPORT                                                    │    │
-│  │                                                                     │    │
-│  │  Critical: 0  │  High: 0  │  Medium: 2  │  Low: 5                   │    │
-│  │                                                                     │    │
-│  │  Verdict: PASS (no critical/high issues)                            │    │
-│  └─────────────────────────────────────────────────────────────────────┘    │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-**Benefits of Treasury + Claude Code + Bitsec Model**:
-- ✅ **Simple** — Fixed TAO values, no complex calculations
-- ✅ **Transparent** — All payouts visible on-chain
-- ✅ **Flexible** — Subnet owner sets bounty values based on priority
-- ✅ **Quality** — Claude Code AI review ensures high code standards
-- ✅ **Secure** — Bitsec (SN60) integration for automated security scanning
-- ✅ **Fair** — First to merge wins, clear acceptance criteria
-
-### Referrers / Integrators / Resellers: 50% Revenue Share (NO Emissions!)
-
-**⚠️ IMPORTANT**: Referrers do NOT register on the Bittensor subnet and do NOT receive emissions!
-
-Simple **affiliate program** with USDC payouts on BASE:
-
-- **All users pay the same retail price** (direct or via referrer)
-- **Referrers earn 50% of revenue** from users they bring in
-- **Minimum 2 referred users** required to activate commissions
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                    AFFILIATE REVENUE SHARE MODEL (50%)                      │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│   REGISTRATION (Simple - No Bittensor Required!)                            │
-│   ──────────────────────────────────────────────                            │
-│                                                                             │
-│   1. Share your BASE wallet address with users you refer                    │
-│   2. Users run: kubeteectl register --affiliate 0x1234...abcd               │
-│   3. Get 2 paying users → Commissions activated!                            │
-│                                                                             │
-│   ┌─────────────────────────────────────────────────────────────────────┐   │
-│   │                                                                     │   │
-│   │   Your Affiliate Address: 0x1234...abcd                             │   │
-│   │                                                                     │   │
-│   │   Status: ✅ Active (3 paying users)                                │   │
-│   │   Minimum: 2 paying users required                                  │   │
-│   │                                                                     │   │
-│   └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                             │
-│   REVENUE DISTRIBUTION:                                                     │
-│   ─────────────────────                                                     │
-│                                                                             │
-│   ┌─────────────┐    ┌──────────────────────┐    ┌──────────────────────┐   │
-│   │   DIRECT    │    │  VIA AFFILIATE       │    │  VIA INTEGRATOR      │   │
-│   │   USERS     │    │  (BASE Address)      │    │  (White-Label API)   │   │
-│   └──────┬──────┘    └──────────┬───────────┘    └──────────┬───────────┘   │
-│          │                      │                           │               │
-│          ▼                      ▼                           ▼               │
-│   ┌─────────────────────────────────────────────────────────────────────┐   │
-│   │                                                                     │   │
-│   │   DIRECT USER:       100% → KubeTEE                                 │   │
-│   │                                                                     │   │
-│   │   REFERRED USER:     50%  → KubeTEE                                 │   │
-│   │                      50%  → Affiliate (USDC on BASE)                │   │
-│   │                                                                     │   │
-│   └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-**Affiliate Types**:
-
-| Type | Description | Use Case |
-|------|-------------|----------|
-| **Affiliate** | Refers users via referral link | Content creators, influencers |
-| **Integrator** | Embeds KubeTEE into their product | SaaS companies, AI platforms |
-| **Reseller** | White-labels KubeTEE for customers | Enterprise resellers |
-
-All types earn the same **50% revenue share** on referred users.
-
-**On-Chain Affiliate System (No Database Required)**:
-
-Attribution and payments are handled entirely by a smart contract on BASE L2. No separate affiliate database needed.
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│              ON-CHAIN AFFILIATE ATTRIBUTION (BASE L2)                       │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  USER REGISTRATION (kubeteectl):                                            │
-│  ───────────────────────────────                                            │
-│  $ kubeteectl register \                                                    │
-│      --base-address 0x5678...efgh \                                         │
-│      --affiliate 0x1234...abcd        # Affiliate's BASE address            │
-│                                                                             │
-│  → Calls KubeTEEAffiliate.registerUser(user, affiliate) on BASE             │
-│  → Attribution stored on-chain permanently                                  │
-│  → Creates Rancher namespace for user                                       │
-│                                                                             │
-│  SMART CONTRACT LOGIC:                                                      │
-│  ─────────────────────                                                      │
-│  ┌─────────────────────────────────────────────────────────────────────┐    │
-│  │  On-Chain State:                                                    │    │
-│  │                                                                     │    │
-│  │  userAffiliate[user] = affiliate     // Permanent attribution       │    │
-│  │  affiliatePaidUsers[affiliate] = N   // Count of paying users       │    │
-│  │  pendingCommissions[affiliate] = X   // Held until 2-user minimum   │    │
-│  └─────────────────────────────────────────────────────────────────────┘    │
-│                                                                             │
-│  PAYMENT FLOW (Hourly):                                                     │
-│  ──────────────────────                                                     │
-│                                                                             │
-│  User Payment ($100)                                                        │
-│       │                                                                     │
-│       ▼                                                                     │
-│  ┌─────────────────────────────────────┐                                    │
-│  │  Check: affiliatePaidUsers >= 2 ?   │                                    │
-│  └─────────────────┬───────────────────┘                                    │
-│           ┌───────┴───────┐                                                 │
-│           ▼               ▼                                                 │
-│        YES (≥2)        NO (<2)                                              │
-│           │               │                                                 │
-│           ▼               ▼                                                 │
-│  ┌─────────────┐   ┌───────────────────┐                                     │
-│  │ Split 50/50 │   │ Hold commission   │                                     │
-│  │             │   │ in contract       │                                     │
-│  │ $50 → Aff   │   │                   │                                     │
-│  │ $50 → KT    │   │ pendingComm += $50│                                    │
-│  └─────────────┘   │ KubeTEE gets $50  │                                     │
-│                    └───────────────────┘                                     │
-│                                                                             │
-│  WHEN AFFILIATE REACHES 2 PAID USERS:                                       │
-│  ────────────────────────────────────                                       │
-│  → All pending commissions released automatically                           │
-│  → Future payments split 50/50 immediately                                  │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-**Smart Contract**: [`KubeTEEPayment.sol`](contracts/KubeTEEPayment.sol) on BASE L2
-
-**Key Features**:
-- ✅ **Pull-based**: Contract pulls USDC directly from user wallet (no deposits)
-- ✅ **One-time approval**: User signs unlimited approval once at registration
-- ✅ **User control**: Can adjust limit in MetaMask before signing
-- ✅ **Graceful failure**: Emits event on insufficient balance instead of reverting
-- ✅ **Affiliate 2-user minimum**: Commissions held until affiliate has 2 paying users
-- ✅ **Automatic release**: Pending commissions released when threshold met
-
-**CLI Registration Flow**:
-
-```bash
-# User registers WITH affiliate (affiliate shares their BASE address)
-kubeteectl register \
-    --base-address 0x5678...efgh \
-    --affiliate 0x1234...abcd
-
-# User registers WITHOUT affiliate  
-kubeteectl register \
-    --base-address 0x5678...efgh
-
-# Affiliate checks their status (reads from contract)
-kubeteectl affiliate status --address 0x1234...abcd
-# Output:
-#   Paid Users: 1/2 (minimum not reached)
-#   Pending Commissions: $47.50 USDC
-#   Status: Pending (need 1 more paid user)
-
-# After 2nd user pays:
-#   Paid Users: 2/2 ✓
-#   Pending Commissions: $0.00 (released!)
-#   Status: Active
-#   Total Earned: $125.00 USDC
-```
-
-**Revenue Share Examples** (50/50 Split):
-
-| Resource Usage | Price | Direct User | Referred User |
-|----------------|-------|-------------|---------------|
-| **H200 GPU hour** | $2.00/hr | $2.00 → KubeTEE | $1.00 → KubeTEE, **$1.00 → Affiliate** |
-| **H100 GPU hour** | $1.50/hr | $1.50 → KubeTEE | $0.75 → KubeTEE, **$0.75 → Affiliate** |
-| **CPU (vCPU/hour)** | $0.02/hr | $0.02 → KubeTEE | $0.01 → KubeTEE, **$0.01 → Affiliate** |
-| **Storage (GB/month)** | $0.15 | $0.15 → KubeTEE | $0.075 → KubeTEE, **$0.075 → Affiliate** |
-| **1K tokens (LLM)** | $0.003-0.006 | Full → KubeTEE | 50% → KubeTEE, **50% → Affiliate** |
-
-**Affiliate Earnings by User Profile** (after 2-user minimum):
-
-| User Profile | Typical Monthly Usage | Your 50% Share |
-|--------------|----------------------|----------------|
-| **RAG CPU-only** | ~$100/month | **$50/month** |
-| **RAG + H100 GPU** | ~$1,300/month | **$650/month** |
-| **Fine-Tuning (weekly)** | ~$1,500/month | **$750/month** |
-| **Heavy Inference (H200)** | ~$1,900/month | **$950/month** |
-
-**Scaling Your Affiliate Income**:
-
-| Referred Users | Profile | Their Monthly Spend | Your 50% Share |
-|----------------|---------|---------------------|----------------|
-| 2 (minimum) | RAG CPU-only | $200 | **$100/month** |
-| 5 | RAG + H100 GPU | $6,500 | **$3,250/month** |
-| 10 | Mixed | $5,000 | **$2,500/month** |
-| 20 | Mixed | $15,000 | **$7,500/month** |
-
-**On-Chain Affiliate Benefits**:
-
-| Aspect | Details |
-|--------|---------|
-| **Currency** | USDC on BASE L2 |
-| **Database** | None — all data on-chain |
-| **Payout** | Automatic (every billing cycle) |
-| **Minimum users** | 2 paid users to activate |
-| **Attribution** | On-chain, permanent, immutable |
-| **Trust** | Trustless — smart contract enforces split |
-
-**Why On-Chain on BASE?**
-- ✅ **No database** — Attribution stored in smart contract
-- ✅ **Trustless** — Affiliates don't need to trust KubeTEE
-- ✅ **Transparent** — Anyone can verify on-chain
-- ✅ **Automatic** — Smart contract handles all splits
-- ✅ **Low fees** — ~$0.01 per transaction on BASE
-- ✅ **Instant** — Commissions paid every billing cycle (hourly)
-
-**Emission vs On-Chain Payment Streams**:
-
-| Revenue Stream | Type | Registration | Distribution |
-|----------------|------|--------------|--------------|
-| Infrastructure Emissions (60%) | Subnet Emissions | Bittensor subnet | Via Yuma Consensus |
-| Benchmark Emissions (30%) | Subnet Emissions | Bittensor subnet | Via Yuma Consensus (Lifetime Score) |
-| Bounty Treasury (10%) | Subnet Emissions | Bittensor subnet | Manual payout by subnet owner |
-| Reseller Payments | On-Chain Contract | KubeTEE CLI only | Validator epoch settlement → KubeTEE Owner |
-
-**On-Chain Smart Contracts**:
-
-| Contract | Chain | Purpose |
-|----------|-------|---------|
-| `KubeTEEPayment.sol` | BASE L2 | User deposits (USDC), epoch settlements, referrer payouts |
-| `KubeTEERegistry.sol` | Bittensor EVM | GitHub→Hotkey mapping, Lifetime Benchmark Scores |
-| `KubeTEEBuybackTreasury.sol` | BASE L2 | Automated buyback and treasury transfer of Alpha tokens |
+- **Subnet 90 Alpha, Other Subnets Alpha, TAO** Discounted for Bittensor community.
+- **USDC-on-BASE job billing** — pull-based, per-epoch metering of Armada job resource usage (`KubeTEEPayment.sol`, `KubeTEEEscrow.sol`)
+- **Referrer / integrator / reseller program** — revenue share with on-chain attribution (`KubeTEEReseller.sol`)
+- **Automated USDC→TAO→Alpha buyback and treasury** — sustainable price support and operations funding (`KubeTEEBuybackBurn.sol`)
 
 Reference: [Bittensor Multi-Mechanism Docs](https://docs.learnbittensor.org/subnets/understanding-multiple-mech-subnets)
 
-### Revenue Model
+---
 
-**Pure Usage-Based Pricing** — No subscriptions, pay only for what you use.
+## Validator Scoring & Attestation
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                    KUBETEE USAGE-BASED PRICING MODEL                        │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│   💳 NO SUBSCRIPTIONS — PAY ONLY FOR WHAT YOU USE                           │
-│                                                                             │
-│   Every user gets:                                                          │
-│   ✅ Isolated Kubernetes namespace (Project)                                │
-│   ✅ Access to all KubeTEE Blueprints (RAG, AIQ, etc.)                      │
-│   ✅ TEE-protected execution (Intel TDX / NVIDIA CC)                        │
-│   ✅ Transparent per-epoch billing                                          │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
+The validator is the subnet's referee. In Early Access it scores each miner (one hotkey per cluster) on a single Infrastructure mechanism and sets Bittensor weights each epoch.
 
-**User Onboarding (Pull-Based Billing)**:
+### TEE Attestation
+- The validator runs attestation cronjobs inside Kata Containers to verify each miner cluster's TEE (Intel TDX/SGX, NVIDIA CC)
+- CoCo remote attestation confirms the confidential container image and runtime are unmodified
+- **No valid attestation → zero emissions** for that miner
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                    PULL-BASED BILLING MODEL                                 │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│   ONE-TIME APPROVAL → Contract pulls USDC as needed from user wallet        │
-│                                                                             │
-│   [1] REGISTRATION (kubeteectl)                                             │
-│   ─────────────────────────────────────────────────────────────────────     │
-│   $ kubeteectl register \                                                   │
-│       --base-address 0x5678... \                                            │
-│       --affiliate 0x1234...         # Optional: affiliate's BASE address    │
-│                                                                             │
-│   CLI prompts user to sign ONE transaction:                                 │
-│   → USDC.approve(KubeTEEPayment, MAX_UINT256)                               │
-│                                                                             │
-│   ⚠️ User can adjust limit in MetaMask/wallet before signing if desired     │
-│                                                                             │
-│   [2] ON-CHAIN REGISTRATION                                                 │
-│   ─────────────────────────────────────────────────────────────────────     │
-│   CLI calls: KubeTEEPayment.registerUser(user, affiliate)                   │
-│   → User address stored on-chain                                            │
-│   → Affiliate attribution stored (if provided)                              │
-│                                                                             │
-│   [3] NAMESPACE CREATION                                                    │
-│   ─────────────────────────────────────────────────────────────────────     │
-│   KubeTEE creates isolated Kubernetes namespace in Rancher                  │
-│   Namespace labels:                                                         │
-│   └── kubetee.ai/user-address: "0x5678..."                                  │
-│   └── kubetee.ai/affiliate: "0x1234..."  (if applicable)                    │
-│                                                                             │
-│   [4] HOURLY BILLING (Automatic Pull)                                       │
-│   ─────────────────────────────────────────────────────────────────────     │
-│   Every hour, billing job:                                                  │
-│   1. Calculates usage per namespace (CPU, GPU, storage, tokens)             │
-│   2. Calls KubeTEEPayment.processPayment(user, amount)                      │
-│   3. Contract pulls USDC directly from user's wallet                        │
-│   4. Splits 50/50 with affiliate (if qualified)                             │
-│                                                                             │
-│   ┌─────────────────────────────────────────────────────────────────────┐   │
-│   │  User Wallet              KubeTEEPayment.sol             Affiliate  │   │
-│   │  (BASE)                   (BASE)                         (BASE)     │   │
-│   │                                                                     │   │
-│   │  $500 USDC  ───────────▶  processPayment($100)                      │   │
-│   │                               │                                     │   │
-│   │                               ├──▶ $50 → KubeTEE                    │   │
-│   │                               └──▶ $50 → Affiliate (if ≥2 users)    │   │
-│   │                                                                     │   │
-│   │  Remaining: $400 USDC                                               │   │
-│   └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                             │
-│   [5] LOW BALANCE ALERTS                                                    │
-│   ─────────────────────────────────────────────────────────────────────     │
-│   If user wallet balance < 24h estimated usage:                             │
-│   → Email notification sent                                                 │
-│   → CLI warning on next command                                             │
-│   → Namespace suspended after 48h grace period                              │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
+### Armada Job Metrics
+- The validator pulls Armada scheduler/executor metrics via Prometheus: job success rate, throughput, scheduling latency, preemption fairness, and gang-scheduling success
+- Miners that reliably execute confidential jobs under `kata-*` runtime classes score higher
 
-**Registration Flow**:
+### Infrastructure Health
+- Uptime, QoS, capacity, and latency from Prometheus and Kubernetes events
+- FIPS-140-2/3 validated
 
-```bash
-# Register with affiliate
-$ kubeteectl register \
-    --base-address 0x5678...efgh \
-    --affiliate 0x1234...abcd
-
-# MetaMask/Wallet popup:
-# "KubeTEE Payment Contract wants to spend your USDC"
-# Amount: Unlimited (user can edit before signing)
-# 
-# [Confirm] [Reject]
-
-# After signing:
-✓ USDC approval granted
-✓ User registered on-chain
-✓ Affiliate attribution: 0x1234...abcd
-✓ Rancher namespace created: kubetee-0x5678efgh
-✓ Ready to deploy blueprints!
-
-# Check status anytime
-$ kubeteectl status
-  Wallet: 0x5678...efgh
-  USDC Balance: $500.00
-  Approval Remaining: Unlimited
-  Affiliate: 0x1234...abcd
-  This Month Usage: $127.50
-```
+### Weight Setting
+- Scores are normalized per miner hotkey and set on-chain via Bittensor `set_weights` (single mechanism)
+- Reference implementation: [`template/mechanisms/infrastructure.py`](template/mechanisms/infrastructure.py) and [`template/validator/forward.py`](template/validator/forward.py)
 
 ---
 
-#### Namespace Resource Pricing
+## Submitting a Confidential Job
 
-Resources allocated to your namespace are metered and billed per hour:
+Jobs are submitted to Armada queues and scheduled onto miner clusters with a confidential `runtimeClassName`. In Early Access, job submission is available to the subnet owner and authorized integrators.
 
-| Resource | Unit | Price (USDC) | Description |
-|----------|------|--------------|-------------|
-| **NVIDIA H200 GPU** | Per hour | **$2.00** | Dedicated GPU for inference/training |
-| **NVIDIA H100 GPU** | Per hour | **$1.50** | Dedicated GPU for inference/training |
-| **CPU** | Per vCPU/hour | **$0.02** | Compute (auto-scaled for RAG workloads) |
-| **Memory** | Per GB/hour | **$0.005** | RAM allocation |
-| **Storage (NVMe)** | Per GB/month | **$0.15** | High-performance storage |
 
-**RAG Server Configurations**:
+### Miner Registration
 
-Users choose their RAG server configuration at setup. CPU auto-scales vertically based on load:
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                       RAG SERVER CONFIGURATIONS                             │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│   OPTION 1: CPU-ONLY (Default)           OPTION 2: GPU-ACCELERATED          │
-│   ─────────────────────────────          ──────────────────────────         │
-│   ┌─────────────────────────┐            ┌─────────────────────────┐        │
-│   │  RAG Server (CPU)       │            │  RAG Server (GPU)       │        │
-│   │  ───────────────────    │            │  ───────────────────    │        │
-│   │  • 1-16 vCPU (auto)     │            │  • 1× H100 GPU          │        │
-│   │  • 2-32GB RAM (auto)    │            │  • 8 vCPU, 32GB RAM     │        │
-│   │  • VPA auto-scaling     │            │  • Fixed allocation     │        │
-│   │                         │            │                         │        │
-│   │  Best for:              │            │  Best for:              │        │
-│   │  • Variable workloads   │            │  • High throughput      │        │
-│   │  • Cost optimization    │            │  • Low latency          │        │
-│   │  • Light-medium usage   │            │  • Heavy inference      │        │
-│   └─────────────────────────┘            └─────────────────────────┘        │
-│                                                                             │
-│   CPU Auto-Scaling (VPA):                                                   │
-│   ─────────────────────────                                                 │
-│   Low Traffic    →    Medium Traffic    →    High Traffic                   │
-│   1 vCPU, 2GB         4 vCPU, 8GB            16 vCPU, 32GB                  │
-│   $0.03/hr            $0.12/hr               $0.48/hr                       │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-**Upgrade/Downgrade with kubeteectl**:
-
-```bash
-# Check current RAG configuration
-kubeteectl rag status
-
-# Upgrade from CPU-only to GPU-accelerated
-kubeteectl rag upgrade --gpu h100
-
-# Downgrade from GPU to CPU-only
-kubeteectl rag downgrade --cpu-only
-
-# View estimated costs
-kubeteectl rag estimate --config gpu
-```
-
-**RAG Configuration Pricing**:
-
-| Configuration | Resources | Hourly Cost | Monthly Cost (730h) |
-|---------------|-----------|-------------|---------------------|
-| **RAG CPU-only** | 1-16 vCPU (auto), 2-32GB RAM, 50GB NVMe | $0.03-0.48/hr | ~$22-350/month |
-| **RAG + H100 GPU** | 1× H100, 8 vCPU, 32GB RAM, 100GB NVMe | $1.81/hr | ~$1,321/month |
-
-**Fine-Tuning with Data Flywheel**:
-
-The [NVIDIA Data Flywheel Blueprint](https://github.com/KubeTEE-AI-Blueprints/data-flywheel) enables continuous model improvement through automated fine-tuning jobs. When fine-tuning is configured, your fine-tuned model is **automatically deployed to its own NIM with a dedicated H200 GPU**.
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                    DATA FLYWHEEL FINE-TUNING                                │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│   WHAT YOU GET:                                                             │
-│   ─────────────                                                             │
-│   ✅ Scheduled fine-tuning jobs (daily/weekly/monthly)                      │
-│   ✅ Your fine-tuned model deployed on dedicated NIM (1× H200 GPU)          │
-│   ✅ Automatic model updates after each fine-tuning job                     │
-│   ✅ Pay only for resources consumed during jobs                            │
-│                                                                             │
-│   BILLING:                                                                  │
-│   ────────                                                                  │
-│   • Fine-tuning job: Pay for CPU/GPU usage during job execution             │
-│   • Model inference: 1× H200 GPU ($2.00/hr) while NIM is running            │
-│                                                                             │
-│   EXAMPLE: Weekly Fine-Tuning                                               │
-│   ───────────────────────────────                                           │
-│   ┌─────────────────────────────────────────────────────────────────────┐   │
-│   │  Fine-tuning job (4h/week): ~$8.56/job × 4 = ~$34/month             │   │
-│   │  Model NIM (H200 24/7): $2.00/hr × 730h = ~$1,460/month             │   │
-│   │  ─────────────────────────────────────────────────────              │   │
-│   │  Total: ~$1,494/month                                               │   │
-│   └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-| Schedule | Fine-Tuning Cost | Model NIM (H200) | Total Monthly Cost |
-|----------|------------------|------------------|-------------------|
-| **Daily** | ~$50-100/month | ~$1,460/month | ~$1,510-1,560/month |
-| **Weekly** | ~$35-70/month | ~$1,460/month | ~$1,495-1,530/month |
-| **Monthly** | ~$15-30/month | ~$1,460/month | ~$1,475-1,490/month |
-
-```bash
-# Configure fine-tuning with kubeteectl
-kubeteectl finetune enable --frequency weekly
-kubeteectl finetune status
-kubeteectl finetune run --now  # Trigger immediate job
-```
+Miners register clusters via the `kubetee register` CLI (one hotkey per cluster). See [For Miners (Infrastructure)](#for-miners-infrastructure). The registration CLI is under active development.
 
 ---
-
-#### Shared Microservices Pricing
-
-Access to KubeTEE's shared NVIDIA NIM models running in TEE:
-
-**Per Token Pricing**:
-
-| Service | Input Tokens | Output Tokens | Notes |
-|---------|--------------|---------------|-------|
-| **LLM Inference** (Nemotron 49B) | $0.003 / 1K | $0.006 / 1K | Reasoning model |
-| **LLM Inference** (Llama 3.3 70B) | $0.002 / 1K | $0.004 / 1K | General purpose |
-| **LLM Inference** (Mistral Large) | $0.002 / 1K | $0.004 / 1K | Fast inference |
-| **Embedding** (NV-EmbedQA) | $0.0005 / 1K | — | Vector generation |
-| **Reranking** (NV-RerankQA) | $0.001 / 1K | — | Search reranking |
-| **OCR/Vision** (Nemotron VL) | $0.004 / 1K | $0.008 / 1K | Document processing |
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                    SHARED MICROSERVICES (TEE Protected)                     │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│   🔒 AVAILABLE MODELS:                                                      │
-│   ─────────────────────                                                     │
-│   • nvidia/llama-3.3-nemotron-super-49b-v1.5  (Primary reasoning model)     │
-│   • nvidia/llama-3.3-70b-instruct            (General purpose)              │
-│   • mistralai/mistral-large-2-instruct       (Fast inference)               │
-│   • nvidia/nv-embedqa-e5-v5                  (Embeddings)                   │
-│   • nvidia/nv-rerankqa-mistral-4b-v3         (Reranking)                    │
-│   • nvidia/llama-nemotron-nano-vl-8b         (Vision/OCR)                   │
-│                                                                             │
-│   🛡️ SECURITY GUARANTEES:                                                   │
-│   ─────────────────────────                                                 │
-│   • Hardware-enforced isolation (Intel TDX, NVIDIA CC)                      │
-│   • No data persistence between requests                                    │
-│   • Attestation-verified execution                                          │
-│   • End-to-end encryption                                                   │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
----
-
-#### Billing & Metering
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                      HOURLY BILLING FLOW (BASE L2)                          │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│   USER NAMESPACE                    VALIDATOR METERING                      │
-│   ───────────────                   ──────────────────                      │
-│                                                                             │
-│   ┌─────────────────┐              ┌─────────────────────────────────────┐  │
-│   │ Your Workloads  │              │  Prometheus Metrics (hourly)        │  │
-│   │                 │              │                                     │  │
-│   │ • RAG Pipeline  │─────────────▶│  • CPU vCPU-hours (VPA actual)     │  │
-│   │ • LLM Requests  │              │  • GPU hours allocated              │  │
-│   │ • Embeddings    │              │  • Memory GB-hours                  │  │
-│   │ • Fine-tuning   │              │  • Storage GB used                  │  │
-│   │ • Custom Models │              │  • Tokens in/out (per model)        │  │
-│   └─────────────────┘              └──────────────┬──────────────────────┘  │
-│                                                   │                         │
-│                                                   ▼                         │
-│   ┌─────────────────────────────────────────────────────────────────────┐   │
-│   │                    SMART CONTRACT SETTLEMENT                        │   │
-│   │                    KubeTEEPayment.sol (BASE L2)                      │   │
-│   │                                                                     │   │
-│   │   Every Hour:                                                       │   │
-│   │   ┌─────────────┐      ┌─────────────┐      ┌─────────────┐         │   │
-│   │   │ User USDC   │─────▶│  Calculate  │─────▶│  KubeTEE    │         │   │
-│   │   │ Deposit     │      │  Usage Cost │      │  Address    │         │   │
-│   │   │ (0x1234...) │      │             │      │  (0xKTEE..) │         │   │
-│   │   └─────────────┘      └─────────────┘      └─────────────┘         │   │
-│   │                                                                     │   │
-│   │   • Validators submit signed usage reports                          │   │
-│   │   • Contract calculates total cost in USDC                          │   │
-│   │   • USDC transferred: User Deposit → KubeTEE Address                │   │
-│   │   • Event emitted for transparency                                  │   │
-│   └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-**Metering Details**:
-- **Billing Cycle**: Every hour (on the hour, UTC)
-- **Namespace Resources**: Prometheus scrapes resource allocation and usage
-- **Token Counting**: Input/output tokens logged per request via NIM proxy
-- **Storage**: Persistent volume claims measured hourly
-- **Settlement**: USDC transferred from user deposit to KubeTEE address on BASE
-
-**Smart Contract Functions**:
-
-| Function | Description |
-|----------|-------------|
-| `deposit()` | User deposits USDC into their account |
-| `withdraw(amount)` | User withdraws unused USDC balance |
-| `getBalance(address)` | Check user's current USDC balance |
-| `submitUsage(address, amount, signature)` | Validator submits hourly usage |
-| `settleHourly()` | Automated hourly settlement (Chainlink Automation) |
-
-**Low Balance Alerts**:
-- ⚠️ Warning at 24h estimated usage remaining
-- 🛑 Namespace paused at 0 balance (workloads stopped, data preserved)
-- ✅ Auto-resume when user deposits more USDC
-
----
-
-#### Example Monthly Bills
-
-| User Profile | Namespace Resources | Shared Services | Total |
-|--------------|---------------------|-----------------|-------|
-| **Hobbyist** | 4 vCPU, 8GB RAM ($58) | 500K tokens ($3) | **~$61/month** |
-| **Startup** | 8 vCPU, 32GB, 1× H100 ($1,285) | 5M tokens ($25) | **~$1,310/month** |
-| **Enterprise** | 32 vCPU, 128GB, 2× H200 ($4,380) | 50M tokens ($250) | **~$4,630/month** |
-| **AI-Heavy** | 16 vCPU, 64GB, 4× H200 ($6,500) | 200M tokens ($1,000) | **~$7,500/month** |
-
----
-
-#### X.402 Micropayments (No Account Required)
-
-For instant, permissionless access via [X.402 Protocol](https://www.x402.org/):
-
-| Service | Price | Notes |
-|---------|-------|-------|
-| **LLM Inference** | $0.005 / 1K tokens | Pay per request, USDC on BASE |
-| **Embedding** | $0.001 / 1K tokens | Instant settlement |
-| **RAG Query** | $0.01 / query | Includes retrieval + generation |
-
-- ✅ **No KYC required** — permissionless for everyone
-- ✅ **No account needed** — pay per request
-- ✅ **AI agent compatible** — autonomous payments
-- ❌ No dedicated namespace (shared resources only)
-
----
-
-#### Referrer Revenue Share
-
-Referrers earn **50% of all usage revenue** from referred users:
-
-| Referred User Spends | Referrer Earns |
-|----------------------|----------------|
-| $100/month | **$50/month** |
-| $1,000/month | **$500/month** |
-| $10,000/month | **$5,000/month** |
-
----
-
-#### Integration Options
-
-- **Bring Your Own LLM** via NeMo Microservices (NimCache, NimService)
-- **Custom model fine-tuning** billed at GPU hourly rate
-- **Private microservices** deployed in your namespace
-
-### Payment Strategy: USDC on BASE
-
-KubeTEE AI uses **USDC on BASE** for all user payments — simple, stable, and widely accessible.
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                       KUBETEE PAYMENT ARCHITECTURE                          │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│   ┌─────────────────────────────────────────────────────────────────────┐   │
-│   │                     BITTENSOR NETWORK                               │   │
-│   │                                                                     │   │
-│   │   KubeTEE α Token ◄──AMM──► TAO                                     │   │
-│   │         │                                                           │   │
-│   │         ▼                                                           │   │
-│   │   Miner Emissions (Infrastructure + Open Source)                    │   │
-│   │   └── Per-block rewards for infrastructure providers                │   │
-│   │   └── Bounty payouts for code contributions                         │   │
-│   └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                             │
-│   ┌─────────────────────────────────────────────────────────────────────┐   │
-│   │                        BASE L2 (Coinbase)                           │   │
-│   │                                                                     │   │
-│   │   USDC Payments                                                     │   │
-│   │   └── User deposits for namespace resources                         │   │
-│   │   └── Per-epoch billing deductions                                  │   │
-│   │   └── Referrer revenue share payouts                                │   │
-│   │                                                                     │   │
-│   │   x402 Protocol Integration                                         │   │
-│   │   └── HTTP 402 micropayments (USDC)                                 │   │
-│   │   └── AI agent autonomous payments                                  │   │
-│   │   └── Per-request billing                                           │   │
-│   │                                                                     │   │
-│   │   ERC-8004 Agent Standard                                           │   │
-│   │   └── Agent-to-agent discovery                                      │   │
-│   │   └── Reputation and trust                                          │   │
-│   │   └── Autonomous AI workflows                                       │   │
-│   └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-**Why USDC on BASE?**
-
-| Factor | Advantage |
-|--------|-----------|
-| **Stability** | No price volatility — users know exactly what they're paying |
-| **Accessibility** | 100M+ Coinbase users can pay directly, no bridges needed |
-| **x402 Protocol** | Native support for HTTP micropayments |
-| **ERC-8004** | AI agent payment standard compatibility |
-| **Gas Costs** | Sub-cent transactions for micropayments |
-| **Enterprise-Friendly** | Stablecoin payments simplify accounting and compliance |
-
-**Payment Model Summary**:
-
-| Model | Network | Best For | Settlement |
-|-------|---------|----------|------------|
-| **Emissions** | Bittensor Subnet | Miners (infra + code) | Per block |
-| **Usage Billing** | BASE L2 (USDC) | Namespace resources | Per epoch |
-| **x402 Micropay** | BASE L2 (USDC) | AI agents, retail | Instant |
-| **Referrer Payouts** | BASE L2 (USDC) | Revenue share | Per epoch |
-
-Reference: [x402 Protocol](https://www.x402.org/) | [ERC-8004](https://www.erc8021.com/) | [BASE](https://base.org/)
-
-### Automated Buyback & Treasury (Sustainable Mechanism)
-
-KubeTEE implements an **automated daily buyback** mechanism that converts revenue to Alpha tokens and transfers them to a **Treasury Hotkey**. The Treasury allocates Alpha for:
-1. **Operations** — Subnet infrastructure costs
-2. **Bounties** — Development rewards
-3. **Recycle** — Remainder goes back to emission pool via UID 0
-
-Unlike burning (which destroys tokens), this model keeps Alpha in circulation while funding operations and rewarding active participants.
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                    DAILY BUYBACK & TREASURY FLOW                            │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│   [STEP 1] COLLECT USDC (BASE L2)                                           │
-│   ─────────────────────────────────────────────────────────────────────     │
-│   Reseller payments accumulate in KubeTEEReseller.sol                       │
-│   Transferred to KubeTEEBuybackTreasury.sol daily                           │
-│                                    │                                        │
-│                                    ▼                                        │
-│   [STEP 2] SWAP USDC → wTAO (Chainlink Automation)                          │
-│   ─────────────────────────────────────────────────────────────────────     │
-│   Chainlink Keepers trigger daily at 00:00 UTC                              │
-│   Swap via Uniswap V3 with 2% max slippage                                  │
-│                                    │                                        │
-│                                    ▼                                        │
-│   [STEP 3] BRIDGE wTAO → TAO                                                │
-│   ─────────────────────────────────────────────────────────────────────     │
-│   Bridge wTAO from BASE to native TAO on Bittensor                          │
-│                                    │                                        │
-│                                    ▼                                        │
-│   [STEP 4] SWAP TAO → ALPHA (Bittensor Bot)                                 │
-│   ─────────────────────────────────────────────────────────────────────     │
-│   buyback_bot.py monitors TAO arrivals                                      │
-│   Swaps TAO → Alpha via subnet native AMM                                   │
-│                                    │                                        │
-│                                    ▼                                        │
-│   [STEP 5] ♻️ TRANSFER ALPHA TO TREASURY                                    │
-│   ─────────────────────────────────────────────────────────────────────     │
-│   buyback_bot.py transfers Alpha to Treasury Hotkey                         │
-│                                    │                                        │
-│                                    ▼                                        │
-│   [STEP 6] TREASURY DISTRIBUTION                                            │
-│   ─────────────────────────────────────────────────────────────────────     │
-│   Treasury Alpha is allocated:                                              │
-│     • Operations — Subnet infrastructure costs                              │
-│     • Bounties — Development rewards (fixed TAO value in Alpha)             │
-│     • Remainder → ♻️ RECYCLED (to emission pool)                  │
-│                                                                             │
-│   ════════════════════════════════════════════════════════════════════      │
-│   BENEFITS OF TREASURY + RECYCLE MODEL:                                     │
-│   • Creates buying pressure on Alpha (price support)                        │
-│   • Funds subnet operations and bounties                                    │
-│   • Remainder recycled → rewards active participants                        │
-│   • Self-sustaining ecosystem (no value destruction)                        │
-│   ════════════════════════════════════════════════════════════════════      │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-**Why Treasury + Recycle Instead of Burn?**
-
-| Aspect | Burn 🔥 | Treasury + Recycle ♻️ |
-|--------|---------|----------------------|
-| Token supply | Decreases (deflationary) | Stays constant |
-| Value destination | Destroyed forever | Operations → Bounties → Recycle |
-| Price support | Via scarcity | Via buying pressure |
-| Ecosystem benefit | Passive holders gain | Funds operations + rewards participants |
-| Flexibility | None (permanent) | Strategic allocation |
-
-**Automation Stack**:
-
-| Component | Technology | Purpose |
-|-----------|------------|---------|
-| Daily trigger | Chainlink Automation | Decentralized, reliable scheduling |
-| USDC→wTAO swap | Uniswap V3 (BASE) | Best liquidity, low slippage |
-| Bridge | wTAO Bridge | Cross-chain transfer |
-| TAO→Alpha swap | Bittensor AMM | Native subnet liquidity |
-| Treasury transfer | buyback_bot.py | Off-chain monitoring & transfer to Treasury |
-
-**Kubernetes Deployment (Fleet GitOps)**:
-
-The buyback bot is deployed to Kubernetes using Fleet GitOps:
-
-```
-fleet-gitops/apps/buyback-bot/
-├── fleet.yaml                    # Fleet configuration
-├── manifests/
-│   ├── namespace.yaml            # kubetee-system namespace
-│   ├── configmap.yaml            # Bot configuration + script
-│   ├── secret.yaml               # Wallet secrets (use ExternalSecrets!)
-│   ├── deployment.yaml           # Bot deployment
-│   ├── service.yaml              # Metrics service + ServiceMonitor
-│   ├── grafana-dashboard.yaml    # Grafana dashboard
-│   └── kustomization.yaml
-└── overlays/
-    └── staging/                  # Staging-specific config
-```
-
-**Deployment Steps**:
-
-```bash
-# 1. Create wallet for buyback operations
-btcli wallet new_coldkey --wallet.name buyback
-btcli wallet new_hotkey --wallet.name buyback --wallet.hotkey default
-
-# 2. Store wallet in Vault (production)
-vault kv put secret/kubetee/buyback-wallet \
-  coldkey="$(cat ~/.bittensor/wallets/buyback/coldkey)" \
-  coldkeypub="$(cat ~/.bittensor/wallets/buyback/coldkeypub)" \
-  hotkey="$(cat ~/.bittensor/wallets/buyback/hotkeys/default)"
-
-# 3. Update KUBETEE_NETUID in configmap.yaml
-# 4. Commit and push - Fleet auto-deploys!
-
-# 5. Monitor
-kubectl logs -f -n kubetee-system deployment/buyback-bot
-kubectl port-forward -n kubetee-system svc/buyback-bot 9090:9090
-# View metrics at http://localhost:9090/metrics
-```
-
-**Prometheus Metrics**:
-
-| Metric | Description |
-|--------|-------------|
-| `buyback_tao_balance` | Current TAO balance |
-| `buyback_alpha_balance` | Current Alpha balance |
-| `buyback_tao_swapped_total` | Total TAO swapped (counter) |
-| `buyback_alpha_transferred_total` | Total Alpha transferred to Treasury (counter) |
-| `buyback_last_swap_timestamp` | Unix timestamp of last swap |
-| `buyback_last_transfer_timestamp` | Unix timestamp of last treasury transfer |
-
-**Alerts** (via PrometheusRule):
-- `BuybackBotNoSwaps` - No swaps in 48 hours
-- `BuybackBotNoTransfers` - No treasury transfers in 48 hours
-- `BuybackBotHighRestarts` - Pod restarting frequently
-
-**Configuration**:
-
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `minBuybackAmount` | $100 USDC | Minimum to trigger buyback |
-| `maxSlippageBps` | 200 (2%) | Maximum swap slippage |
-| `buybackInterval` | 24 hours | Time between buybacks |
-| `MIN_TAO_THRESHOLD` | 0.1 TAO | Min TAO to trigger swap |
-| `MIN_ALPHA_THRESHOLD` | 0.1 Alpha | Min Alpha to trigger treasury transfer |
-
-### Validation & Scoring
-
-**Infrastructure Validation**:
-- Prometheus Metrics and Kubernetes Events
-- UpTime monitoring
-- Quality of Service (QoS) metrics
-- Performance benchmarks
-
-**Revenue Validation**:
-- Service usage tracking per miner per user
-- Token and GPU time accounting
-- Revenue calculation per epoch
-- 50% miner share calculation and distribution
-
-**AI Agent Validation**:
-- Benchmark performance on hidden test set
-- Code quality assessment via AI Agent analysis
-- CI/CD pipeline compliance
-- Security vulnerability scans
-
----
-
-## Client Getting Started
-
-### Prerequisites
-
-**Information Required**:
-- Region (Americas, EU, Middle East, Africa, Asia)
-- Organization Name (for SSL certificate)
-- Customer WALLET.NAME, WALLET.HOTKEY
-
-### Deployment Steps
-
-Using the KubeTEE CLI (one command deployment):
-
-1. **Create Hotkey**: Create Bittensor coldkey and hotkey
-2. **Deposit Funds**: Deposit Alpha (TAO → Alpha) from customer coldkey to KubeTEE hotkey
-3. **Setup Access**: Create username and password with Project/Namespace in Rancher UI
-4. **Get Config**: Download the Kube Config file
-5. **Deploy**: Deploy RAG and AIQ Helm charts with `username.kubetee.ai` for the frontend
-
----
-
-## For Miners (Benchmark Competition)
-
-### Development Process
-
-**Miners are incentivized to improve the DeepResearch Benchmark scores**
-
-1. **Create Repository**: Fork public repository on GitHub
-2. **Register Coldkey/Hotkey to the subnet**: using Bittensor CLI (BTCLI)
-3. **Link GitHub Account**: Using KUBETEECTL to map GitHub → Bittensor hotkey
-4. **CI/CD Setup**: Automated deployment when committed to the staging branch
-5. **Code Analysis**: Pass AI Agent analysis for code compliance
-6. **Security Checks**: Pass CI workflow for vulnerability & basic tests
-7. **Staging Deploy**: Pass Staging deployment without errors
-8. **Benchmarking**: Pass benchmarks and earn Lifetime Score (with decay)
-
-### Bounty Participation
-
-**Contribute to bounties for fixed TAO rewards (paid in Alpha)**
-
-1. **Browse Bounties**: Check [github.com/KubeTEE-AI](https://github.com/KubeTEE-AI) for `bounty-value:*` labels
-2. **Check Value**: Each bounty shows fixed TAO reward (e.g., `bounty-value:50τ`)
-3. **Submit PR**: Include `Fixes #XX` in commit to link to bounty issue
-4. **Wait for Merge**: Pass CI/CD, security scan, and subnet owner review
-5. **Get Paid**: Subnet owner manually transfers Alpha tokens from treasury
 
 ## For Miners (Infrastructure)
+
+**Early Access Cluster Rules**:
+- One hotkey per cluster (one miner = one cluster)
+- All nodes co-located in a single data center (low-latency, same-DC networking)
+- First two clusters deployed in the USA
+- Armada Executor + Installer deployed on the cluster (scheduled by the subnet-owner Armada Server)
+- Confidential runtime classes available: `kata-qemu-nvidia-gpu-tdx` (GPU TEE), `kata-qemu-tdx` (CPU TEE)
 
 **Minimum For Staging Permissionless Participation**:
 
 - ✅ INTEL TDX Compatible node with NVIDIA H100/H200
 - ✅ BIOS TDX/SGX Enabled
 - ✅ Kernel TDX/SGX Enabled
-- ✅ RKE2 Rancher Kubernetes cluster
 - ✅ One Cluster per Miner (labeled with `kubetee.ai/` prefixed labels)
-- ✅ Same Regional deployment (Control Plane and Workers in same Region/Zone)
+- ✅ Same Regional deployment (Workers in same Data Center)
 - ✅ Cluster registered with Rancher for Fleet management
 - ✅ Cluster must be labeled with required labels:
   - `kubetee.ai/continent`, `kubetee.ai/country`, `kubetee.ai/city` (geographic identification)
@@ -2437,767 +476,64 @@ Using the KubeTEE CLI (one command deployment):
 
 **For Production Participation**:
 
-- ✅ KYC compliance (for legal & regulatory requirements)
-- ✅ Successfully passed Staging validation
+- ✅ Successfully passed Staging validation period
 
----
-
-## Evaluation & Benchmarks
-
-### Primary Benchmark
-
-[Deep Research Bench](https://github.com/Ayanami0730/deep_research_bench)
-
-> [!IMPORTANT]  
-> An evaluation benchmark dataset created by [NVIDIA NeMo Data Designer](https://docs.nvidia.com/nemo/microservices/latest/generate-synthetic-data/index.html) will not be available publicly and only accessible to validators in a TEE environment to ensure that the benchmark scoring cannot be gamed.
-
-### Evaluation Criteria
-
-Comprehensive evaluation across all deployment tiers with focus on:
-- **Code Quality**: Clean, maintainable, and well-documented code
-- **Benchmark Performance**: Scores on Deep Research Bench and additional benchmarks
-- **Infrastructure Reliability**: Uptime, fault tolerance, disaster recovery
-- **Security Compliance**: TEE validation, audit logs, vulnerability assessments
-- **Service Quality Metrics**: Consistant benchmarks scores
-
-### Additional Planned Benchmarks
-
-- [ ] [GAIA Benchmark](https://huggingface.co/spaces/gaia-benchmark/leaderboard) — General AI Assistants real-world task evaluation
-- [ ] [ARC-AGI-3-Agents](https://github.com/KubeTEE-AI/ARC-AGI-3-Agents)
-- [ ] [REKA Research Eval](https://github.com/KubeTEE-AI/research-eval)
-- [ ] [YDC Deep Research Evals](https://github.com/KubeTEE-AI/ydc-deep-research-evals)
-- [ ] [SN 22 Search Eval](https://github.com/KubeTEE-AI/ai-search-benchmark)
-- [ ] [Perplexity Search Eval](https://github.com/KubeTEE-AI/search_evals)
+**Reference Documentation**:
+- [Node Registration](./docs/NODE-REGISTRATION.md)
+- [GPU Node Requirements](./docs/GPU-NODE-REQUIREMENTS.md)
+- [Cluster Naming Convention](./docs/CLUSTER_NAMING_CONVENTION.md)
+- [FIPS-140-3 Target](./docs/FIPS-140-3.md)
 
 ---
 
 ## Roadmap
 
-### Phase 1: Foundation (Current)
+### Phase 0 — Early Access (Current)
 
-- [x] RKE2 Kubernetes cluster deployment
-- [x] Linkerd mTLS
-- [x] Rancher Fleet Multi-Cluster Management
-  - [x] GitOps workflow setup
-  - [x] Cluster registration automation
-  - [x] Fleet GitRepo configurations
-- [x] NeMo Microservices deployment
-- [x] RAG Blueprint installation
-  - [x] [CyborgDB](https://www.cyborg.co/) Vector Database for End-to-End Encrypted Confidential AI
-  - [x] Ingest Data of all kinds
-- [x] AIQ Agent Blueprint installation
-- [x] NVIDIA Flywheel Blueprint installation
-  - [x] Integrate NVIDIA Data Flywheel for autonomous model self-improvement via RL
-- [ ] Implement the validator component
-  - [ ] Container needs to be run in a TEE environment and workload validated
-- [ ] Develop the KUBETEECTL CLI
+- [ ] Deploy 2 US clusters (one hotkey each, nodes co-located in a single DC)
+- [ ] Armada Server on the subnet-owner control plane; Armada Executor on each miner cluster
+- [ ] Kata + CoCo TEE runtime classes (`kata-qemu-nvidia-gpu-tdx`, `kata-qemu-tdx`)
+- [ ] Single Infrastructure validator mechanism (TEE attestation + Armada job metrics + uptime)
+- [ ] Emissions-only rewards
+- [ ] FIPS-140-3 target on FIPS-140-2 validated RKE2 baseline
+- [ ] Confidential NeMo / NIM / Blueprint job templates
+- [ ] Confidential Subnets Owners and Approved Integrators templates.
+
+### Phase 1 — Expansion
+
+- [ ] More US + international clusters
+- [ ] Armada fair-use + gang scheduling hardening
+- [ ] Automated TEE attestation cronjobs
+- [ ] `kubetee register` CLI for miner self-service registration
 - [ ] Build documentation website
 
-### Phase 2: Launch
+### Phase 2 — Paid Jobs
 
-- [ ] Create slides for presentation
-- [ ] Podcasts to raise awardness
-- [ ] Monitor and stabilize subnet
+- [ ] Alpha, TAO, USDC-on-BASE job billing (pull-based, per-epoch metering) — contracts in [`contracts/`](contracts/)
+- [ ] Referrer / integrator / reseller program (on-chain attribution)
+- [ ] Automated USDC→TAO→Alpha buyback and treasury
 
-#### Subnet 93 — Bitcast (Marketing & Awareness)
+### Phase 3 — Job-Type Growth
 
-> *The Decentralized Creators Economy Powered by Bittensor*
-
-Integration with [Bitcast](https://bitcast.network) for KubeTEE marketing and community awareness:
-
-- [ ] Create educational content about KubeTEE's TEE infrastructure
-- [ ] Produce video explainers on Confidential AI and secure model deployment
-- [ ] Incentivize content creators to explain KubeTEE use cases
-- [ ] Cross-subnet promotion for mainstream user onboarding
-- [ ] Leverage Bitcast's no-GPU, login-level participation model for community growth
-
-**Benefits**: Tap into Bitcast's decentralized content creator network to drive awareness, educate potential miners and resellers, and accelerate adoption without traditional marketing costs.
-
-#### Subnet 16 — BitAds (Affiliate & Performance Marketing)
-
-> *Decentralized Performance Marketing on Bittensor*
-
-Integration with [BitAds](https://bitads.ai) for affiliate/referral marketing and performance-based advertising:
-
-- [ ] Integrate BitAds for referrer/affiliate tracking and payouts
-- [ ] Create KubeTEE advertising campaigns on decentralized ad network
-- [ ] Track referral conversions via BitAds performance metrics
-- [ ] Pay affiliates in Alpha tokens via BitAds infrastructure
-- [ ] Cross-promote with other Bittensor subnets via BitAds network
-
-**How It Connects to Referrer Model**:
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                    BITADS (SN16) INTEGRATION                                │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  ┌─────────────────┐                     ┌─────────────────┐                │
-│  │   BitAds        │                     │   KubeTEE       │                │
-│  │   (SN16)        │ ◀────────────────── │   Referrers     │                │
-│  │                 │                     │                 │                │
-│  │ • Ad Campaigns  │                     │ • 50% Rev Share │                │
-│  │ • Click Track   │ ──────────────────▶ │ • User Signup   │                │
-│  │ • Conversions   │                     │ • Attribution   │                │
-│  └─────────────────┘                     └─────────────────┘                │
-│                                                                             │
-│  Use Cases:                                                                 │
-│  ──────────                                                                 │
-│  1. Affiliate Links → BitAds tracks → KubeTEE signup → 50% revenue share    │
-│  2. Ad Campaigns → BitAds network → New user acquisition                    │
-│  3. Performance Metrics → Optimize referrer payouts                         │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-#### Subnet 71 — LeadPoet (B2B Lead Intelligence)
-
-> *Decentralized B2B Lead Data Intelligence on Bittensor*
-
-Integration with [LeadPoet](https://leadpoet.com/) for B2B lead generation and intelligence:
-
-- [ ] Integrate LeadPoet for enterprise lead identification
-- [ ] Access decentralized B2B contact and company data
-- [ ] Leverage AI-powered lead scoring and enrichment
-- [ ] Target enterprise customers for KubeTEE AI services
-
-**Benefits**: Tap into LeadPoet's decentralized B2B intelligence network to identify and qualify enterprise prospects for KubeTEE's confidential AI infrastructure services.
-
-**Benefits**: 
-- Decentralized affiliate tracking (no middleman)
-- Performance-based payouts (pay for conversions, not impressions)
-- Native Bittensor integration (Alpha token payouts)
-- Cross-subnet visibility (reach other Bittensor communities)
-
-### Phase 3: Enhancements
-
-- [ ] Deploy an MCP server for Bittensor community projects
-  - [ ] Deep ReSearch Agent for Bittensor with RAG on Bittensor Inteligence
-- [ ] Add Tools and MCP servers
-- [ ] Improve Design UI interface for chatting with AI agent to launch AI Agents
-- [ ] Affine SN120 Model Reenforcement Learning Improvment
-- [ ] Ridges SN62 Coding AI Agent
-- [ ] Expand benchmark suites
-- [ ] Scale to additional regions
-
-#### 🏆 Affine SN120 — Model Benchmark Challenge
-
-> *Decentralized model optimization to outperform NVIDIA NeMo Super 49B V1.5*
-
-**Challenge:** Improve the base model benchmark of [NVIDIA Llama 3.3 NeMo Super 49B V1.5](https://build.nvidia.com/nvidia/llama-3_3-nemotron-super-49b-v1_5/modelcard) while maintaining full compatibility with the [NVIDIA AIQ Deep Research Blueprint](https://github.com/NVIDIA/AgentIQ/tree/main/examples/deep_research).
-
-**Core Requirements:**
-
-| Requirement | Description |
-|-------------|-------------|
-| **Benchmark Improvement** | Surpass NeMo Super 49B V1.5 on key benchmarks |
-| **Single H200 Inference** | Model must be able to run inference on a single NVIDIA H200 GPU (141GB HBM3e) |
-| **AIQ Blueprint Compatibility** | Model must work seamlessly with the AIQ Deep Research Agent architecture |
-| **Protocol Adaptation** | If the model uses different tool calling or thinking protocols, the blueprint must be modified to handle the model |
-
-**NeMo Super 49B V1.5 Benchmarks to Beat:**
-
-| Benchmark | NeMo Super 49B V1.5 | Target |
-|-----------|---------------------|--------|
-| MATH500 | 97.4% | >97.4% |
-| AIME 2024 | 87.5% | >87.5% |
-| AIME 2025 | 82.71% | >82.71% |
-| GPQA | 71.97% | >71.97% |
-| LiveCodeBench 24.10-25.02 | 73.58% | >73.58% |
-| BFCL v3 (Tool Calling) | 71.75% | >71.75% |
-| IFEval (Strict:Instruction) | 88.61% | >88.61% |
-| ArenaHard | 92.0% | >92.0% |
-| MMLU Pro (CoT) | 79.53% | >79.53% |
-
-**Why This Matters:**
-
-Different models implement tool calling and reasoning in different ways:
-- **Tool Calling Protocols**: Function calling format, parameter schemas, response parsing
-- **Thinking Protocols**: Chain-of-thought markers, reasoning tokens, structured output formats
-- **Response Formats**: JSON vs XML vs natural language tool invocations
-
-The challenge is not just to create a better-performing model, but to ensure the entire AIQ Deep Research Blueprint can adapt to handle models with varying protocols — enabling a plug-and-play architecture for frontier models.
-
-**Private Benchmark Datasets:**
-
-We will create private dataset benchmarks from the base benchmark datasets using [NeMo Data Designer](https://docs.nvidia.com/nemo/microservices/latest/design-synthetic-data-from-scratch-or-seeds/index.html) and store them in NeMo Data Store service on KubeTEE cluster. This prevents overfitting to public benchmarks and ensures genuine model capability improvements.
-
-**KubeTEE Evaluation Infrastructure:**
-
-| Component | Description | Documentation |
-|-----------|-------------|---------------|
-| **LLM Model Targets** | Define evaluation targets pointing to miner LLMs | [LLM Model Targets](https://docs.nvidia.com/nemo/microservices/latest/evaluate/evaluation-targets/llm-model-targets.html) |
-| **Evaluation Configs** | Create benchmark configurations (public + private) | [Create Config](https://docs.nvidia.com/nemo/microservices/latest/evaluate/evaluation-configs/create-config.html) |
-| **Evaluation Jobs** | Run evaluation jobs against miner models | [Create Job](https://docs.nvidia.com/nemo/microservices/latest/evaluate/evaluation-jobs/create-job.html) |
-| **Results to Affine** | Send evaluation results to Affine DB via NeMo Evaluator SDK | Custom integration |
-
-**Success Criteria:**
-
-- Model achieves higher benchmark scores than NeMo Super 49B V1.5
-- Model runs inference on a single H200 GPU (141GB HBM3e)
-- AIQ Deep Research Blueprint modifications to support the model's tool calling protocol
-- AIQ Deep Research Blueprint modifications to support the model's thinking/reasoning protocol
-- End-to-end Deep Research Agent functionality preserved
-- Documentation for blueprint adaptations
-
-**Integration tasks**
-- [ ] Create private benchmark datasets using NeMo Data Designer (stored in NeMo Data Store)
-- [ ] Create Model Eval templates and code using NVIDIA NeMo Evaluator SDK to send results to Affine DB
-- [ ] Define LLM Evaluation Targets for miner models
-- [ ] Create Evaluation configs for existing benchmarks + private benchmarks
-- [ ] Create Evaluation Jobs pipeline
-- [ ] Affine deploys evaluation jobs in KubeTEE Cluster to evaluate miner LLMs
-
-**Benefits**: Creates a decentralized pathway for continuous model improvement while building a flexible agent infrastructure that can integrate any high-performing model regardless of its native protocols.
-
-#### Subnet 62 — Ridges (Coding Assistant Tool/MCP Server)
-
-> *AI-powered code generation and software development assistance on Bittensor*
-
-Integration with [Ridges](https://ridges.ai) (Subnet 62) as a tool or MCP server for coding capabilities:
-
-- [ ] Integrate Ridges as MCP server for code generation
-- [ ] Enable AI-assisted software development within KubeTEE agents
-- [ ] Support multi-language code generation and refactoring
-- [ ] Code review and debugging assistance
-- [ ] Repository analysis and documentation generation
-
-**Benefits**: Extend KubeTEE Deep Research Agents with powerful coding capabilities, enabling end-to-end software development workflows within the secure TEE environment.
-
-#### Subnet 22 — Desearch (Decentralized Web Search)
-
-> *AI-powered decentralized search with real-time access to X, Reddit, Arxiv, and the web*
-
-Integration with [Desearch](https://desearch.ai) to replace Tavily and other centralized web search APIs:
-
-- [ ] Replace Tavily API with Desearch for Deep Research web searches
-- [ ] Integrate real-time X (Twitter) search for current events research
-- [ ] Add Reddit search for community insights and discussions
-- [ ] Enable Arxiv search for academic paper retrieval
-- [ ] Use Desearch's Rizzy Agent for automated research workflows
-
-**Architecture**:
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                    DESEARCH (SN22) INTEGRATION                              │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  CURRENT: Centralized Search APIs                                           │
-│  ─────────────────────────────────                                          │
-│  Deep Research Agent → Tavily API → Web Results                             │
-│                      → Google API → Web Results                             │
-│                                                                             │
-│  FUTURE: Decentralized Desearch (SN22)                                      │
-│  ─────────────────────────────────────                                      │
-│                                                                             │
-│  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐          │
-│  │   KubeTEE       │    │    Desearch     │    │   Data Sources  │          │
-│  │   Deep Research │───▶│     (SN22)      │───▶│                 │          │
-│  │                 │    │                 │    │ • Web crawl     │          │
-│  │ Research query  │    │ • AI-powered    │    │ • X/Twitter     │          │
-│  │ Agent workflow  │    │ • Real-time     │    │ • Reddit        │          │
-│  │                 │    │ • Decentralized │    │ • Arxiv papers  │          │
-│  └─────────────────┘    └─────────────────┘    └─────────────────┘          │
-│                                                                             │
-│  Benefits vs Tavily/Google:                                                 │
-│  ─────────────────────────                                                  │
-│  • Decentralized (no single point of failure/censorship)                    │
-│  • Native Bittensor (pay in TAO/Alpha, not USD)                             │
-│  • Real-time social data (X, Reddit integration)                            │
-│  • Academic focus (Arxiv integration)                                       │
-│  • AI-powered ranking (not just keyword matching)                           │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-**Rizzy Agent Integration**:
-Desearch's Rizzy Agent can power automated research workflows, potentially enhancing KubeTEE's Deep Research capabilities with live AI agents.
-
-#### Subnet 60 — Bitsec (Security Scanning)
-
-> *AI-powered vulnerability detection for blockchain and code security*
-
-Integration with [Bitsec](https://bitsec.ai) for decentralized security scanning of bounty submissions:
-
-- [x] Integrate Bitsec API for automated code security analysis
-- [x] Add BitsecSecurityScanner to bounty validation pipeline
-- [ ] Enable subnet-to-subnet synapse communication for security scans
-- [ ] Implement continuous security monitoring for deployed code
-- [ ] Cross-subnet security attestation
-
-**Architecture**:
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                    Bitsec (SN60) Integration                        │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│  ┌─────────────┐    ┌─────────────────┐    ┌──────────────────┐     │
-│  │   Bounty    │    │    Bitsec       │    │   Validation     │     │
-│  │ Submission  │───▶│    (SN60)       │───▶│    Result        │     │
-│  │             │    │                 │    │                  │     │
-│  │  PR Code    │    │ AI Vulnerability│    │ PASS: 0 critical │     │
-│  │   Diff      │    │   Detection     │    │ FAIL: issues     │     │
-│  └─────────────┘    └─────────────────┘    └──────────────────┘     │
-│                                                                     │
-│  Security Levels:                                                   │
-│  • Critical: Immediate rejection                                    │
-│  • High: Immediate rejection                                        │
-│  • Medium: Warning, manual review option                            │
-│  • Low: Informational, auto-approve allowed                         │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
-```
-
-**Benefits**: Decentralized security auditing, AI-powered vulnerability detection, no single point of failure, native Bittensor integration.
-
-### Phase 4: Subnet Integrations
-
-#### Subnet 3 — Templar (Model Pre-Training)
-
-> *Decentralized pre-training of foundation models using distributed compute*
-
-Integration with [Templar](https://github.com/templar-ai) to create custom models that outperform or replace NVIDIA Llama3.3 Nemotron 49B Super V1.5:
-
-- [ ] Evaluate Templar's Gauntlet incentive mechanism for KubeTEE model training
-- [ ] Pre-train custom Deep Research model optimized for KubeTEE use cases
-- [ ] Create TEE-native model variants with security attestation built-in
-- [ ] Collaborate with Templar + Gradients for end-to-end training pipeline
-- [ ] Deploy custom Covenant-style models as alternatives to NVIDIA NIM
-
-**Architecture**:
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                    CUSTOM MODEL TRAINING PIPELINE                           │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  ┌─────────────┐    ┌─────────────────┐    ┌─────────────────┐              │
-│  │   Templar   │    │    Gradients    │    │    KubeTEE      │              │
-│  │   (SN3)     │───▶│     (SN56)      │───▶│  TEE Deployment │              │
-│  │             │    │                 │    │                 │              │
-│  │ Pre-train   │    │  Fine-tune      │    │ Secure          │              │
-│  │ 72B+ Model  │    │  for KubeTEE    │    │ Inference       │              │
-│  └─────────────┘    └─────────────────┘    └─────────────────┘              │
-│                                                                             │
-│  Target Models:                                                             │
-│  ─────────────                                                              │
-│  1. KubeTEE-Research-72B     → Outperform Nemotron 49B on DeepResearch      │
-│  2. KubeTEE-Agent-7B         → Optimized agent model for tool use           │
-│  3. KubeTEE-RAG-13B          → Specialized RAG/retrieval model              │
-│  4. Customer Fine-Tuned      → Custom models for enterprise clients         │
-│                                                                             │
-│  Benefits vs NVIDIA NIM:                                                    │
-│  ───────────────────────                                                    │
-│  • No vendor lock-in (decentralized training)                               │
-│  • Lower cost (distributed compute)                                         │
-│  • TEE-native security (attestation from training to inference)             │
-│  • Custom optimization (not generic pre-trained weights)                    │
-│  • Open source (community can verify and contribute)                        │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-**Templar's Gauntlet Mechanism**:
-- Distributed participants submit gradient updates
-- Two-stage filtering: statistical analysis + performance validation
-- Permissionless: anyone can join by providing compute
-- Compensation proportional to contribution quality
-
-**Collaboration Pipeline** (Templar + Gradients + KubeTEE):
-1. **Templar (SN3)**: Pre-train base model from scratch (e.g., 72B parameters)
-2. **Gradients (SN56)**: Post-training fine-tuning for KubeTEE use cases
-3. **KubeTEE**: TEE validation + deployment + inference
-
-#### Subnet 37 — Aurelius (AI Alignment & Safety)
-
-> *Decentralized protocol for surfacing and verifying alignment failures in LLMs*
-
-Integration with [Aurelius](https://subnetalpha.ai/subnet/aurelius/) for AI safety verification and red-teaming of KubeTEE models:
-
-**What Aurelius Does** ([Source](https://subnetalpha.ai/subnet/aurelius/)):
-- **Crowdsourced Red-Teaming**: Independent participants aggressively test AI systems to expose failures
-- **High-Signal Alignment Data**: Structured, verifiable datasets for safer AI fine-tuning
-- **Three-Tier System**: Miners (adversarial prompters) → Validators (auditors) → Tribunate (governance rules)
-- **Cryptographic Verification**: All interactions logged on-chain with provenance guarantees
-
-**KubeTEE Integration Tasks**:
-- [ ] Integrate Aurelius for adversarial testing of KubeTEE Deep Research models
-- [ ] Use Aurelius to verify alignment of custom fine-tuned models
-- [ ] Generate structured safety datasets for model improvement via Data Flywheel
-- [ ] Red-team models before production deployment
-- [ ] Continuous alignment monitoring for deployed agents
-- [ ] Provide alignment attestation certificates for enterprise clients
-
-**Architecture**:
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                    AURELIUS (SN37) INTEGRATION                              │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐          │
-│  │   KubeTEE       │    │    Aurelius     │    │   Safety        │          │
-│  │   Models        │───▶│     (SN37)      │───▶│   Report        │          │
-│  │                 │    │                 │    │                 │          │
-│  │ • Research-72B  │    │ • Adversarial   │    │ • Alignment     │          │
-│  │ • Agent-7B      │    │   prompts       │    │   failures      │          │
-│  │ • RAG-13B       │    │ • Red-teaming   │    │ • Safety score  │          │
-│  │ • Custom models │    │ • Interpretabil │    │ • Improvement   │          │
-│  └─────────────────┘    └─────────────────┘    └─────────────────┘          │
-│                                                                             │
-│  Use Cases:                                                                 │
-│  ──────────                                                                 │
-│  1. Pre-deployment: Verify model alignment before production                │
-│  2. Continuous: Monitor deployed models for alignment drift                 │
-│  3. Fine-tuning: Generate datasets to improve model safety                  │
-│  4. Audit: Provide alignment attestation for enterprise clients             │
-│                                                                             │
-│  Aurelius Components:                                                       │
-│  • Miners (Prompters): Generate adversarial prompts                         │
-│  • Validators (Auditors): Verify and score outputs                          │
-│  • Tribunate: Dynamic rules layer for evaluation                            │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-**Benefits**:
-- 🛡️ **Decentralized red-teaming** — No single point of bias
-- 📊 **Structured datasets** — Reproducible alignment artifacts
-- 🔍 **Interpretability** — Understand why models fail
-- ✅ **Safety attestation** — Prove model alignment to clients
-
-#### Subnet 56 — Gradients (Decentralized Fine-Tuning)
-
-> *Simplifying AI training, making it accessible to all through Bittensor's decentralized network*
-
-Integration with [Gradients](https://gradients.ai) to replace NVIDIA NeMo microservices with decentralized TEE-based fine-tuning:
-
-- [ ] Evaluate Gradients for on-demand gradient computation within TEE environments
-- [ ] Replace centralized NVIDIA fine-tuning microservice with Gradients subnet
-- [ ] Implement secure model fine-tuning pipeline using Gradients + KubeTEE TEE
-- [ ] Enable privacy-preserving model customization for enterprise clients
-- [ ] Cross-subnet orchestration for training → deployment workflow
-
-**Architecture Vision**:
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                    Decentralized AI Pipeline                        │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│  ┌─────────────┐    ┌─────────────────┐    ┌──────────────────┐     │
-│  │  Gradients  │    │    KubeTEE      │    │   Deployment     │     │
-│  │   (SN56)    │───▶│  TEE Validation │───▶│   & Inference    │     │
-│  │             │    │                 │    │                  │     │
-│  │ Fine-Tuning │    │ Secure Training │    │ Production AI    │     │
-│  │ Computation │    │  Attestation    │    │   Services       │     │
-│  └─────────────┘    └─────────────────┘    └──────────────────┘     │
-│                                                                     │
-│  Benefits:                                                          │
-│  • No NVIDIA vendor lock-in for fine-tuning                         │
-│  • Decentralized compute for cost efficiency                        │
-│  • TEE attestation ensures training integrity                       │
-│  • Privacy-preserving: data never leaves TEE                        │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
-```
-
-**Benefits**: Eliminate dependency on centralized NVIDIA microservices, reduce costs through decentralized compute, maintain security via TEE attestation throughout the training pipeline.
-
----
-
-#### Data-Focused Subnets
-
-These subnets provide critical datasets for fine-tuning and pre-training the AIQ Deep Research agent:
-
-##### Subnet 13 — Data Universe (Macrocosmos) ⭐ CRITICAL
-
-> *World's largest open social dataset—55B+ rows of real-time social and web content*
-
-Integration with [Data Universe](https://www.macrocosmos.ai/sn13) for real-time grounding data:
-
-- [ ] Integrate Gravity API for on-demand social data scraping
-- [ ] Use 55B+ row HuggingFace dataset for pre-training grounding
-- [ ] Real-time X/Twitter, Reddit feeds for research agent context
-- [ ] MCP integration for Claude-compatible data pipelines
-- [ ] Prevent research agent hallucination via current events grounding
-
-**Architecture**:
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                    DATA UNIVERSE (SN13) INTEGRATION                         │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐          │
-│  │   Gravity API   │    │  55B+ Dataset   │    │   KubeTEE AI    │          │
-│  │                 │    │  (HuggingFace)  │    │                 │          │
-│  │ • Real-time     │    │ • X/Twitter     │    │ • Grounding     │          │
-│  │   scraping      │───▶│ • Reddit        │───▶│   Layer         │          │
-│  │ • On-demand     │    │ • Web content   │    │ • RAG context   │          │
-│  │   queries       │    │ • Sentiment     │    │ • Fine-tuning   │          │
-│  └─────────────────┘    └─────────────────┘    └─────────────────┘          │
-│                                                                             │
-│  Why Critical:                                                              │
-│  • Prevents hallucination via real-time grounding                           │
-│  • Largest open social dataset in the world                                 │
-│  • MCP integration for Claude compatibility                                 │
-│  • Macrocosmos ecosystem synergy (pairs with SN01 Apex)                     │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-##### Subnet 52 — Dojo (Tensorplex)
-
-> *Community-generated multi-modal AI training data with human validation*
-
-Integration with [Dojo](https://tensorplex.ai) for high-quality training samples:
-
-- [ ] Integrate Dojo for human-validated training data generation
-- [ ] Crowdsource training samples for KubeTEE-specific use cases
-- [ ] Multi-modal data collection (text, image, structured)
-- [ ] Quality assurance via community validation
-- [ ] Generate domain-specific training datasets for enterprise clients
-
-**Use Cases**:
-- Generate high-quality Q&A pairs for research agent fine-tuning
-- Collect human preferences for RLHF alignment
-- Validate AI outputs via community consensus
-
-##### Subnet 54 — MIID (Synthetic Identities)
-
-> *Synthetic identity generation for compliance testing and security validation*
-
-Integration with MIID for secure compliance testing:
-
-- [ ] Generate synthetic identities for KYC/AML testing
-- [ ] Privacy-preserving test data for enterprise demos
-- [ ] Compliance testing without real user data exposure
-- [ ] Security validation using synthetic attack vectors
-- [ ] TEE-protected synthetic data generation
-
-**Why Important**:
-- Enterprise clients need compliance testing without real data risk
-- Synthetic identities enable realistic but safe security audits
-- Pairs with TEE for privacy-preserving compliance workflows
-
-##### Subnet 75 — Hippius (Decentralized Cloud Storage)
-
-> *Decentralized storage infrastructure for AI datasets and model artifacts*
-
-Integration with [Hippius](https://hippius.com) for decentralized storage:
-
-- [ ] Store large training datasets (55B+ rows) on decentralized storage
-- [ ] Model checkpoint storage with content-addressable retrieval
-- [ ] Reduce centralized cloud storage dependency (S3, GCS)
-- [ ] Geographic distribution for latency optimization
-- [ ] Immutable storage for model versioning and audit trails
-
-**Architecture**:
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                    HIPPIUS (SN75) INTEGRATION                               │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐          │
-│  │   Training      │    │    Hippius      │    │   Deployment    │          │
-│  │   Datasets      │    │    (SN75)       │    │   Retrieval     │          │
-│  │                 │    │                 │    │                 │          │
-│  │ • SN13 social   │───▶│ • Decentralized │───▶│ • Model         │          │
-│  │ • SN52 Dojo     │    │ • Immutable     │    │   checkpoints   │          │
-│  │ • Embeddings    │    │ • Geo-dist      │    │ • Embeddings    │          │
-│  └─────────────────┘    └─────────────────┘    └─────────────────┘          │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
----
-
-#### Financial & Trading Subnets
-
-These subnets provide specialized financial data and analytics for enterprise research capabilities:
-
-##### Subnet 79 — τaos (Financial Market Simulation)
-
-> *Financial market simulation with model IP protection*
-
-Integration with τaos for advanced financial modeling:
-
-- [ ] Financial market simulation for research agent training
-- [ ] Backtesting frameworks for financial strategies
-- [ ] Synthetic market data generation
-- [ ] Risk modeling
-
-**Use Cases**:
-- Research agents on financial scenarios
-
-##### Subnet 6 — Numinous (Superhuman Forecasting)
-
-> *Decentralized AI forecasting with prediction market oracle*
-
-[Numinous](https://subnetalpha.ai/subnet/numinous/) is a decentralized forecasting protocol that produces superhuman predictive intelligence through competing AI forecasting agents. The subnet aggregates autonomous forecasting models that compete and evolve to become extremely accurate forecasters, using Brier Score metrics to evaluate and reward top performers.
-
-Integration with Numinous for predictive intelligence capabilities:
-
-- [ ] Integrate Numinous Oracle API for event probability forecasts
-- [ ] Financial event prediction for deep research reports
-- [ ] Prediction market resolution oracle integration
-- [ ] Real-time probability updates for trading signals
-
-**Key Capabilities**:
-- 99%+ accurate prediction market resolutions
-- Superhuman forecasting via AI agent ensemble
-- Real-time probability updates on binary events
-- Integrates with Desearch (SN22) + Chutes (SN64)
-
-**Use Cases**:
-- Investment thesis validation with probabilistic forecasts
-- Risk assessment for enterprise decisions
-- Market event prediction for research reports
-
----
-
-### Phase 5: Experimental Integrations
-
-These subnets are being evaluated for future integration:
-
-##### Subnet 121 — Sundae Bar (Enterprise AI Agent Marketplace)
-
-> *🧪 EXPERIMENTAL: AI Agent marketplace for enterprise workflows*
-
-[Sundae Bar](https://subnetalpha.ai/subnet/sundae_bar/) (SN121) is an "App Store for AI Agents" — a unified marketplace where AI agents can be listed by their creators and easily discovered and utilized by businesses. The platform connects AI agent developers with enterprises, enabling them to discover, deploy, and monetize autonomous AI "teammates" for various tasks (HR, marketing, finance, coding assistants, etc.).
-
-**Planned MCP Server Integration**:
-
-- [ ] Integrate Sundae Bar as MCP server for AI agent discovery
-- [ ] Enable enterprise users to browse and deploy curated AI agents
-- [ ] Agent matchmaking based on workflow requirements
-- [ ] Access pre-built agents (HR, Sales, Marketing, Ops automation)
-- [ ] TEE-protected agent deployment for sensitive enterprise workflows
-
-**Key Capabilities**:
-- Performance-based rewards via Bittensor (Yuma Consensus)
-- Enterprise-grade compliance (KYC/AML verification)
-- Real-world deployment metrics for agent quality
-- Agent orchestration with natural language
-
-**Use Cases**:
-- Discover specialized AI agents for enterprise tasks
-- Deploy HR automation agents (recruiting, onboarding)
-- Access marketing content generation agents
-- Integrate trading/analytics agents for financial workflows
-
-**Integration Status**: 🧪 Experimental — evaluating for Phase 5+
-
----
-
-### AIQ Deep Research Agent — Subnet Data Pipeline
-
-The following diagram shows how data-focused subnets feed into the AIQ Deep Research Agent:
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                        AIQ DEEP RESEARCH AGENT                              │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  ┌──────────────────┐    ┌──────────────────────────────────────────────┐   │
-│  │  REASONING CORE  │◄───│  SN01 Apex (agentic traces)                  │   │
-│  │  (Fine-tuned LLM)│◄───│  SN03 Templar (pre-training)                 │   │
-│  └────────┬─────────┘    │  SN56 Gradients (fine-tuning)                │   │
-│           │              └──────────────────────────────────────────────┘   │
-│           │                                                                 │
-│  ┌────────▼─────────┐    ┌──────────────────────────────────────────────┐   │
-│  │  GROUNDING LAYER │◄───│  SN13 Data Universe (55B social posts)       │   │
-│  │  (RAG + Vector)  │◄───│  SN22 Desearch (summarized web data)         │   │
-│  └────────┬─────────┘    │  SN52 Dojo (human-validated samples)         │   │
-│           │              └──────────────────────────────────────────────┘   │
-│           │                                                                 │
-│  ┌────────▼─────────┐    ┌──────────────────────────────────────────────┐   │
-│  │  VERIFICATION    │◄───│  SN37 Aurelius (alignment safety)            │   │
-│  │  (Safety layer)  │◄───│  SN60 Bitsec (security scanning)             │   │
-│  └────────┬─────────┘    └──────────────────────────────────────────────┘   │
-│           │                                                                 │
-│  ┌────────▼─────────┐    ┌──────────────────────────────────────────────┐   │
-│  │  STORAGE LAYER   │◄───│  SN75 Hippius (decentralized storage)        │   │
-│  └────────┬─────────┘    └──────────────────────────────────────────────┘   │
-│           │                                                                 │
-│  ┌────────▼─────────┐    ┌──────────────────────────────────────────────┐   │
-│  │  FINANCIAL INTEL │◄───│  SN79 τaos (market simulation)               │   │
-│  │  (Domain-specific│◄───│                                              │   │
-│  │   research)      │◄───│  SN06 Numinous (superhuman forecasting)      │   │
-│  └──────────────────┘    └──────────────────────────────────────────────┘   │
-│                                                                             │
-│           ▼ ▼ ▼ ▼ ▼ ▼ ▼ ▼ ▼ ▼ ▼ ▼ ▼ ▼ ▼ ▼ ▼ ▼ ▼ ▼ ▼                         │
-│  ┌──────────────────────────────────────────────────────────────────────┐   │
-│  │              KubeTEE AI / dStack TEE (Intel TDX)                     │   │
-│  │         Confidential Training → Inference → Deployment               │   │
-│  └──────────────────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-### Subnet Ecosystem Overview
-
-> 📊 Full diagram with Mermaid source: [docs/subnet-integrations-diagram.md](./docs/subnet-integrations-diagram.md)
-
-```
-┌─────────────────────────────────────────────────────────────────────────────────────────┐
-│                            KUBETEE AI — 17 SUBNET INTEGRATIONS                          │
-├─────────────────────────────────────────────────────────────────────────────────────────┤
-│                                                                                         │
-│   🎯 REASONING & TRAINING              📊 DATA & GROUNDING           📣 MARKETING       │
-│   ┌─────────────────────────┐          ┌─────────────────────┐      ┌───────────────┐   │
-│   │ SN01  Apex              │          │ SN13  Data Universe │      │ SN16  BitAds  │   │
-│   │ SN03  Templar           │          │ SN22  Desearch      │      │ SN71  LeadPoet│   │
-│   │ SN56  Gradients         │          │ SN52  Dojo          │      │ SN93  Bitcast │   │
-│   │ SN120 Affine            │          │ SN54  MIID          │      └───────┬───────┘   │
-│   └───────────┬─────────────┘          └──────────┬──────────┘              │           │
-│               │                                   │                         │           │
-│               ▼                                   ▼                         │           │
-│   ┌───────────────────────────────────────────────────────────────────────────────────┐ │
-│   │                     🏢 KUBETEE AI DEEP RESEARCH AGENT                             │ │
-│   │  ┌─────────────┐   ┌─────────────┐   ┌─────────────┐   ┌─────────────────────────┐│ │
-│   │  │  REASONING  │──▶│  GROUNDING  │──▶│VERIFICATION │──▶│   FINANCIAL INTEL       ││ │
-│   │  │    CORE     │   │    LAYER    │   │   LAYER     │   │ SN06 SN79               ││ │
-│   │  └─────────────┘   └─────────────┘   └─────────────┘   └─────────────────────────┘│ │
-│   │                           🔒 TEE INFRASTRUCTURE (Intel TDX / NVIDIA CC)           │ │
-│   └───────────────────────────────────────────────────────────────────────────────────┘ │
-│               ▲                                   ▲                                     │
-│               │                                   │                                     │
-│   ┌───────────┴─────────────┐          ┌─────────┴───────────┐                          │
-│   │ 🔐 SAFETY               │          │ ☁️ INFRASTRUCTURE    │                          │
-│   │ SN37  Aurelius          │          │ SN62  Ridges        │                          │
-│   │ SN60  Bitsec            │          │ SN64  Chutes        │                          │
-│   └─────────────────────────┘          │ SN75  Hippius       │                          │
-│                                        └─────────────────────┘                          │
-│                                                                                         │
-│   ═══════════════════════════════════════════════════════════════════════════════════   │
-│                                    SUBNET CATEGORIES                                    │
-│   ═══════════════════════════════════════════════════════════════════════════════════   │
-│   🎯 Training    │ Model pre-training, fine-tuning, RL optimization                     │
-│   📊 Data        │ Web search, social data, human-validated samples                     │
-│   🔐 Safety      │ AI alignment, security scanning, red-teaming                         │
-│   ☁️ Infra       │ Storage, compute, coding assistance                                  │
-│   📈 Financial   │ Forecasting, DeFi analytics, market simulation                       │
-│   📣 Marketing   │ Affiliate marketing, B2B leads, creator content                      │
-└─────────────────────────────────────────────────────────────────────────────────────────┘
-```
+- [ ] More job templates
+- [ ] Multi-arch TEE (Intel TDX + AMD SEV-SNP)
+- [ ] Additional confidential compute runtimes
 
 ---
 
 ## Research & Documentation
 
-### Deep Research Reports
+### Documentation
+- [FIPS-140-3 Target](./docs/FIPS-140-3.md) — RKE2 + Kata + CoCo FIPS stack research
+- [Confidential Containers Certification](./docs/certification-confidential-containers.md) — CC standards and Kata runtime mapping
+- [Node Registration](./docs/NODE-REGISTRATION.md) — Miner RKE2 node registration
+- [GPU Node Requirements](./docs/GPU-NODE-REQUIREMENTS.md) — GPU/TEE hardware requirements
+- [Cluster Naming Convention](./docs/CLUSTER_NAMING_CONVENTION.md) — `kubetee.ai/*` labels and Fleet GitOps targeting
 
-We leverage cutting-edge AI research agents to continuously improve our architecture:
-
-- **[Grok xAI Deep Research Report](./docs/Grok_XAI_Research.md)**  
-  Analysis of gaps and opportunities in the Bittensor ecosystem, market trends, and competitive landscape
-
-- **[Claude Deep Research Project Architecture Report](./docs/Claude_Deep_Research.md)**  
-  Comprehensive architectural analysis and recommendations for the KubeTEE subnet
+### External Resources
+- [Armada](https://armadaproject.io/) | [Armada GitHub](https://github.com/armadaproject/armada) — multi-cluster batch scheduler
+- [Kata Containers](https://katacontainers.io/) | [Confidential Containers](https://github.com/confidential-containers/confidential-containers)
+- [RKE2 FIPS Support](https://docs.rke2.io/security/fips_support)
 
 ### Community & Support
 
@@ -3214,6 +550,6 @@ See [LICENSE](LICENSE) for details.
 
 ---
 
-**Built with ❤️ by the KubeTEE Community**
+**Built by the KubeTEE Community**
 
-*Empowering Bittensor decentralized AI with enterprise-grade security and performance*
+*Confidential compute for decentralized AI jobs — secured by TEE, scheduled by Armada, incentivized by Bittensor.*
