@@ -492,6 +492,8 @@ Miners register clusters (one hotkey per cluster) with the subnet owner for Ranc
 - [ ] Armada Server on the subnet-owner control plane; Armada Executor on each miner cluster
 - [ ] Kata + CoCo TEE runtime classes (`kata-qemu-nvidia-gpu-tdx`, `kata-qemu-tdx`)
 - [ ] Single Infrastructure validator mechanism (TEE attestation + Armada job metrics + uptime)
+- [ ] Validator Rancher v3 API access: map Bittensor validator hotkeys to Rancher principals (custom auth provider / SAML / OIDC) so validators obtain a read-only bearer token for the Rancher v3 API (bound to `cluster-readonly`) — see CLAUDE.md "Validator Rancher API Access"
+- [ ] Miner Rancher access on cluster creation: map the new cluster's `kubetee.ai/miner-hotkey` to a Rancher principal (same external auth) and bind it **read-only** to the miner's own cluster (`cluster-readonly`) so the miner can observe their cluster (subnet owner manages via Fleet)
 - [ ] Emissions-only rewards
 - [ ] FIPS-140-3 target on FIPS-140-2 validated RKE2 baseline
 - [ ] Confidential NeMo / NIM / Blueprint job templates

@@ -173,7 +173,7 @@ Validator Logic (template/validator/)
 **Forward Pass (template/validator/forward.py):**
 1. Query infrastructure status from all miners (one hotkey per RKE2 cluster)
 2. Verify TEE attestation per cluster (Kata cronjobs)
-3. Pull Armada job metrics (success, throughput, fair-share) via Prometheus
+3. Pull Armada job metrics (success, throughput, fair-share) via Prometheus, and cluster/node state + resource info from the Rancher v3 API
 4. Run connectivity tests (dummy protocol)
 5. Calculate a single Infrastructure weight per miner
 6. Set weights on-chain via Bittensor `set_weights` (single mechanism)
@@ -190,6 +190,21 @@ PHASE 2 (planned):
      ├─→ USDC-on-BASE job billing
      └─→ Referrer / reseller revenue share
 ```
+
+### Validator Rancher API Access (design TBD)
+
+Validators read cluster metrics and information from the **Rancher v3 REST API** (management cluster at `RANCHER_URL`, e.g. `https://staging-rancher.kubetee.ai`) — cluster state, node health/capacity, resource usage, and Fleet/Armada-derived info — in addition to Prometheus. This supersedes direct Rancher Fleet API access for scoring inputs.
+
+**Open design — how a validator obtains a Rancher bearer token after signing in as a validator with its Bittensor hotkey:**
+- A Rancher v3 call requires a bearer token (`Authorization: Bearer token-xxxxx:yyyyy`); the kubeconfig client cert used for `kubectl` does **not** work for `/v3`.
+- **Chosen approach (preferred): Rancher external auth mapped to Bittensor hotkeys** — register each Bittensor hotkey (**validators and miners**) as a Rancher principal via a custom auth provider (SAML / OIDC) backed by the subnet, so a node signs in with its hotkey and receives a session/API token for the v3 API. Tracked as tasks in the subnet [Roadmap](README.md#roadmap) (Phase 0).
+  - **Validators** receive a **read-only** token (bound to `cluster-readonly`) to pull cluster/node metrics across clusters for scoring.
+  - **Miners** receive a **read-only** principal (bound to `cluster-readonly`) scoped to **their own cluster** (the cluster labeled with their `kubetee.ai/miner-hotkey`), provisioned automatically **when a new cluster is created** — they can observe their cluster (nodes, workloads, metrics) while the subnet owner manages it via Fleet GitOps.
+- Alternatives considered (not chosen):
+  1. **Signed-hotkey challenge** — the validator signs a challenge with its Bittensor hotkey; a subnet-owner-operated service verifies the signature on-chain and mints a short-lived, read-only Rancher API token (scoped to the validator's cluster(s)) via the v3 API.
+  2. **Subnet-owner-issued per-validator tokens** — the subnet owner pre-provisions a read-only Rancher API key per validator hotkey (delivered out-of-band); the validator loads it like `.env`.
+- Whatever the mechanism: validator tokens must be **read-only** (bound to `cluster-readonly`); miner tokens are scoped to their own cluster; all tokens are **short-lived or rotatable** and never exposed.
+- References: `../CREATE-CLUSTER-GUIDE.md` (v3 API + `.env` token sourcing), `../cluster-readonly-roletemplate.yaml` (read-only RoleTemplate to bind validator principals to).
 
 ### Key Files and Locations
 
@@ -211,7 +226,7 @@ PHASE 2 (planned):
 Payment processing, escrow, reseller/referrer attribution, and buyback/treasury contracts (BASE L2) plus the Bittensor EVM registry are planned for Phase 2 and are **not included** in the Early Access repo.
 
 **Hardware Requirements:**
-- `min_compute.yml` - Miner: 8x H100/H200/B200 GPUs with TEE attestation, Validator: no GPU needed
+- `docs/GPU-NODE-REQUIREMENTS.md` - Miner: 8x H100/H200/B200 GPUs with TEE attestation, Validator: no GPU needed
 
 ## Development Workflow
 
@@ -415,7 +430,7 @@ btcli wallet overview --wallet.name miner
 **Validator Implementation:** The validator handles:
 - Single Infrastructure mechanism scoring via MechanismManager
 - TEE attestation verification (Kata cronjobs)
-- Armada job metric collection via Prometheus
+- Armada job metric collection via Prometheus + Rancher v3 API (cluster/node state, resource info)
 - Weight calculation and on-chain `set_weights` (single mechanism)
 - (Phase 2) Revenue tracking and reseller/referrer payment distribution
 
