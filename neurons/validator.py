@@ -43,7 +43,7 @@ https://docs.learnbittensor.org/subnets/understanding-multiple-mech-subnets
 Resellers are a special category of "miners" that:
 - Do NOT receive emissions
 - Do NOT register on the Bittensor subnet
-- DO register via KubeTEE CLI → Creates Rancher account
+- DO register via Rancher Fleet → Creates Rancher account
 - DO deposit Alpha/TAO to KubeTEEPayment smart contract
 - Validators calculate usage and transfer funds each epoch to KubeTEE Owner
 
@@ -106,7 +106,7 @@ class Validator(BaseValidatorNeuron):
     - Open Source (40%): Miners improving tech stack
     
     RESELLERS (special category - NO emissions):
-    - Register via KubeTEE CLI (not on Bittensor subnet)
+    - Register via Rancher Fleet (not on Bittensor subnet)
     - Deposit Alpha/TAO to on-chain contract
     - Validators report usage each epoch
     - Contract transfers to KubeTEE Owner

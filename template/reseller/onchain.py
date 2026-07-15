@@ -9,7 +9,7 @@ ARCHITECTURE:
 
                           RESELLER FLOW
 ┌──────────────────┐     ┌────────────────────┐     ┌─────────────────────┐
-│   Reseller       │     │  KubeTEE CLI       │     │  On-Chain Contract  │
+│   Reseller       │     │  Rancher Fleet     │     │  On-Chain Contract  │
 │   (coldkey/hot)  │────▶│  register-reseller │────▶│  KubeTEEPayment.sol │
 │                  │     │                    │     │  (Bittensor EVM)    │
 └──────────────────┘     └────────────────────┘     └─────────────────────┘
@@ -231,7 +231,7 @@ class OnChainClient:
     Client for interacting with KubeTEEPayment smart contract.
     
     Used by:
-    - KubeTEE CLI: For reseller registration and deposits
+    - Rancher Fleet: For reseller registration and deposits
     - Validators: For reporting epoch usage and settlements
     """
     
@@ -278,7 +278,7 @@ class OnChainClient:
         """
         Register as a reseller on-chain.
         
-        Called via KubeTEE CLI after Rancher account creation.
+        Called via Rancher Fleet after Rancher account creation.
         
         Args:
             private_key: EVM private key for transaction

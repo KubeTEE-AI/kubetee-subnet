@@ -33,7 +33,7 @@ class MechanismType(IntEnum):
     REFERRERS are a special category (NO EMISSIONS):
     - Do NOT receive emissions
     - Do NOT register on Bittensor subnet
-    - Register via KubeTEE CLI → Get referral code
+    - Register via Rancher Fleet → Get referral code
     - Refer users who pay SAME retail price as direct users
     - Earn 50% revenue share from referred users' spend
     

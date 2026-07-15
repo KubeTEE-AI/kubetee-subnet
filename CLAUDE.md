@@ -79,21 +79,7 @@ pylint --fail-on=W,E,F --exit-zero ./
 
 **Miner (requires 8x H100/H200/B200 GPUs with TEE attestation):**
 
-Infrastructure miners register their Kubernetes clusters via the KubeTEE CLI. No separate miner process is required - the validator communicates directly with the registered cluster via Rancher Fleet.
-
-```bash
-# Register as infrastructure miner
-kubetee register \
-  --wallet.name <WALLET_NAME> \
-  --wallet.hotkey <HOTKEY> \
-  --kubeconfig <FILE_PATH>
-
-# Link GitHub account (for benchmark emissions)
-kubetee link-github --hotkey <HOTKEY>
-
-# Check registration status
-kubetee status --wallet.name <WALLET_NAME>
-```
+Infrastructure miners register their RKE2 clusters with Rancher Fleet (labeled with `kubetee.ai/*` hotkey/coldkey labels). No separate miner process is required - the validator communicates directly with the registered cluster via Rancher Fleet and scores it via TEE attestation + Armada job metrics. See `docs/NODE-REGISTRATION.md`.
 
 **Validator:**
 ```bash
@@ -143,45 +129,24 @@ btcli stake add --wallet.name validator --wallet.hotkey default
 
 ## Architecture Overview
 
-### Multi-Mechanism Incentive System
+### Incentive Mechanism (Single: Infrastructure)
 
-This subnet implements **native Bittensor multiple incentive mechanisms** with three on-chain mechanisms plus an off-chain referral program:
+KubeTEE Early Access uses a **single Bittensor incentive mechanism** that distributes emissions as weights to miners based on the resources they provide in their RKE2 cluster and how reliably they execute Armada-scheduled confidential jobs. There is no benchmark, bounty, or referral mechanism in Early Access — payments and revenue share are a Phase 2 roadmap item.
 
-1. **Mechanism 0: Infrastructure (60% emissions)**
-   - Rewards miners providing Kubernetes infrastructure
-   - Metrics: uptime, TEE compliance, latency, GPU capacity
-   - Miners receive **50% revenue share** from service requests
-   - Location: `template/mechanisms/infrastructure.py`
+**Mechanism: Infrastructure (100% emissions)**
+- Rewards miners providing RKE2 cluster resources (GPU nodes) that run confidential AI jobs scheduled by Armada
+- Metrics: TEE attestation (Intel TDX/SGX, NVIDIA CC), Armada job success/throughput/fair-share, uptime, resource utilization, FIPS-140-3 progress
+- One hotkey per cluster; all nodes co-located in a single data center
+- No attestation = no emissions
+- Location: `template/mechanisms/infrastructure.py`
 
-2. **Mechanism 1: Benchmark Competition (30% emissions)**
-   - Rewards DeepResearch Benchmark improvements
-   - **Lifetime Score with Decay** model (5% monthly decay, 30% floor)
-   - Early improvers continue earning even after others improve
-   - **On-chain registry**: `KubeTEERegistry.sol` on Bittensor EVM stores GitHub→Hotkey mappings + scores
-   - **Write access**: Subnet Owner only (validators read-only)
-   - Location: `template/mechanisms/benchmark.py`
-
-3. **Mechanism 2: Bounty Treasury (10% emissions)**
-   - Treasury key accumulates emissions for development bounties
-   - Fixed TAO values (paid in Alpha tokens) per bounty
-   - Manual payout by subnet owner when PR is merged
-   - Location: `template/mechanisms/bounty_treasury.py`
-
-4. **Referrers (NO emissions, 50% revenue share)**
-   - NOT registered on Bittensor subnet (no emissions)
-   - Register via CLI, get unique referral code
-   - Earn 50% of revenue from referred users
-   - Location: `template/reseller/referral.py`
-
-**Critical Detail:** Three mechanisms use emissions (Infrastructure 60%, Benchmark 30%, Bounty Treasury 10%). Referrers use pure revenue share with NO emissions. Each mechanism has separate weight matrices and independent Yuma Consensus calculations.
+**Critical Detail:** A single weight matrix is used. The validator sets one set of weights per epoch via Bittensor `set_weights` (no `mechanism_id` split). The benchmark, bounty treasury, and referrer mechanisms from the earlier design are removed for Early Access.
 
 ### Core Architecture Layers
 
 ```
 Entry Points (neurons/)
   └── validator.py - Main validator loop
-CLI (kubetee/)
-  └── cli/ - KubeTEE CLI for miner registration
         ↓
 Base Abstractions (template/base/)
   ├── neuron.py - BaseNeuron (core lifecycle)
@@ -193,11 +158,9 @@ Protocol Definitions (template/protocol.py)
   └── Dummy - Connectivity testing
         ↓
 Mechanism Coordination (template/mechanisms/)
-  ├── manager.py - MechanismManager (coordinates all mechanisms)
-  ├── definitions.py - Mechanism configurations (60/30/10 split)
-  ├── infrastructure.py - Infrastructure scoring (Mechanism 0)
-  ├── benchmark.py - Benchmark scoring with Lifetime Decay (Mechanism 1)
-  └── bounty_treasury.py - Treasury accumulation for bounties (Mechanism 2)
+  ├── manager.py - MechanismManager (coordinates the single Infrastructure mechanism)
+  ├── definitions.py - Single mechanism configuration (Infrastructure 100%)
+  └── infrastructure.py - Infrastructure scoring (TEE, Armada jobs, uptime, capacity)
         ↓
 Validator Logic (template/validator/)
   ├── forward.py - Query miners, track revenue
@@ -208,50 +171,44 @@ Validator Logic (template/validator/)
 ### Protocol Flow
 
 **Forward Pass (template/validator/forward.py):**
-1. Query infrastructure status from all miners
-2. Process pending service requests (with revenue tracking)
-3. Run connectivity tests (dummy protocol)
-4. Record metrics per mechanism
-5. Calculate weights per mechanism
-6. Set weights using `mechanism_id` parameter
+1. Query infrastructure status from all miners (one hotkey per RKE2 cluster)
+2. Verify TEE attestation per cluster (Kata cronjobs)
+3. Pull Armada job metrics (success, throughput, fair-share) via Prometheus
+4. Run connectivity tests (dummy protocol)
+5. Calculate a single Infrastructure weight per miner
+6. Set weights on-chain via Bittensor `set_weights` (single mechanism)
 
-**Revenue Flow:**
+**Revenue Flow (Phase 2, not in Early Access):**
 ```
-USER REQUEST
+EARLY ACCESS: emissions only
      ↓
-MINER (serves request)
+MINER (runs confidential Armada jobs)
      ↓
-REVENUE TRACKING
-     ├─→ Infrastructure Miner: Bittensor Subnet Emission mechanism
-     ├─→ KubeTEE Subnet Tao Inflow : 100% (or 50% if referred)
-     └─→ Referrer: 50% of revenue (if user was referred)
+VALIDATOR → set_weights → Bittensor emissions to miners
+
+PHASE 2 (planned):
+     ├─→ USDC-on-BASE job billing
+     └─→ Referrer / reseller revenue share
 ```
 
 ### Key Files and Locations
 
 **Entry Points:**
-- `neurons/validator.py` - Validator main loop, initializes MechanismManager, runs forward pass, sets weights
-- `kubetee/cli/` - KubeTEE CLI for miner registration (replaces traditional miner neuron)
+- `neurons/validator.py` - Validator main loop, runs forward pass, sets weights for the single Infrastructure mechanism
 
 **Core Mechanisms:**
-- `template/mechanisms/definitions.py` - Emission splits (60/40/0), mechanism configurations
-- `template/mechanisms/manager.py` - MechanismManager coordinates all mechanisms
-- `template/mechanisms/infrastructure.py` - InfrastructureScorer (health, latency, TEE, revenue)
-- `template/mechanisms/benchmark.py` - BenchmarkScorer (reads from Bittensor EVM registry)
-- `template/mechanisms/bounty_treasury.py` - Treasury accumulation for bounties
-- `template/reseller/referral.py` - ReferralManager (50% revenue share, NO emissions)
+- `template/mechanisms/definitions.py` - Single mechanism configuration (Infrastructure 100%)
+- `template/mechanisms/manager.py` - MechanismManager coordinates the Infrastructure mechanism
+- `template/mechanisms/infrastructure.py` - InfrastructureScorer (TEE attestation, Armada job metrics, uptime, capacity, FIPS-140-3)
+- `template/reseller/` - Phase 2 reseller/referral code (not active in Early Access)
 
 **Protocol and Base:**
 - `template/protocol.py` - Synapse definitions (ServiceRequest, InfrastructureStatus, Dummy)
 - `template/base/neuron.py` - BaseNeuron with lifecycle management
 - `template/__init__.py` - Version management (`__version__ = "0.0.0"`)
 
-**Smart Contracts:**
-- `contracts/KubeTEEPayment.sol` - Payment processing (BASE L2)
-- `contracts/KubeTEEBuybackTreasury.sol` - Buyback & treasury transfer (BASE L2)
-- `contracts/KubeTEEEscrow.sol` - Miner payment escrow (BASE L2)
-- `contracts/KubeTEEReseller.sol` - Referrer tracking (BASE L2)
-- `contracts/KubeTEERegistry.sol` - **Bittensor EVM** - GitHub→Hotkey mapping + Lifetime Benchmark Scores
+**Smart Contracts (Phase 2, not in Early Access):**
+Payment processing, escrow, reseller/referrer attribution, and buyback/treasury contracts (BASE L2) plus the Bittensor EVM registry are planned for Phase 2 and are **not included** in the Early Access repo.
 
 **Hardware Requirements:**
 - `min_compute.yml` - Miner: 8x H100/H200/B200 GPUs with TEE attestation, Validator: no GPU needed
@@ -282,10 +239,9 @@ REVENUE TRACKING
 
 ## CI/CD Pipeline
 
-**CircleCI Jobs (.circleci/config.yml):**
+**Code Quality Checks (run locally or via repo CI):**
 - `black` - Code formatting check (line-length 79)
 - `pylint` - Static code analysis
-- `check_compatibility` - Python 3.8-3.11 compatibility
 - `build` - Install and validate package
 
 **Python Version Support:** 3.13+
@@ -322,7 +278,7 @@ Every PR triggers **Claude Code GitHub Actions** for automated AI-powered review
 
 **Configuration:** `.github/workflows/claude.yml`
 
-All PRs require Claude Code review approval in addition to CircleCI checks.
+All PRs require Claude Code review approval.
 
 ## Technology Stack
 
@@ -343,7 +299,7 @@ All PRs require Claude Code review approval in addition to CircleCI checks.
   - NeMo Retriever Microservice
 
 **Infrastructure:**
-- Kubernetes (RKE2) - FIPS-140-2 certified container orchestration
+- Kubernetes (RKE2) - FIPS-140-2 validated container orchestration (FIPS-140-3 target)
 - Rancher - Multi-cluster management
 - Kata Containers - Secure container runtime with TEE support
 - Prometheus - Metrics collection
@@ -351,12 +307,12 @@ All PRs require Claude Code review approval in addition to CircleCI checks.
 **Security:**
 - Intel TDX/SGX - CPU-based TEE
 - NVIDIA Confidential Computing - GPU-based TEE (Hopper/Blackwell)
-- FIPS-140-2 compliance
+- FIPS-140-3 target on a FIPS-140-2 validated baseline
 
 **Blockchain:**
-- Solidity smart contracts
-- BASE L2 (Coinbase) - USDC payments
-- Bittensor EVM - Emission-related payments
+- Bittensor - native emissions via `set_weights` (Early Access)
+- BASE L2 (Coinbase) - USDC payments (Phase 2)
+- Solidity smart contracts - Phase 2 (not in Early Access repo)
 
 ## Important Implementation Patterns
 
@@ -373,8 +329,9 @@ class MyProtocol(bt.Synapse):
 2. Validators query miners via Rancher Fleet API (no miner process needed)
 3. Add query logic in validator's `forward()` (`template/validator/forward.py`)
 
-### Adding a New Mechanism
+### Adding a New Mechanism (post-Early-Access)
 
+Early Access uses a single Infrastructure mechanism. To add a second mechanism later:
 1. Create scorer in `template/mechanisms/<mechanism_name>.py`
 2. Add to `definitions.py` MECHANISMS list
 3. Update emission splits (must sum to 100%)
@@ -383,21 +340,20 @@ class MyProtocol(bt.Synapse):
 
 ### Modifying Scoring Logic
 
-1. Update appropriate scorer (`infrastructure.py`, `open_source.py`, `resellers.py`)
+1. Update `template/mechanisms/infrastructure.py` (the single scorer)
 2. Implement `calculate_weights()` method
 3. Weights should be normalized (sum to 1.0)
 4. Test in isolation before deploying
 
-### Weight Setting Per Mechanism
+### Weight Setting
 
-Weights are set separately for each mechanism using the `mechanism_id` parameter:
+Early Access sets a single weight matrix (no `mechanism_id` split):
 ```python
 self.subtensor.set_weights(
     wallet=self.wallet,
     netuid=self.config.netuid,
     uids=uids,
     weights=weights,
-    mechanism_id=mechanism_id  # 0 for Infrastructure, 1 for OpenSource
 )
 ```
 
@@ -405,7 +361,7 @@ self.subtensor.set_weights(
 
 **Validator Logs:**
 - Location: `~/.bittensor/validators/<netuid>/`
-- Mechanism stats logged every 60s
+- Infrastructure mechanism stats logged every 60s
 - Use `bt.logging` at appropriate levels (trace, debug, info, warning, error)
 
 **Miner Verification:**
@@ -429,7 +385,7 @@ btcli wallet overview --wallet.name miner
 **TEE Requirements:**
 - Miners MUST provide TEE attestation (Intel TDX/SGX or NVIDIA CC)
 - 8-GPU nodes required (H100/H200/B200/B300)
-- FIPS-140-2 compliance mandatory
+- FIPS-140-3 target (FIPS-140-2 validated baseline) mandatory
 
 **Blacklist Logic:**
 - Implemented in miner's `blacklist()` method
@@ -445,38 +401,36 @@ btcli wallet overview --wallet.name miner
 
 **Current State:** This is an early-stage template (v0.0.0) with production-ready architecture but placeholder implementations. The infrastructure requires:
 - Full NVIDIA stack integration (NeMo, NIM, Blueprints)
-- Smart contract deployment (BASE L2 and Bittensor EVM)
-- Multi-cluster Kubernetes setup with Rancher Fleet
-- TEE attestation service integration
-- DeepResearch Benchmark integration
+- Armada multi-cluster batch scheduler integration
+- Multi-cluster Kubernetes setup with Rancher Fleet (RKE2)
+- TEE attestation service integration (Kata + CoCo)
+- FIPS-140-3 target on a FIPS-140-2 validated baseline
 
-**Miner Implementation:** Infrastructure miners register via `kubetee register` CLI command. No separate miner process is needed - validators communicate directly with registered Kubernetes clusters via Rancher Fleet. Miners must provide:
+**Miner Implementation:** Infrastructure miners register their RKE2 clusters with Rancher Fleet (no separate miner process). Validators communicate directly with registered Kubernetes clusters via Rancher Fleet and score them via TEE attestation + Armada job metrics. Miners must provide:
 - Kubernetes cluster with Rancher Fleet agent
 - TEE attestation (Intel TDX/SGX or NVIDIA CC)
 - 8x H100/H200/B200 GPUs minimum
 - Health metrics exposed via Prometheus
 
 **Validator Implementation:** The validator handles:
-- Multi-mechanism coordination via MechanismManager
-- Revenue tracking and attribution
-- Weight calculation per mechanism
-- Referrer payment distribution
+- Single Infrastructure mechanism scoring via MechanismManager
+- TEE attestation verification (Kata cronjobs)
+- Armada job metric collection via Prometheus
+- Weight calculation and on-chain `set_weights` (single mechanism)
+- (Phase 2) Revenue tracking and reseller/referrer payment distribution
 
-**Smart Contracts:** Deployment targets:
-- Bittensor EVM for emission-related payments
-- BASE L2 for USDC payments (lower fees)
+**Smart Contracts (Phase 2):** Deployment targets (not in Early Access):
+- BASE L2 (Coinbase) - USDC job billing, escrow, reseller/referrer attribution, buyback/treasury
+- Bittensor EVM - optional Phase 2 registry (Early Access emissions are native `set_weights`, no contract)
 
 ## Key Takeaways
 
-1. This subnet uses **four economic models** with three receiving emissions (Infrastructure 60%, Benchmark 30%, Bounty Treasury 10%) plus Referrers (50% revenue share, NO emissions)
-2. **Separate weight matrices** per mechanism with independent Yuma Consensus
-3. **Lifetime Score with Decay** for benchmark competition - early improvers continue earning (5% monthly decay, 30% floor)
-4. **Bounty Treasury** accumulates 10% emissions for manual payouts on merged PRs (fixed TAO values in Alpha)
-5. **TEE is mandatory** for miners (Intel TDX/SGX, NVIDIA Confidential Computing)
-6. **NVIDIA partnership** is central - leverages NeMo, NIM, and AI Blueprints
-7. **Multi-chain strategy** - BASE L2 for payments, Bittensor EVM for emissions
-8. **Revenue share** - Miners get 50%, Referrers get 50%, KubeTEE gets remainder
-9. **Development workflow** - Feature → Staging → Main with CircleCI + Claude GitHub Actions automation
-10. **Hardware requirements** are extreme - 8x H100/H200/B200 GPUs minimum for miners
-11. **Current version 0.0.0** indicates template stage - production deployment requires significant additional work
-12. **Security-first design** - FIPS-140-2, CCC membership, confidential computing throughout
+1. Early Access uses a **single Infrastructure incentive mechanism** that distributes emissions as weights to miners based on RKE2 cluster resources and Armada job execution
+2. **Single weight matrix** — validator sets one set of weights per epoch (no multi-mechanism split)
+3. **TEE is mandatory** for miners (Intel TDX/SGX, NVIDIA Confidential Computing) — no attestation = no emissions
+4. **NVIDIA AI stack** (NeMo, NIM, Blueprints) runs as Armada-scheduled confidential jobs in Kata + CoCo TEE
+5. **Armada** is the multi-cluster batch scheduler across RKE2 miner clusters (one hotkey per cluster, single data center)
+6. **Payments are Phase 2** — emissions-only in Early Access; USDC-on-BASE billing, revenue share, and referral program are roadmap
+7. **Security-first design** — FIPS-140-3 target on FIPS-140-2 validated RKE2, CCC membership, confidential computing throughout
+8. **Hardware requirements** — 8x H100/H200/B200 GPUs minimum for miners
+9. **Current version 0.0.0** indicates template stage — production deployment requires significant additional work

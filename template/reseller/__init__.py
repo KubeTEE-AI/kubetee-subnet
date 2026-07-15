@@ -15,7 +15,7 @@ KEY PRINCIPLE: All users pay the SAME retail price!
 Referrers are partners that:
 - Do NOT receive emissions
 - Do NOT register on the Bittensor subnet on-chain
-- DO register via KubeTEE CLI → Get unique referral code
+- DO register via Rancher Fleet → Get unique referral code
 - DO receive 50% of revenue from users they refer
 
 ═══════════════════════════════════════════════════════════════════════════════
@@ -34,7 +34,7 @@ Referrers are partners that:
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │  REFERRERS / INTEGRATORS / WHITE LABEL                                      │
 │  - NOT registered on Bittensor subnet (no emissions)                        │
-│  - Register via KubeTEE CLI → Get referral code                             │
+│  - Register via Rancher Fleet → Get referral code                           │
 │  - Refer users who pay SAME retail price                                    │
 │  - Earn 50% of referred users' spend (USDC on BASE)                        │
 │  - Automatic payouts per epoch                                              │

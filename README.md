@@ -396,7 +396,7 @@ KubeTEE Early Access uses a **single Infrastructure incentive mechanism**. Miner
 #### Staging vs Production
 
 **Staging Environment** (Permissionless):
-- Test applications, infrastructure, upgrades, benchmarks
+- Test applications, infrastructure, upgrades, job validation
 - Gateway to Production environment
 - Community Staging jobs
 
@@ -407,14 +407,12 @@ KubeTEE Early Access uses a **single Infrastructure incentive mechanism**. Miner
 
 ### Payments & Revenue (Roadmap)
 
-Early Access is **emissions-only**. The following payment and revenue mechanisms are designed and drafted (smart contracts in [`contracts/`](contracts/)) and will activate in Phase 2 (see [Roadmap](#roadmap)):
+Early Access is **emissions-only**. The following payment and revenue features are planned for Phase 2 (see [Roadmap](#roadmap)):
 
 - **Subnet 90 Alpha, Other Subnets Alpha, TAO** Discounted for Bittensor community.
-- **USDC-on-BASE job billing** — pull-based, per-epoch metering of Armada job resource usage (`KubeTEEPayment.sol`, `KubeTEEEscrow.sol`)
-- **Referrer / integrator / reseller program** — revenue share with on-chain attribution (`KubeTEEReseller.sol`)
-- **Automated USDC→TAO→Alpha buyback and treasury** — sustainable price support and operations funding (`KubeTEEBuybackBurn.sol`)
-
-Reference: [Bittensor Multi-Mechanism Docs](https://docs.learnbittensor.org/subnets/understanding-multiple-mech-subnets)
+- **USDC-on-BASE job billing** — pull-based, per-epoch metering of Armada job resource usage
+- **Referrer / integrator / reseller program** — revenue share with on-chain attribution
+- **Automated USDC→TAO→Alpha buyback and treasury** — sustainable price support and operations funding
 
 ---
 
@@ -448,7 +446,7 @@ Jobs are submitted to Armada queues and scheduled onto miner clusters with a con
 
 ### Miner Registration
 
-Miners register clusters via the `kubetee register` CLI (one hotkey per cluster). See [For Miners (Infrastructure)](#for-miners-infrastructure). The registration CLI is under active development.
+Miners register clusters (one hotkey per cluster) with the subnet owner for Rancher Fleet and Armada enrollment. See [For Miners (Infrastructure)](#for-miners-infrastructure).
 
 ---
 
@@ -504,12 +502,11 @@ Miners register clusters via the `kubetee register` CLI (one hotkey per cluster)
 - [ ] More US + international clusters
 - [ ] Armada fair-use + gang scheduling hardening
 - [ ] Automated TEE attestation cronjobs
-- [ ] `kubetee register` CLI for miner self-service registration
 - [ ] Build documentation website
 
 ### Phase 2 — Paid Jobs
 
-- [ ] Alpha, TAO, USDC-on-BASE job billing (pull-based, per-epoch metering) — contracts in [`contracts/`](contracts/)
+- [ ] Alpha, TAO, USDC-on-BASE job billing (pull-based, per-epoch metering)
 - [ ] Referrer / integrator / reseller program (on-chain attribution)
 - [ ] Automated USDC→TAO→Alpha buyback and treasury
 

@@ -28,7 +28,7 @@ as documented at: https://docs.learnbittensor.org/subnets/understanding-multiple
 Resellers are a special category of "miners" that:
 - Do NOT receive emissions
 - Do NOT register on the Bittensor subnet
-- DO register via KubeTEE CLI → Rancher account
+- DO register via Rancher Fleet → Rancher account
 - DO deposit Alpha/TAO to on-chain contract
 - Validators calculate usage and transfer each epoch
 
