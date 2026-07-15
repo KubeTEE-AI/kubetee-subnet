@@ -1,12 +1,19 @@
 # KubeTEE Subnet Local Testing Stack
 # - Local Subtensor chain (fast blocks for dev)
-# - Validator (owner validator for emission recycle use case)
-# - Dozzle for live log viewing of all containers
+# - Single "validator" container that does EVERYTHING (as requested):
+#     * btcli setup (register subnet if needed + stake + start emissions + set conviction/recycle hypers)
+#     * background while loop for keeping conviction hypers
+#     * background btcli loop printing stats (hypers, stake, metagraph, conviction, etc.)
+#     * foreground owner_validator (sets weights 1.0 to owner UID for emission recycle)
+# - Dozzle for live log viewing
 #
 # Usage:
-#   docker compose up -d
+#   docker compose up -d --build
 #   docker compose logs -f validator
 #   open http://localhost:8080 for dozzle
+#
+# Everything is inside the single validator container command.
+# See keys/README.md for the deterministic (pinned) dev accounts.
 #
 # For testing pyramid:
 #   - Use --profile with-miners for additional mock miners
@@ -50,10 +57,91 @@ services:
       - TARGET_UID=0
       - LOG_LEVEL=INFO
     volumes:
-      - ~/.bittensor:/root/.bittensor  # wallets
+      - ~/.bittensor:/root/.bittensor  # wallets (setup + validator will create/use "owner" here)
       - ./logs:/app/logs
     restart: unless-stopped
-    command: ["python", "scripts/owner_validator.py"]  # entry for the recycle use case (v11 owner weights)
+    # Everything in ONE container command as requested:
+    # 1. Run btcli setup (register if needed, stake, start emissions, set conviction/recycle hypers)
+    # 2. Background while-loop to keep setting conviction hypers
+    # 3. Background btcli stats printer (hypers, stake, metagraph, conviction, etc.)
+    # 4. Foreground: owner_validator.py that sets weights 1.0 to owner UID for recycle
+    # All logs go to this container (view with `docker compose logs -f validator`)
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        NETUID=$${KUBETEE_SUBNET_NETUID:-1}
+        WALLET=$${BT_WALLET:-owner}
+        HOTKEY=$${BT_WALLET_HOTKEY:-default}
+        NET=$${BT_NETWORK:-ws://chain:9944}
+
+        echo "=== [validator] Phase 1: btcli setup (register, stake, start, hypers) ==="
+        python scripts/setup_single_node.py \
+          --netuid "$$NETUID" \
+          --owner-wallet "$$WALLET" \
+          --chain-endpoint "$$NET" || true
+
+        # Read actual netuid written by setup (in case create allocated e.g. 2)
+        if [ -f /app/.kubetee_netuid ]; then
+          NETUID=$$(cat /app/.kubetee_netuid)
+          echo "Using actual netuid=$$NETUID from setup"
+        fi
+
+        echo "=== [validator] Phase 2: starting background loops + owner validator ==="
+
+        # Conviction setter loop (was separate container) - quiet to not pollute stats.
+        # setup_single_node.py writes /app/.kubetee_owned=false when it verified (via a
+        # real chain query, not a guess) that our wallet does NOT own $$NETUID - e.g. the
+        # SubtokenDisabled / pre-owned-bootstrap-netuid case. Retrying a sudo call we
+        # already know fails with "wallet doesn't own the specified subnet" every 45s
+        # forever was the direct cause of the chain node's HTTP 429 connection throttling.
+        # Back off hard (5 min) instead of hammering the chain when we know it's futile,
+        # but keep checking in case ownership later changes out-of-band.
+        (
+          while true; do
+            OWNED="unknown"
+            [ -f /app/.kubetee_owned ] && OWNED=$$(cat /app/.kubetee_owned)
+            if [ "$$OWNED" = "false" ]; then
+              echo "[conviction @ $$(date)] skipping - setup verified we do not own netuid $$NETUID (see setup log). Re-checking in 300s."
+              sleep 300
+              continue
+            fi
+            echo "[conviction @ $$(date)] setting owner_cut_auto_lock_enabled + recycle..."
+            btcli sudo set \
+              --netuid "$$NETUID" \
+              --param owner_cut_auto_lock_enabled \
+              --value true \
+              --wallet.name "$$WALLET" \
+              --wallet-hotkey "$$HOTKEY" \
+              --network "$$NET" \
+              --yes > /dev/null 2>&1 || echo "  (set failed - not owner)"
+            btcli sudo set \
+              --netuid "$$NETUID" \
+              --param recycle_or_burn \
+              --value Recycle \
+              --wallet.name "$$WALLET" \
+              --wallet-hotkey "$$HOTKEY" \
+              --network "$$NET" \
+              --yes > /dev/null 2>&1 || echo "  (set failed - not owner)"
+            sleep 45
+          done
+        ) &
+
+        # Stats printer - loops internally (--loop/--interval) reusing ONE chain
+        # connection for the container's lifetime, instead of the old shell
+        # while-loop that spawned a fresh python process (and fresh websocket
+        # connection) every 25s - that reconnect churn contributed to HTTP 429s.
+        python -u scripts/print_subnet_stats.py \
+          --netuid "$$NETUID" \
+          --network "$$NET" \
+          --owner-wallet "$$WALLET" \
+          --miner-wallet miner \
+          --loop --interval 25 2>&1 | cat &
+
+        # Foreground: the actual owner validator (sets weights 1.0 for recycle)
+        echo "Starting owner_validator.py (weights loop)..."
+        exec python -u scripts/owner_validator.py
 
   # Optional: simple mock miner containers for testing comms/scoring (extend as needed)
   miner-1:
@@ -67,6 +155,8 @@ services:
       - ROLE=miner
     depends_on:
       - chain
+    # Explicit command so the validator entrypoint (btcli setup + validator) is not run for the miner stub
+    command: ["python", "-c", "import time; print('miner-1 stub'); time.sleep(10**9)"]
     restart: "no"
 
   dozzle:

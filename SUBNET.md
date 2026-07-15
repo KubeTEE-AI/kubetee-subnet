@@ -18,6 +18,8 @@ This gives you a fast local chain + your validator (and optional miners) with fu
 
 ### 2. Start the stack (chain + validator + dozzle)
 
+The validator container now self-initializes: on startup it first runs the btcli registration + hyperparam setup, then starts the owner validator.
+
 ```bash
 cd repos/subnet/kubetee-subnet
 
@@ -28,55 +30,92 @@ docker compose up -d --build
 # Open http://localhost:8080
 ```
 
-Services:
-- `chain`: `ghcr.io/raofoundation/subtensor-localnet:devnet` (fast blocks by default)
-- `validator`: Runs the owner-validator (sets weights to recycle/conviction mode)
-- `dozzle`: Log viewer
-- `miner-1` (optional): `docker compose --profile with-miners up -d`
+Services (all using deterministic pinned dev accounts):
+- `chain`: subtensor-localnet (FAST_BLOCKS for fast testing)
+- `validator`: entrypoint does btcli (register subnet if not exists, register owner + sample-miner, add stake, start emissions, set conviction/recycle hypers) then owner_validator (weights 1.0 to owner UID for recycling)
+- `conviction-setter`: bash while-loop that periodically re-sets the conviction hypers
+- `subnet-stats`: btcli loop that prints hypers (conviction, recycle), stake, metagraph (emissions, UIDs, weights), balances etc. — everything visible in logs
+- `dozzle`: log viewer (http://localhost:8080)
+- `miner-1` (optional profile)
 
 Stop: `docker compose down`
 
-### 3. Run the Single-Node Setup Script (starts emissions + conviction + recycle)
-
-After the chain is healthy, run the setup script **from the host**:
-
+Follow the interesting logs:
 ```bash
-python scripts/setup_single_node.py --netuid 1 --owner-wallet owner
+docker compose logs -f validator subnet-stats conviction-setter
 ```
 
-What it does:
-- Waits for chain
-- Creates/funds dev wallets (using Alice dev account)
-- Ensures subnet exists + owner neuron registered
-- Calls `start` to enable emissions
-- Sets hyperparameters:
-  - `owner_cut_auto_lock_enabled=true` → owner cut (18%) is **automatically locked into CONVICTION**
-  - `recycle_or_burn=Recycle` → emissions directed to owner UID are **recycled** (not burned)
-- Owner emissions now flow into conviction (locked, builds conviction over time) + recycled path.
+### 3. Single-Node Setup Script (register + hypers for conviction + recycle)
 
-You can also run it with different netuid if `create` gave you another one.
+The setup is now performed **inside the validator container** automatically.
+
+If you want to run (or re-run) setup manually from the **host** (e.g. for debugging or different netuid):
+
+```bash
+python scripts/setup_single_node.py --netuid 1 --owner-wallet owner --chain-endpoint ws://127.0.0.1:9944
+```
+
+(When running inside compose the entrypoint uses the internal `ws://chain:9944`.)
+
+What the setup (run at validator startup) does:
+- Waits for chain
+- **Uses pinned deterministic dev seeds** (Alice + owner) — fdn-subnet style (Alith etc.). Owner SS58 + UID stable.
+- Ensures/creates subnet if it does not exist
+- Registers the owner hotkey as a neuron on the subnet
+- Puts some stake on the subnet for the owner (`btcli stake add`)
+- Starts emissions (`sudo start`)
+- Sets the key hyperparameters for the use case:
+  - `owner_cut_auto_lock_enabled=true` (owner cut auto-locks into CONVICTION)
+  - `recycle_or_burn=Recycle` (emissions directed to owner UID get recycled, not burned)
+- Then the long-running owner validator sets weights=1.0 to the owner UID.
+
+This lets you observe "miner incentive recycling" (via weights + recycle hyper) + conviction behavior.
+
+See `keys/README.md` for the pinned seeds and fdn parallel.
+
+The conviction-setter and subnet-stats containers (see below) provide continuous observation in logs.
 
 ### 4. The Owner Validator (recycle + conviction use case)
 
-The validator in the compose runs:
+Inside the compose validator container the flow is:
 
-```bash
-python scripts/owner_validator.py
-```
+1. `scripts/validator_entrypoint.py` runs first (btcli commands for register + hypers)
+2. Once that exits, it execs `python scripts/owner_validator.py`
 
-It sets weight 1.0 to the target owner UID so that the miner-incentive portion of emissions goes to the owner key (combined with the Recycle setting above).
+The validator sets weight 1.0 to the target owner UID (so miner incentive portion goes to owner key). Combined with `recycle_or_burn=Recycle` this recycles instead of burning.
 
-Environment in compose:
-- `TARGET_UID=0` (or the UID you registered for the owner hotkey)
-- You can override via `.env` or compose override.
+Environment in compose (passed to both setup and validator):
+- `KUBETEE_SUBNET_NETUID=1`
+- `TARGET_UID=0` (the UID that the owner hotkey received on registration; override if needed)
+- `BT_NETWORK=ws://chain:9944` (internal to compose)
+- `BT_WALLET=owner`
 
-To run manually on host (after setup):
+To run the validator manually on host (after you ran setup yourself):
 ```bash
 BT_NETWORK=ws://127.0.0.1:9944 \
 KUBETEE_SUBNET_NETUID=1 \
 TARGET_UID=0 \
 python scripts/owner_validator.py
 ```
+
+### Observer / Sidecar Containers
+
+Two additional containers are started by default to make the single-node pyramid easy to observe in dozzle:
+
+- **conviction-setter**: A simple bash `while true` loop that repeatedly runs the `btcli sudo set` commands for `owner_cut_auto_lock_enabled` and `recycle_or_burn=Recycle`. This keeps (or re-asserts) the conviction/recycle behavior on the subnet.
+
+- **subnet-stats**: A `while true` btcli stats printer that outputs (to container logs):
+  - `subnets hyperparameters` (conviction + recycle_or_burn visible here)
+  - `stake list`
+  - `metagraph` (UIDs, stake, weights, emission columns — primary way to see "miner recycling" in action when the owner validator sets weight 1.0)
+  - wallet balances
+
+Run with:
+```bash
+docker compose logs -f validator subnet-stats conviction-setter
+```
+
+Everything is designed so you can watch the full flow (register → stake → emissions start → weights → recycled emissions + conviction) live.
 
 ### 5. Running a Miner
 
