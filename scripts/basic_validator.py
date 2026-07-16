@@ -448,6 +448,19 @@ def main(env: Mapping[str, str] | None = None) -> None:
     # real bittensor; only the live process pays this cost.
     import bittensor as bt
 
+    # bittensor's import reconfigures global logging to Warning, which would
+    # mute the cycle-evidence INFO lines that AC5/AC9 assert on. Give our
+    # logger its own handler and stop propagation so nothing upstream can
+    # silence it.
+    handler = logging.StreamHandler()
+    handler.setFormatter(
+        logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s")
+    )
+    _LOG.handlers.clear()
+    _LOG.addHandler(handler)
+    _LOG.setLevel(logging.INFO)
+    _LOG.propagate = False
+
     wallet = bt.Wallet(name=config.wallet_name, hotkey=config.wallet_hotkey)
     metrics = ValidatorMetrics(max_consecutive_skips=config.max_consecutive_skips)
     # Compose keeps this port off the host network (AC11: compose-internal).
