@@ -1,0 +1,27 @@
+name: Test
+
+on:
+  push:
+    branches: [main, feat/*, research/*]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-test:
+    runs-on: [self-hosted, linux, X64]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Lint with ruff
+        run: uv run --python 3.13 --with ruff ruff check .
+
+      - name: Test with pytest
+        run: uv run --python 3.13 --with-requirements requirements.txt --with pytest pytest -q --tb=short

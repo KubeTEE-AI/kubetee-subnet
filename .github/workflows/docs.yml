@@ -1,0 +1,38 @@
+name: Docs
+
+on:
+  push:
+    branches: [main, feat/*, research/*]
+    paths:
+      - '**.md'
+      - 'docs/**'
+      - 'SUBNET.md'
+      - '.github/workflows/docs.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - '**.md'
+      - 'docs/**'
+      - 'SUBNET.md'
+      - '.github/workflows/docs.yml'
+  workflow_dispatch:
+
+jobs:
+  docs:
+    runs-on: [self-hosted, linux, X64]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate Markdown
+        uses: DavidAnson/markdownlint-cli2-action@v16
+        with:
+          globs: |
+            **/*.md
+            !node_modules/**
+
+      - name: Check SUBNET.md
+        run: |
+          echo "Validating SUBNET.md presence and basic structure"
+          test -f SUBNET.md
+          grep -q "miner" SUBNET.md && grep -q "validator" SUBNET.md && grep -q "docker compose" SUBNET.md
+          echo "SUBNET.md looks good"

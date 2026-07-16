@@ -5,5 +5,8 @@ pytest>=8
 torch>=2
 numpy>=1
 setuptools>=68
-bittensor-wallet>=4.0.0
-bittensor>=9.11.1
+# Bittensor v11+ unified package (SDK + btcli)
+# Installs from RaoFoundation/subtensor sdk/python distribution
+bittensor>=10.0.0
+# For local dev / compose images
+docker>=7.0.0
