@@ -420,6 +420,15 @@ Early Access is **emissions-only**. The following payment and revenue features a
 
 The validator is the subnet's referee. In Early Access it scores each miner (one hotkey per cluster) on a single Infrastructure mechanism and sets Bittensor weights each epoch.
 
+> **Early Access caveat — current implementation scores liveness only.** The
+> basic validator shipping today applies a binary, fail-closed **node-liveness
+> check** against the Rancher v3 API (cluster + node `active` via the
+> `kubetee.ai/miner-hotkey` label) and splits weights between scoring miners
+> and the subnet-owner recycle UID (see [SUBNET.md](SUBNET.md)). The TEE
+> attestation, Armada job, and infrastructure-health scoring described below
+> is the design target and remains roadmap. Liveness scoring is **not** an
+> attestation, eligibility, or security-compliance signal.
+
 ### TEE Attestation
 - The validator runs attestation cronjobs inside Kata Containers to verify each miner cluster's TEE (Intel TDX/SGX, NVIDIA CC)
 - CoCo remote attestation confirms the confidential container image and runtime are unmodified
