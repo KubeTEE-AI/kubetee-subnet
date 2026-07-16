@@ -323,14 +323,22 @@ def test_netuid_file_overrides_env(tmp_path):
     assert config.netuid == 7
 
 
-def test_main_refuses_to_start_without_credentials(caplog):
+def test_main_refuses_to_start_without_credentials():
     """D14 startup half of AC9(c): missing RANCHER_* is a clear config error,
-    exit - never a skip loop. Reaches SystemExit before any bittensor import."""
-    with caplog.at_level(logging.ERROR), pytest.raises(SystemExit) as excinfo:
+    exit - never a skip loop. Reaches SystemExit before any bittensor import.
+
+    Asserts on the ConfigError chained onto SystemExit instead of captured
+    logs: in the full CI suite bittensor's import-time logging side effects
+    break root-level caplog capture, and the refusal contract is the exit
+    code plus the error naming every missing variable."""
+    with pytest.raises(SystemExit) as excinfo:
         main(env={})
     assert excinfo.value.code == 2
-    assert "refusing to start" in caplog.text
-    assert "RANCHER" in caplog.text
+    cause = excinfo.value.__cause__
+    assert isinstance(cause, ConfigError)
+    assert "RANCHER_URL" in str(cause)
+    assert "RANCHER_BEARER_TOKEN" in str(cause)
+    assert "KUBETEE_OWNER_HOTKEY" in str(cause)
 
 
 # ---------------------------------------------------------------------------
