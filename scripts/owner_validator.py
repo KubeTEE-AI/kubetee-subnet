@@ -1,6 +1,4 @@
 #!/usr/bin/env python3
-from __future__ import annotations
-
 """
 KubeTEE Owner Validator (v11 Bittensor)
 
@@ -36,11 +34,10 @@ Usage (localnet example):
 For full subnet: register owner hotkey as neuron, discover UID via metagraph,
 set weights to it every epoch, and ensure RecycleOrBurn=Recycle on the subnet.
 """
+from __future__ import annotations
 
 import os
-import sys
 import time
-from pathlib import Path
 
 import bittensor as bt
 
@@ -129,7 +126,7 @@ def run_validator_loop(subtensor, wallet, netuid, target_uid, sleep=time.sleep):
 
 
 def main():
-    print(f"Starting KubeTEE owner validator (recycle mode)")
+    print("Starting KubeTEE owner validator (recycle mode)")
     print(f"  network={NETWORK} netuid={NETUID} target_uid={TARGET_UID}")
     print(f"  wallet={WALLET_NAME}/{HOTKEY_NAME}")
     print("  This sets 100% miner incentive weight to owner key.")

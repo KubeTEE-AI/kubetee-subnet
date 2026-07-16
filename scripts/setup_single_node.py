@@ -39,7 +39,6 @@ Note: On localnet with FAST_BLOCKS, tempos are fast.
 import argparse
 import os
 import subprocess
-import sys
 import time
 from pathlib import Path
 
@@ -375,7 +374,7 @@ def main():
 
     print("\n=== Setup complete ===")
     if decision["proceed"]:
-        print(f"Owner emissions will now:")
+        print("Owner emissions will now:")
         print("  - Have owner cut auto-locked into CONVICTION (via owner_cut_auto_lock_enabled)")
         print("  - Miner emissions directed to owner UID will be RECYCLED (not burned)")
     else:
