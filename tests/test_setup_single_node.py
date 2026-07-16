@@ -37,6 +37,28 @@ sys.modules[_spec.name] = _setup
 _spec.loader.exec_module(_setup)
 
 decide_owner_actions = _setup.decide_owner_actions
+registration_plan = _setup.registration_plan
+
+
+def test_registration_plan_is_owner_alice_bob_triad():
+    """g004 D7: owner (recycle target) registers first for a stable UID,
+    then alice (validator, signs set_weights), then bob (miner)."""
+    plan = registration_plan("owner")
+    assert [entry["wallet"] for entry in plan] == ["owner", "alice", "bob"]
+    assert [entry["role"] for entry in plan] == ["owner", "validator", "miner"]
+    assert [entry["validator"] for entry in plan] == [True, True, False]
+    seeds = [entry["seed"] for entry in plan]
+    assert len(set(seeds)) == 3, "triad seeds must be distinct pinned dev seeds"
+
+
+def test_legacy_miner_wallet_is_retired():
+    """D7: the sample 'miner' wallet and its pinned dev seed are gone; bob
+    (new pinned dev seed) is the miner."""
+    assert not any(name.startswith("DEV_MINER") for name in dir(_setup))
+    assert all(entry["wallet"] != "miner" for entry in registration_plan())
+    assert _setup.DEV_BOB_SEED.startswith("0x")
+    assert len(_setup.DEV_BOB_SEED) == 66  # 0x + 32 bytes hex
+    int(_setup.DEV_BOB_SEED[2:], 16)  # must parse as hex
 
 
 def test_decide_owner_actions_proceeds_when_owned():

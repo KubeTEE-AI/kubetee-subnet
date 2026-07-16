@@ -32,6 +32,17 @@ _spec.loader.exec_module(_stats)
 build_report = _stats.build_report
 format_report = _stats.format_report
 
+
+def test_default_wallets_are_bob_and_owner_not_signing_wallet(monkeypatch):
+    """g004 D7: the default miner wallet is bob (legacy 'miner' retired) and
+    the owner default never follows BT_WALLET (that is alice, the validator
+    signing wallet in compose)."""
+    monkeypatch.setenv("BT_WALLET", "alice")
+    monkeypatch.delenv("KUBETEE_OWNER_WALLET", raising=False)
+    parser = _stats.build_arg_parser()
+    assert parser.get_default("miner_wallet") == "bob"
+    assert parser.get_default("owner_wallet") == "owner"
+
 # Old hardcoded strings the buggy version printed unconditionally - must never
 # appear again once the real state contradicts them.
 _OLD_HARDCODED_STAKE_TEXT = "no stake found (or setup stake failed due to ownership)"

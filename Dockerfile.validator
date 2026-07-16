@@ -37,8 +37,9 @@ ENV PATH="/usr/local/bin:${PATH}"
 COPY . .
 
 # Default: run the validator container entrypoint.
-# It first executes btcli registration + hyperparam setup (conviction + recycle),
-# then execs the owner validator (sets weights 1.0 to TARGET_UID).
+# It first executes btcli registration + hyperparam setup (conviction + recycle,
+# owner/alice/bob triad), then execs the basic validator (alice signs
+# set_weights; Rancher-scored miner share, owner recycle split).
 # This matches the desired flow: "first run btcli commands, once all is set then run validator".
 CMD ["python", "scripts/validator_entrypoint.py"]
 
