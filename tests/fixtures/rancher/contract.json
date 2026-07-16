@@ -1,0 +1,49 @@
+{
+  "contract_version": 1,
+  "source": "staging-rancher.kubetee.ai /v3 API, captured read-only 2026-07-16; all values below re-expressed synthetically per the g004 V1 field allowlist",
+  "collection": {
+    "type": "collection",
+    "pagination_fields": ["first", "next", "last", "limit", "total", "partial"],
+    "next_page": "follow pagination.next URL (marker-based) until the field is absent",
+    "incomplete_signals": [
+      "pagination.partial is true and pagination.next is absent",
+      "pagination object missing on a collection",
+      "unrecognized pagination fields beyond the listed set"
+    ],
+    "server_max_limit": 10000
+  },
+  "cluster": {
+    "state_field": "state",
+    "active_value": "active",
+    "transitioning_field": "transitioning",
+    "transitioning_ok_value": "no",
+    "identity_fields": ["id", "uuid"],
+    "label_container": "labels",
+    "miner_label_key": "kubetee.ai/miner-hotkey",
+    "delete_authorization_signal": "links.remove (presence is an inference only, never proof)",
+    "conditional_delete": "unsupported: norman v3 objects expose uuid but no resourceVersion; the pre-delete recheck is a GET re-validating id, uuid, label value, and non-management identity",
+    "management_cluster_markers": ["internal flag", "id c-x* naming for imported management", "absence of kubetee.ai labels"],
+    "secret_bearing_fields_dropped": ["caCert", "clusterSecrets", "annotations", "appliedSpec", "importedConfig"]
+  },
+  "node": {
+    "state_field": "state",
+    "active_value": "active",
+    "transitioning_field": "transitioning",
+    "transitioning_ok_value": "no",
+    "identity_fields": ["id", "uuid", "clusterId"],
+    "secret_bearing_fields_dropped": ["ipAddress", "hostname", "requestedHostname", "customConfig", "annotations", "info"]
+  },
+  "observed_states": {
+    "cluster": ["active"],
+    "node": ["active"]
+  },
+  "transitional_or_unknown_treated_inactive": [
+    "provisioning", "updating", "upgrading", "registering", "reconciling",
+    "unavailable", "error", "cordoned", "draining", "waiting", "removing"
+  ],
+  "http_client_requirements": {
+    "user_agent_required": true,
+    "user_agent_example": "kubetee-validator/0.1",
+    "reason": "Cloudflare fronts staging Rancher and blocks the default python-urllib signature with 'error code: 1010'; curl and custom UAs verified passing (HTTP 200)"
+  }
+}

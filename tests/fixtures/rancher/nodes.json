@@ -1,0 +1,27 @@
+{
+ "type": "collection",
+ "resourceType": "node",
+ "links": {
+  "self": "https://rancher.example/v3/nodes"
+ },
+ "pagination": {
+  "limit": 10000,
+  "total": 1
+ },
+ "data": [
+  {
+   "id": "cluster-aaa:node-aaa",
+   "type": "node",
+   "baseType": "node",
+   "uuid": "00000000-0000-4000-8000-0000000000cc",
+   "clusterId": "cluster-aaa",
+   "state": "active",
+   "transitioning": "no",
+   "transitioningMessage": "",
+   "labels": {},
+   "links": {
+    "self": "https://rancher.example/v3/nodes/cluster-aaa:node-aaa"
+   }
+  }
+ ]
+}
