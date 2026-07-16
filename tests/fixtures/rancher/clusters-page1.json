@@ -1,0 +1,39 @@
+{
+ "type": "collection",
+ "resourceType": "cluster",
+ "links": {
+  "self": "https://rancher.example/v3/clusters"
+ },
+ "pagination": {
+  "first": "https://rancher.example/v3/clusters?limit=1&marker=cluster-aaa",
+  "next": "https://rancher.example/v3/clusters?limit=1&marker=cluster-bbb",
+  "last": "https://rancher.example/v3/clusters?limit=1&marker=cluster-bbb",
+  "limit": 1,
+  "total": 2,
+  "partial": true
+ },
+ "data": [
+  {
+   "id": "cluster-aaa",
+   "type": "cluster",
+   "baseType": "cluster",
+   "uuid": "00000000-0000-4000-8000-0000000000aa",
+   "state": "active",
+   "transitioning": "no",
+   "transitioningMessage": "",
+   "labels": {
+    "kubetee.ai/continent": "eu",
+    "kubetee.ai/country": "zz",
+    "kubetee.ai/city": "testcity",
+    "kubetee.ai/miner-hotkey": "5FAKEminerHotkeyFAKEFAKEFAKEFAKEFAKEFAKEFAKEabcd",
+    "kubetee.ai/miner-coldkey": "5FAKEminerColdkeyFAKEFAKEFAKEFAKEFAKEFAKEFAKEabc",
+    "kubetee.ai/miner-uid": "0"
+   },
+   "links": {
+    "self": "https://rancher.example/v3/clusters/cluster-aaa",
+    "remove": "https://rancher.example/v3/clusters/cluster-aaa",
+    "nodes": "https://rancher.example/v3/clusters/cluster-aaa/nodes"
+   }
+  }
+ ]
+}

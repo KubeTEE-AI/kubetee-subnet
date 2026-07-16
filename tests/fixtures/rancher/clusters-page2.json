@@ -1,0 +1,30 @@
+{
+ "type": "collection",
+ "resourceType": "cluster",
+ "links": {
+  "self": "https://rancher.example/v3/clusters"
+ },
+ "pagination": {
+  "first": "https://rancher.example/v3/clusters?limit=1&marker=cluster-aaa",
+  "limit": 1,
+  "total": 2,
+  "partial": true
+ },
+ "data": [
+  {
+   "id": "cluster-bbb",
+   "type": "cluster",
+   "baseType": "cluster",
+   "uuid": "00000000-0000-4000-8000-0000000000bb",
+   "state": "active",
+   "transitioning": "no",
+   "transitioningMessage": "",
+   "labels": {},
+   "links": {
+    "self": "https://rancher.example/v3/clusters/cluster-bbb",
+    "remove": "https://rancher.example/v3/clusters/cluster-bbb",
+    "nodes": "https://rancher.example/v3/clusters/cluster-bbb/nodes"
+   }
+  }
+ ]
+}
