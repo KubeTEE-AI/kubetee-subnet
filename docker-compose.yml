@@ -1,10 +1,15 @@
 # KubeTEE Subnet Local Testing Stack
 # - Local Subtensor chain (fast blocks for dev)
 # - Single "validator" container that does EVERYTHING (as requested):
-#     * btcli setup (register subnet if needed + stake + start emissions + set conviction/recycle hypers)
+#     * btcli setup (register subnet if needed + owner/alice/bob triad + stake
+#       + start emissions + set conviction/recycle hypers)
 #     * background while loop for keeping conviction hypers
 #     * background btcli loop printing stats (hypers, stake, metagraph, conviction, etc.)
-#     * foreground owner_validator (sets weights 1.0 to owner UID for emission recycle)
+#     * foreground basic_validator (g004): alice signs set_weights; miners
+#       discovered from the metagraph are scored via the read-only Rancher v3
+#       API; weights split KUBETEE_MINER_SHARE to miners, rest to the owner
+#       recycle UID. RANCHER_* comes from the gitignored .env (see
+#       .env.example); missing/invalid static config refuses to start (D14).
 # - Dozzle for live log viewing
 #
 # Usage:
@@ -49,22 +54,40 @@ services:
       chain:
         condition: service_started
     environment:
+      # Validator signing identity (D7): alice signs set_weights. The
+      # subnet-owner wallet (setup/sudo + recycle target) stays "owner".
       - BT_NETWORK=ws://chain:9944
-      - BT_WALLET=owner
+      - BT_WALLET=alice
       - BT_WALLET_HOTKEY=default
+      - KUBETEE_OWNER_WALLET=owner
       - KUBETEE_SUBNET_NETUID=1
-      - OWNER_HOTKEY=5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
-      - TARGET_UID=0
+      # Pinned dev hotkey SS58s (public localnet dev keys, see keys/README.md):
+      # owner = recycle target, validator = alice. UIDs are resolved from the
+      # metagraph by hotkey - no fixed-UID environment variable.
+      - KUBETEE_OWNER_HOTKEY=5FLbZav21bAsjH5SAdmJZwTP5C4b3bcaaWqC6GSmGmsbzUJ9
+      - KUBETEE_VALIDATOR_HOTKEY=5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
+      # Rancher scoring credentials from the gitignored .env (names in
+      # .env.example). REQUIRED: startup refuses without them (D14).
+      - RANCHER_URL=${RANCHER_URL:-}
+      - RANCHER_BEARER_TOKEN=${RANCHER_BEARER_TOKEN:-}
+      # Tunables (plan-pinned defaults; override via .env)
+      - KUBETEE_MINER_SHARE=${KUBETEE_MINER_SHARE:-0.10}
+      - KUBETEE_POLL_SECONDS=${KUBETEE_POLL_SECONDS:-60}
+      - KUBETEE_MAX_CONSECUTIVE_SKIPS=${KUBETEE_MAX_CONSECUTIVE_SKIPS:-10}
+      - KUBETEE_RECONCILE_MIN_CYCLES=${KUBETEE_RECONCILE_MIN_CYCLES:-3}
+      - KUBETEE_RECONCILE_MIN_SECONDS=${KUBETEE_RECONCILE_MIN_SECONDS:-900}
+      # Prometheus metrics: compose-internal only (no host port mapping, AC11)
+      - KUBETEE_METRICS_PORT=9100
       - LOG_LEVEL=INFO
     volumes:
-      - ~/.bittensor:/root/.bittensor  # wallets (setup + validator will create/use "owner" here)
+      - ~/.bittensor:/root/.bittensor  # wallets (setup + validator will create/use the triad here)
       - ./logs:/app/logs
     restart: unless-stopped
     # Everything in ONE container command as requested:
-    # 1. Run btcli setup (register if needed, stake, start emissions, set conviction/recycle hypers)
+    # 1. Run btcli setup (register if needed, owner/alice/bob triad, stake, start emissions, set conviction/recycle hypers)
     # 2. Background while-loop to keep setting conviction hypers
     # 3. Background btcli stats printer (hypers, stake, metagraph, conviction, etc.)
-    # 4. Foreground: owner_validator.py that sets weights 1.0 to owner UID for recycle
+    # 4. Foreground: basic_validator.py (alice signs; Rancher-scored miner share, owner recycle split)
     # All logs go to this container (view with `docker compose logs -f validator`)
     command:
       - sh
@@ -72,14 +95,14 @@ services:
       - |
         set -e
         NETUID=$${KUBETEE_SUBNET_NETUID:-1}
-        WALLET=$${BT_WALLET:-owner}
+        OWNER_WALLET=$${KUBETEE_OWNER_WALLET:-owner}
         HOTKEY=$${BT_WALLET_HOTKEY:-default}
         NET=$${BT_NETWORK:-ws://chain:9944}
 
         echo "=== [validator] Phase 1: btcli setup (register, stake, start, hypers) ==="
         python scripts/setup_single_node.py \
           --netuid "$$NETUID" \
-          --owner-wallet "$$WALLET" \
+          --owner-wallet "$$OWNER_WALLET" \
           --chain-endpoint "$$NET" || true
 
         # Read actual netuid written by setup (in case create allocated e.g. 2)
@@ -88,7 +111,7 @@ services:
           echo "Using actual netuid=$$NETUID from setup"
         fi
 
-        echo "=== [validator] Phase 2: starting background loops + owner validator ==="
+        echo "=== [validator] Phase 2: starting background loops + basic validator ==="
 
         # Conviction setter loop (was separate container) - quiet to not pollute stats.
         # setup_single_node.py writes /app/.kubetee_owned=false when it verified (via a
@@ -112,7 +135,7 @@ services:
               --netuid "$$NETUID" \
               --param owner_cut_auto_lock_enabled \
               --value true \
-              --wallet.name "$$WALLET" \
+              --wallet.name "$$OWNER_WALLET" \
               --wallet-hotkey "$$HOTKEY" \
               --network "$$NET" \
               --yes > /dev/null 2>&1 || echo "  (set failed - not owner)"
@@ -120,7 +143,7 @@ services:
               --netuid "$$NETUID" \
               --param recycle_or_burn \
               --value Recycle \
-              --wallet.name "$$WALLET" \
+              --wallet.name "$$OWNER_WALLET" \
               --wallet-hotkey "$$HOTKEY" \
               --network "$$NET" \
               --yes > /dev/null 2>&1 || echo "  (set failed - not owner)"
@@ -135,13 +158,14 @@ services:
         python -u scripts/print_subnet_stats.py \
           --netuid "$$NETUID" \
           --network "$$NET" \
-          --owner-wallet "$$WALLET" \
-          --miner-wallet miner \
+          --owner-wallet "$$OWNER_WALLET" \
+          --miner-wallet bob \
           --loop --interval 25 2>&1 | cat &
 
-        # Foreground: the actual owner validator (sets weights 1.0 for recycle)
-        echo "Starting owner_validator.py (weights loop)..."
-        exec python -u scripts/owner_validator.py
+        # Foreground: the basic validator (alice signs set_weights; fails
+        # fast at startup on missing/invalid static config incl. RANCHER_*).
+        echo "Starting basic_validator.py (scoring + weights loop)..."
+        exec python -u scripts/basic_validator.py
 
   # Optional: simple mock miner containers for testing comms/scoring (extend as needed)
   miner-1:

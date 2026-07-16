@@ -6,7 +6,7 @@ For the KubeTEE local "single node testnet" (using subtensor-localnet in docker)
 
 This script:
 1. Waits for chain to be ready.
-2. Creates/funds dev wallets using *pinned dev seeds* (Alice + owner, fdn-subnet style)
+2. Creates/funds dev wallets using *pinned dev seeds* (owner + alice + bob triad, D7)
    for stable SS58 addresses and predictable UIDs on the localnet.
 3. Creates/registers the subnet (if needed) on local.
 4. Registers the owner hotkey as a neuron (to get a UID for emissions).
@@ -30,7 +30,7 @@ Manual usage (from host, with bittensor installed):
 Then view everything in dozzle: http://localhost:8080
 
 Requires: bittensor + bittensor-cli (btcli) in PATH. Inside the validator image this is guaranteed.
-For pure local dev it uses *pinned dev seeds* (Alice + owner) exactly like fdn-subnet pins Alith etc.
+For pure local dev it uses *pinned dev seeds* (owner/alice/bob) exactly like fdn-subnet pins Alith etc.
   for reproducible registration, hypers, and UID targeting in the single-node test pyramid.
 
 Note: On localnet with FAST_BLOCKS, tempos are fast.
@@ -62,7 +62,7 @@ import chain_state
 # - Alice seed is the classic substrate dev seed (pre-funded by localnet --dev images).
 # - Owner (the subnet creator / the key whose hotkey we register + weight to) uses a
 #   pinned dev seed below so the coldkey/hotkey SS58 is *stable* across runs.
-#   This makes TARGET_UID predictable (usually 0 for the first/owner registration)
+#   This makes the owner UID predictable (usually 0 for the first/owner registration)
 #   and the whole "setup then validator" flow deterministic.
 #
 # !!! ONLY FOR LOCALNET / SINGLE-NODE TEST PYRAMID !!!
@@ -77,9 +77,10 @@ DEV_ALICE_SEED = "0xe5be9a5092b81bca64be81d212e7f2f9eba183bb7a90954f7b76361f6edb
 DEV_OWNER_SEED = "0x398f0c28f98885e046333d4a41c19cee4c37368a9832c749be0086a2a9b4e8c0"
 DEV_OWNER_COLD_SS58 = "5FLbZav21bAsjH5SAdmJZwTP5C4b3bcaaWqC6GSmGmsbzUJ9"
 
-# Additional pinned dev seed for a sample "miner" (so we have something that looks like
-# a miner whose incentive can be directed/recycled to the owner UID via weights).
-DEV_MINER_SEED = "0x8075991ce870b93a8870eca0c0f91913d12f47948ca0fd25b49c6fa7cdbeee8b"
+# Pinned dev seed for the "bob" miner wallet (g004 D7): the miner whose
+# staging-Rancher cluster the basic validator scores. Replaces the retired
+# legacy sample "miner" wallet. Localnet-only, PUBLIC by design.
+DEV_BOB_SEED = "0x0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b"
 
 def run(cmd: list[str], check=True, capture=False, env=None):
     print(f"$ {' '.join(cmd)}")
@@ -232,6 +233,26 @@ def decide_owner_actions(ownership: dict) -> dict:
     return {"proceed": True, "reason": "confirmed on-chain owner match"}
 
 
+def registration_plan(owner_wallet: str = "owner") -> list[dict]:
+    """The g004 wallet triad (D7), in registration order. Pure data consumed
+    by main() and asserted by tests.
+
+    owner (the recycle target) registers first for a stable UID; alice is
+    the validator that signs set_weights (its stake attempt is best-effort:
+    the pinned localnet image can reject add_stake with SubtokenDisabled,
+    reported honestly by the btcli output); bob is the miner - a new pinned
+    dev seed replacing the retired legacy sample "miner" wallet.
+    """
+    return [
+        {"wallet": owner_wallet, "seed": DEV_OWNER_SEED, "role": "owner",
+         "validator": True, "stake": 200},
+        {"wallet": "alice", "seed": DEV_ALICE_SEED, "role": "validator",
+         "validator": True, "stake": 100},
+        {"wallet": "bob", "seed": DEV_BOB_SEED, "role": "miner",
+         "validator": False, "stake": 50},
+    ]
+
+
 def register_neuron(netuid: int, wallet_name: str, hotkey: str = "default", as_validator: bool = True, chain_endpoint: str = "ws://127.0.0.1:9944"):
     print(f"Registering {wallet_name} on netuid {netuid} (network={chain_endpoint}) ...")
     # Use burned register on local (faucet enabled).
@@ -316,13 +337,15 @@ def main():
     wait_for_chain(chain_endpoint)
 
     # Wallets using *pinned dev seeds* (fdn-subnet style) for stable SS58/UIDs.
-    # Alice funds; owner is the subnet owner (creates + sudo + the one we weight to).
-    ensure_dev_wallet("alice", DEV_ALICE_SEED)
-    ensure_dev_wallet(owner, DEV_OWNER_SEED)
+    # The g004 triad (D7): owner (recycle target + sudo), alice (validator,
+    # signs set_weights), bob (miner). Alice also stays the funding source.
+    triad = registration_plan(owner)
+    for entry in triad:
+        ensure_dev_wallet(entry["wallet"], entry["seed"])
 
-    # Fund the actual addresses of the wallets we will use (owner for sudo+weights, miner for demo)
+    # Fund the actual addresses of the wallets we will use.
     fund_from_alice(owner, 5000, chain_endpoint)
-    fund_from_alice("miner", 2000, chain_endpoint)
+    fund_from_alice("bob", 2000, chain_endpoint)
     fund_from_alice("alice", 1000, chain_endpoint)  # top up alice faucet
 
     # Wait for transfers to land (localnet is fast but extrinsic finality + balance query can lag)
@@ -333,16 +356,15 @@ def main():
     # create_subnet_if_needed now forces a create (to get ownership) and returns the actual netuid.
     netuid = create_subnet_if_needed(netuid, owner, chain_endpoint)
 
-    register_neuron(netuid, owner, "default", as_validator=True, chain_endpoint=chain_endpoint)
-
-    # Put some stake on the subnet (owner has stake; useful for metagraph/emission visibility and "skin in game")
-    add_stake(netuid, owner, 200, chain_endpoint)
-
-    # Also register + stake a sample "miner" wallet (pinned seed). The owner validator
-    # can then set weights such that "miner" emissions get recycled to the owner UID.
-    ensure_dev_wallet("miner", DEV_MINER_SEED)
-    register_neuron(netuid, "miner", "default", as_validator=False, chain_endpoint=chain_endpoint)
-    add_stake(netuid, "miner", 50, chain_endpoint)
+    # Register + stake the triad in plan order. Stake attempts are
+    # best-effort and reported honestly: the pinned localnet image can
+    # reject add_stake with SubtokenDisabled (T3 lesson) - the btcli output
+    # below is the record; nothing here claims a stake that did not land.
+    for entry in triad:
+        register_neuron(netuid, entry["wallet"], "default",
+                        as_validator=entry["validator"],
+                        chain_endpoint=chain_endpoint)
+        add_stake(netuid, entry["wallet"], entry["stake"], chain_endpoint)
 
     # Verify real on-chain ownership before attempting owner-only sudo calls.
     # create_subnet_if_needed's regex-parsed btcli stdout is NOT proof of ownership
@@ -382,7 +404,7 @@ def main():
         print(f"  {decision['reason']}")
         print("  Conviction/recycle hypers were NOT set. See ownership check above for the real owner.")
     print("\nUsing pinned dev seeds (owner SS58 ~5FLbZa... ) so the registered UID is stable.")
-    print("Next: The validator (if run after this) will set weights=1.0 to the owner UID.")
+    print("Next: The basic validator (alice) discovers miners from the metagraph, scores them via Rancher, and splits weights (default 10% miners / 90% owner recycle UID).")
     print("When used inside the validator container, this script runs first then the validator starts automatically.")
 
     # Write the actual netuid we own so the subsequent validator (and other containers) can use the correct one.

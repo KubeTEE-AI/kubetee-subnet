@@ -12,19 +12,30 @@ reproducible dev keys:
 
 ## For kubetee-subnet (bittensor localnet)
 
-We do the equivalent with **pinned dev seeds** (not random `new_coldkey`):
+We do the equivalent with **pinned dev seeds** (not random `new_coldkey`)
+for the g004 triad (D7):
 
-- `DEV_ALICE_SEED` — classic substrate Alice (pre-funded by subtensor-localnet).
-- `DEV_OWNER_SEED` — pinned dev seed for the subnet owner wallet (the one that
-  does `subnet create`, registers its hotkey to get a UID, calls `sudo start`,
-  sets hypers, and is the target of the owner-validator weights).
+- `DEV_ALICE_SEED` — classic substrate Alice (pre-funded by
+  subtensor-localnet). **alice is the validator**: registered and staked on
+  the subnet, signs `set_weights` (`BT_WALLET=alice` in compose). It also
+  stays the funding source.
+- `DEV_OWNER_SEED` — pinned dev seed for the subnet owner wallet (the one
+  that does `subnet create`, registers its hotkey to get a UID, calls
+  `sudo start`, sets hypers, and is the **recycle target** the owner share
+  of weights points at).
+- `DEV_BOB_SEED` — pinned dev seed for the **bob miner wallet**: the miner
+  whose staging-Rancher cluster (labeled `kubetee.ai/miner-hotkey`) the
+  basic validator scores. Replaces the retired legacy sample `miner`
+  wallet (its pinned seed constant was removed with it).
 
 Result:
 - Owner coldkey/hotkey SS58 is always the same:
   `5FLbZav21bAsjH5SAdmJZwTP5C4b3bcaaWqC6GSmGmsbzUJ9`
 - First registration on a fresh subnet tends to land on a stable UID
   (commonly 0 for the creator).
-- `TARGET_UID=0` (in compose) is reliable.
+- UIDs are resolved from the metagraph by hotkey SS58
+  (`KUBETEE_OWNER_HOTKEY` / `KUBETEE_VALIDATOR_HOTKEY` in compose) — there
+  is no `TARGET_UID` anymore.
 - The validator container entrypoint + setup is fully deterministic.
 
 ## How it works here

@@ -134,15 +134,22 @@ def format_report(report: dict) -> str:
     return "\n".join(lines)
 
 
-def main():
+def build_arg_parser() -> argparse.ArgumentParser:
+    """CLI defaults (g004 D7): the owner wallet is the subnet owner
+    (KUBETEE_OWNER_WALLET, NOT BT_WALLET - that is alice, the validator
+    signing wallet) and the default miner wallet is bob."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--netuid", type=int, default=int(os.environ.get("KUBETEE_SUBNET_NETUID", "1")))
     parser.add_argument("--network", default=os.environ.get("BT_NETWORK", "ws://chain:9944"))
-    parser.add_argument("--owner-wallet", default=os.environ.get("BT_WALLET", "owner"))
-    parser.add_argument("--miner-wallet", default="miner")
+    parser.add_argument("--owner-wallet", default=os.environ.get("KUBETEE_OWNER_WALLET", "owner"))
+    parser.add_argument("--miner-wallet", default="bob")
     parser.add_argument("--loop", action="store_true", help="Loop forever, reusing a single chain connection.")
     parser.add_argument("--interval", type=float, default=25.0, help="Seconds between reports when --loop is set.")
-    args = parser.parse_args()
+    return parser
+
+
+def main():
+    args = build_arg_parser().parse_args()
 
     wallets = {
         "owner": {

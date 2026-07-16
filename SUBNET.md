@@ -32,7 +32,7 @@ docker compose up -d --build
 
 Services (all using deterministic pinned dev accounts):
 - `chain`: subtensor-localnet (FAST_BLOCKS for fast testing)
-- `validator`: entrypoint does btcli (register subnet if not exists, register owner + sample-miner, add stake, start emissions, set conviction/recycle hypers) then owner_validator (weights 1.0 to owner UID for recycling)
+- `validator`: entrypoint does btcli (register subnet if not exists, register the owner/alice/bob triad, add stake, start emissions, set conviction/recycle hypers) then basic_validator (alice signs set_weights; miners scored via the read-only Rancher v3 API; weights split `KUBETEE_MINER_SHARE` to miners, rest to the owner recycle UID)
 - `conviction-setter`: bash while-loop that periodically re-sets the conviction hypers
 - `subnet-stats`: btcli loop that prints hypers (conviction, recycle), stake, metagraph (emissions, UIDs, weights), balances etc. — everything visible in logs
 - `dozzle`: log viewer (http://localhost:8080)
@@ -75,27 +75,39 @@ See `keys/README.md` for the pinned seeds and fdn parallel.
 
 The conviction-setter and subnet-stats containers (see below) provide continuous observation in logs.
 
-### 4. The Owner Validator (recycle + conviction use case)
+### 4. The Basic Validator (Rancher-scored miner share + owner recycle)
 
 Inside the compose validator container the flow is:
 
-1. `scripts/validator_entrypoint.py` runs first (btcli commands for register + hypers)
-2. Once that exits, it execs `python scripts/owner_validator.py`
+1. `scripts/validator_entrypoint.py` runs first (btcli commands for register + hypers, owner/alice/bob triad)
+2. Once that exits, it execs `python scripts/basic_validator.py`
 
-The validator sets weight 1.0 to the target owner UID (so miner incentive portion goes to owner key). Combined with `recycle_or_burn=Recycle` this recycles instead of burning.
+Each cycle the validator discovers miners from the metagraph (every registered
+hotkey that is not the owner or validator key), scores each miner's
+`kubetee.ai/miner-hotkey`-labeled Rancher cluster with a binary fail-closed
+node-active rule, and sets weights: `KUBETEE_MINER_SHARE` (default 0.10) split
+across scoring miners, the remainder to the owner recycle UID. Combined with
+`recycle_or_burn=Recycle` the owner-directed share recycles instead of burning.
+With no scoring miner it degenerates to 100% owner weight (the previous
+owner-validator behavior). Missing/invalid static config (including
+`RANCHER_URL`/`RANCHER_BEARER_TOKEN`) refuses to start; a runtime Rancher
+outage skips weight-setting for the cycle instead of scoring anyone 0.
 
-Environment in compose (passed to both setup and validator):
+Environment in compose (see `docker-compose.yml` and `.env.example`):
 - `KUBETEE_SUBNET_NETUID=1`
-- `TARGET_UID=0` (the UID that the owner hotkey received on registration; override if needed)
 - `BT_NETWORK=ws://chain:9944` (internal to compose)
-- `BT_WALLET=owner`
+- `BT_WALLET=alice` (validator signing wallet; the owner wallet stays `KUBETEE_OWNER_WALLET=owner`)
+- `KUBETEE_OWNER_HOTKEY` / `KUBETEE_VALIDATOR_HOTKEY` (UIDs resolved from the metagraph by hotkey — no `TARGET_UID`)
+- `RANCHER_URL` / `RANCHER_BEARER_TOKEN` from the gitignored `.env`
 
 To run the validator manually on host (after you ran setup yourself):
 ```bash
 BT_NETWORK=ws://127.0.0.1:9944 \
 KUBETEE_SUBNET_NETUID=1 \
-TARGET_UID=0 \
-python scripts/owner_validator.py
+KUBETEE_OWNER_HOTKEY=5FLbZav21bAsjH5SAdmJZwTP5C4b3bcaaWqC6GSmGmsbzUJ9 \
+KUBETEE_VALIDATOR_HOTKEY=5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY \
+RANCHER_URL=... RANCHER_BEARER_TOKEN=... \
+python scripts/basic_validator.py
 ```
 
 ### Observer / Sidecar Containers
@@ -193,4 +205,4 @@ This matches the requirement: "auto set subnet owners emissions to be into convi
 - Full testing pyramid layers (in-mem → localnet integration → multi-node).
 - TEE/attestation integration into the scoring.
 
-See also: `scripts/setup_single_node.py`, `scripts/owner_validator.py`, `docker-compose.yml`, and the previous pyramid spec.
+See also: `scripts/setup_single_node.py`, `scripts/basic_validator.py`, `docker-compose.yml`, and the previous pyramid spec.
