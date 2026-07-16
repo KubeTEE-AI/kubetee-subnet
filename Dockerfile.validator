@@ -19,6 +19,11 @@ RUN pip install --no-cache-dir uv
 
 COPY requirements.txt .
 
+# Install CPU-only torch first. The validator needs no GPU (see CLAUDE.md), so the
+# default CUDA wheels (~2.8GB) are pure waste and overflow CI runner disk. Pinning
+# the CPU index means requirements.txt's `torch>=2` is already satisfied below.
+RUN uv pip install --system --no-cache torch --index-url https://download.pytorch.org/whl/cpu
+
 # Use uv for installation (recommended for the project)
 RUN uv pip install --system --no-cache -r requirements.txt
 
