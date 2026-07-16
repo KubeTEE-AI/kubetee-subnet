@@ -17,21 +17,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Install uv
+      - name: Install uv (provides Python 3.13)
         uses: astral-sh/setup-uv@v5
+        with:
+          python-version: '3.13'
 
       - name: Install dependencies
-        run: |
-          uv pip install --system -r requirements.txt
-          uv pip install --system ruff pytest
+        run: uv pip install --system -r requirements.txt ruff pytest
 
       - name: Lint with ruff
-        run: ruff check .
+        run: uv run --no-project ruff check .
 
       - name: Test with pytest
-        run: pytest -q --tb=short
+        run: uv run --no-project pytest -q --tb=short
