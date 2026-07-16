@@ -10,3 +10,5 @@ setuptools>=68
 bittensor>=10.0.0
 # For local dev / compose images
 docker>=7.0.0
+
+prometheus-client>=0.20
