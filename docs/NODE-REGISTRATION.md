@@ -19,6 +19,18 @@ Before registering your node, ensure the infrastructure setup is complete:
    - **Latest firmware installed** - See [NVIDIA DGX Firmware Guide](https://docs.nvidia.com/dgx/dgxh100-fw-update-guide/)
    - VFIO/IOMMU configured for passthrough
 
+## Miner Hotkey Label (Early Access scoring requirement)
+
+The subnet validator finds your cluster through the
+`kubetee.ai/miner-hotkey` **cluster label**, whose value is your miner
+hotkey SS58. In Early Access this label is applied **by the KubeTEE
+operator** as a manual step when your cluster is registered (registration
+is operator-performed, not permissionless). A registered miner whose
+cluster is missing the label — or whose label holds a stale hotkey — scores
+**0** and earns no miner share; exactly one cluster may carry a given
+hotkey value. See [SUBNET.md](../SUBNET.md) ("Manual cluster label step")
+for the labeling procedure and the scoring rule.
+
 ## Cluster Architecture Requirements
 
 **IMPORTANT**: For a production RKE2 cluster, you need:

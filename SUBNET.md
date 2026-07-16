@@ -1,24 +1,205 @@
 # KubeTEE Subnet (v11 Bittensor)
 
-This document explains how to run miners and validators for the KubeTEE subnet.
+This document explains how to run the KubeTEE subnet stack in Early Access:
+the local single-node chain, the **basic validator** (g004), and the
+operational policies that come with it.
 
-**Important (2026-07):** We are on a development branch moving away from the legacy v10 `bittensor-subnet-template`. 
-The structure is being modernized for Bittensor 11+ (signed requests for neuron comms + unified `bittensor` SDK).
+**Important (2026-07):** We are on a development branch moving away from the
+legacy v10 `bittensor-subnet-template`. The structure is being modernized for
+Bittensor 11+ (signed requests for neuron comms + unified `bittensor` SDK).
 
-For the **testing pyramid** we use a "single node" local setup based on the official RaoFoundation localnet.
+**Early Access scoring caveat:** the basic validator scores **node liveness
+only** — a binary, fail-closed check against the Rancher v3 API. It is a
+liveness proxy, **not** TEE attestation, capacity, or job-quality scoring
+(those are the future scoring epic, see `README.md`). Liveness scoring
+establishes no eligibility, attestation, or security compliance.
 
-## Local Single-Node Testing Pyramid (Recommended for Development)
+## The Basic Validator (Early Access)
 
-This gives you a fast local chain + your validator (and optional miners) with full logs.
+### Flow
+
+Each cycle (every `KUBETEE_POLL_SECONDS`, minimum 60s) the validator:
+
+1. **Reads the metagraph** and discovers miners: every registered hotkey
+   that is not one of our own subnet keys (`KUBETEE_OWNER_HOTKEY`,
+   `KUBETEE_VALIDATOR_HOTKEY`). UIDs are resolved by hotkey SS58 — there is
+   no fixed-UID configuration.
+2. **Enumerates Rancher** (read-only, complete pagination): finds each
+   miner's cluster by the `kubetee.ai/miner-hotkey` label and reads its
+   nodes.
+3. **Runs deregistration reconciliation** (the single guarded Rancher
+   mutation — see below).
+4. **Scores each miner** binary fail-closed: `1` iff exactly one labeled
+   cluster matches, the cluster is `active`, and at least one node is
+   `active`; anything missing, ambiguous, transitional, or unverifiable
+   scores `0`.
+5. **Sets weights**, signed by **alice** (`BT_WALLET=alice`): each scoring
+   miner gets `KUBETEE_MINER_SHARE / N`; the owner recycle UID gets
+   `1 − KUBETEE_MINER_SHARE` (or `1.0` when no miner scores); all other
+   UIDs get explicit zero. Success is claimed only on chain acceptance.
+6. **Logs and exports Prometheus metrics** (structured, redacted — the
+   bearer token and response bodies never appear in logs or metrics).
+
+With no scoring miner the subnet degenerates to owner-only recycle
+(100% owner weight) — the behavior of the retired owner validator.
+
+### Manual cluster label step (Early Access)
+
+The miner→cluster mapping is the `kubetee.ai/miner-hotkey` cluster label,
+whose value is the miner's hotkey SS58. In Early Access the **operator sets
+this label manually** when registering the miner's cluster (registration is
+operator-performed, not permissionless):
+
+1. Rancher UI → Cluster Management → select the miner's cluster → Edit
+   Config → Labels & Annotations, **or** the equivalent `kubectl label
+   clusters.provisioning.cattle.io ...` on the management cluster.
+2. Add label `kubetee.ai/miner-hotkey=<miner hotkey SS58>` (for the Early
+   Access miner this is **bob's** hotkey).
+3. Exactly one cluster may carry a given hotkey value — duplicates score 0
+   (ambiguous, fail-closed).
+
+A registered miner without a labeled active cluster scores 0. The label is
+trusted only because the operator sets it; binding labels to verified
+enrollment is part of the future permissionless epic.
+
+### Configurable weight split (D12)
+
+`KUBETEE_MINER_SHARE` lives in `.env` (see `.env.example`), default
+**0.10** — i.e. 10% to scoring miners, 90% recycled to the subnet-owner
+UID. It must be finite and within `[0, 1]`; anything else refuses to start.
+Changing the split is a `.env` edit + container restart, no code change.
+
+### Recycle mechanism (D13)
+
+Recycling works by **directing weights to the owner-controlled UID while
+the subnet has `recycle_or_burn=Recycle` set** (the compose setup phase
+sets it, ownership permitting). That mechanism is accepted per Bittensor
+docs and owner decision D13. What the validator/UAT verifies is exactly:
+
+- the hyperparameters we set are in place, **where the chain allows
+  reading/setting them**, and
+- the weights target the **proper owner-controlled key** (the owner UID's
+  hotkey equals `KUBETEE_OWNER_HOTKEY`).
+
+### Localnet environment limitation (D1)
+
+On the pinned `ghcr.io/opentensor/subtensor-localnet:latest` image, netuid 1
+is pre-owned by a bootstrap key and `btcli subnet create` fails with
+`SubtokenDisabled`. Owner-only hyperparameters (`recycle_or_burn`,
+`owner_cut_auto_lock_enabled`) therefore **cannot be set on-chain there**;
+the setup reports this honestly (ownership check, `/app/.kubetee_owned`)
+and skips the doomed sudo calls instead of hammering the chain. This is a
+documented **environment limitation, not a doubt about the recycle
+mechanism** — the weight split is demonstrated live on localnet and the
+on-chain recycle-hyperparameter proof is deferred to a future testnet
+slice. UAT reports the hyperparameter check as SKIPPED/LIMITED with this
+citation on the pinned image.
+
+### Rancher token debt (D6)
+
+Early Access uses an existing **cluster-scoped test/dev token** in the
+gitignored `.env` (`RANCHER_BEARER_TOKEN`). Its blast radius is bounded to
+that cluster, but its *in-cluster permission level* (read-only vs.
+writable) is unverified. Containment is code-side: the Rancher client is
+structurally GET-only apart from the single guarded reconciliation DELETE,
+pins one https origin, refuses redirects, and never logs the token.
+
+**Recorded debt item:** verify the token's role bindings, and if it is
+writable, replace it with a `cluster-readonly`-bound token. This must be
+resolved **before any non-local deployment** and must not be silently
+extended.
+
+### Failure handling: fail-fast startup vs runtime skip (D14/D10)
+
+- **Startup (fail-fast):** every static config value is validated before
+  the loop starts — `KUBETEE_MINER_SHARE`, `KUBETEE_POLL_SECONDS` (≥ 60),
+  `KUBETEE_MAX_CONSECUTIVE_SKIPS`, reconcile parameters, owner + validator
+  hotkeys (present, distinct), and `RANCHER_URL`/`RANCHER_BEARER_TOKEN`
+  (present, well-formed https origin). Any violation → the process refuses
+  to start with a clear error naming every offending variable (values of
+  secrets are never echoed).
+- **Runtime (never exit):** once started, the validator **never exits on a
+  runtime error**. A Rancher outage (transport error, timeout, 5xx, auth
+  rejection) **skips `set_weights` for that cycle** — our own observability
+  outage must never zero a miner — logs the reason, increments the error
+  metric, and suppresses reconciliation. A rejected `set_weights` is logged
+  honestly with a redacted error and retried with bounded backoff. Even an
+  unexpected in-cycle exception degrades to backoff and the loop continues.
+  Only operator signals (`docker compose down`, SIGTERM) stop the process.
+
+### Degraded mode and remediation policy (D10 staleness bound)
+
+Consecutive skipped cycles are counted and capped by
+`KUBETEE_MAX_CONSECUTIVE_SKIPS` (default **10**, ≈ 10 minutes at the 60s
+interval). Exceeding the cap does **not** auto-zero anyone's weights — it
+puts the validator into an explicit, loudly logged **degraded mode** with
+the Prometheus flag `kubetee_degraded_mode=1`. On-chain weights are stale
+from the last successful cycle and stay that way until scoring recovers.
+
+**Operator remediation policy:**
+
+1. Alert on `kubetee_degraded_mode == 1` (and on
+   `kubetee_consecutive_skips` climbing).
+2. Diagnose the skip reason from the validator logs
+   (`cycle skipped set_weights: reason=...`) and the
+   `kubetee_rancher_errors_total{category=...}` counters — typical causes:
+   staging Rancher outage, revoked/expired token (auth), network path.
+3. Fix the cause (restore Rancher/network; rotate the token in `.env` and
+   restart the container for credential failures — credential *changes*
+   are a restart, not a runtime reload).
+4. Recovery is automatic: the first fully successful scoring cycle clears
+   the flag and resets the counter. Verify `kubetee_degraded_mode == 0`
+   and a fresh `kubetee_last_successful_scoring_timestamp`.
+5. Never "remediate" by zeroing weights manually — stale-but-visible is
+   the designed failure mode; scoring integrity returns with evidence.
+
+### Deregistration reconciliation (single guarded mutation)
+
+When a `kubetee.ai/miner-hotkey`-labeled cluster's hotkey is no longer
+registered on the metagraph, the validator removes that cluster from
+Rancher — the **only** write it can ever perform. Guards (all mandatory,
+fail-closed): runs only after a fresh successful metagraph read **and** a
+complete Rancher enumeration in the same cycle; absence must persist ≥
+`KUBETEE_RECONCILE_MIN_CYCLES` (3) successful cycles **and** ≥
+`KUBETEE_RECONCILE_MIN_SECONDS` (900) wall-clock; a same-cycle pre-delete
+recheck (fresh metagraph read + final GET re-validating id/uuid/label);
+unlabeled and management (`local`) clusters are structurally out of reach;
+404/409 are idempotent; an unauthorized token fails closed as
+`operator action required` (never a silent no-op). Every deletion or
+suppression logs an evidence bundle (identifiers and history only — never
+payloads or secrets). Counters are in-memory: a restart only defers
+deletion (the safe direction).
+
+### Prometheus metrics
+
+The validator exposes `prometheus_client` text metrics on
+`KUBETEE_METRICS_PORT` (9100), **compose-internal only** (no host port
+mapping). Key series: `kubetee_rancher_errors_total{category}`,
+`kubetee_set_weights_total{result}`, `kubetee_cycles_skipped_total{reason}`,
+`kubetee_consecutive_skips`, `kubetee_degraded_mode`,
+`kubetee_last_successful_scoring_timestamp`, `kubetee_miners_discovered`,
+`kubetee_miners_scoring`, `kubetee_reconciliation_deletions_total`,
+`kubetee_reconciliation_suppressed_total{reason}`,
+`kubetee_reconciliation_conflicts_total`. All label values are fixed enums;
+no metric or label ever carries secret material.
+
+## Local Single-Node Testing Stack
+
+This gives you a fast local chain + the validator (and optional miners) with full logs.
 
 ### 1. Prerequisites
+
 - Docker + Compose
 - Python 3.10+ + `pip install bittensor` (for btcli and SDK on host)
 - Wallets will be created under `~/.bittensor`
+- A `.env` file with the Rancher credentials and tunables (copy
+  `.env.example`, fill values — never commit it). Without `RANCHER_URL` /
+  `RANCHER_BEARER_TOKEN` the validator refuses to start (by design, D14).
 
 ### 2. Start the stack (chain + validator + dozzle)
 
-The validator container now self-initializes: on startup it first runs the btcli registration + hyperparam setup, then starts the owner validator.
+The validator container self-initializes: on startup it first runs the
+btcli registration + hyperparam setup, then starts the basic validator.
 
 ```bash
 cd repos/subnet/kubetee-subnet
@@ -30,179 +211,101 @@ docker compose up -d --build
 # Open http://localhost:8080
 ```
 
-Services (all using deterministic pinned dev accounts):
+Services (all using deterministic pinned dev accounts, see `keys/README.md`):
+
 - `chain`: subtensor-localnet (FAST_BLOCKS for fast testing)
-- `validator`: entrypoint does btcli (register subnet if not exists, register the owner/alice/bob triad, add stake, start emissions, set conviction/recycle hypers) then basic_validator (alice signs set_weights; miners scored via the read-only Rancher v3 API; weights split `KUBETEE_MINER_SHARE` to miners, rest to the owner recycle UID)
-- `conviction-setter`: bash while-loop that periodically re-sets the conviction hypers
-- `subnet-stats`: btcli loop that prints hypers (conviction, recycle), stake, metagraph (emissions, UIDs, weights), balances etc. — everything visible in logs
+- `validator`: entrypoint does btcli (register subnet if not exists,
+  register the **owner/alice/bob** triad, add stake, start emissions,
+  attempt conviction/recycle hypers) then runs `basic_validator.py`
+  (alice signs `set_weights`)
+- background conviction-setter + subnet-stats loops inside the validator
+  container (single chain connection each — HTTP 429 lesson)
 - `dozzle`: log viewer (http://localhost:8080)
-- `miner-1` (optional profile)
+- `miner-1` (optional profile, stub)
 
 Stop: `docker compose down`
 
 Follow the interesting logs:
+
 ```bash
-docker compose logs -f validator subnet-stats conviction-setter
+docker compose logs -f validator
 ```
 
-### 3. Single-Node Setup Script (register + hypers for conviction + recycle)
+### 3. Single-node setup script (register + hypers)
 
-The setup is now performed **inside the validator container** automatically.
-
-If you want to run (or re-run) setup manually from the **host** (e.g. for debugging or different netuid):
+The setup runs **inside the validator container** automatically. To run
+(or re-run) it manually from the **host**:
 
 ```bash
 python scripts/setup_single_node.py --netuid 1 --owner-wallet owner --chain-endpoint ws://127.0.0.1:9944
 ```
 
-(When running inside compose the entrypoint uses the internal `ws://chain:9944`.)
+What it does:
 
-What the setup (run at validator startup) does:
-- Waits for chain
-- **Uses pinned deterministic dev seeds** (Alice + owner) — fdn-subnet style (Alith etc.). Owner SS58 + UID stable.
-- Ensures/creates subnet if it does not exist
-- Registers the owner hotkey as a neuron on the subnet
-- Puts some stake on the subnet for the owner (`btcli stake add`)
-- Starts emissions (`sudo start`)
-- Sets the key hyperparameters for the use case:
-  - `owner_cut_auto_lock_enabled=true` (owner cut auto-locks into CONVICTION)
-  - `recycle_or_burn=Recycle` (emissions directed to owner UID get recycled, not burned)
-- Then the long-running owner validator sets weights=1.0 to the owner UID.
+- Waits for the chain
+- **Uses pinned deterministic dev seeds** for the triad (D7): `owner`
+  (subnet owner / recycle target), `alice` (validator, also the funding
+  source), `bob` (miner)
+- Creates the subnet if needed, registers and stakes all three wallets
+  (stake attempts are best-effort: the pinned image can reject them with
+  `SubtokenDisabled` — reported honestly, see the D1 limitation above)
+- Starts emissions and attempts the conviction/recycle hyperparameters
+  **only when a live ownership check passes** (never blind retries)
 
-This lets you observe "miner incentive recycling" (via weights + recycle hyper) + conviction behavior.
+### 4. Running the validator manually (host)
 
-See `keys/README.md` for the pinned seeds and fdn parallel.
-
-The conviction-setter and subnet-stats containers (see below) provide continuous observation in logs.
-
-### 4. The Basic Validator (Rancher-scored miner share + owner recycle)
-
-Inside the compose validator container the flow is:
-
-1. `scripts/validator_entrypoint.py` runs first (btcli commands for register + hypers, owner/alice/bob triad)
-2. Once that exits, it execs `python scripts/basic_validator.py`
-
-Each cycle the validator discovers miners from the metagraph (every registered
-hotkey that is not the owner or validator key), scores each miner's
-`kubetee.ai/miner-hotkey`-labeled Rancher cluster with a binary fail-closed
-node-active rule, and sets weights: `KUBETEE_MINER_SHARE` (default 0.10) split
-across scoring miners, the remainder to the owner recycle UID. Combined with
-`recycle_or_burn=Recycle` the owner-directed share recycles instead of burning.
-With no scoring miner it degenerates to 100% owner weight (the previous
-owner-validator behavior). Missing/invalid static config (including
-`RANCHER_URL`/`RANCHER_BEARER_TOKEN`) refuses to start; a runtime Rancher
-outage skips weight-setting for the cycle instead of scoring anyone 0.
-
-Environment in compose (see `docker-compose.yml` and `.env.example`):
-- `KUBETEE_SUBNET_NETUID=1`
-- `BT_NETWORK=ws://chain:9944` (internal to compose)
-- `BT_WALLET=alice` (validator signing wallet; the owner wallet stays `KUBETEE_OWNER_WALLET=owner`)
-- `KUBETEE_OWNER_HOTKEY` / `KUBETEE_VALIDATOR_HOTKEY` (UIDs resolved from the metagraph by hotkey — no `TARGET_UID`)
-- `RANCHER_URL` / `RANCHER_BEARER_TOKEN` from the gitignored `.env`
-
-To run the validator manually on host (after you ran setup yourself):
 ```bash
 BT_NETWORK=ws://127.0.0.1:9944 \
 KUBETEE_SUBNET_NETUID=1 \
+BT_WALLET=alice \
 KUBETEE_OWNER_HOTKEY=5FLbZav21bAsjH5SAdmJZwTP5C4b3bcaaWqC6GSmGmsbzUJ9 \
 KUBETEE_VALIDATOR_HOTKEY=5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY \
 RANCHER_URL=... RANCHER_BEARER_TOKEN=... \
 python scripts/basic_validator.py
 ```
 
-### Observer / Sidecar Containers
+### 5. Observability
 
-Two additional containers are started by default to make the single-node pyramid easy to observe in dozzle:
+- **Dozzle** (http://localhost:8080): filter the validator logs for
+  `set_weights`, `cycle skipped`, `DEGRADED`, `reconciliation`.
+- **Metrics**: from inside the compose network,
+  `http://validator:9100/metrics` (deliberately not reachable from the
+  host).
+- **subnet-stats** loop prints hypers (conviction, recycle_or_burn where
+  readable), stake, ownership, and wallet stake for owner + bob.
 
-- **conviction-setter**: A simple bash `while true` loop that repeatedly runs the `btcli sudo set` commands for `owner_cut_auto_lock_enabled` and `recycle_or_burn=Recycle`. This keeps (or re-asserts) the conviction/recycle behavior on the subnet.
+### 6. Testnet / Mainnet notes
 
-- **subnet-stats**: A `while true` btcli stats printer that outputs (to container logs):
-  - `subnets hyperparameters` (conviction + recycle_or_burn visible here)
-  - `stake list`
-  - `metagraph` (UIDs, stake, weights, emission columns — primary way to see "miner recycling" in action when the owner validator sets weight 1.0)
-  - wallet balances
-
-Run with:
-```bash
-docker compose logs -f validator subnet-stats conviction-setter
-```
-
-Everything is designed so you can watch the full flow (register → stake → emissions start → weights → recycled emissions + conviction) live.
-
-### 5. Running a Miner
-
-For local testing, miners are mostly infrastructure/TEE providers for KubeTEE.
-
-Basic pattern (v11 style - no more legacy axon/dendrite):
-
-1. Register a hotkey on the subnet (as miner).
-2. Run your miner process that:
-   - Serves via plain HTTP + signs requests with `bittensor.http_auth`
-   - Responds to validator queries (see signed-requests guide)
-   - Reports infrastructure/TEE status, etc.
-
-Example minimal miner skeleton will be added as we clean more legacy code.
-
-For now, you can use the optional `miner-1` profile as a stub, or implement against the protocol your validator expects.
-
-To register a test miner:
-```bash
-btcli subnet register --netuid 1 --wallet.name miner1 --wallet-hotkey default --network local --yes
-```
-
-### 6. View Everything in Dozzle
-
-After `docker compose up -d`:
-
-- Go to http://localhost:8080
-- Select containers: `kubetee-chain`, `kubetee-validator`, `kubetee-dozzle`, etc.
-- Filter by "emissions", "conviction", "weights", "hyperparameter", etc.
-
-This is the main way to review the single-node pyramid run.
-
-### 7. Testnet / Mainnet Notes
-
-- Use real funded wallets.
-- `btcli ... --network test` or `finney`
-- Set `BT_NETWORK=ws://...` accordingly.
-- For mainnet you must be the subnet owner (coldkey) to set hypers and start emissions.
+- Use real funded wallets; `--network test` or `finney`.
+- **Resolve the D6 token debt first** (cluster-readonly-bound token) —
+  mandatory before any non-local deployment.
 - Always test recycle + conviction on local first.
 
-### 8. Common Commands (v11 / btcli)
+### 7. Common commands (v11 / btcli)
 
 ```bash
-# View hypers
-btcli subnets hyperparameters --netuid 1 --network local
+# View hypers (recycle_or_burn visible where the chain exposes it)
+btcli subnets hyperparameters --netuid 1 --network ws://127.0.0.1:9944
 
-# Set (owner only)
-btcli sudo set --netuid 1 --param owner_cut_auto_lock_enabled --value true --network local
-btcli sudo set --netuid 1 --param recycle_or_burn --value Recycle --network local
+# Set (owner only; fails on the pinned localnet image - D1)
+btcli sudo set --netuid 1 --param recycle_or_burn --value Recycle --network ws://127.0.0.1:9944
 
-# Start emissions
-btcli sudo start --netuid 1 --network local
-
-# Weights (the validator does this)
-btcli weights set --netuid 1 --uids 0 --weights 1.0 --network local
-
-# Conviction view
-btcli subnets conviction --netuid 1 --network local
+# Metagraph (UIDs, stake, weights - the place to see the split)
+btcli subnets metagraph --netuid 1 --network ws://127.0.0.1:9944
 ```
 
-### 9. Conviction + Recycle Goal
+## UAT
 
-By enabling `owner_cut_auto_lock_enabled`:
-- The 18% owner cut is auto-locked into a conviction position (time-weighted, proves commitment).
-
-By using owner-validator + `recycle_or_burn=Recycle`:
-- Miner-directed emissions to owner UID are recycled (re-emittable) instead of burned.
-
-This matches the requirement: "auto set subnet owners emissions to be into conviction" + recycle instead of burn.
+The executable UAT runbook for the g004 acceptance demos (healthy split,
+score-0, runtime-outage skip, startup refusal, metrics scrape, degraded
+mode, and the operator-gated reconciliation demo) is
+[`docs/UAT-g004.md`](docs/UAT-g004.md). The live demos require operator
+actions and a running stack; they are executed at integration UAT, not by
+CI.
 
 ---
 
-**Next steps on the branch:**
-- More v11-native miner/validator base (remove remaining legacy template/ bits).
-- Full testing pyramid layers (in-mem → localnet integration → multi-node).
-- TEE/attestation integration into the scoring.
-
-See also: `scripts/setup_single_node.py`, `scripts/basic_validator.py`, `docker-compose.yml`, and the previous pyramid spec.
+See also: `scripts/setup_single_node.py`, `scripts/basic_validator.py`,
+`docker-compose.yml`, `.env.example`, `keys/README.md`, and
+`docs/NODE-REGISTRATION.md` (miner-side node registration + the
+`kubetee.ai/miner-hotkey` label requirement).
