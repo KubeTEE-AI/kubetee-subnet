@@ -49,16 +49,78 @@ LTOK=$(cr -X POST "$RANCHER/v3-public/localProviders/local?action=login" \
         -d "{\"username\":\"admin\",\"password\":\"$BOOT\"}" | jq -r .token)
 [ -n "$LTOK" ] && [ "$LTOK" != "null" ] || { log "login failed"; exit 1; }
 
-# --- 2. server-url + mint validator token -----------------------------------
+# --- 2. server-url + SCOPED validator identity + token -----------------------
+# The validator must NOT hold admin: its designed authority is read (clusters,
+# nodes) plus the single guarded reconciliation DELETE - nothing else. Create a
+# dedicated user bound to a custom global role with exactly those verbs, and
+# mint the validator's token for THAT user. Admin stays inside this container.
 cr -X PUT "$RANCHER/v3/settings/server-url" -H "Authorization: Bearer $LTOK" \
    -H 'Content-Type: application/json' \
    -d "{\"name\":\"server-url\",\"value\":\"$RANCHER\"}" >/dev/null || true
-BEARER=$(cr -X POST "$RANCHER/v3/token" -H "Authorization: Bearer $LTOK" \
+
+VAL_USERNAME="kubetee-validator"
+VAL_ROLE_NAME="kubetee-validator-scoring"
+
+# 2a. custom global role: clusters get/list/watch/delete, nodes get/list/watch
+ROLE_ID=$(cr "$RANCHER/v3/globalroles?name=$VAL_ROLE_NAME" -H "Authorization: Bearer $LTOK" \
+           | jq -r '.data[0].id // empty')
+if [ -z "$ROLE_ID" ]; then
+  ROLE_ID=$(cr -X POST "$RANCHER/v3/globalrole" -H "Authorization: Bearer $LTOK" \
+             -H 'Content-Type: application/json' -d "{
+    \"type\": \"globalRole\",
+    \"name\": \"$VAL_ROLE_NAME\",
+    \"description\": \"KubeTEE validator: cluster read + guarded delete, node read\",
+    \"rules\": [
+      {\"apiGroups\": [\"management.cattle.io\"], \"resources\": [\"clusters\"],
+       \"verbs\": [\"get\", \"list\", \"watch\", \"delete\"]},
+      {\"apiGroups\": [\"management.cattle.io\"], \"resources\": [\"nodes\"],
+       \"verbs\": [\"get\", \"list\", \"watch\"]}
+    ]}" | jq -r .id)
+fi
+[ -n "$ROLE_ID" ] && [ "$ROLE_ID" != "null" ] || { log "global role create failed"; exit 1; }
+log "scoped global role: $ROLE_ID"
+
+# 2b. dedicated user with a per-`up` random password (never persisted/echoed)
+VAL_PASSWORD=$(head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')
+USER_ID=$(cr "$RANCHER/v3/users?username=$VAL_USERNAME" -H "Authorization: Bearer $LTOK" \
+           | jq -r '.data[0].id // empty')
+if [ -z "$USER_ID" ]; then
+  USER_ID=$(cr -X POST "$RANCHER/v3/user" -H "Authorization: Bearer $LTOK" \
+             -H 'Content-Type: application/json' \
+             -d "{\"type\":\"user\",\"username\":\"$VAL_USERNAME\",
+                  \"password\":\"$VAL_PASSWORD\",\"mustChangePassword\":false,
+                  \"enabled\":true}" | jq -r .id)
+else
+  # persisted Rancher: rotate to this run's password so we can log in
+  cr -X POST "$RANCHER/v3/users/$USER_ID?action=setpassword" \
+     -H "Authorization: Bearer $LTOK" -H 'Content-Type: application/json' \
+     -d "{\"newPassword\":\"$VAL_PASSWORD\"}" >/dev/null
+fi
+[ -n "$USER_ID" ] && [ "$USER_ID" != "null" ] || { log "user create failed"; exit 1; }
+log "validator user: $USER_ID"
+
+# 2c. bindings: login basics (user-base) + the scoped role (idempotent)
+EXISTING_BINDS=$(cr "$RANCHER/v3/globalrolebindings?userId=$USER_ID" \
+                  -H "Authorization: Bearer $LTOK" | jq -r '[.data[].globalRoleId] | join(",")')
+for ROLE in "user-base" "$ROLE_ID"; do
+  case ",$EXISTING_BINDS," in *",$ROLE,"*) continue;; esac
+  cr -X POST "$RANCHER/v3/globalrolebinding" -H "Authorization: Bearer $LTOK" \
+     -H 'Content-Type: application/json' \
+     -d "{\"type\":\"globalRoleBinding\",\"globalRoleId\":\"$ROLE\",\"userId\":\"$USER_ID\"}" >/dev/null
+done
+log "bindings ensured (user-base + $VAL_ROLE_NAME)"
+
+# 2d. log in AS the scoped user and mint the validator token from that session
+VLTOK=$(cr -X POST "$RANCHER/v3-public/localProviders/local?action=login" \
+         -H 'Content-Type: application/json' \
+         -d "{\"username\":\"$VAL_USERNAME\",\"password\":\"$VAL_PASSWORD\"}" | jq -r .token)
+[ -n "$VLTOK" ] && [ "$VLTOK" != "null" ] || { log "validator login failed"; exit 1; }
+BEARER=$(cr -X POST "$RANCHER/v3/token" -H "Authorization: Bearer $VLTOK" \
           -H 'Content-Type: application/json' \
-          -d '{"type":"token","description":"kubetee-validator-uat","ttl":0}' | jq -r .token)
+          -d '{"type":"token","description":"kubetee-validator-scoring","ttl":0}' | jq -r .token)
 [ -n "$BEARER" ] && [ "$BEARER" != "null" ] || { log "token mint failed"; exit 1; }
 ( umask 077; printf '%s' "$BEARER" > "$SHARED/rancher-token" )   # never echoed
-log "minted validator API token -> $SHARED/rancher-token"
+log "minted SCOPED validator API token -> $SHARED/rancher-token"
 
 # --- 3. CA -> shared ---------------------------------------------------------
 cr "$RANCHER/v3/settings/cacerts" -H "Authorization: Bearer $LTOK" | jq -r .value > "$SHARED/rancher-ca.crt"
