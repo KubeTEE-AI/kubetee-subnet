@@ -9,14 +9,14 @@ no authority to do them).
 
 **Safety banner — read before executing:**
 
-- Demos run against the **local docker compose stack** plus **read-only**
-  staging Rancher queries. The only Rancher mutations here are the two
-  operator label actions in AC9(b) and — **only with explicit recorded
-  operator approval** — the AC12 disposable-cluster DELETE.
-- **The production miner cluster (bob's real cluster) is banned from the
-  AC12 deletion demo.** No demo may delete, modify, or relabel it except
-  the AC9(b) label remove/restore, which is itself an operator action with
-  a verified restoration step.
+- Demos run against the **self-contained docker compose stack**: the
+  in-compose Rancher and its disposable `miner-cluster` downstream. External
+  Rancher endpoints (staging or production) are **out of scope** for these
+  demos. The only Rancher mutations here are the label actions in AC9(b)
+  and — **only with explicit recorded operator approval** — the AC12
+  disposable-cluster DELETE, all against the stack's own Rancher.
+- **Production miner clusters are banned from every demo.** Never point the
+  stack at an external Rancher for a UAT run.
 - `.env` values (especially `RANCHER_BEARER_TOKEN`) must never appear in
   captured artifacts, issues, or commits. The validator redacts by design;
   still run the secret grep in §0.4 before publishing any artifact.
@@ -26,13 +26,17 @@ no authority to do them).
 ### 0.1 Prerequisites
 
 - Merged stack: PR-1…PR-4 on `main` (or the stacked branches checked out).
-- `.env` present in the repo root (copy `.env.example`; operator fills the
-  real staging values). Required: `RANCHER_URL`, `RANCHER_BEARER_TOKEN`.
-- The staging cluster of the Early Access miner carries the label
-  `kubetee.ai/miner-hotkey=<bob hotkey SS58>`.
-  **Named operator action (one-time prep):** the label currently holds the
-  alice dev address (recorded in the goal evidence); relabel it to bob's
-  hotkey before AC9(a). Print bob's hotkey after the stack is up:
+- No `.env` needed: the stack is self-contained. `rancher-init` mints the
+  validator's Rancher token, imports the disposable `miner-cluster`
+  downstream, and labels it `kubetee.ai/miner-hotkey=<bob>` automatically
+  on every `up`. Resolve the downstream's cluster id (used by the label
+  commands below):
+
+```bash
+docker compose logs rancher-init | grep "import cluster"   # -> id=c-xxxxx
+```
+
+  Print bob's hotkey if needed:
 
 ```bash
 docker compose exec validator python -c \
@@ -78,8 +82,8 @@ grep -RniE "token-[a-z0-9]+:" logs/uat-g004/ || echo "CLEAN"
 
 ## 1. AC9(a) — healthy path: score 1, accepted weights, 0.10/0.90 split
 
-**Preconditions:** stack up (§0.3); miner label on bob's hotkey (§0.1);
-staging node active.
+**Preconditions:** stack up (§0.3); miner label on bob's hotkey (§0.1,
+automatic); the `miner-cluster` downstream active with an active node.
 
 **Commands:**
 
@@ -122,8 +126,14 @@ docker compose exec validator cat /app/.kubetee_owned
 ## 2. AC9(b) — score 0: label removed, 100% owner weights
 
 **Named operator action (Rancher, outside validator authority):** remove
-the `kubetee.ai/miner-hotkey` label from the miner's cluster (Rancher UI →
-Cluster Management → cluster → Labels & Annotations → delete the label).
+the `kubetee.ai/miner-hotkey` label from the miner-cluster — one command
+against the in-compose Rancher (any dev can run it):
+
+```bash
+docker compose exec rancher kubectl label \
+  clusters.management.cattle.io <cluster-id> kubetee.ai/miner-hotkey-
+```
+
 Record the time and cluster id in the artifact notes.
 
 **Commands (after ≥ 2 poll intervals, ~2–3 min):**
@@ -142,8 +152,14 @@ docker compose exec validator btcli subnets metagraph \
 - Metagraph shows owner UID weight `1.0 ± 0.01`, bob `0.0 + 0.01`.
 - The process never exited (`docker compose ps validator` → `running`).
 
-**Named operator action (restore):** re-add
-`kubetee.ai/miner-hotkey=<bob hotkey SS58>` to the same cluster.
+**Named operator action (restore):** re-add the label to the same cluster:
+
+```bash
+docker compose exec rancher kubectl label \
+  clusters.management.cattle.io <cluster-id> \
+  kubetee.ai/miner-hotkey=<bob hotkey SS58> --overwrite
+```
+
 **Restoration is verified** by a subsequent score-1 cycle: repeat the
 AC9(a) log assertion and record it in `a9b-restore.log`.
 
@@ -285,10 +301,10 @@ recovery metric output.
 
 1. **Explicit operator approval recorded in the epic**
    (KubeTEE-AI/kubetee-subnet#4) referencing this section.
-2. A **pre-created disposable test cluster** in staging Rancher with
-   recorded provenance (cluster id, creation note, creator) — labeled with
-   a **non-production test hotkey, never bob's**. The production miner
-   cluster is **banned** from this demo.
+2. The target is the stack's own disposable **`miner-cluster`** downstream
+   (record its cluster id from `rancher-init`) — relabelled with a
+   **throwaway test hotkey, never bob's**. External Rancher endpoints and
+   production miner clusters are **banned** from this demo.
 3. Wall-clock budget ≥ 15 minutes (the pinned
    `KUBETEE_RECONCILE_MIN_SECONDS=900` threshold — do not lower it).
 4. The V1 capability matrix is **non-authoritative**: only this demo (or
@@ -300,15 +316,22 @@ disposable target) in the epic and stop — that is an accepted AC12 outcome.
 
 **Steps:**
 
-1. **Named operator action:** create the disposable cluster registration in
-   staging Rancher; label it `kubetee.ai/miner-hotkey=<TEST hotkey SS58>`
-   (a throwaway localnet hotkey, e.g. a fresh `btcli wallet new_hotkey`
-   address — record it). Do NOT register that hotkey on the localnet
-   metagraph (absence from the metagraph is the trigger condition). If the
-   test hotkey was ever registered, deregister it first, or record honestly
-   that absence was simulated at the metagraph seam.
-2. Run the stack normally (real `.env`, §0.3). The validator observes the
-   labeled cluster with an unregistered hotkey each cycle.
+1. **Named operator action:** relabel the stack's `miner-cluster` to a
+   throwaway test hotkey (e.g. a fresh `btcli wallet new_hotkey` address —
+   record it):
+
+```bash
+docker compose exec rancher kubectl label \
+  clusters.management.cattle.io <cluster-id> \
+  kubetee.ai/miner-hotkey=<TEST hotkey SS58> --overwrite
+```
+
+   Do NOT register that hotkey on the localnet metagraph (absence from the
+   metagraph is the trigger condition). If the test hotkey was ever
+   registered, deregister it first, or record honestly that absence was
+   simulated at the metagraph seam.
+2. Run the stack normally (§0.3). The validator observes the labeled
+   cluster with an unregistered hotkey each cycle.
 3. Wait ≥ 3 successful cycles AND ≥ 15 minutes. Watch:
 
 ```bash
@@ -335,9 +358,11 @@ docker compose exec validator python -c \
 # unauthorized: kubetee_reconciliation_suppressed_total{reason="unauthorized_operator_action_required"} >= 1
 ```
 
-7. **Named operator action (restore):** confirm in Rancher that ONLY the
-   disposable cluster is gone; delete any leftover test registration
-   artifacts; record final Rancher state in the epic.
+7. **Named operator action (restore):** confirm ONLY the disposable
+   `miner-cluster` registration is gone (the `local` management cluster is
+   protected and must be untouched); record final Rancher state in the
+   epic. A plain `docker compose down -v && docker compose up -d` resets
+   the whole environment (re-imports and relabels a fresh downstream).
 
 **Outcomes (record exactly one):** (a) DELETE proven against the disposable
 cluster with the full evidence bundle, or (b) token unauthorized → the
