@@ -24,9 +24,12 @@ for the g004 triad (D7):
   `sudo start`, sets hypers, and is the **recycle target** the owner share
   of weights points at).
 - `DEV_BOB_SEED` — pinned dev seed for the **bob miner wallet**: the miner
-  whose staging-Rancher cluster (labeled `kubetee.ai/miner-hotkey`) the
-  basic validator scores. Replaces the retired legacy sample `miner`
-  wallet (its pinned seed constant was removed with it).
+  whose Rancher cluster (labeled `kubetee.ai/miner-hotkey`) the basic
+  validator scores. Replaces the retired legacy sample `miner` wallet (its
+  pinned seed constant was removed with it). Must be an ordinary random hex
+  seed (#20): the earlier all-`0x0b` value serialised into an unreadable
+  keyfile, so bob could never sign or register.
+  Hotkey ss58: `5FsfgiqMdQzgqtJQLb15ox6MzcZLvFG55vtAsy4TYuDCEEFs`.
 
 Result:
 - Owner coldkey/hotkey SS58 is always the same:
