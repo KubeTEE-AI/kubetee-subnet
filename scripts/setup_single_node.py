@@ -78,9 +78,13 @@ DEV_OWNER_SEED = "0x398f0c28f98885e046333d4a41c19cee4c37368a9832c749be0086a2a9b4
 DEV_OWNER_COLD_SS58 = "5FLbZav21bAsjH5SAdmJZwTP5C4b3bcaaWqC6GSmGmsbzUJ9"
 
 # Pinned dev seed for the "bob" miner wallet (g004 D7): the miner whose
-# staging-Rancher cluster the basic validator scores. Replaces the retired
-# legacy sample "miner" wallet. Localnet-only, PUBLIC by design.
-DEV_BOB_SEED = "0x0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b"
+# Rancher cluster (labeled kubetee.ai/miner-hotkey) the basic validator
+# scores. Replaces the retired legacy sample "miner" wallet. Localnet-only,
+# PUBLIC by design. NOTE (#20): must be an ordinary random hex seed - the
+# previous all-0x0b value was serialised as raw bytes into the keyfile's
+# secretSeed, producing a wallet bittensor could not read back (bob could
+# never sign or register). ss58: 5FsfgiqMdQzgqtJQLb15ox6MzcZLvFG55vtAsy4TYuDCEEFs
+DEV_BOB_SEED = "0x907fd5b32015c612b7badd5c4ab60de2fbb641333989e5eeabcd226a240a4689"
 
 def run(cmd: list[str], check=True, capture=False, env=None):
     print(f"$ {' '.join(cmd)}")

@@ -120,8 +120,9 @@ services:
     environment:
       - RANCHER_URL=https://rancher
       - BOOTSTRAP_PASSWORD=kubetee-dev-admin
-      # bob's pinned dev hotkey ss58 (the miner the downstream is labelled for)
-      - MINER_HOTKEY=5C5Z3GAFrMKr12CafiRRGgRobMPSacYAjABv7ZcVrNd46Ks1
+      # bob's pinned dev hotkey ss58 (the miner the downstream is labelled
+      # for) - derived from DEV_BOB_SEED in scripts/setup_single_node.py.
+      - MINER_HOTKEY=5FsfgiqMdQzgqtJQLb15ox6MzcZLvFG55vtAsy4TYuDCEEFs
     volumes:
       - ./scripts:/scripts:ro
       - rancher-shared:/shared
@@ -170,7 +171,7 @@ services:
     volumes:
       - ~/.bittensor:/root/.bittensor  # wallets (setup + validator will create/use the triad here)
       - ./logs:/app/logs
-      - ./scripts:/app/scripts         # live dev scripts (incl. repair_bob_wallet.py)
+      - ./scripts:/app/scripts         # live dev scripts
       - rancher-shared:/shared         # Rancher token + CA published by rancher-init
     restart: unless-stopped
     # Everything in ONE container command as requested:
@@ -208,11 +209,6 @@ services:
           NETUID=$$(cat /app/.kubetee_netuid)
           echo "Using actual netuid=$$NETUID from setup"
         fi
-
-        # Repair bob's dev keyfile (DEV_BOB_SEED serialises corrupt) and register
-        # bob, so a miner actually exists for the validator to score. Idempotent.
-        echo "=== [validator] repairing + registering bob (dev-seed workaround) ==="
-        python scripts/repair_bob_wallet.py || true
 
         echo "=== [validator] Phase 2: starting background loops + basic validator ==="
 
