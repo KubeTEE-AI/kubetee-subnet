@@ -169,7 +169,12 @@ services:
       - KUBETEE_METRICS_PORT=9100
       - LOG_LEVEL=INFO
     volumes:
-      - ~/.bittensor:/root/.bittensor  # wallets (setup + validator will create/use the triad here)
+      # Isolated dev wallets: the owner/alice/bob triad is regenerated from
+      # pinned seeds by setup_single_node.py on every `up`, so there is no need
+      # to bind-mount (and pollute / root-own) the host ~/.bittensor. Keys live
+      # in this named volume; `down -v` wipes them, next `up` recreates them.
+      # Host btcli: use `docker compose exec validator btcli ...`.
+      - bittensor-wallets:/root/.bittensor
       - ./logs:/app/logs
       - ./scripts:/app/scripts         # live dev scripts
       - rancher-shared:/shared         # Rancher token + CA published by rancher-init
@@ -299,6 +304,7 @@ volumes:
   k3s-out:         # miner-cluster kubeconfig (read by rancher-init)
   rancher-data:    # Rancher + embedded k3s control plane (persist for fast reboots)
   rancher-shared:  # minted Rancher token + CA (rancher-init -> validator)
+  bittensor-wallets:  # dev triad wallets, regenerated from pinned seeds - isolated from host
 
 networks:
   default:
