@@ -95,17 +95,28 @@ on-chain recycle-hyperparameter proof is deferred to a future testnet
 slice. UAT reports the hyperparameter check as SKIPPED/LIMITED with this
 citation on the pinned image.
 
-### Rancher token debt (D6)
+### Rancher access in the dev stack, and token debt (D6)
 
-Early Access uses an existing **cluster-scoped test/dev token** in the
-gitignored `.env` (`RANCHER_BEARER_TOKEN`). Its blast radius is bounded to
-that cluster, but its *in-cluster permission level* (read-only vs.
-writable) is unverified. Containment is code-side: the Rancher client is
-structurally GET-only apart from the single guarded reconciliation DELETE,
-pins one https origin, refuses redirects, and never logs the token.
+The dev compose stack is **self-contained**: a `rancher` service
+(containerised Rancher with its embedded k3s management cluster) plus a
+disposable `miner-cluster` downstream. The one-shot `rancher-init` service
+**mints the validator's Rancher API token automatically on every `up`** and
+publishes it (with the Rancher CA) through a shared volume — nothing
+Rancher-related needs to live in `.env` for local development. The Rancher
+bootstrap password in `docker-compose.yml` is a hardcoded **disposable dev
+credential**, exactly like the pinned dev seeds.
 
-**Recorded debt item:** verify the token's role bindings, and if it is
-writable, replace it with a `cluster-readonly`-bound token. This must be
+Running against an **external** Rancher (staging or otherwise) still uses
+the gitignored `.env` (`RANCHER_URL`, `RANCHER_BEARER_TOKEN`). Containment
+is code-side either way: the Rancher client is structurally GET-only apart
+from the single guarded reconciliation DELETE, pins one https origin,
+refuses redirects, and never logs the token.
+
+**Recorded debt item (D6):** for any non-local deployment the validator
+token must be bound to a `cluster-readonly`-style role (read plus the
+single delete, nothing else) and verified — never an admin or unverified
+token. The dev stack's auto-minted token must converge to the same scoped
+shape so local runs exercise the real authorization posture. This must be
 resolved **before any non-local deployment** and must not be silently
 extended.
 
@@ -143,7 +154,7 @@ from the last successful cycle and stay that way until scoring recovers.
 2. Diagnose the skip reason from the validator logs
    (`cycle skipped set_weights: reason=...`) and the
    `kubetee_rancher_errors_total{category=...}` counters — typical causes:
-   staging Rancher outage, revoked/expired token (auth), network path.
+   Rancher outage, revoked/expired token (auth), network path.
 3. Fix the cause (restore Rancher/network; rotate the token in `.env` and
    restart the container for credential failures — credential *changes*
    are a restart, not a runtime reload).
@@ -192,14 +203,23 @@ This gives you a fast local chain + the validator (and optional miners) with ful
 - Docker + Compose
 - Python 3.10+ + `pip install bittensor` (for btcli and SDK on host)
 - Wallets will be created under `~/.bittensor`
-- A `.env` file with the Rancher credentials and tunables (copy
-  `.env.example`, fill values — never commit it). Without `RANCHER_URL` /
-  `RANCHER_BEARER_TOKEN` the validator refuses to start (by design, D14).
+- No `.env` is required for the normal self-contained stack: `rancher-init`
+  mints the validator's Rancher token automatically each `up`. Use a `.env`
+  (copy `.env.example`, never commit it) only to override tunables or to
+  point the validator at an **external** Rancher (`RANCHER_URL` +
+  `RANCHER_BEARER_TOKEN`). The validator still refuses to start without a
+  Rancher URL + token in its environment (by design, D14) — in the compose
+  stack these are supplied by the stack itself.
 
-### 2. Start the stack (chain + validator + dozzle)
+### 2. Start the stack (chain + Rancher + miner-cluster + validator + dozzle)
 
-The validator container self-initializes: on startup it first runs the
-btcli registration + hyperparam setup, then starts the basic validator.
+One `up` brings the whole self-contained environment: the local chain, the
+containerised Rancher, the disposable miner-cluster (imported and labelled
+by `rancher-init`), and the validator. The validator container
+self-initializes: it waits for Rancher provisioning, runs the btcli
+registration + hyperparam setup, then starts the basic validator. First
+boot takes a few minutes (Rancher bootstrap); later `up`s after `down`
+**without** `-v` are much faster (the Rancher control plane persists).
 
 ```bash
 cd repos/subnet/kubetee-subnet
