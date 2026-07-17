@@ -1,5 +1,10 @@
 # KubeTEE Subnet Local Testing Stack
 # - Local Subtensor chain (fast blocks for dev)
+# - Self-contained Rancher (rancher/rancher) + a disposable rancher/k3s
+#   downstream "miner-cluster", auto-provisioned by the `rancher-init` service
+#   (mints the validator's Rancher API token, imports + labels the downstream).
+#   No external Rancher and no Rancher credentials in .env - one `up` is a
+#   complete, repeatable environment (chain + Rancher + miner cluster + validator).
 # - Single "validator" container that does EVERYTHING (as requested):
 #     * btcli setup (register subnet if needed + owner/alice/bob triad + stake
 #       + start emissions + set conviction/recycle hypers)
@@ -45,6 +50,85 @@ services:
     # We use a simple depends + sleep in validator if needed.
     restart: unless-stopped
 
+  # Self-contained Rancher management server (embeds a single-node k3s = the
+  # `local` management cluster). Disposable dev instance: the bootstrap password
+  # is a hardcoded throwaway credential (it controls nothing real, like the
+  # pinned dev bittensor seeds). Boots in ~2-3 min; needs --privileged.
+  rancher:
+    image: rancher/rancher:v2.14.2
+    container_name: kubetee-rancher
+    privileged: true
+    environment:
+      - CATTLE_BOOTSTRAP_PASSWORD=kubetee-dev-admin
+      - CATTLE_SERVER_URL=https://rancher
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sk -f https://localhost/ping || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 48
+      start_period: 60s
+    volumes:
+      # Persist the embedded k3s + Rancher control plane so only the FIRST
+      # `up` pays the ~3 min bootstrap; later `up`s (after `down` WITHOUT -v)
+      # restore state and come up in ~30-60s. `down -v` = clean reset.
+      - rancher-data:/var/lib/rancher
+    networks:
+      default:
+        # Static IP so the agent's hostAlias (below) stays valid across
+        # restarts even when the container is recreated.
+        ipv4_address: 172.28.0.10
+    restart: unless-stopped
+
+  # Disposable downstream cluster that gets imported into Rancher and plays the
+  # role of a miner's RKE2 cluster (labelled kubetee.ai/miner-hotkey by
+  # rancher-init). rancher/k3s as a plain service; ephemeral.
+  miner-cluster:
+    image: rancher/k3s:v1.35.5-k3s1
+    container_name: kubetee-miner-cluster
+    privileged: true
+    tmpfs:
+      - /run
+      - /var/run
+    environment:
+      - K3S_KUBECONFIG_OUTPUT=/output/kubeconfig.yaml
+      - K3S_KUBECONFIG_MODE=666
+    command: server --disable traefik --disable servicelb --tls-san miner-cluster
+    volumes:
+      - k3s-out:/output
+    # Ephemeral on purpose: the downstream is re-imported fresh each `up`
+    # (rancher-init deletes any stale cluster first). Persisting it would leave
+    # a stale node/agent that cannot cleanly re-handshake after a reboot.
+    healthcheck:
+      test: ["CMD", "kubectl", "get", "--raw=/readyz"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+    restart: unless-stopped
+
+  # One-shot provisioner: logs in to Rancher, mints the validator's API token,
+  # imports the miner-cluster, waits for it active and labels it with bob's
+  # hotkey. Publishes token + CA to the shared volume for the validator.
+  rancher-init:
+    image: alpine:3.20
+    container_name: kubetee-rancher-init
+    depends_on:
+      rancher:
+        condition: service_healthy
+      miner-cluster:
+        condition: service_healthy
+    environment:
+      - RANCHER_URL=https://rancher
+      - BOOTSTRAP_PASSWORD=kubetee-dev-admin
+      # bob's pinned dev hotkey ss58 (the miner the downstream is labelled for)
+      - MINER_HOTKEY=5C5Z3GAFrMKr12CafiRRGgRobMPSacYAjABv7ZcVrNd46Ks1
+    volumes:
+      - ./scripts:/scripts:ro
+      - rancher-shared:/shared
+      - k3s-out:/k3s-out:ro
+    command: ["sh", "/scripts/rancher_provision.sh"]
+    restart: "no"
+
   validator:
     build:
       context: .
@@ -53,6 +137,8 @@ services:
     depends_on:
       chain:
         condition: service_started
+      rancher-init:
+        condition: service_completed_successfully
     environment:
       # Validator signing identity (D7): alice signs set_weights. The
       # subnet-owner wallet (setup/sudo + recycle target) stays "owner".
@@ -66,10 +152,12 @@ services:
       # metagraph by hotkey - no fixed-UID environment variable.
       - KUBETEE_OWNER_HOTKEY=5FLbZav21bAsjH5SAdmJZwTP5C4b3bcaaWqC6GSmGmsbzUJ9
       - KUBETEE_VALIDATOR_HOTKEY=5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
-      # Rancher scoring credentials from the gitignored .env (names in
-      # .env.example). REQUIRED: startup refuses without them (D14).
-      - RANCHER_URL=${RANCHER_URL:-}
-      - RANCHER_BEARER_TOKEN=${RANCHER_BEARER_TOKEN:-}
+      # Rancher scoring endpoint: the in-compose `rancher` service. The bearer
+      # token is minted per-`up` by `rancher-init` and read from /shared at
+      # startup (see command below); the self-signed CA is trusted via
+      # SSL_CERT_FILE. Nothing Rancher-related lives in .env anymore.
+      - RANCHER_URL=https://rancher
+      - SSL_CERT_FILE=/shared/rancher-ca.crt
       # Tunables (plan-pinned defaults; override via .env)
       - KUBETEE_MINER_SHARE=${KUBETEE_MINER_SHARE:-0.10}
       - KUBETEE_POLL_SECONDS=${KUBETEE_POLL_SECONDS:-60}
@@ -82,6 +170,8 @@ services:
     volumes:
       - ~/.bittensor:/root/.bittensor  # wallets (setup + validator will create/use the triad here)
       - ./logs:/app/logs
+      - ./scripts:/app/scripts         # live dev scripts (incl. repair_bob_wallet.py)
+      - rancher-shared:/shared         # Rancher token + CA published by rancher-init
     restart: unless-stopped
     # Everything in ONE container command as requested:
     # 1. Run btcli setup (register if needed, owner/alice/bob triad, stake, start emissions, set conviction/recycle hypers)
@@ -99,6 +189,14 @@ services:
         HOTKEY=$${BT_WALLET_HOTKEY:-default}
         NET=$${BT_NETWORK:-ws://chain:9944}
 
+        # The in-compose Rancher is provisioned by rancher-init, which publishes
+        # the freshly-minted validator token + CA into the shared volume. Wait
+        # for it, then wire the token (RANCHER_URL + CA come from environment).
+        echo "=== [validator] waiting for in-compose Rancher provisioning ==="
+        until [ -f /shared/ready ]; do sleep 2; done
+        export RANCHER_BEARER_TOKEN="$$(cat /shared/rancher-token)"
+        echo "=== [validator] Rancher wired: $$RANCHER_URL ==="
+
         echo "=== [validator] Phase 1: btcli setup (register, stake, start, hypers) ==="
         python scripts/setup_single_node.py \
           --netuid "$$NETUID" \
@@ -110,6 +208,11 @@ services:
           NETUID=$$(cat /app/.kubetee_netuid)
           echo "Using actual netuid=$$NETUID from setup"
         fi
+
+        # Repair bob's dev keyfile (DEV_BOB_SEED serialises corrupt) and register
+        # bob, so a miner actually exists for the validator to score. Idempotent.
+        echo "=== [validator] repairing + registering bob (dev-seed workaround) ==="
+        python scripts/repair_bob_wallet.py || true
 
         echo "=== [validator] Phase 2: starting background loops + basic validator ==="
 
@@ -196,4 +299,13 @@ services:
     restart: unless-stopped
 
 volumes:
-  chain-data:  # if needed for persistence, but localnet usually ephemeral for tests
+  chain-data:      # if needed for persistence, but localnet usually ephemeral for tests
+  k3s-out:         # miner-cluster kubeconfig (read by rancher-init)
+  rancher-data:    # Rancher + embedded k3s control plane (persist for fast reboots)
+  rancher-shared:  # minted Rancher token + CA (rancher-init -> validator)
+
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: 172.28.0.0/24
