@@ -46,8 +46,11 @@ Result:
 - `scripts/setup_single_node.py` (and the validator container entrypoint that
   calls it) uses `btcli wallet regen-coldkey --seed <DEV_...>` instead of
   `new_coldkey`.
-- The host `~/.bittensor` (mounted into the validator container as
-  `/root/.bittensor`) receives the deterministic wallet files.
+- The wallet files land in the container's `/root/.bittensor`, backed by the
+  `bittensor-wallets` **named docker volume** — isolated from the host, not a
+  bind-mount of your `~/.bittensor`. They are regenerated from the pinned seeds
+  on every `up` (`down -v` wipes the volume; the next `up` recreates them).
+  Inspect them with `docker compose exec validator btcli wallet ...`.
 - Funding still goes through Alice (regen from its seed) to the resolved owner
   address (or the known `DEV_OWNER_COLD_SS58`).
 
@@ -73,7 +76,8 @@ See also:
 If you want a fdn-style `keys/` layout for bittensor:
 
 - You can place mnemonic/seed files here.
-- Or pre-populate `~/.bittensor/wallets/owner/...` from a known seed.
+- Or pre-populate the `bittensor-wallets` volume (e.g. via
+  `docker compose exec validator ...`) from a known seed.
 - Extend the entrypoint/setup to accept `KUBETEE_KEYS_DIR` and copy/import
   before running btcli.
 

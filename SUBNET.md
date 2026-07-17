@@ -202,7 +202,10 @@ This gives you a fast local chain + the validator (and optional miners) with ful
 
 - Docker + Compose
 - Python 3.10+ + `pip install bittensor` (for btcli and SDK on host)
-- Wallets will be created under `~/.bittensor`
+- Wallets are created inside the validator container (in the
+  `bittensor-wallets` named volume) from pinned dev seeds — your host
+  `~/.bittensor` is not touched. Inspect via
+  `docker compose exec validator btcli wallet ...`.
 - No `.env` is required for the normal self-contained stack: `rancher-init`
   mints the validator's Rancher token automatically each `up`. Use a `.env`
   (copy `.env.example`, never commit it) only to override tunables or to
