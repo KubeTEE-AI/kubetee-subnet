@@ -81,15 +81,13 @@ pylint --fail-on=W,E,F --exit-zero ./
 
 Infrastructure miners register their RKE2 clusters with Rancher Fleet (labeled with `kubetee.ai/*` hotkey/coldkey labels). No separate miner process is required - the validator communicates directly with the registered cluster via Rancher Fleet and scores it via TEE attestation + Armada job metrics. See `docs/NODE-REGISTRATION.md`.
 
-**Validator:**
+**Validator (self-contained compose stack — see SUBNET.md):**
 ```bash
-python neurons/validator.py \
-  --netuid <NETUID> \
-  --subtensor.chain_endpoint <ENDPOINT> \
-  --wallet.name <WALLET_NAME> \
-  --wallet.hotkey <HOTKEY> \
-  --logging.debug
+# Runs its own Rancher + localnet chain + validator
+docker compose up -d --build
+# Logs: http://localhost:8080 (dozzle)
 ```
+`scripts/validator_entrypoint.py` bootstraps the subnet via `scripts/setup_single_node.py`, then execs `scripts/basic_validator.py`, which reads `RANCHER_URL` / `RANCHER_BEARER_TOKEN` / `KUBETEE_*` from the environment and fails fast on missing/invalid config.
 
 ### Local Development (Staging)
 
@@ -138,45 +136,39 @@ KubeTEE Early Access uses a **single Bittensor incentive mechanism** that distri
 - Metrics: TEE attestation (Intel TDX/SGX, NVIDIA CC), Armada job success/throughput/fair-share, uptime, resource utilization, FIPS-140-3 progress
 - One hotkey per cluster; all nodes co-located in a single data center
 - No attestation = no emissions
-- Location: `template/mechanisms/infrastructure.py`
+- Location: `scripts/miner_scoring.py`
 
 **Critical Detail:** A single weight matrix is used. The validator sets one set of weights per epoch via Bittensor `set_weights` (no `mechanism_id` split). The benchmark, bounty treasury, and referrer mechanisms from the earlier design are removed for Early Access.
 
 ### Core Architecture Layers
 
 ```
-Entry Points (neurons/)
-  └── validator.py - Main validator loop
+Entry Points (scripts/)
+  └── validator_entrypoint.py - Container entrypoint (setup → exec validator)
         ↓
-Base Abstractions (template/base/)
-  ├── neuron.py - BaseNeuron (core lifecycle)
-  └── validator.py - BaseValidatorNeuron
+Setup (scripts/setup_single_node.py)
+  └── btcli bootstrap: subnet, owner/alice/bob triad, stake, emissions, conviction/recycle
         ↓
-Protocol Definitions (template/protocol.py)
-  ├── ServiceRequest - AI inference with revenue tracking
-  ├── InfrastructureStatus - Health and capacity reporting
-  └── Dummy - Connectivity testing
-        ↓
-Mechanism Coordination (template/mechanisms/)
-  ├── manager.py - MechanismManager (coordinates the single Infrastructure mechanism)
-  ├── definitions.py - Single mechanism configuration (Infrastructure 100%)
-  └── infrastructure.py - Infrastructure scoring (TEE, Armada jobs, uptime, capacity)
-        ↓
-Validator Logic (template/validator/)
-  ├── forward.py - Query miners, track revenue
-  ├── reward.py - Calculate rewards
-  └── revenue.py - Revenue tracking
+Validator Loop (scripts/basic_validator.py) — per cycle:
+  ├── metagraph read (chain_state.py)
+  ├── Rancher v3 enumeration (rancher_client.py) — read-only, fail-closed pagination
+  ├── reconciliation (reconciliation.py) — guarded deregistration on sustained absence
+  ├── scoring (miner_scoring.py) — binary fail-closed node-liveness + S/N weight split
+  ├── metrics (validator_metrics.py) — Prometheus + degraded-mode skip accountant
+  └── set_weights on-chain (alice signs)
 ```
 
-### Protocol Flow
+### Validator Cycle
 
-**Forward Pass (template/validator/forward.py):**
-1. Query infrastructure status from all miners (one hotkey per RKE2 cluster)
-2. Verify TEE attestation per cluster (Kata cronjobs)
-3. Pull Armada job metrics (success, throughput, fair-share) via Prometheus, and cluster/node state + resource info from the Rancher v3 API
-4. Run connectivity tests (dummy protocol)
-5. Calculate a single Infrastructure weight per miner
-6. Set weights on-chain via Bittensor `set_weights` (single mechanism)
+**Per cycle (`scripts/basic_validator.py`, spec 4.2):**
+1. Read the metagraph (`scripts/chain_state.py`) — discover miners by hotkey
+2. Enumerate clusters/nodes via the read-only Rancher v3 API (`scripts/rancher_client.py`)
+3. Reconcile — guarded deregistration of clusters whose hotkey has been absent from the metagraph for ≥3 cycles / ≥900s (`scripts/reconciliation.py`)
+4. Score — binary fail-closed node-liveness per miner (one labeled cluster, active, ≥1 active node), split weights between scoring miners and the owner recycle UID (`scripts/miner_scoring.py`)
+5. Set weights on-chain via Bittensor `set_weights`, signed by alice
+6. Emit Prometheus metrics + cycle-evidence logs (`scripts/validator_metrics.py`)
+
+Fail-fast at startup on any missing/invalid static config (D14); at runtime, Rancher outage / rejected set_weights / unexpected errors degrade to skip/backoff and the loop continues.
 
 **Revenue Flow (Phase 2, not in Early Access):**
 ```
@@ -191,36 +183,36 @@ PHASE 2 (planned):
      └─→ Referrer / reseller revenue share
 ```
 
-### Validator Rancher API Access (design TBD)
+### Validator Rancher API Access (hotkey-signed auth)
 
 Validators read cluster metrics and information from the **Rancher v3 REST API** (management cluster at `RANCHER_URL`, e.g. `https://staging-rancher.kubetee.ai`) — cluster state, node health/capacity, resource usage, and Fleet/Armada-derived info — in addition to Prometheus. This supersedes direct Rancher Fleet API access for scoring inputs.
 
-**Open design — how a validator obtains a Rancher bearer token after signing in as a validator with its Bittensor hotkey:**
+**Chosen mechanism — hotkey-signed auth via an auth mechanism connected to Rancher:**
 - A Rancher v3 call requires a bearer token (`Authorization: Bearer token-xxxxx:yyyyy`); the kubeconfig client cert used for `kubectl` does **not** work for `/v3`.
-- **Chosen approach (preferred): Rancher external auth mapped to Bittensor hotkeys** — register each Bittensor hotkey (**validators and miners**) as a Rancher principal via a custom auth provider (SAML / OIDC) backed by the subnet, so a node signs in with its hotkey and receives a session/API token for the v3 API. Tracked as tasks in the subnet [Roadmap](README.md#roadmap) (Phase 0).
+- **Flow:** the validator (or miner) signs a challenge with its Bittensor **hotkey** (SR25519). An auth mechanism connected to Rancher — a custom external auth provider (SAML / OIDC) backed by the subnet — verifies the signature on-chain, maps the hotkey to a Rancher principal, and issues a **short-lived, read-only** Rancher v3 bearer token. The hotkey is the only credential; no long-lived admin token is held by the validator. Tracked as tasks in the subnet [Roadmap](README.md#roadmap) (Phase 0).
   - **Validators** receive a **read-only** token (bound to `cluster-readonly`) to pull cluster/node metrics across clusters for scoring.
   - **Miners** receive a **read-only** principal (bound to `cluster-readonly`) scoped to **their own cluster** (the cluster labeled with their `kubetee.ai/miner-hotkey`), provisioned automatically **when a new cluster is created** — they can observe their cluster (nodes, workloads, metrics) while the subnet owner manages it via Fleet GitOps.
-- Alternatives considered (not chosen):
-  1. **Signed-hotkey challenge** — the validator signs a challenge with its Bittensor hotkey; a subnet-owner-operated service verifies the signature on-chain and mints a short-lived, read-only Rancher API token (scoped to the validator's cluster(s)) via the v3 API.
-  2. **Subnet-owner-issued per-validator tokens** — the subnet owner pre-provisions a read-only Rancher API key per validator hotkey (delivered out-of-band); the validator loads it like `.env`.
+- Alternative considered (not chosen): **Subnet-owner-issued per-validator tokens** — the subnet owner pre-provisions a read-only Rancher API key per validator hotkey (delivered out-of-band); the validator loads it like `.env`. Simpler but moves trust to out-of-band delivery and lacks hotkey-binding.
 - Whatever the mechanism: validator tokens must be **read-only** (bound to `cluster-readonly`); miner tokens are scoped to their own cluster; all tokens are **short-lived or rotatable** and never exposed.
 - References: `../CREATE-CLUSTER-GUIDE.md` (v3 API + `.env` token sourcing), `../cluster-readonly-roletemplate.yaml` (read-only RoleTemplate to bind validator principals to).
 
 ### Key Files and Locations
 
 **Entry Points:**
-- `neurons/validator.py` - Validator main loop, runs forward pass, sets weights for the single Infrastructure mechanism
+- `scripts/validator_entrypoint.py` - Container entrypoint: runs `setup_single_node.py` (btcli bootstrap) then execs the basic validator
+- `scripts/basic_validator.py` - Validator main loop (g004): metagraph → Rancher enumeration → reconciliation → scoring → set_weights, with fail-fast startup and degraded-mode skip/backoff
 
-**Core Mechanisms:**
-- `template/mechanisms/definitions.py` - Single mechanism configuration (Infrastructure 100%)
-- `template/mechanisms/manager.py` - MechanismManager coordinates the Infrastructure mechanism
-- `template/mechanisms/infrastructure.py` - InfrastructureScorer (TEE attestation, Armada job metrics, uptime, capacity, FIPS-140-3)
-- `template/reseller/` - Phase 2 reseller/referral code (not active in Early Access)
+**Core Scoring & Reconciliation:**
+- `scripts/miner_scoring.py` - Miner discovery + binary fail-closed node-liveness score + S/N weight split
+- `scripts/reconciliation.py` - Guarded deregistration engine (absence thresholds, pre-delete recheck, protected clusters)
+- `scripts/validator_metrics.py` - Prometheus metrics + degraded-mode skip accountant
+- `scripts/chain_state.py` - Real on-chain ownership/stake queries (no hardcoded values)
 
-**Protocol and Base:**
-- `template/protocol.py` - Synapse definitions (ServiceRequest, InfrastructureStatus, Dummy)
-- `template/base/neuron.py` - BaseNeuron with lifecycle management
-- `template/__init__.py` - Version management (`__version__ = "0.0.0"`)
+**Rancher & Setup:**
+- `scripts/rancher_client.py` - Contained Rancher v3 client (origin-pinned, endpoint allowlist, fail-closed pagination)
+- `scripts/rancher_provision.sh` - Mints the least-privilege `kubetee-validator` Rancher token + labels the disposable miner cluster
+- `scripts/setup_single_node.py` - btcli bootstrap (subnet, owner/alice/bob triad, stake, emissions, conviction/recycle hypers)
+- `scripts/print_subnet_stats.py` - Subnet stats printer (reuses one Subtensor connection)
 
 **Smart Contracts (Phase 2, not in Early Access):**
 Payment processing, escrow, reseller/referrer attribution, and buyback/treasury contracts (BASE L2) plus the Bittensor EVM registry are planned for Phase 2 and are **not included** in the Early Access repo.
@@ -247,7 +239,7 @@ Payment processing, escrow, reseller/referrer attribution, and buyback/treasury 
 
 **Release Process:**
 1. Create release branch from `staging`
-2. Update version in `template/__init__.py`
+2. Bump version (e.g., in `requirements.txt` / image tag)
 3. Merge to `main`
 4. Tag release: `git tag -a v<VERSION> -m "Release <VERSION>"`
 5. Back-merge to `staging`
@@ -331,34 +323,26 @@ All PRs require Claude Code review approval.
 
 ## Important Implementation Patterns
 
-### Adding a New Protocol
+### Adding a Scoring Input
 
-1. Define in `template/protocol.py` as `bt.Synapse` subclass:
-```python
-class MyProtocol(bt.Synapse):
-    # Define fields
-    def deserialize(self) -> "MyProtocol":
-        return self
-```
-
-2. Validators query miners via Rancher Fleet API (no miner process needed)
-3. Add query logic in validator's `forward()` (`template/validator/forward.py`)
+The g004 validator has no synapse/protocol layer — it reads the metagraph and the Rancher v3 API directly. To add a new scoring input:
+1. Extend `scripts/rancher_client.py` (or add a new read-only client) for the new data source
+2. Fold the new signal into `scripts/miner_scoring.py`'s score calculation
+3. Keep the binary fail-closed posture and the S/N weight-split invariants
 
 ### Adding a New Mechanism (post-Early-Access)
 
-Early Access uses a single Infrastructure mechanism. To add a second mechanism later:
-1. Create scorer in `template/mechanisms/<mechanism_name>.py`
-2. Add to `definitions.py` MECHANISMS list
-3. Update emission splits (must sum to 100%)
-4. Register in MechanismManager
-5. Configure on-chain via `configure_emission_splits()`
+Early Access uses a single Infrastructure mechanism in `scripts/miner_scoring.py`. To add a second mechanism later:
+1. Add a new scorer module under `scripts/`
+2. Combine its output with `scripts/miner_scoring.py`'s weights
+3. Keep weights normalized (sum to 1.0)
+4. Configure on-chain emission splits if needed
 
 ### Modifying Scoring Logic
 
-1. Update `template/mechanisms/infrastructure.py` (the single scorer)
-2. Implement `calculate_weights()` method
-3. Weights should be normalized (sum to 1.0)
-4. Test in isolation before deploying
+1. Update `scripts/miner_scoring.py` (the single scorer)
+2. Preserve the invariants: fail-closed liveness, S/N split, weights sum to 1.0
+3. Test in isolation (`tests/test_miner_scoring.py`) before deploying
 
 ### Weight Setting
 

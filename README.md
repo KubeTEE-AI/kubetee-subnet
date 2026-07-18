@@ -28,7 +28,7 @@ KubeTEE AI is registered with the [**NVIDIA Inception Program**](https://www.nvi
 
 ### Bittensor Community Partnerships
 
-As part of Bittensor ecosystem as a miner since Febuary 2024, Pierre known as the french miner from Cyprus by Targon was the first to provide Confidential Computing nodes on Subnet 3. We helped Chutes Subnet 64 to onboard B200/B300 nodes and helped Lium Subnet 51 to deploy recently Confidential Computing working with their stack.
+As part of Bittensor ecosystem as a miner since Febuary 2024, Pierre known as the french miner from Cyprus by Targon was the first to provide Confidential Computing nodes on Targon Subnet 4. We helped Chutes Subnet 64 to onboard B200/B300 nodes and helped Lium Subnet 51 to deploy recently Confidential Computing working with their stack.
 
 I was also the first to provide Confidential Computing to Telegram Cocoon and Phala Network.
 
@@ -44,13 +44,7 @@ Providing High Quality infrastructure to the 3 Computing subnet on Bittensor for
 
 **Direct Engineering Collaboration**: KubeTEE AI works directly with **INTEL** and **NVIDIA** engineers throughout the development and testing process of the NVIDIA technology especialy Kata/CoCo Containers. This close collaboration ensures optimal integration of confidential computing features, early access to emerging technologies, and validation of our implementation against the most stringent security and performance standards.
 
-KubeTEE AI actively contributes to and builds upon the [OpenInfra Foundation's](https://openinfra.org/) open source infrastructure projects, particularly:
-- **[Kata Containers](https://katacontainers.io/)**: Secure, lightweight CRI-compatible virtualized containers that provide the TEE foundation for our confidential computing infrastructure
-
-We also leverage CNCF projects for cloud-native confidential computing:
-- **[Confidential Containers (CoCo)](https://github.com/confidential-containers/confidential-containers)**: CNCF Sandbox project enabling transparent deployment of unmodified containers in Trusted Execution Environments (TEEs) with support for Intel TDX/SGX and other hardware platforms
-
-We schedule workloads across miner clusters with **[Armada](https://armadaproject.io/)** ([GitHub](https://github.com/armadaproject/armada)), a CNCF Sandbox multi-cluster Kubernetes batch scheduler used in production to run millions of jobs per day across tens of thousands of nodes.
+KubeTEE AI actively contributes to OpenInfra and CNCF projects — [Kata Containers](https://katacontainers.io/) and [Confidential Containers (CoCo)](https://github.com/confidential-containers/confidential-containers) provide the TEE foundation, and [Armada](https://armadaproject.io/) schedules workloads across miner clusters (detailed in [Architecture](#architecture)).
 
 ### Confidential Computing Consortium Resources
 
@@ -106,10 +100,6 @@ As a member of the [Confidential Computing Consortium (CCC)](https://confidentia
   - [Overview](#overview)
     - [Early Access](#early-access)
   - [The Confidential Compute Challenge: Problems We Solve](#the-confidential-compute-challenge-problems-we-solve)
-    - [1. Private Data and Models Must Stay Private](#1-private-data-and-models-must-stay-private)
-    - [2. Regulated Workloads Need Verifiable Compute](#2-regulated-workloads-need-verifiable-compute)
-    - [3. Trust in Decentralized Infrastructure](#3-trust-in-decentralized-infrastructure)
-    - [The KubeTEE Value Proposition](#the-kubetee-value-proposition)
   - [Architecture](#architecture)
     - [Infrastructure](#infrastructure)
       - [Kubernetes High Availability](#kubernetes-high-availability)
@@ -131,6 +121,7 @@ As a member of the [Confidential Computing Consortium (CCC)](https://confidentia
     - [Payments \& Revenue (Roadmap)](#payments--revenue-roadmap)
   - [Validator Scoring \& Attestation](#validator-scoring--attestation)
     - [Validator Runtime (TEE)](#validator-runtime-tee)
+    - [Rancher v3 Access (Hotkey-signed Auth)](#rancher-v3-access-hotkey-signed-auth)
     - [TEE Attestation](#tee-attestation)
     - [Armada Job Metrics](#armada-job-metrics)
     - [Infrastructure Health](#infrastructure-health)
@@ -147,7 +138,6 @@ As a member of the [Confidential Computing Consortium (CCC)](https://confidentia
     - [Documentation](#documentation)
     - [External Resources](#external-resources)
     - [Community \& Support](#community--support)
-  - [License](#license)
 
 ---
 
@@ -159,7 +149,7 @@ Each miner cluster is identified by a permanent Bittensor **hotkey/coldkey** pai
 
 ### Early Access
 
-KubeTEE is in **Early Access**. The first deployment targets **two clusters in the USA**, each operated by 1-Horizon hotkeys with all nodes co-located in two data center. Early Access focuses on:
+KubeTEE is in **Early Access**. The first deployment targets **two clusters in the USA**, one hotkey each, with all nodes of a cluster co-located in a single data center. Early Access focuses on:
 
 - Standing up the Armada multi-cluster batch scheduler across miner clusters
 - Running confidential AI jobs (NeMo / NIM / Blueprints) in Kata + CoCo TEE pods
@@ -171,75 +161,11 @@ KubeTEE is in **Early Access**. The first deployment targets **two clusters in t
 
 ## The Confidential Compute Challenge: Problems We Solve
 
-Most organizations that need to run sensitive AI workloads — training, fine-tuning, inference, and data processing — face an impossible choice between security, cost, and trust.
+Organizations running sensitive AI workloads — training, fine-tuning, inference, data processing — face an impossible choice between security, cost, and trust. KubeTEE resolves all three:
 
-### 1. Private Data and Models Must Stay Private
-
-**The Problem**:
-- Enterprises cannot send proprietary data or models to public cloud AI services
-- Traditional deployments expose data in memory during processing
-- Insider threats and cloud provider access to sensitive data
-- No cryptographic guarantee that data remains private during compute
-
-**KubeTEE's Solution**:
-- **Hardware-enforced Trusted Execution Environment (TEE)** encrypts data in use, not just at rest and in transit
-- **Intel TDX/SGX** creates isolated memory enclaves invisible to hypervisors and OS
-- **NVIDIA Hopper/Blackwell Confidential Computing** protects GPU workloads during AI compute
-- **Kata Containers** isolate workloads at the VM level with cryptographic validation
-- **CoCo remote attestation** lets you verify the exact code running on your data
-- **End-to-end encryption** from job submission through compute to results
-
-### 2. Regulated Workloads Need Verifiable Compute
-
-**The Problem**:
-- Healthcare (HIPAA), Finance (SOC2, PCI-DSS), Government (FedRAMP) face strict compliance requirements
-- Public cloud AI services cannot guarantee data isolation and compliance
-- No verifiable proof that infrastructure ran the expected workload
-
-**KubeTEE's Solution**:
-- **FIPS-140-3** as the Early Access security target, on a **FIPS-140-2 validated RKE2** baseline
-- **Trusted Execution Environment (TEE)** with hardware-enforced isolation (Intel TDX/SGX, NVIDIA CC)
-- **Cryptographic attestation** — validators verify each cluster's TEE and the unmodified container image
-- **Audit trails and monitoring** built-in for compliance reporting (Prometheus, Kubernetes events)
-- **Isolated namespaces** ensure complete tenant separation
-
-### 3. Trust in Decentralized Infrastructure
-
-**The Problem**:
-- Centralized cloud providers represent single points of failure and control
-- Vendor lock-in limits flexibility and negotiating power
-- No transparency into infrastructure operations and data handling
-
-**KubeTEE's Solution**:
-- **Decentralized multi-cluster architecture** eliminates single points of failure
-- **Bittensor incentive mechanism** aligns infrastructure providers with reliable job execution
-- **Validator attestation** provides objective, cryptographic proof of confidential compute
-- **Open source transparency** — inspect code, audit security, verify operations
-- **No vendor lock-in** — open standards (Kubernetes, Armada, Kata, CoCo)
-
-### The KubeTEE Value Proposition
-
-KubeTEE AI Factory uniquely combines **confidential security**, **decentralized trust**, and **accessible pricing** to democratize access to confidential AI compute.
-
-```
-        Confidential Security
-               /\
-              /  \
-             /    \
-            /      \
-           /        \
-          /          \
-         /____________\
-    Accessible      Trustworthy
-     Pricing        Decentralized
-```
-
-Traditional solutions force you to choose two:
-- **Public cloud AI**: Accessible + scalable ✗ Confidential security & decentralization
-- **Build your own TEE cluster**: Security + control ✗ Accessible & decentralized
-- **Single-vendor confidential platform**: Security + accessible ✗ Decentralized trust
-
-**KubeTEE AI Factory delivers all three.**
+1. **Private data & models must stay private** — Public cloud AI and traditional deployments expose data in memory and give providers/insiders access. KubeTEE enforces hardware TEE isolation (Intel TDX/SGX, NVIDIA CC) via Kata + CoCo, with remote attestation so you can verify the exact code running on your data; data is protected at rest, in transit, and in use.
+2. **Regulated workloads need verifiable compute** — Healthcare (HIPAA), Finance (SOC2/PCI-DSS), Government (FedRAMP) need proof of isolation. KubeTEE provides FIPS-140-3 target on FIPS-140-2 validated RKE2, cryptographic attestation, audit trails (Prometheus, Kubernetes events), and isolated namespaces for tenant separation.
+3. **Trust in decentralized infrastructure** — Centralized clouds are single points of failure with vendor lock-in. KubeTEE's decentralized multi-cluster architecture, Bittensor incentives, validator attestation, and open standards (Kubernetes, Armada, Kata, CoCo) remove the single point of failure and the lock-in.
 
 ---
 
@@ -316,8 +242,7 @@ Armada addresses Kubernetes batch limitations that matter for the Factory: singl
   - Kata Containers (TEE)
   - [Confidential Containers](https://confidentialcontainers.org/docs/overview/) Operator
   - Armada Server (controller, scheduler, lookout + Pulsar/Redis/Postgres)
-- **Validator runs in a TEE** — the validator process executes inside a confidential Kata + CoCo pod on the control plane, so scoring and weight-setting are themselves confidentially executed and attested (see [Validator Runtime (TEE)](#validator-runtime-tee))
-- **KubeTEE-hosted validator option** — KubeTEE can run the validator code in a KubeTEE confidential cluster for operators that do not run their own TEE infrastructure
+- Validator runs in a TEE on the control plane; KubeTEE can also host the validator code (see [Validator Runtime (TEE)](#validator-runtime-tee))
 
 #### Miner Infrastructure
 - RKE2 Rancher Kubernetes
@@ -333,8 +258,6 @@ Armada addresses Kubernetes batch limitations that matter for the Factory: singl
 **Important**: Clusters are labeled with `kubetee.ai/miner-hotkey` and `kubetee.ai/miner-coldkey` for permanent identification. These labels never change, while `kubetee.ai/miner-uid` can be updated if a miner deregisters and re-registers on the subnet.
 
 ### Early Access Topology
-
-The first deployment targets two clusters in the USA, one hotkey each, all nodes co-located in a single data center per cluster:
 
 ```mermaid
 flowchart LR
@@ -360,7 +283,7 @@ flowchart LR
     Validator -->|set weights| Chain["Bittensor\nemissions"]
 ```
 
-> The **Validator** and **Armada Server** run on the subnet-owner control plane inside confidential Kata + CoCo TEE pods. KubeTEE can additionally host the validator code in a KubeTEE confidential cluster for operators that do not run their own TEE infrastructure (see [Validator Runtime (TEE)](#validator-runtime-tee)).
+> The **Validator** and **Armada Server** run on the control plane inside confidential Kata + CoCo TEE pods (see [Validator Runtime (TEE)](#validator-runtime-tee)).
 
 ---
 
@@ -379,7 +302,7 @@ KubeTEE AI Factory schedules AI workloads as Armada batch jobs that execute insi
 
 ### Incentive Mechanism: Infrastructure (Early Access)
 
-KubeTEE Early Access uses a **single Infrastructure incentive mechanism**. Miners earn Bittensor emissions by providing confidential compute capacity and reliably executing Armada-scheduled jobs. Emissions are **emissions-only** in Early Access — Alpha, Subnet Alpha, TAO, USDC job billing are a Roadmap item (Phase 2).
+KubeTEE Early Access uses a **single Infrastructure incentive mechanism**. Miners earn Bittensor emissions by providing confidential compute capacity and reliably executing Armada-scheduled jobs. Early Access is **emissions-only** — paid billing is a Phase 2 roadmap item (see [Payments & Revenue](#payments--revenue-roadmap)).
 
 **Purpose**: Reward miners for providing Kubernetes infrastructure that runs confidential AI jobs scheduled by Armada.
 
@@ -425,20 +348,19 @@ Early Access is **emissions-only**. The following payment and revenue features a
 
 The validator is the subnet's referee. In Early Access it scores each miner (one hotkey per cluster) on a single Infrastructure mechanism and sets Bittensor weights each epoch.
 
-> **Early Access caveat — current implementation scores liveness only.** The
-> basic validator shipping today applies a binary, fail-closed **node-liveness
-> check** against the Rancher v3 API (cluster + node `active` via the
-> `kubetee.ai/miner-hotkey` label) and splits weights between scoring miners
-> and the subnet-owner recycle UID (see [SUBNET.md](SUBNET.md)). The TEE
-> attestation, Armada job, and infrastructure-health scoring described below
-> is the design target and remains roadmap. Liveness scoring is **not** an
-> attestation, eligibility, or security-compliance signal.
+> **Current Early Access stand-in:** the shipping validator scores node liveness only today; the full TEE-attestation + Armada + health scoring below is the design target (see [Roadmap](#roadmap) and [SUBNET.md](SUBNET.md)).
 
 ### Validator Runtime (TEE)
 
 The validator is the subnet's referee — so the referee itself must be trustworthy. The validator process runs **inside a confidential TEE pod** (`kata-qemu-nvidia-gpu-tdx` or `kata-qemu-tdx`) on the subnet-owner control plane, with CoCo remote attestation proving the validator code and configuration are unmodified. Scoring, weight-setting, and credentials (Rancher token, Bittensor wallet) stay confidential and tamper-resistant — the validator cannot be silently altered by the host or hypervisor.
 
 **KubeTEE-hosted validator**: KubeTEE offers to run the validator code in KubeTEE clusters, so a validator operator does not need to provision and operate their own TEE infrastructure. KubeTEE schedules the validator as a confidential workload in a KubeTEE confidential cluster, with attestation evidence available to the subnet. This lowers the barrier to running a validator and ensures every validator runs in a genuine, attested TEE.
+
+### Rancher v3 Access (Hotkey-signed Auth)
+
+To read cluster and node metrics for scoring, the validator calls the **Rancher v3 REST API**. Access is granted by **hotkey-signed authentication**: the validator signs a challenge with its Bittensor **hotkey** (SR25519), and an auth mechanism connected to Rancher verifies the signature on-chain, maps the hotkey to a Rancher principal, and issues a **short-lived, read-only** Rancher v3 bearer token bound to `cluster-readonly`. The hotkey is the only credential — no long-lived admin token is held by the validator — and it stays inside the validator's TEE pod.
+
+Miners use the same hotkey-signed flow, scoped read-only to their own cluster (the one labeled with their `kubetee.ai/miner-hotkey`), provisioned automatically when their cluster is created.
 
 ### TEE Attestation
 - The validator runs attestation cronjobs inside Kata Containers to verify each miner cluster's TEE (Intel TDX/SGX, NVIDIA CC)
@@ -455,7 +377,7 @@ The validator is the subnet's referee — so the referee itself must be trustwor
 
 ### Weight Setting
 - Scores are normalized per miner hotkey and set on-chain via Bittensor `set_weights` (single mechanism)
-- Reference implementation: [`template/mechanisms/infrastructure.py`](template/mechanisms/infrastructure.py) and [`template/validator/forward.py`](template/validator/forward.py)
+- Reference implementation: [`scripts/basic_validator.py`](scripts/basic_validator.py) (scoring: [`scripts/miner_scoring.py`](scripts/miner_scoring.py), reconciliation: [`scripts/reconciliation.py`](scripts/reconciliation.py), Rancher v3 client: [`scripts/rancher_client.py`](scripts/rancher_client.py))
 
 ---
 
@@ -497,10 +419,10 @@ Miners register clusters (one hotkey per cluster) with the subnet owner for Ranc
 - ✅ Successfully passed Staging validation period
 
 **Reference Documentation**:
-- [Node Registration](./docs/NODE-REGISTRATION.md)
-- [GPU Node Requirements](./docs/GPU-NODE-REQUIREMENTS.md)
-- [Cluster Naming Convention](./docs/CLUSTER_NAMING_CONVENTION.md)
-- [FIPS-140-3 Target](./docs/FIPS-140-3.md)
+- [Node Registration](./docs/NODE-REGISTRATION.md) — Miner RKE2 node registration and the `kubetee.ai/miner-hotkey` label requirement
+- [GPU Node Requirements](./docs/GPU-NODE-REQUIREMENTS.md) — GPU/TEE hardware requirements (CPU TDX/SEV-SNP, BIOS, kernel)
+- [Cluster Naming Convention](./docs/CLUSTER_NAMING_CONVENTION.md) — `kubetee.ai/*` labels and Fleet GitOps targeting
+- [FIPS-140-3 Target](./docs/FIPS-140-3.md) — RKE2 + Kata + CoCo FIPS stack
 
 ---
 
@@ -511,11 +433,11 @@ Miners register clusters (one hotkey per cluster) with the subnet owner for Ranc
 - [ ] Deploy 2 US clusters (one hotkey each, nodes co-located in a single DC)
 - [ ] Armada Server on the subnet-owner control plane; Armada Executor on each miner cluster
 - [ ] Kata + CoCo TEE runtime classes (`kata-qemu-nvidia-gpu-tdx`, `kata-qemu-tdx`)
-- [ ] Single Infrastructure validator mechanism (TEE attestation + Armada job metrics + uptime)
+- [ ] Single Infrastructure validator mechanism (design: TEE attestation + Armada job metrics + uptime; Early Access stand-in: node liveness)
 - [ ] Validator runs in a TEE (Kata + CoCo) on the control plane; CoCo attestation proves the validator code is unmodified
 - [ ] KubeTEE-hosted validator offering: KubeTEE runs the validator code in a KubeTEE confidential cluster for operators without their own TEE infrastructure
-- [ ] Validator Rancher v3 API access: map Bittensor validator hotkeys to Rancher principals (custom auth provider / SAML / OIDC) so validators obtain a read-only bearer token for the Rancher v3 API (bound to `cluster-readonly`) — see CLAUDE.md "Validator Rancher API Access"
-- [ ] Miner Rancher access on cluster creation: map the new cluster's `kubetee.ai/miner-hotkey` to a Rancher principal (same external auth) and bind it **read-only** to the miner's own cluster (`cluster-readonly`) so the miner can observe their cluster (subnet owner manages via Fleet)
+- [ ] Validator Rancher v3 API access: a validator authenticates by **signing a challenge with its Bittensor hotkey**; an auth mechanism connected to Rancher verifies the signature and issues a **read-only** Rancher v3 bearer token (bound to `cluster-readonly`) — see [Rancher v3 Access (Hotkey-signed Auth)](#rancher-v3-access-hotkey-signed-auth) and CLAUDE.md "Validator Rancher API Access"
+- [ ] Miner Rancher access on cluster creation: the miner authenticates with the same **hotkey-signed** flow, scoped **read-only** to their own cluster (the one labeled with their `kubetee.ai/miner-hotkey`, bound to `cluster-readonly`) so the miner can observe their cluster (subnet owner manages via Fleet)
 - [ ] Emissions-only rewards
 - [ ] FIPS-140-3 target on FIPS-140-2 validated RKE2 baseline
 - [ ] Confidential NeMo / NIM / Blueprint job templates
@@ -545,11 +467,12 @@ Miners register clusters (one hotkey per cluster) with the subnet owner for Ranc
 ## Research & Documentation
 
 ### Documentation
-- [FIPS-140-3 Target](./docs/FIPS-140-3.md) — RKE2 + Kata + CoCo FIPS stack research
-- [Confidential Containers Certification](./docs/certification-confidential-containers.md) — CC standards and Kata runtime mapping
-- [Node Registration](./docs/NODE-REGISTRATION.md) — Miner RKE2 node registration
+- [Node Registration](./docs/NODE-REGISTRATION.md) — Miner RKE2 node registration and `kubetee.ai/*` labels
 - [GPU Node Requirements](./docs/GPU-NODE-REQUIREMENTS.md) — GPU/TEE hardware requirements
 - [Cluster Naming Convention](./docs/CLUSTER_NAMING_CONVENTION.md) — `kubetee.ai/*` labels and Fleet GitOps targeting
+- [FIPS-140-3 Target](./docs/FIPS-140-3.md) — RKE2 + Kata + CoCo FIPS stack research
+- [Confidential Containers Certification](./docs/certification-confidential-containers.md) — CC standards and Kata runtime mapping
+- [UAT-g004 Runbook](./docs/UAT-g004.md) — Self-contained single-node validator UAT procedures
 
 ### External Resources
 - [Armada](https://armadaproject.io/) | [Armada GitHub](https://github.com/armadaproject/armada) — multi-cluster batch scheduler
@@ -562,12 +485,6 @@ Miners register clusters (one hotkey per cluster) with the subnet owner for Ranc
 - **Documentation**: [docs/](./docs/)
 - **Discord**: Coming soon
 - **Twitter**: Coming soon
-
----
-
-## License
-
-See [LICENSE](LICENSE) for details.
 
 ---
 
