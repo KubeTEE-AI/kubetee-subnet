@@ -53,11 +53,12 @@ KubeTEE requires the latest SEV-SNP for maximum security.
 **Supported GPUs**:
 - ✅ **NVIDIA H100** (Hopper) - 80GB HBM3
 - ✅ **NVIDIA H200** (Hopper) - 141GB HBM3e
+- ✅ **NVIDIA B200** (Blackwell) - 192GB HBM3e
+- ✅ **NVIDIA B300** (Blackwell Ultra) - 288GB HBM3e
 
 **NOT Supported**:
 - ❌ NVIDIA A100 (Ampere architecture)
 - ❌ NVIDIA V100 (Volta architecture)
-- ❌ NVIDIA B200 (Blackwell) - Coming soon, not yet supported
 - ❌ Any other GPU model
 
 **Verification**:
@@ -67,7 +68,11 @@ lspci -nn | grep -i nvidia
 
 # For H100: Look for [10de:2330] or [10de:2331]
 # For H200: Look for [10de:2331]
+# For B200: Look for [10de:2901] (B200) or [10de:2909] (HGX B200)
+# For B300: Look for [10de:3182] (B300 SXM6)
 ```
+
+> **B300 note**: the GPU Operator validator must include device ID `3182` (added by [gpu-operator PR #2441](https://github.com/NVIDIA/gpu-operator/issues/2231)); older validator builds fail to recognize B300 with `failed to find device with id '3182'`. Ensure a GPU Operator release that supports `3182` is deployed before labeling B300 nodes.
 
 ---
 
@@ -94,6 +99,8 @@ lspci | grep -i nvidia | grep -i "3D controller\|VGA" | wc -l
 **Supported**:
 - ✅ 8x H100 80GB
 - ✅ 8x H200 141GB
+- ✅ 8x B200 192GB
+- ✅ 8x B300 288GB
 
 **NOT Supported**:
 - ❌ 4x H100 + 4x H200 (mixed models)
@@ -110,10 +117,18 @@ lspci -nn | grep -i nvidia | awk -F'[][]' '{print $2}' | sort -u
 
 ### ✅ 5. Latest Firmware (MANDATORY)
 
-**Requirement**: Latest firmware for DGX H100/H200 systems
+**Requirement**: Latest firmware for DGX H100/H200 and HGX B200/B300 systems
 
 **Update firmware BEFORE node registration** using the official guide:
 - **[NVIDIA DGX H100/H200 Firmware Update Guide](https://docs.nvidia.com/dgx/dgxh100-fw-update-guide/)**
+- For HGX B200/B300 systems, follow your OEM/HGX firmware update procedure (BIOS/BMC, GPU firmware, PCIe switches and retimers)
+
+**Confidential Computing firmware compatibility** (authoritative source: **[NVIDIA Secure AI Compatibility Matrix](https://www.nvidia.com/en-us/data-center/solutions/confidential-computing/secure-ai-compatibility-matrix/)**):
+
+The Compatibility Matrix is the source of truth for supported **GPU + VBIOS + CUDA driver + Confidential Computing mode** combinations (and RIM / VBIOS_RIM status). The node operator is responsible for the **GPU VBIOS** and **CC mode** (firmware/BIOS level); the **CUDA driver** is deployed by the GPU Operator after registration. Before registering a node, confirm your GPU's **VBIOS** and chosen **CC mode** (Protected PCIe / CC-Aux / APM) are listed as supported, and that the matrix's supported **CUDA driver** version matches what the GPU Operator will deploy. Key guidance from NVIDIA:
+- **Protected PCIe (PPCIe) mode** — use **HGX Hopper FW 1.7.0**; avoid HGX Hopper FW 1.6.0, which has a known issue that can cause the GPU to fall off the bus during boot when PPCIe is enabled.
+- **Secure AI with HGX Hopper FW 1.8.0 or later** — rollback to FW 1.7.1 or earlier is **not supported**; plan firmware forward-only.
+- For **Blackwell (B200) / Blackwell Ultra (B300)**, check the matrix for the required VBIOS + CUDA driver + CC mode combination before labeling the node.
 
 **Critical firmware components**:
 - BMC (Baseboard Management Controller)
@@ -181,24 +196,22 @@ dmesg | grep -i "AMD-Vi"
 
 ---
 
-## What NOT to Install
+## GPU Software (Managed by GPU Operator)
 
 **⚠️ CRITICAL - Clean Ubuntu Installation Required**
 
-**DO NOT install**:
-- ❌ NVIDIA drivers
-- ❌ CUDA toolkit
-- ❌ nvidia-docker
-- ❌ nvidia-container-toolkit
-- ❌ GPU Operator
+Nodes do **not** install or manage any NVIDIA GPU software. The **GPU Operator** (deployed via Fleet) installs and maintains the entire GPU software stack automatically after the node joins the cluster:
 
-**Why?**
-All GPU software is installed automatically by the GPU Operator (deployed via Fleet) after the node joins the cluster.
+- NVIDIA drivers
+- CUDA toolkit
+- nvidia-container-toolkit
+- GPU device plugins and Kubernetes GPU resources
+
+Because the GPU Operator owns the GPU software stack, the node must start from a **clean Ubuntu 26.04 installation** with no pre-existing NVIDIA stack, to avoid version conflicts with what the GPU Operator deploys.
 
 **OS Requirement**:
-- ✅ Ubuntu 24.04 (clean installation)
-- ✅ No NVIDIA software pre-installed
-- ✅ Kernel configured per MINER_INFRA.md
+- ✅ Ubuntu 26.04 (clean installation, no pre-existing NVIDIA software)
+- ✅ Kernel 7.0.0-27-generic or newer (configured per MINER_INFRA.md)
 - ✅ etcd user/group created
 
 ---
@@ -239,18 +252,6 @@ After labeling, the GPU Operator will automatically:
 
 **Wait time**: 5-15 minutes for driver installation
 
-### Step 3: Verify (After GPU Operator Completes)
-
-```bash
-# Check GPU Operator pods
-kubectl get pods -n gpu-operator-system
-
-# After drivers are installed, nvidia-smi will work
-nvidia-smi
-
-# Should show all 8 GPUs
-```
-
 ---
 
 ## Complete Verification Checklist
@@ -271,7 +272,8 @@ lspci | grep -i nvidia | grep -i "3D controller\|VGA" | wc -l
 
 # 4. Verify GPU model via device ID
 lspci -nn | grep -i nvidia
-# All should show [10de:2330] or [10de:2331]
+# All should show one of:
+#   [10de:2330]/[10de:2331] (H100/H200), [10de:2901]/[10de:2909] (B200), [10de:3182] (B300)
 
 # 5. Verify firmware (DGX systems)
 nvfwupd --query
@@ -284,8 +286,12 @@ df -h /
 df -h /data
 # OS: 800GB+, Data: 3TB+
 
-# 8. Verify NO NVIDIA software installed
-which nvidia-smi  # Should return: not found
+# 8. Verify OS and kernel
+lsb_release -ds  # Should show: Ubuntu 26.04 LTS
+uname -r         # Should show: 7.0.0-27-generic or newer
+
+# 9. Verify a clean baseline (no pre-existing NVIDIA stack)
+which nvidia-smi  # Should return: not found (GPU Operator installs it later)
 which nvcc        # Should return: not found
 ```
 
@@ -328,7 +334,7 @@ Is your node a GPU node?
     ├─ Exactly 8 GPUs?
     │   ├─ NO → Node NOT supported ❌
     │   └─ YES → Continue
-    ├─ All GPUs are H100 or H200?
+    ├─ All GPUs are H100, H200, B200, or B300?
     │   ├─ NO → Node NOT supported ❌
     │   └─ YES → Continue
     ├─ All GPUs same model?
@@ -343,8 +349,8 @@ Is your node a GPU node?
     ├─ VFIO/IOMMU enabled?
     │   ├─ NO → Enable in BIOS, update kernel params
     │   └─ YES → Continue
-    ├─ Clean Ubuntu (no NVIDIA software)?
-    │   ├─ NO → Reinstall Ubuntu 24.04
+    ├─ Clean Ubuntu 26.04, kernel 7.0.0-27-generic+ (no pre-existing NVIDIA stack)?
+    │   ├─ NO → Reinstall Ubuntu 26.04
     │   └─ YES → Continue
     └─ ✅ Node meets ALL requirements → Proceed with registration
 ```
@@ -369,12 +375,14 @@ lspci -nn | grep nvidia
 # Shows: [10de:2330] and [10de:2331]  ← NOT SUPPORTED
 ```
 
-### ❌ Pre-installed NVIDIA Software
+### ❌ Pre-existing NVIDIA Software
+
+The GPU Operator owns the entire GPU software stack. A pre-existing NVIDIA install conflicts with what it deploys.
 
 ```bash
-# BAD: CUDA or drivers installed
+# BAD: a previous NVIDIA install is present
 which nvidia-smi
-# /usr/bin/nvidia-smi  ← NOT SUPPORTED, reinstall Ubuntu
+# /usr/bin/nvidia-smi  ← reinstall Ubuntu 26.04 clean
 ```
 
 ### ❌ Old CPU Generation
@@ -402,13 +410,13 @@ nvfwupd --query
 |-------------|---------------|---------------|
 | **CPU** | Intel 5th/6th Gen, AMD 4th/5th Gen EPYC | Intel ≤4th Gen, AMD ≤3rd Gen |
 | **Confidential Computing** | TDX (Intel), SEV-SNP ONLY (AMD) | No TDX/SNP, older SEV/SEV-ES |
-| **GPU Model** | H100, H200 | A100, V100, B200, others |
+| **GPU Model** | H100, H200, B200, B300 | A100, V100, others |
 | **GPU Count** | Exactly 8 | 1-7, 9+ |
 | **GPU Uniformity** | All same model | Mixed models |
 | **Firmware** | Latest (25.10.1+) | Outdated versions |
 | **GPU Mode** | PPCIe enabled | Standard PCIe |
 | **IOMMU** | Enabled | Disabled |
-| **OS** | Ubuntu 24.04 (clean) | With NVIDIA software |
+| **OS** | Ubuntu 26.04 (clean, kernel 7.0.0-27-generic+) | Pre-existing NVIDIA software |
 | **OS Disk** | 800 GB+ | <800 GB |
 | **Data Disk** | 3 TB+ | <3 TB |
 
@@ -419,6 +427,7 @@ nvfwupd --query
 ### Official Documentation
 
 - **[NVIDIA DGX H100/H200 Firmware Update Guide](https://docs.nvidia.com/dgx/dgxh100-fw-update-guide/)** - MANDATORY reading for firmware updates
+- **[NVIDIA Secure AI Compatibility Matrix](https://www.nvidia.com/en-us/data-center/solutions/confidential-computing/secure-ai-compatibility-matrix/)** - Supported GPU + VBIOS + CUDA driver + Confidential Computing mode combinations (source of truth for CC firmware compatibility)
 - **[NODE-REGISTRATION.md](NODE-REGISTRATION.md)** - Complete registration guide
 - **[MINER_INFRA.md](MINER_INFRA.md)** - Initial infrastructure setup
 
@@ -434,10 +443,10 @@ nvfwupd --query
 
 **To register a GPU node to KubeTEE**:
 
-1. ✅ **Hardware**: 8x H100 or H200 GPUs on Intel 5th/6th Gen Xeon OR AMD EPYC 4th/5th Gen
+1. ✅ **Hardware**: 8x H100, H200, B200, or B300 GPUs on Intel 5th/6th Gen Xeon OR AMD EPYC 4th/5th Gen
 2. ✅ **Firmware**: Latest version from [NVIDIA DGX Firmware Guide](https://docs.nvidia.com/dgx/dgxh100-fw-update-guide/)
 3. ✅ **BIOS**: TDX/SEV-SNP, PPCIe mode, VFIO/IOMMU enabled
-4. ✅ **OS**: Ubuntu 24.04 clean (NO NVIDIA drivers/CUDA)
+4. ✅ **OS**: Ubuntu 26.04 clean, kernel 7.0.0-27-generic+ (GPU Operator manages all GPU software)
 5. ✅ **Storage**: 800GB OS + 3TB data disks
 6. ✅ **Register**: Run registration command with network addresses
 7. ✅ **Label**: `kubectl label node <name> nvidia.com/gpu.workload.config=vm-passthrough`
@@ -447,7 +456,7 @@ nvfwupd --query
 
 ---
 
-**Last Updated**: 2025-10-29  
+**Last Updated**: 2026-07-18  
 **NVIDIA Firmware Version**: 25.10.1+  
 **Status**: ✅ Production Ready
 
