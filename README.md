@@ -22,11 +22,11 @@
 
 ## About
 
-**KubeTEE AI** is the **AI Factory** of the Bittensor network: it turns decentralized GPU clusters into a confidential batch-job factory. AI workloads are scheduled across miner clusters by [Armada](https://armadaproject.io/) — a CNCF Sandbox multi-cluster Kubernetes batch scheduler — and executed inside hardware-secured Trusted Execution Environments (TEE) using [Kata Containers](https://katacontainers.io/) and [Confidential Containers (CoCo)](https://github.com/confidential-containers/confidential-containers).
+**KubeTEE AI** is the **AI Factory** of the Bittensor network: it turns decentralized GPU clusters into a confidential AI factory. AI workloads run inside hardware-secured Trusted Execution Environments (TEE) using [Kata Containers](https://katacontainers.io/) and [Confidential Containers (CoCo)](https://github.com/confidential-containers/confidential-containers), and are scheduled across miner clusters by [Armada](https://armadaproject.io/) — a CNCF Sandbox multi-cluster Kubernetes batch scheduler.
 
 KubeTEE AI is registered with the [**NVIDIA Inception Program**](https://www.nvidia.com/startups/) and is an active contributor to both the [**Kata Containers**](https://katacontainers.io/) and [**Confidential Containers (CoCo)**](https://github.com/confidential-containers/confidential-containers) ecosystems. It also leverages [**CNCF**](https://www.cncf.io/) projects for cloud-native infrastructure.
 
-### Bittensor Community Partnerships
+### Bittensor Miner
 
 As part of Bittensor ecosystem as a miner since Febuary 2024, Pierre known as the french miner from Cyprus by Targon was the first to provide Confidential Computing nodes on Targon Subnet 4. We helped Chutes Subnet 64 to onboard B200/B300 nodes and helped Lium Subnet 51 to deploy recently Confidential Computing working with their stack.
 
@@ -40,7 +40,7 @@ With 40 years of expertise, Started in 1986 to install Linux and Novell servers 
 
 My expertise for Confidential Computing, Kubernetes, networking and security at Kernel and hardware level can benefit Bittensor ecosystem and I want to help every subnets in the ecosystem by providing the most secure and efficient AI Factory stack to elevate Bittensor offering of decentrilized Artifical Inteligence.
 
-Providing High Quality infrastructure to the 3 Computing subnet on Bittensor for more than 2.5 years (Chutes #64, Targon #3 and Lium #51) with monitoring, upgrades and my help to improve each stack. I wanted to offer different tech stack that I belive Bittensor ecosystem can use and extend from.
+Providing High Quality infrastructure to the 2 Computing and Inference subnets on Bittensor for more than 2.5 years (Chutes #64, Targon #3 and Lium #51) with monitoring, upgrades and my help to improve each stack. I wanted to offer different tech stack that I belive Bittensor ecosystem can use and extend from.
 
 **Direct Engineering Collaboration**: KubeTEE AI works directly with **INTEL** and **NVIDIA** engineers throughout the development and testing process of the NVIDIA technology especialy Kata/CoCo Containers. This close collaboration ensures optimal integration of confidential computing features, early access to emerging technologies, and validation of our implementation against the most stringent security and performance standards.
 
@@ -76,7 +76,7 @@ As a member of the [Confidential Computing Consortium (CCC)](https://confidentia
 
 ### Mission & Vision
 
-**Mission**: To turn decentralized GPU clusters into a confidential batch-job factory — running AI training, inference, and data-processing jobs in Trusted Execution Environments, scheduled fairly across Bittensor miner clusters by Armada, with the highest standards of security, compliance, and performance.
+**Mission**: To turn decentralized GPU clusters into a confidential AI factory — running AI training, inference, and data-processing jobs in Trusted Execution Environments, scheduled fairly across Bittensor miner clusters by Armada, with the highest standards of security, compliance, and performance.
 
 **Key Differentiators**:
 - **Security-First**: TEE-enabled infrastructure with FIPS-140-3 as the Early Access target (FIPS-140-2 validated RKE2 baseline) and Kata Containers isolation
@@ -91,7 +91,7 @@ As a member of the [Confidential Computing Consortium (CCC)](https://confidentia
 
 - [KubeTEE AI Factory — Confidential Compute for Decentralized AI Jobs](#kubetee-ai-factory--confidential-compute-for-decentralized-ai-jobs)
   - [About](#about)
-    - [Bittensor Community Partnerships](#bittensor-community-partnerships)
+    - [Bittensor Miner](#bittensor-miner)
     - [Background](#background)
     - [Motivation](#motivation)
     - [Confidential Computing Consortium Resources](#confidential-computing-consortium-resources)
@@ -101,11 +101,11 @@ As a member of the [Confidential Computing Consortium (CCC)](https://confidentia
     - [Early Access](#early-access)
   - [The Confidential Compute Challenge: Problems We Solve](#the-confidential-compute-challenge-problems-we-solve)
   - [Architecture](#architecture)
+    - [Confidential Computing (Kata + CoCo)](#confidential-computing-kata--coco)
     - [Infrastructure](#infrastructure)
       - [Kubernetes High Availability](#kubernetes-high-availability)
       - [Armada Multi-Cluster Batch Scheduling](#armada-multi-cluster-batch-scheduling)
     - [Security \& Compliance](#security--compliance)
-      - [Confidential Computing Features](#confidential-computing-features)
       - [Network Security](#network-security)
       - [Data Protection](#data-protection)
       - [Monitoring \& Audit](#monitoring--audit)
@@ -119,6 +119,12 @@ As a member of the [Confidential Computing Consortium (CCC)](https://confidentia
     - [Incentive Mechanism: Infrastructure (Early Access)](#incentive-mechanism-infrastructure-early-access)
       - [Staging vs Production](#staging-vs-production)
     - [Payments \& Revenue (Roadmap)](#payments--revenue-roadmap)
+  - [Tokenomics — Utility Token \& DePIN Model](#tokenomics--utility-token--depin-model)
+    - [Recycle vs Burn](#recycle-vs-burn)
+    - [Corporate Structure (vertically split)](#corporate-structure-vertically-split)
+    - [Cross-Subnet Consumption Loop (utility-token flywheel)](#cross-subnet-consumption-loop-utility-token-flywheel)
+    - [DePIN Subsidy Trajectory](#depin-subsidy-trajectory)
+    - [Boundary Conditions (what breaks the model)](#boundary-conditions-what-breaks-the-model)
   - [Validator Scoring \& Attestation](#validator-scoring--attestation)
     - [Validator Runtime (TEE)](#validator-runtime-tee)
     - [Rancher v3 Access (Hotkey-signed Auth)](#rancher-v3-access-hotkey-signed-auth)
@@ -172,6 +178,16 @@ Organizations running sensitive AI workloads — training, fine-tuning, inferenc
 
 ## Architecture
 
+### Confidential Computing (Kata + CoCo)
+
+**Trusted Execution Environment (TEE)**
+- Kata Containers for workload isolation
+- Confidential Containers with Workload Identity Validation
+- Intel TDX/SGX
+- NVIDIA Hopper/Blackwell/Vera Ruben
+
+CoCo provides transparent confidential image decryption and remote attestation via the KBS, so unmodified containers run inside the TEE. Confidential job execution uses the `kata-qemu-nvidia-gpu-tdx` (GPU) and `kata-qemu-tdx` (CPU) runtime classes — see [Armada Multi-Cluster Batch Scheduling](#armada-multi-cluster-batch-scheduling).
+
 ### Infrastructure
 
 #### Kubernetes High Availability
@@ -209,14 +225,6 @@ Organizations running sensitive AI workloads — training, fine-tuning, inferenc
 Armada addresses Kubernetes batch limitations that matter for the Factory: single-cluster scaling limits, etcd throughput ceilings, and the lack of fair-use / gang scheduling in the default kube-scheduler.
 
 ### Security & Compliance
-
-#### Confidential Computing Features
-
-**Trusted Execution Environment (TEE)**
-- Intel TDX/SGX
-- NVIDIA Hopper/Blackwell/Vera Ruben
-- Kata Containers for workload isolation
-- Confidential Containers with Workload Identity Validation
 
 #### Network Security
 - Linkerd mTLS communication within the cluster
@@ -345,6 +353,79 @@ Early Access is **emissions-only**. The following payment and revenue features a
 
 ---
 
+## Tokenomics — Utility Token & DePIN Model
+
+SN90 (KubeTEE) Alpha is a **utility token consumed to access confidential compute**, not a security. The design follows a DePIN subsidy model: external inference demand buys Alpha on the open market and spends it to consume compute; spent Alpha is **recycled** to unissued supply and re-emitted through the protocol's fixed emission split — a self-sustaining security budget for the compute network (the Bitcoin-fee model applied to Alpha). Full analysis: [Tokenomics — Utility Token & DePIN Model](./docs/TOKENOMICS.md).
+
+### Recycle vs Burn
+
+When Alpha is spent for compute, the subnet mechanism chooses what happens to it:
+
+- **Burn** — permanent supply reduction; does not reduce `SubnetAlphaOut`; maximum scarcity signal.
+- **Recycle** (chosen) — returns to unissued supply, reduces `SubnetAlphaOut`, extends the Alpha emission runway, pushes halving thresholds out, and refills the miner incentive budget.
+
+For a compute subnet whose product is ongoing work, **recycle** is the right economics: consumption funds future miner emissions. Neither method games emission share — the miner-withholding penalty is source-based, not method-based.
+
+### Corporate Structure (vertically split)
+
+```mermaid
+flowchart LR
+    Proto["Bittensor protocol<br/>41 / 41 / 18 emission split"]
+    Proto -->|18% owner stream| Kube["KubeTEE LTD<br/>subnet owner<br/>mechanism + IP"]
+    Proto -->|41% miner stream| Hori["1-HORIZON LTD<br/>miner operator<br/>GPU/TEE capex"]
+    Proto -->|41% miner stream| Ext["External miners<br/>(permissionless)"]
+    Hori -.->|separate coldkeys<br/>(MinerBurned tripwire)| Proto
+    Kube -.->|related-party license<br/>(off-chain, disclosed)| Hori
+```
+
+- **KubeTEE LTD — subnet owner**: owns the mechanism, the €100k subnet registration, and the **18% owner emission stream**. No token sales against promises, no customer balances, no treasury discretion.
+- **1-HORIZON LTD — miner operator**: competes for the **41% miner share** like any miner; funds GPU/TEE capex. Registers, competes, and is deregistered under identical rules as every other miner.
+- **On-chain tripwire**: the `MinerBurned` penalty targets miner emission flowing to subnet-owner-controlled coldkeys. 1-HORIZON's miner hotkeys must trace to genuinely separate coldkeys, not KubeTEE-controlled ones.
+- **Target state**: the related-party (1-HORIZON) share shrinks as external miners grow — a declining related-party share is the on-chain evidence the network is real.
+
+### Cross-Subnet Consumption Loop (utility-token flywheel)
+
+```mermaid
+flowchart LR
+    Cust["External customers<br/>pay fiat for inference"] --> SN64["SN64 (Chutes)<br/>inference / subscription"]
+    SN64 -->|swap TAO for Alpha<br/>on open pool| Pool["SN90 Alpha pool<br/>(open market, no discounts)"]
+    Pool -->|Alpha| SN64
+    SN64 -->|spend Alpha<br/>for compute| SN90["SN90 (KubeTEE)<br/>confidential compute"]
+    SN90 -->|spent Alpha recycled| Unissued["Unissued supply<br/>(zero discretion)"]
+    Unissued -->|re-emit via 41/41/18| Proto["Bittensor protocol"]
+    Proto -->|miners / validators / owner| SN90
+    SN64 -.->|run validator on SN90| Val["SN64-aligned validator<br/>scores miner output = SLA"]
+    Val -.->|Yuma Consensus| Proto
+```
+
+External customers pay fiat for inference → SN64 (Chutes) swaps TAO for SN90 Alpha on the **open pool** (no discounts, no allocations, no side-letters) → spends Alpha to consume SN90 confidential compute → spent Alpha is **recycled** to unissued supply → re-emitted via the **41/41/18** split (miners / validators / owner). An **SN64-aligned validator** on SN90 scores miner output — the protocol-native SLA (no contract needed). This is external demand one hop removed, not circular emissions-farming.
+
+### DePIN Subsidy Trajectory
+
+```mermaid
+flowchart LR
+    A["Pre-crossover<br/>emissions fund the subsidy<br/>net inflationary"] --> B["Crossover<br/>consumption = emissions<br/>net issuance ~ 0"] --> C["Post-crossover<br/>net-deflationary<br/>miners paid fully"]
+    KPI["Subsidy ratio KPI<br/>emission value / miner compensation<br/>monotonically declining"] -.-> A
+    Moat["Stack-efficiency moat grows<br/>K8s bin-packing · TEE premium · utilization<br/>70/30 at launch to 30/70 by crossover"] -.-> C
+```
+
+Miner compensation = emissions + consumption spend. While emissions cover most of the cost base, miners price compute below cash cost and SN64 pockets the gap (funded by Alpha dilution). The **subsidy ratio** (emission value ÷ total miner compensation) is the single on-chain KPI, monotonically declining:
+
+- **Pre-crossover** (amber): net inflationary; emissions fund the subsidy.
+- **Crossover**: consumption spend = emissions → net Alpha issuance ≈ 0; consumers fund the miner budget through the pool.
+- **Post-crossover**: net-deflationary while still paying miners fully.
+
+Defenses: subsidy tapers by a **published glide path** (not surprise); **stack efficiency** is the moat (Kubernetes bin-packing, TEE-attestation confidential-compute premium, higher utilization) — target 70% subsidy / 30% efficiency at launch → 30/70 by crossover. Score verifiable properties (delivered capacity, attested TEE execution, validator-issued challenges) and make self-consumption economically neutral to defeat **wash consumption**.
+
+### Boundary Conditions (what breaks the model)
+
+- Owner-hotkey withholding of miner emission — penalized regardless of recycle/burn, and re-centralizes the flow.
+- Discretionary accumulation between spend and recycle (treasury discretion is the poison).
+- Public messaging framing Alpha appreciation — rather than compute access — as the reason to hold.
+- Preferential Alpha placement, side-letters, or volume discounts to large consumers (contaminates the loop into a primary distribution).
+
+---
+
 ## Validator Scoring & Attestation
 
 The validator is the subnet's referee. In Early Access it scores each miner (one hotkey per cluster) on a single Infrastructure mechanism and sets Bittensor weights each epoch.
@@ -378,7 +459,7 @@ Miners use the same hotkey-signed flow, scoped read-only to their own cluster (t
 
 ### Weight Setting
 - Scores are normalized per miner hotkey and set on-chain via Bittensor `set_weights` (single mechanism)
-- Reference implementation: [`scripts/basic_validator.py`](scripts/basic_validator.py) (scoring: [`scripts/miner_scoring.py`](scripts/miner_scoring.py), reconciliation: [`scripts/reconciliation.py`](scripts/reconciliation.py), Rancher v3 client: [`scripts/rancher_client.py`](scripts/rancher_client.py))
+- Reference implementation: [`scripts/validator.py`](scripts/validator.py) (scoring: [`scripts/miner_scoring.py`](scripts/miner_scoring.py), reconciliation: [`scripts/reconciliation.py`](scripts/reconciliation.py), Rancher v3 client: [`scripts/rancher_client.py`](scripts/rancher_client.py))
 
 ---
 
@@ -491,6 +572,7 @@ See [Workflow Orchestration — Airflow & Metaflow](./docs/WORKFLOW-ORCHESTRATIO
 - [Confidential Containers Certification](./docs/certification-confidential-containers.md) — CC standards and Kata runtime mapping
 - [UAT-g004 Runbook](./docs/UAT-g004.md) — Self-contained single-node validator UAT procedures
 - [Workflow Orchestration — Airflow & Metaflow](./docs/WORKFLOW-ORCHESTRATION.md) — orchestrating multi-step confidential pipelines on Armada
+- [Tokenomics — Utility Token & DePIN Model](./docs/TOKENOMICS.md) — recycle vs burn, treasury/securities posture, cross-subnet consumption loop, DePIN subsidy trajectory
 
 ### External Resources
 - [Armada](https://armadaproject.io/) | [Armada GitHub](https://github.com/armadaproject/armada) — multi-cluster batch scheduler

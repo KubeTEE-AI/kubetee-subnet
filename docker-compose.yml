@@ -10,7 +10,7 @@
 #       + start emissions + set conviction/recycle hypers)
 #     * background while loop for keeping conviction hypers
 #     * background btcli loop printing stats (hypers, stake, metagraph, conviction, etc.)
-#     * foreground basic_validator (g004): alice signs set_weights; miners
+#     * foreground validator (g004): alice signs set_weights; miners
 #       discovered from the metagraph are scored via the read-only Rancher v3
 #       API; weights split KUBETEE_MINER_SHARE to miners, rest to the owner
 #       recycle UID. RANCHER_* comes from the gitignored .env (see
@@ -183,7 +183,7 @@ services:
     # 1. Run btcli setup (register if needed, owner/alice/bob triad, stake, start emissions, set conviction/recycle hypers)
     # 2. Background while-loop to keep setting conviction hypers
     # 3. Background btcli stats printer (hypers, stake, metagraph, conviction, etc.)
-    # 4. Foreground: basic_validator.py (alice signs; Rancher-scored miner share, owner recycle split)
+    # 4. Foreground: validator.py (alice signs; Rancher-scored miner share, owner recycle split)
     # All logs go to this container (view with `docker compose logs -f validator`)
     command:
       - sh
@@ -266,10 +266,10 @@ services:
           --miner-wallet bob \
           --loop --interval 25 2>&1 | cat &
 
-        # Foreground: the basic validator (alice signs set_weights; fails
+        # Foreground: the validator (alice signs set_weights; fails
         # fast at startup on missing/invalid static config incl. RANCHER_*).
-        echo "Starting basic_validator.py (scoring + weights loop)..."
-        exec python -u scripts/basic_validator.py
+        echo "Starting validator.py (scoring + weights loop)..."
+        exec python -u scripts/validator.py
 
   # Optional: simple mock miner containers for testing comms/scoring (extend as needed)
   miner-1:

@@ -212,7 +212,7 @@ a subsequent `set_weights accepted` cycle.
 ```bash
 docker compose run --rm --no-deps \
   -e RANCHER_URL= -e RANCHER_BEARER_TOKEN= \
-  validator python scripts/basic_validator.py \
+  validator python scripts/validator.py \
   2>&1 | tee logs/uat-g004/a9c-refusal.log; echo "exit=$?"
 ```
 

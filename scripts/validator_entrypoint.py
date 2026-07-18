@@ -77,7 +77,7 @@ def main() -> None:
     # Exec the validator so it becomes PID 1 / receives signals cleanly.
     # It fails fast on missing/invalid static config (D14) - a refusal here
     # is a configuration error, not a crash loop.
-    validator_cmd = [sys.executable, "scripts/basic_validator.py"]
+    validator_cmd = [sys.executable, "scripts/validator.py"]
     print(f"$ {' '.join(validator_cmd)}")
     os.execv(sys.executable, validator_cmd)
 

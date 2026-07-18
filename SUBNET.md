@@ -239,7 +239,7 @@ Services (all using deterministic pinned dev accounts, see `keys/README.md`):
 - `chain`: subtensor-localnet (FAST_BLOCKS for fast testing)
 - `validator`: entrypoint does btcli (register subnet if not exists,
   register the **owner/alice/bob** triad, add stake, start emissions,
-  attempt conviction/recycle hypers) then runs `basic_validator.py`
+  attempt conviction/recycle hypers) then runs `validator.py`
   (alice signs `set_weights`)
 - background conviction-setter + subnet-stats loops inside the validator
   container (single chain connection each — HTTP 429 lesson)
@@ -284,7 +284,7 @@ BT_WALLET=alice \
 KUBETEE_OWNER_HOTKEY=5FLbZav21bAsjH5SAdmJZwTP5C4b3bcaaWqC6GSmGmsbzUJ9 \
 KUBETEE_VALIDATOR_HOTKEY=5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY \
 RANCHER_URL=... RANCHER_BEARER_TOKEN=... \
-python scripts/basic_validator.py
+python scripts/validator.py
 ```
 
 ### 5. Observability
@@ -328,7 +328,7 @@ CI.
 
 ---
 
-See also: `scripts/setup_single_node.py`, `scripts/basic_validator.py`,
+See also: `scripts/setup_single_node.py`, `scripts/validator.py`,
 `docker-compose.yml`, `.env.example`, `keys/README.md`, and
 `docs/NODE-REGISTRATION.md` (miner-side node registration + the
 `kubetee.ai/miner-hotkey` label requirement).

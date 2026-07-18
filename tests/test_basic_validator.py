@@ -31,7 +31,7 @@ import pytest
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent.parent / "scripts"))
 
-from basic_validator import (
+from validator import (
     BasicValidator,
     ConfigError,
     ValidatorConfig,

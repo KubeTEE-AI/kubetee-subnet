@@ -87,7 +87,7 @@ Infrastructure miners register their RKE2 clusters with Rancher Fleet (labeled w
 docker compose up -d --build
 # Logs: http://localhost:8080 (dozzle)
 ```
-`scripts/validator_entrypoint.py` bootstraps the subnet via `scripts/setup_single_node.py`, then execs `scripts/basic_validator.py`, which reads `RANCHER_URL` / `RANCHER_BEARER_TOKEN` / `KUBETEE_*` from the environment and fails fast on missing/invalid config.
+`scripts/validator_entrypoint.py` bootstraps the subnet via `scripts/setup_single_node.py`, then execs `scripts/validator.py`, which reads `RANCHER_URL` / `RANCHER_BEARER_TOKEN` / `KUBETEE_*` from the environment and fails fast on missing/invalid config.
 
 ### Local Development (Staging)
 
@@ -149,7 +149,7 @@ Entry Points (scripts/)
 Setup (scripts/setup_single_node.py)
   └── btcli bootstrap: subnet, owner/alice/bob triad, stake, emissions, conviction/recycle
         ↓
-Validator Loop (scripts/basic_validator.py) — per cycle:
+Validator Loop (scripts/validator.py) — per cycle:
   ├── metagraph read (chain_state.py)
   ├── Rancher v3 enumeration (rancher_client.py) — read-only, fail-closed pagination
   ├── reconciliation (reconciliation.py) — guarded deregistration on sustained absence
@@ -160,7 +160,7 @@ Validator Loop (scripts/basic_validator.py) — per cycle:
 
 ### Validator Cycle
 
-**Per cycle (`scripts/basic_validator.py`, spec 4.2):**
+**Per cycle (`scripts/validator.py`, spec 4.2):**
 1. Read the metagraph (`scripts/chain_state.py`) — discover miners by hotkey
 2. Enumerate clusters/nodes via the read-only Rancher v3 API (`scripts/rancher_client.py`)
 3. Reconcile — guarded deregistration of clusters whose hotkey has been absent from the metagraph for ≥3 cycles / ≥900s (`scripts/reconciliation.py`)
@@ -199,8 +199,8 @@ Validators read cluster metrics and information from the **Rancher v3 REST API**
 ### Key Files and Locations
 
 **Entry Points:**
-- `scripts/validator_entrypoint.py` - Container entrypoint: runs `setup_single_node.py` (btcli bootstrap) then execs the basic validator
-- `scripts/basic_validator.py` - Validator main loop (g004): metagraph → Rancher enumeration → reconciliation → scoring → set_weights, with fail-fast startup and degraded-mode skip/backoff
+- `scripts/validator_entrypoint.py` - Container entrypoint: runs `setup_single_node.py` (btcli bootstrap) then execs the validator
+- `scripts/validator.py` - Validator main loop (g004): metagraph → Rancher enumeration → reconciliation → scoring → set_weights, with fail-fast startup and degraded-mode skip/backoff
 
 **Core Scoring & Reconciliation:**
 - `scripts/miner_scoring.py` - Miner discovery + binary fail-closed node-liveness score + S/N weight split
