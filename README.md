@@ -124,7 +124,6 @@ As a member of the [Confidential Computing Consortium (CCC)](https://confidentia
     - [Corporate Structure (vertically split)](#corporate-structure-vertically-split)
     - [Cross-Subnet Consumption Loop (utility-token flywheel)](#cross-subnet-consumption-loop-utility-token-flywheel)
     - [DePIN Subsidy Trajectory](#depin-subsidy-trajectory)
-    - [Boundary Conditions (what breaks the model)](#boundary-conditions-what-breaks-the-model)
   - [Validator Scoring \& Attestation](#validator-scoring--attestation)
     - [Validator Runtime (TEE)](#validator-runtime-tee)
     - [Rancher v3 Access (Hotkey-signed Auth)](#rancher-v3-access-hotkey-signed-auth)
@@ -349,7 +348,7 @@ Early Access is **emissions-only**. The following payment and revenue features a
 - **Subnet 90 Alpha, Other Subnets Alpha, TAO** Discounted for Bittensor community.
 - **USDC-on-BASE job billing** — pull-based, per-epoch metering of Armada job resource usage
 - **Referrer / integrator / reseller program** — revenue share with on-chain attribution
-- **Automated USDC→TAO→Alpha recycling and treasury** — sustainable price support and operations funding
+- **Automated USDC→TAO→Alpha recycling** — unused emissions recycled
 
 ---
 
@@ -378,7 +377,7 @@ flowchart LR
     Kube -.->|related-party license<br/>(off-chain, disclosed)| Hori
 ```
 
-- **KubeTEE LTD — subnet owner**: owns the mechanism, the €100k subnet registration, and the **18% owner emission stream**. No token sales against promises, no customer balances, no treasury discretion.
+- **KubeTEE LTD — subnet owner**: owns the mechanism, the €198k subnet registration, and the **18% owner emission stream**. No token sales against promises, no customer balances, no treasury — all unused emissions are recycled.
 - **1-HORIZON LTD — miner operator**: competes for the **41% miner share** like any miner; funds GPU/TEE capex. Registers, competes, and is deregistered under identical rules as every other miner.
 - **On-chain tripwire**: the `MinerBurned` penalty targets miner emission flowing to subnet-owner-controlled coldkeys. 1-HORIZON's miner hotkeys must trace to genuinely separate coldkeys, not KubeTEE-controlled ones.
 - **Target state**: the related-party (1-HORIZON) share shrinks as external miners grow — a declining related-party share is the on-chain evidence the network is real.
@@ -417,12 +416,6 @@ Miner compensation = emissions + consumption spend. While emissions cover most o
 
 Defenses: subsidy tapers by a **published glide path** (not surprise); **stack efficiency** is the moat (Kubernetes bin-packing, TEE-attestation confidential-compute premium, higher utilization) — target 70% subsidy / 30% efficiency at launch → 30/70 by crossover. Score verifiable properties (delivered capacity, attested TEE execution, validator-issued challenges) and make self-consumption economically neutral to defeat **wash consumption**.
 
-### Boundary Conditions (what breaks the model)
-
-- Owner-hotkey withholding of miner emission — penalized regardless of recycle/burn, and re-centralizes the flow.
-- Discretionary accumulation between spend and recycle (treasury discretion is the poison).
-- Public messaging framing Alpha appreciation — rather than compute access — as the reason to hold.
-- Preferential Alpha placement, side-letters, or volume discounts to large consumers (contaminates the loop into a primary distribution).
 
 ---
 
@@ -552,7 +545,7 @@ See [Workflow Orchestration — Airflow & Metaflow](./docs/WORKFLOW-ORCHESTRATIO
 
 - [ ] Alpha, TAO, USDC-on-BASE job billing (pull-based, per-epoch metering)
 - [ ] Referrer / integrator / reseller program (on-chain attribution)
-- [ ] Automated USDC→TAO→Alpha recycling and treasury
+- [ ] Automated USDC→TAO→Alpha recycling (unused emissions recycled)
 
 ### Phase 3 — Job-Type Growth
 
@@ -572,7 +565,7 @@ See [Workflow Orchestration — Airflow & Metaflow](./docs/WORKFLOW-ORCHESTRATIO
 - [Confidential Containers Certification](./docs/certification-confidential-containers.md) — CC standards and Kata runtime mapping
 - [UAT-g004 Runbook](./docs/UAT-g004.md) — Self-contained single-node validator UAT procedures
 - [Workflow Orchestration — Airflow & Metaflow](./docs/WORKFLOW-ORCHESTRATION.md) — orchestrating multi-step confidential pipelines on Armada
-- [Tokenomics — Utility Token & DePIN Model](./docs/TOKENOMICS.md) — recycle vs burn, treasury/securities posture, cross-subnet consumption loop, DePIN subsidy trajectory
+- [Tokenomics — Utility Token & DePIN Model](./docs/TOKENOMICS.md) — recycle vs burn, securities posture, cross-subnet consumption loop, DePIN subsidy trajectory
 
 ### External Resources
 - [Armada](https://armadaproject.io/) | [Armada GitHub](https://github.com/armadaproject/armada) — multi-cluster batch scheduler

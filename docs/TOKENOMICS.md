@@ -1,8 +1,8 @@
 # Tokenomics — Utility Token & DePIN Model
 
-This document is the full analysis behind the README [Tokenomics — Utility Token & DePIN Model](../README.md#tokenomics--utility-token--depin-model) section. It covers the economic design of SN90 (KubeTEE) Alpha: recycle vs burn, treasury and securities posture, the cross-subnet consumption loop, the vertically-split corporate structure, and the DePIN subsidy trajectory.
+This document is the full analysis behind the README [Tokenomics — Utility Token & DePIN Model](../README.md#tokenomics--utility-token--depin-model) section. It covers the economic design of SN90 (KubeTEE) Alpha: recycle vs burn, securities posture, the cross-subnet consumption loop, the vertically-split corporate structure, and the DePIN subsidy trajectory.
 
-> **Not legal advice.** The securities analysis below is engineering design rationale, not legal advice. Run the royalty-base carve-out, treasury policy, and related-party structure past Cyprus counsel before the first accumulation or sale.
+> **Not legal advice.** The securities analysis below is engineering design rationale, not legal advice. Run the royalty-base carve-out and related-party structure past Cyprus counsel before the first sale.
 
 ---
 
@@ -12,7 +12,7 @@ SN90 (KubeTEE) Alpha is a **utility token consumed to access confidential comput
 
 - External inference demand buys Alpha on the **open market** and spends it to consume compute.
 - Spent Alpha is **recycled** to unissued supply and re-emitted through the protocol's fixed emission split — a self-sustaining security budget for the compute network (the Bitcoin-fee model applied to Alpha).
-- No entity sells tokens against promises, holds customer balances, or exercises treasury discretion. Value reaches each entity only through protocol safe-harbor channels (owner emissions, scored miner emissions).
+- No entity sells tokens against promises, holds customer balances, or accumulates a treasury — all unused emissions are recycled. Value reaches each entity only through protocol safe-harbor channels (owner emissions, scored miner emissions).
 
 The goal is a token whose value narrative is **compute access**, verifiable on-chain by anyone — the cleanest fact pattern for a utility-token / DePIN classification.
 
@@ -44,42 +44,32 @@ For a compute subnet whose product is **ongoing work** (inference, training), re
 
 ---
 
-## Treasury Policy & Securities Posture
+## Securities Posture — No Treasury
 
-The question is not "is Alpha a security because we have a treasury" but "do our treasury practices create a scheme where purchasers reasonably expect profits from our managerial efforts." The SEC/CFTC interpretive release (Release No. 33-11412, March 17, 2026) applies the Howey test to **transactions** rather than assets themselves, and addresses how a non-security crypto asset may become subject to, and cease to be subject to, an investment contract.
+SN90 has **no treasury**. All unused emissions are **recycled** to unissued supply with zero discretion anywhere — nobody holds them, nobody times their disposal, no customer-balance liability exists. This removes the entire treasury category: no accumulation, no discretion, nothing to mischaracterize.
 
-### Fact patterns (safest to worst)
+The SEC/CFTC interpretive release (Release No. 33-11412, March 17, 2026) applies the Howey test to **transactions** rather than assets themselves, and addresses how a non-security crypto asset may become subject to, and cease to be subject to, an investment contract. The question is not "is Alpha a security" but "do any of our practices create a scheme where purchasers reasonably expect profits from our managerial efforts." Eliminating the treasury eliminates the most attackable set of those practices up front.
+
+### Fact patterns the no-treasury design avoids
 
 1. **Receiving emissions (safe).** The release includes explicit safe harbors for protocol mining, staking, and airdrops — tokens received programmatically per protocol rules are not the problem. The subnet owner's 18% arrives the same way a miner's 41% does. Passive accrual to a wallet is hard to attack.
-2. **Accumulating and holding (mostly optics/concentration).** A large discretionary insider position is a Howey factor (common enterprise, reliance on a promoter), not dispositive. A dormant treasury does not by itself convey rights to income or assets, but it sits as ammunition for the argument that value depends on what you will do with it.
-3. **Selling treasury to fund operations (classic risk).** Emissions → sell → servers and salaries. Functionally a continuous primary distribution funding the enterprise; if buyers reasonably expect the funded development to drive token value, those sales transactions start to look like investment contracts — even while secondary trading of the same token stays commodity-like. The token can be a digital commodity and your treasury sales can still be securities transactions.
-4. **Deploying treasury for holder benefit (avoid entirely).** Buybacks, price support, liquidity backstops, yield programs, "treasury works for the community" messaging — anything that positions discretionary decisions as the value driver walks directly into the "expectation of profits from the essential managerial efforts of others" prong.
+2. **Accumulating and holding a discretionary position (avoided).** A large discretionary insider position is a Howey factor (common enterprise, reliance on a promoter). A dormant treasury sits as ammunition for the argument that value depends on what you will do with it. With no treasury, there is no such position to characterize.
+3. **Selling treasury to fund operations (avoided).** Emissions → sell → servers and salaries is functionally a continuous primary distribution funding the enterprise; if buyers reasonably expect the funded development to drive token value, those sales transactions start to look like investment contracts — even while secondary trading of the same token stays commodity-like. The token can be a digital commodity and treasury sales can still be securities transactions. With no treasury, there is nothing to sell this way.
+4. **Deploying treasury for holder benefit (avoided entirely).** Buybacks, price support, liquidity backstops, yield programs, "treasury works for the community" messaging — anything that positions discretionary decisions as the value driver walks directly into the "expectation of profits from the essential managerial efforts of others" prong. With no treasury, there is no discretionary deployment to make.
 
-### Durbin's burn model
+### Why recycle fulfills the burn-adjacent posture
 
-Durbin's programmatic purchase-and-burn model is extreme precisely because it removes the entire category: no accumulation, no discretion, nothing to mischaracterize. Burn makes consumption **terminal**: no beneficiary, no treasury, no residual claim anywhere.
+Durbin's programmatic purchase-and-burn model is extreme precisely because it removes the entire category: no accumulation, no discretion, nothing to mischaracterize. Burn makes consumption **terminal**: no beneficiary, no residual claim anywhere.
 
-### Rules-based treasury (the middle path)
-
-If a treasury is desired, make it **rules-based rather than discretionary**:
-
-- Committed emissions schedule.
-- On-chain timelocks or vesting.
-- Pre-published deployment policy (e.g., fixed percentage recycled, fixed percentage sold on schedule for opex).
-- No holder-facing promises about it.
-
-**Programmatic commitment** is the load-bearing word in the digital-commodity definition; the closer the treasury behaves to protocol code and the further from board decisions, the better the posture. Also avoid **staking the treasury for yield**, which adds a passive-income feature on top.
+Recycling all unused emissions reaches the same posture by a different route: there is still no accumulation, no discretion, and no residual claim — spent Alpha returns to unissued supply and is re-emitted only through the protocol's fixed 41/41/18 split. Nobody chooses who receives it; the protocol does. The load-bearing property is **no discretion anywhere in the loop**, not the choice of burn over recycle. For a compute subnet whose product is ongoing work, recycle preserves the emission runway that funds future miner compensation while keeping the same "nothing to mischaracterize" posture.
 
 ### Mitigants
 
 - Token is already functional (used per its programmatic utility on a functional system).
 - No fundraising framing, no roadmap promises tied to sales.
-- Arm's-length OTC disposal.
+- Arm's-length OTC disposal of any emission the owner entity does liquidate.
 - Disclosure — especially important for a related-party structure.
-
-### Custodian conditions (telegraphed by the agencies)
-
-No operational use, no lending, pledging, or rehypothecation, no leverage, trading, speculation, or discretionary activities. Discretion over held tokens is the poison.
+- No staking of accumulated balances for yield (would add a passive-income feature on top).
 
 ---
 
@@ -148,12 +138,12 @@ flowchart LR
     Kube -.->|related-party license<br/>(off-chain, disclosed)| Hori
 ```
 
-- **KubeTEE LTD — subnet owner**: owns the subnet layer (mechanism, the €100k registration, the 18% owner stream). Receives value only through the owner-emission safe-harbor path.
+- **KubeTEE LTD — subnet owner**: owns the subnet layer (mechanism, the €198k registration, the 18% owner stream). Receives value only through the owner-emission safe-harbor path.
 - **1-HORIZON LTD — miner operator**: a miner competing inside SN90 for a slice of the 41%. Funds GPU, TEE hardware, and rack commitments. Registers, competes, and is deregistered under identical rules as every other miner — same registration cost, same immunity period, no reserved UIDs.
 
 ### What the split gets right
 
-Separating the subnet-owner entity from the miner entity means each receives value **exclusively through protocol safe-harbor channels**: KubeTEE's 18% arrives as owner emissions; 1-HORIZON's share arrives as scored miner emissions. Neither entity needs to sell tokens against promises, hold customer balances, or exercise treasury discretion. Capex lands in the right place — GPUs, TEE hardware, rack commitments sit in 1-HORIZON, insulated from the subnet-layer entity, which owns only the mechanism and IP.
+Separating the subnet-owner entity from the miner entity means each receives value **exclusively through protocol safe-harbor channels**: KubeTEE's 18% arrives as owner emissions; 1-HORIZON's share arrives as scored miner emissions. Neither entity needs to sell tokens against promises, hold customer balances, or accumulate a treasury — all unused emissions are recycled. Capex lands in the right place — GPUs, TEE hardware, rack commitments sit in 1-HORIZON, insulated from the subnet-layer entity, which owns only the mechanism and IP.
 
 ### The on-chain tripwire
 
@@ -220,7 +210,7 @@ Given 1-HORIZON mines on the subnet its sister company owns, this must be closed
 ## Boundary Conditions (what breaks the model)
 
 1. **Owner-hotkey withholding** of miner emission — penalized regardless of recycle/burn, and re-centralizes the flow.
-2. **Discretionary accumulation** inserted between spend and recycle (treasury discretion is the poison).
+2. **Discretionary accumulation** inserted between spend and recycle (no treasury — any accumulation is the poison; all unused emissions must be recycled).
 3. **Public messaging** that frames Alpha appreciation — rather than compute access — as the reason to hold.
 4. **Preferential Alpha placement**, side-letters, or volume discounts to large consumers — contaminates the loop into a primary distribution with investment characteristics.
 
