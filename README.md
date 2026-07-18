@@ -130,6 +130,7 @@ As a member of the [Confidential Computing Consortium (CCC)](https://confidentia
       - [Staging vs Production](#staging-vs-production)
     - [Payments \& Revenue (Roadmap)](#payments--revenue-roadmap)
   - [Validator Scoring \& Attestation](#validator-scoring--attestation)
+    - [Validator Runtime (TEE)](#validator-runtime-tee)
     - [TEE Attestation](#tee-attestation)
     - [Armada Job Metrics](#armada-job-metrics)
     - [Infrastructure Health](#infrastructure-health)
@@ -315,6 +316,8 @@ Armada addresses Kubernetes batch limitations that matter for the Factory: singl
   - Kata Containers (TEE)
   - [Confidential Containers](https://confidentialcontainers.org/docs/overview/) Operator
   - Armada Server (controller, scheduler, lookout + Pulsar/Redis/Postgres)
+- **Validator runs in a TEE** — the validator process executes inside a confidential Kata + CoCo pod on the control plane, so scoring and weight-setting are themselves confidentially executed and attested (see [Validator Runtime (TEE)](#validator-runtime-tee))
+- **KubeTEE-hosted validator option** — KubeTEE can run the validator code in a KubeTEE confidential cluster for operators that do not run their own TEE infrastructure
 
 #### Miner Infrastructure
 - RKE2 Rancher Kubernetes
@@ -356,6 +359,8 @@ flowchart LR
     NodeB -.->|attestation + metrics| Validator
     Validator -->|set weights| Chain["Bittensor\nemissions"]
 ```
+
+> The **Validator** and **Armada Server** run on the subnet-owner control plane inside confidential Kata + CoCo TEE pods. KubeTEE can additionally host the validator code in a KubeTEE confidential cluster for operators that do not run their own TEE infrastructure (see [Validator Runtime (TEE)](#validator-runtime-tee)).
 
 ---
 
@@ -429,6 +434,12 @@ The validator is the subnet's referee. In Early Access it scores each miner (one
 > is the design target and remains roadmap. Liveness scoring is **not** an
 > attestation, eligibility, or security-compliance signal.
 
+### Validator Runtime (TEE)
+
+The validator is the subnet's referee — so the referee itself must be trustworthy. The validator process runs **inside a confidential TEE pod** (`kata-qemu-nvidia-gpu-tdx` or `kata-qemu-tdx`) on the subnet-owner control plane, with CoCo remote attestation proving the validator code and configuration are unmodified. Scoring, weight-setting, and credentials (Rancher token, Bittensor wallet) stay confidential and tamper-resistant — the validator cannot be silently altered by the host or hypervisor.
+
+**KubeTEE-hosted validator**: KubeTEE offers to run the validator code in KubeTEE clusters, so a validator operator does not need to provision and operate their own TEE infrastructure. KubeTEE schedules the validator as a confidential workload in a KubeTEE confidential cluster, with attestation evidence available to the subnet. This lowers the barrier to running a validator and ensures every validator runs in a genuine, attested TEE.
+
 ### TEE Attestation
 - The validator runs attestation cronjobs inside Kata Containers to verify each miner cluster's TEE (Intel TDX/SGX, NVIDIA CC)
 - CoCo remote attestation confirms the confidential container image and runtime are unmodified
@@ -501,6 +512,8 @@ Miners register clusters (one hotkey per cluster) with the subnet owner for Ranc
 - [ ] Armada Server on the subnet-owner control plane; Armada Executor on each miner cluster
 - [ ] Kata + CoCo TEE runtime classes (`kata-qemu-nvidia-gpu-tdx`, `kata-qemu-tdx`)
 - [ ] Single Infrastructure validator mechanism (TEE attestation + Armada job metrics + uptime)
+- [ ] Validator runs in a TEE (Kata + CoCo) on the control plane; CoCo attestation proves the validator code is unmodified
+- [ ] KubeTEE-hosted validator offering: KubeTEE runs the validator code in a KubeTEE confidential cluster for operators without their own TEE infrastructure
 - [ ] Validator Rancher v3 API access: map Bittensor validator hotkeys to Rancher principals (custom auth provider / SAML / OIDC) so validators obtain a read-only bearer token for the Rancher v3 API (bound to `cluster-readonly`) — see CLAUDE.md "Validator Rancher API Access"
 - [ ] Miner Rancher access on cluster creation: map the new cluster's `kubetee.ai/miner-hotkey` to a Rancher principal (same external auth) and bind it **read-only** to the miner's own cluster (`cluster-readonly`) so the miner can observe their cluster (subnet owner manages via Fleet)
 - [ ] Emissions-only rewards
