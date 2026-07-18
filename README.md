@@ -128,6 +128,7 @@ As a member of the [Confidential Computing Consortium (CCC)](https://confidentia
     - [Weight Setting](#weight-setting)
   - [Submitting a Confidential Job](#submitting-a-confidential-job)
     - [Miner Registration](#miner-registration)
+  - [Workflow Orchestration (Airflow \& Metaflow)](#workflow-orchestration-airflow--metaflow)
   - [For Miners (Infrastructure)](#for-miners-infrastructure)
   - [Roadmap](#roadmap)
     - [Phase 0 — Early Access (Current)](#phase-0--early-access-current)
@@ -340,7 +341,7 @@ Early Access is **emissions-only**. The following payment and revenue features a
 - **Subnet 90 Alpha, Other Subnets Alpha, TAO** Discounted for Bittensor community.
 - **USDC-on-BASE job billing** — pull-based, per-epoch metering of Armada job resource usage
 - **Referrer / integrator / reseller program** — revenue share with on-chain attribution
-- **Automated USDC→TAO→Alpha buyback and treasury** — sustainable price support and operations funding
+- **Automated USDC→TAO→Alpha recycling and treasury** — sustainable price support and operations funding
 
 ---
 
@@ -389,6 +390,21 @@ Jobs are submitted to Armada queues and scheduled onto miner clusters with a con
 ### Miner Registration
 
 Miners register clusters (one hotkey per cluster) with the subnet owner for Rancher Fleet and Armada enrollment. See [For Miners (Infrastructure)](#for-miners-infrastructure).
+
+---
+
+## Workflow Orchestration (Airflow & Metaflow)
+
+Single confidential jobs are submitted to Armada queues (see [Submitting a Confidential Job](#submitting-a-confidential-job)). For **multi-step AI pipelines** — ETL → fine-tune → evaluate → register → deploy — KubeTEE integrates with two open-source orchestrators so each pipeline step runs as a confidential Armada batch job inside Kata + CoCo TEE pods:
+
+- **[Apache Airflow](https://airflow.apache.org/)** — DAG-based pipeline orchestration. Author DAGs on the control plane (or externally); each task submits an Armada job spec with a confidential `runtimeClassName`. Airflow schedules the *pipeline*; Armada schedules the *task pods* across miner clusters.
+- **[Metaflow](https://metaflow.org/)** — a Python framework for data-science / ML workflows. Author flows with `@step`-style decorators; a KubeTEE Metaflow producer submits each step to an Armada queue as a confidential pod. Iterate locally, run production steps in TEE.
+
+**Confidential pipelines**: every task pod runs under `kata-qemu-nvidia-gpu-tdx` (GPU) or `kata-qemu-tdx` (CPU) with CoCo remote attestation. Pipeline artifacts move through encrypted Longhorn volumes or an encrypted object store; secrets are injected via the CoCo KBS — no plaintext secrets in DAG/flow code. A pipeline can verify a step's attestation evidence before passing artifacts downstream.
+
+See [Workflow Orchestration — Airflow & Metaflow](./docs/WORKFLOW-ORCHESTRATION.md) for architecture, connector design, and example DAG / Metaflow flow snippets.
+
+> **Status:** integration is on the roadmap — Airflow and Metaflow Armada connectors land in Phase 1 / Phase 3 (see [Roadmap](#roadmap)).
 
 ---
 
@@ -448,13 +464,14 @@ Miners register clusters (one hotkey per cluster) with the subnet owner for Ranc
 - [ ] More US + international clusters
 - [ ] Armada fair-use + gang scheduling hardening
 - [ ] Automated TEE attestation cronjobs
+- [ ] Apache Airflow + Metaflow Armada connectors — multi-step confidential pipelines (see [Workflow Orchestration](./docs/WORKFLOW-ORCHESTRATION.md))
 - [ ] Build documentation website
 
 ### Phase 2 — Paid Jobs
 
 - [ ] Alpha, TAO, USDC-on-BASE job billing (pull-based, per-epoch metering)
 - [ ] Referrer / integrator / reseller program (on-chain attribution)
-- [ ] Automated USDC→TAO→Alpha buyback and treasury
+- [ ] Automated USDC→TAO→Alpha recycling and treasury
 
 ### Phase 3 — Job-Type Growth
 
@@ -473,9 +490,11 @@ Miners register clusters (one hotkey per cluster) with the subnet owner for Ranc
 - [FIPS-140-3 Target](./docs/FIPS-140-3.md) — RKE2 + Kata + CoCo FIPS stack research
 - [Confidential Containers Certification](./docs/certification-confidential-containers.md) — CC standards and Kata runtime mapping
 - [UAT-g004 Runbook](./docs/UAT-g004.md) — Self-contained single-node validator UAT procedures
+- [Workflow Orchestration — Airflow & Metaflow](./docs/WORKFLOW-ORCHESTRATION.md) — orchestrating multi-step confidential pipelines on Armada
 
 ### External Resources
 - [Armada](https://armadaproject.io/) | [Armada GitHub](https://github.com/armadaproject/armada) — multi-cluster batch scheduler
+- [Apache Airflow](https://airflow.apache.org/) | [Metaflow](https://metaflow.org/) — pipeline orchestration for confidential Armada jobs
 - [Kata Containers](https://katacontainers.io/) | [Confidential Containers](https://github.com/confidential-containers/confidential-containers)
 - [RKE2 FIPS Support](https://docs.rke2.io/security/fips_support)
 

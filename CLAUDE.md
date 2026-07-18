@@ -215,7 +215,7 @@ Validators read cluster metrics and information from the **Rancher v3 REST API**
 - `scripts/print_subnet_stats.py` - Subnet stats printer (reuses one Subtensor connection)
 
 **Smart Contracts (Phase 2, not in Early Access):**
-Payment processing, escrow, reseller/referrer attribution, and buyback/treasury contracts (BASE L2) plus the Bittensor EVM registry are planned for Phase 2 and are **not included** in the Early Access repo.
+Payment processing, escrow, reseller/referrer attribution, and Alpha recycling/treasury contracts (BASE L2) plus the Bittensor EVM registry are planned for Phase 2 and are **not included** in the Early Access repo.
 
 **Hardware Requirements:**
 - `docs/GPU-NODE-REQUIREMENTS.md` - Miner: 8x H100/H200/B200 GPUs with TEE attestation, Validator: no GPU needed
@@ -419,7 +419,7 @@ btcli wallet overview --wallet.name miner
 - (Phase 2) Revenue tracking and reseller/referrer payment distribution
 
 **Smart Contracts (Phase 2):** Deployment targets (not in Early Access):
-- BASE L2 (Coinbase) - USDC job billing, escrow, reseller/referrer attribution, buyback/treasury
+- BASE L2 (Coinbase) - USDC job billing, escrow, reseller/referrer attribution, Alpha recycling/treasury
 - Bittensor EVM - optional Phase 2 registry (Early Access emissions are native `set_weights`, no contract)
 
 ## Key Takeaways
