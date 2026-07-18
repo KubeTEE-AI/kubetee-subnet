@@ -130,6 +130,7 @@ As a member of the [Confidential Computing Consortium (CCC)](https://confidentia
     - [TEE Attestation](#tee-attestation)
     - [Armada Job Metrics](#armada-job-metrics)
     - [Infrastructure Health](#infrastructure-health)
+    - [Competitive Pricing](#competitive-pricing)
     - [Weight Setting](#weight-setting)
   - [Submitting a Confidential Job](#submitting-a-confidential-job)
     - [Miner Registration](#miner-registration)
@@ -159,7 +160,7 @@ KubeTEE is in **Early Access**. The first deployment targets **two clusters in t
 
 - Standing up the Armada multi-cluster batch scheduler across miner clusters
 - Running confidential AI jobs (NeMo / NIM / Blueprints) in Kata + CoCo TEE pods
-- The **validator incentive mechanism**: scoring miners on TEE attestation, Armada job success, and uptime
+- The **validator incentive mechanism**: scoring miners on TEE attestation, Armada job success, uptime, and **competitive pricing** against the other compute subnets (Targon, Lium, Chutes) with a 75% utilization target
 - **Emissions-only** rewards (no USDC job billing yet — see [Roadmap](#roadmap))
 - **Security**: Confidential Computing TEE with FIPS-140-3 as the Early Access target on a FIPS-140-2 validated RKE2 baseline
 
@@ -450,6 +451,23 @@ Miners use the same hotkey-signed flow, scoped read-only to their own cluster (t
 - Uptime, QoS, capacity, and latency from Prometheus and Kubernetes events
 - FIPS-140-2/3 validated
 
+### Competitive Pricing
+
+SN90 sells compute, so its miners are scored against the **other Bittensor compute subnets** — **Targon (SN4)**, **Lium (SN51)**, and **Chutes (SN64)** — each of which exposes a **verifiable** feed (public API + on-chain metagraph for emission/attestation proof). Targon exposes a **supply-side** payout feed (per-miner emission payout by compute type and card count, via `stats.targon.com`); Lium and Chutes expose **demand-side** listing prices. The validator scrapes those feeds each epoch, cross-checks them against the metagraph, and computes a **target price** per SN90 job class (GPU-hour by GPU type, CPU-hour, per-token inference).
+
+The target price is **discovered, not decreed** — a function of four inputs:
+
+- **The compute needed** — the job class (GPU type / GPU-hours / CPU-hours / per-token); price is computed per class, not as a flat number.
+- **Competitor signals for the same class** — Targon's per-miner payout by compute type (supply-side) and Lium's / Chutes's listing prices (demand-side), each cross-checked on-chain.
+- **SN90 demand** — Armada queue depth and scheduling wait time for that class.
+- **The 75% utilization target** — the equilibrium anchor. Below 75% average capacity, price is pushed down to attract demand and fill capacity; at 75%, price sits at the competitor average; above 75%, price is pushed up to ration demand and preserve headroom.
+
+The target price is a **scoring input, not a bill**. Miners are scored on whether the compute they deliver is priced at or below the target (full credit), modestly above (reduced credit), or far above (zero credit for that class — SN90 would lose the demand to SN4/SN51/SN64). A miner with perfect attestation but a price 2× the competitor average scores low. This is what "competitive with the other subnets" means mechanically: the weight vector rewards miners that keep SN90 in the competitive band. The 75% target also doubles as the **wash-consumption defense** — a miner faking utilization pushes the subnet above 75%, which raises the target price and makes its own wash spend more expensive.
+
+Every input is a public API or on-chain data; the validator publishes the scraped competitor prices and the computed target price each epoch as Prometheus metrics, so the weight vector is auditable end-to-end. Full design — competitor feeds, the target-price formula, scoring integration, and verifiability table: [Competitive Pricing & Miner Scoring](./docs/COMPETITIVE-PRICING.md).
+
+> **Status:** competitive pricing is a **roadmap** scoring dimension (Phase 2, alongside USDC job billing — both depend on a real price existing). The shipping Early Access validator scores node liveness only (see [SUBNET.md](SUBNET.md)).
+
 ### Weight Setting
 - Scores are normalized per miner hotkey and set on-chain via Bittensor `set_weights` (single mechanism)
 - Reference implementation: [`scripts/validator.py`](scripts/validator.py) (scoring: [`scripts/miner_scoring.py`](scripts/miner_scoring.py), reconciliation: [`scripts/reconciliation.py`](scripts/reconciliation.py), Rancher v3 client: [`scripts/rancher_client.py`](scripts/rancher_client.py))
@@ -538,12 +556,14 @@ See [Workflow Orchestration — Airflow & Metaflow](./docs/WORKFLOW-ORCHESTRATIO
 - [ ] More US + international clusters
 - [ ] Armada fair-use + gang scheduling hardening
 - [ ] Automated TEE attestation cronjobs
+- [ ] Validator scoring expansion: TEE attestation + Armada job metrics + infrastructure health (replacing the Early Access liveness stand-in)
 - [ ] Apache Airflow + Metaflow Armada connectors — multi-step confidential pipelines (see [Workflow Orchestration](./docs/WORKFLOW-ORCHESTRATION.md))
 - [ ] Build documentation website
 
 ### Phase 2 — Paid Jobs
 
 - [ ] Alpha, TAO, USDC-on-BASE job billing (pull-based, per-epoch metering)
+- [ ] Competitive pricing dimension: scrape Targon (SN4) / Lium (SN51) / Chutes (SN64) price feeds, compute per-class target price, score miners on price competitiveness against a 75% utilization target (see [Competitive Pricing](./docs/COMPETITIVE-PRICING.md))
 - [ ] Referrer / integrator / reseller program (on-chain attribution)
 - [ ] Automated USDC→TAO→Alpha recycling (unused emissions recycled)
 
@@ -566,6 +586,7 @@ See [Workflow Orchestration — Airflow & Metaflow](./docs/WORKFLOW-ORCHESTRATIO
 - [UAT-g004 Runbook](./docs/UAT-g004.md) — Self-contained single-node validator UAT procedures
 - [Workflow Orchestration — Airflow & Metaflow](./docs/WORKFLOW-ORCHESTRATION.md) — orchestrating multi-step confidential pipelines on Armada
 - [Tokenomics — Utility Token & DePIN Model](./docs/TOKENOMICS.md) — recycle vs burn, securities posture, cross-subnet consumption loop, DePIN subsidy trajectory
+- [Competitive Pricing & Miner Scoring](./docs/COMPETITIVE-PRICING.md) — pricing SN90 against Targon/Lium/Chutes, the 75% utilization target, and how price becomes weights
 
 ### External Resources
 - [Armada](https://armadaproject.io/) | [Armada GitHub](https://github.com/armadaproject/armada) — multi-cluster batch scheduler

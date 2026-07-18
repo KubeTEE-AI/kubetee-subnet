@@ -134,11 +134,12 @@ KubeTEE Early Access uses a **single Bittensor incentive mechanism** that distri
 **Mechanism: Infrastructure (100% emissions)**
 - Rewards miners providing RKE2 cluster resources (GPU nodes) that run confidential AI jobs scheduled by Armada
 - Metrics: TEE attestation (Intel TDX/SGX, NVIDIA CC), Armada job success/throughput/fair-share, uptime, resource utilization, FIPS-140-3 progress
+- **Competitive pricing (Phase 2 roadmap):** miners are scored against the other Bittensor compute subnets — Targon (SN4, supply-side payout feed via `stats.targon.com`), Lium (SN51, demand-side rental prices), Chutes (SN64, demand-side inference prices) — each with a verifiable feed (public API + on-chain metagraph). The validator discovers a per-job-class target price from competitor signals, SN90 demand (Armada queue depth), and a **75% average utilization target**, then weights miners on whether their delivered compute is priced competitively. A miner with perfect attestation but a price 2× the competitor average scores low. See `docs/COMPETITIVE-PRICING.md`.
 - One hotkey per cluster; all nodes co-located in a single data center
 - No attestation = no emissions
 - Location: `scripts/miner_scoring.py`
 
-**Critical Detail:** A single weight matrix is used. The validator sets one set of weights per epoch via Bittensor `set_weights` (no `mechanism_id` split). The benchmark, bounty, and referrer mechanisms from the earlier design are removed for Early Access.
+**Critical Detail:** A single weight matrix is used. The validator sets one set of weights per epoch via Bittensor `set_weights` (no `mechanism_id` split). The benchmark, bounty, and referrer mechanisms from the earlier design are removed for Early Access. The shipping Early Access validator scores node liveness only; TEE/Armada/health scoring and competitive pricing are roadmap dimensions (Phase 1 / Phase 2).
 
 ### Core Architecture Layers
 
@@ -219,6 +220,10 @@ Payment processing, escrow, reseller/referrer attribution, and Alpha recycling c
 
 **Hardware Requirements:**
 - `docs/GPU-NODE-REQUIREMENTS.md` - Miner: 8x H100/H200/B200 GPUs with TEE attestation, Validator: no GPU needed
+
+**Scoring & Economics Docs:**
+- `docs/COMPETITIVE-PRICING.md` - Competitive pricing scoring design: Targon/Lium/Chutes price feeds, per-class target price, 75% utilization target, how price becomes weights (Phase 2 roadmap)
+- `docs/TOKENOMICS.md` - Utility token & DePIN model: recycle vs burn, no-treasury securities posture, cross-subnet consumption loop, subsidy trajectory
 
 ## Development Workflow
 
