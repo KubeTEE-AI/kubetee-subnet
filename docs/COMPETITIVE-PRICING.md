@@ -30,6 +30,22 @@ All three are read-only, public feeds. The validator never authenticates as a cu
 - **Lium (SN51)** — the **raw GPU rental** benchmark: per-GPU-type hourly pricing on a marketplace, no confidentiality premium. This is the floor for *non-confidential* GPU rental (the **demand-side** price customers pay to rent a bare GPU pod); the gap between Lium's rental price and Targon's per-card payout is the confidential-compute premium the market pays.
 - **Chutes (SN64)** — the **demand-side** benchmark and the loop partner: Chutes pays fiat for inference and swaps TAO for SN90 Alpha to consume SN90 compute. Chutes' own inference pricing is the ceiling the end-customer will bear, which bounds what SN90 can charge Chutes and still let Chutes keep a margin.
 
+### Live Targon benchmark (8-card GPU nodes)
+
+The Targon stats API returns each miner's per-epoch emission **payout** by `compute_type` and `cards`. As of this writing, every Targon GPU miner runs an **8-card node** — the same form factor SN90 requires — so the per-8-card-node payout is the direct supply-side benchmark for SN90 miner compensation. Current live values (fetched from `GET https://stats.targon.com/api/miners`):
+
+| `compute_type` | TEE | GPU | Payout / 8-card node / epoch | Per GPU |
+|-----------------|-----|-----|-------------------------------|---------|
+| `TDX-BLACKWELL-NVIDIA-B300` | Intel TDX | B300 | 64 | 8.0 |
+| `TDX-BLACKWELL-NVIDIA-B200` | Intel TDX | B200 | 52 | 6.5 |
+| `TDX-HOPPER-NVIDIA-H200` | Intel TDX | H200 | 28 | 3.5 |
+| `TDX-VM-NVIDIA-H200` | Intel TDX (VM) | H200 | 27.84 | 3.48 |
+| `TDX-HOPPER-NVIDIA-H100` | Intel TDX | H100 | 24 | 3.0 |
+| `TDX-VM-NVIDIA-RTX6000B` | Intel TDX (VM) | RTX 6000 Blackwell | 16 | 2.0 |
+| `SEV-CPU-AMD-EPYC-V4` | AMD SEV | CPU (1-card node) | 0.2 | 0.2 |
+
+The payout is in TAO emission units per epoch; the validator normalizes to a per-GPU-hour figure at runtime using the current TAO price and epoch length. The **durable signal is the relative ranking**, which tracks the confidential-compute market's valuation of newer / higher-memory GPUs: B300 pays ~2.7× H100 per card, B200 ~2.2× H100, H200 ~1.17× H100. Two H200 variants appear (`TDX-HOPPER` GPU-passthrough vs `TDX-VM` virtualized) at near-identical payout (~28), so Targon prices the GPU model, not the virtualization mode. SN90's per-8-card-node emission must sit in this band — paying an 8-card H100 node roughly what Targon pays it (~24), an 8-card B200 node roughly ~52, an 8-card B300 node roughly ~64 — or miners migrate to SN4. The validator's `targon_payout_per_gpuhr[c]` input (see [formula](#the-target-price-formula-design)) is read live from this endpoint each epoch, not hardcoded.
+
 ## The price SN90 targets
 
 The validator computes a **target price** per SN90 job class (e.g. H100/H200/B200/B300 GPU-hour, CPU-hour, per-token inference) each epoch. The target is a function of four inputs the user specified:
