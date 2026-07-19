@@ -440,7 +440,7 @@ SN90 (KubeTEE) Alpha is a **utility token consumed to access confidential comput
 
 ### Owner Conviction Auto-Locked to Perpetuity
 
-The subnet owner **auto-locks its dTAO conviction to perpetuity** — the owner's locked TAO/Alpha conviction is continuously re-locked on-chain so it never decays and is never withdrawn to liquidate. This is a permanent, programmatic commitment, not a discretionary promise: the owner holds no discretionary liquid position to sell, value reaches the owner only through the 18% owner-emission stream, and the owner's conviction is permanently out of the float. It complements the no-treasury posture on the owner side and removes the large-discretionary-insider-position fact pattern from the securities analysis (see [Tokenomics — Utility Token & DePIN Model](./docs/TOKENOMICS.md)).
+**KubeTEE LTD — subnet owner**: owns the mechanism, the $198k (≈1,003 TAO) subnet registration, and the 18% owner emission stream. No token sales against promises, no customer balances, no treasury — all unused emissions are recycled. KubeTEE LTD **auto-locks its dTAO conviction to perpetuity** — the owner's locked TAO/Alpha conviction is continuously re-locked on-chain so it never decays and is never withdrawn to liquidate. This is a permanent, programmatic commitment, not a discretionary promise: the owner holds no discretionary liquid position to sell, value reaches the owner only through the 18% owner-emission stream, and the owner's conviction is permanently out of the float. It complements the no-treasury posture on the owner side and removes the large-discretionary-insider-position fact pattern from the securities analysis (see [Tokenomics — Utility Token & DePIN Model](./docs/TOKENOMICS.md)).
 
 ### Recycle vs Burn
 
@@ -463,7 +463,7 @@ flowchart LR
     Kube -.->|"related-party license<br/>(off-chain, disclosed)"| Hori
 ```
 
-- **KubeTEE LTD — subnet owner**: owns the mechanism, the €198k subnet registration, and the **18% owner emission stream**. No token sales against promises, no customer balances, no treasury — all unused emissions are recycled.
+- **KubeTEE LTD — subnet owner**: owns the mechanism, the $198k (≈1,003 TAO) subnet registration, and the **18% owner emission stream**. No token sales against promises, no customer balances, no treasury — all unused emissions are recycled.
 - **1-HORIZON LTD — miner operator**: competes for the **41% miner share** like any miner; funds GPU/TEE capex. Registers, competes, and is deregistered under identical rules as every other miner.
 - **On-chain tripwire**: the `MinerBurned` penalty targets miner emission flowing to subnet-owner-controlled coldkeys. 1-HORIZON's miner hotkeys must trace to genuinely separate coldkeys, not KubeTEE-controlled ones.
 - **Target state**: the related-party (1-HORIZON) share shrinks as external miners grow — a declining related-party share is the on-chain evidence the network is real.
