@@ -1,13 +1,11 @@
-starlette>=0.30.0
-pydantic>=2
 rich>=13
 pytest>=8
-torch>=2
 numpy>=1
 setuptools>=68
 # Bittensor v11+ unified package (SDK + btcli)
 # Installs from RaoFoundation/subtensor sdk/python distribution
-bittensor>=10.0.0
+# Dev pre-release (11.0.0.dev0); SDK deps: websockets, bittensor-core, typer, rich, eth-account
+bittensor>=11.0.0.dev0
 # For local dev / compose images
 docker>=7.0.0
 
