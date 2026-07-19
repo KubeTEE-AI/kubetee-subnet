@@ -455,7 +455,7 @@ When Alpha is spent for compute, the subnet mechanism chooses what happens to it
 - **Burn** — permanent supply reduction; does not reduce `SubnetAlphaOut`; maximum scarcity signal.
 - **Recycle** (chosen) — returns to unissued supply, reduces `SubnetAlphaOut`, extends the Alpha emission runway, pushes halving thresholds out, and refills the miner incentive budget.
 
-For a compute subnet whose product is ongoing work, **recycle** is the right economics: consumption funds future miner emissions. Neither method games emission share — the miner-withholding penalty is source-based, not method-based.
+For a compute subnet whose product is ongoing work, **recycle** is the right economics: consumption funds future miner emissions. Neither method games emission share.
 
 ### Corporate Structure (vertically split)
 
@@ -466,12 +466,10 @@ flowchart LR
     Proto -->|"41% miner stream<br/>(one pool)"| Pool["Miner emission pool<br/>(scored, competed for)"]
     Pool -->|"scored share<br/>shrinks as network grows"| Hori["1-HORIZON LTD<br/>miner operator<br/>GPU/TEE capex"]
     Pool -->|"scored share<br/>grows as network grows"| Ext["External miners<br/>(permissionless, competitive)"]
-    Hori -.->|"separate coldkeys<br/>(MinerBurned tripwire)"| Proto
 ```
 
 - **KubeTEE LTD — subnet owner**: owns the mechanism, the $198k (≈1,003 TAO) subnet registration, and the **18% owner emission stream** (100% conviction auto-locked at perpetuity). No token sales against promises, no customer balances, no treasury — all unused emissions are recycled.
 - **1-HORIZON LTD — miner operator**: competes for the **41% miner share** like any miner; funds GPU/TEE capex. Registers, competes, and is deregistered under identical rules as every other miner.
-- **On-chain tripwire**: the `MinerBurned` penalty targets miner emission flowing to subnet-owner-controlled coldkeys. 1-HORIZON's miner hotkeys must trace to genuinely separate coldkeys, not KubeTEE-controlled ones.
 - **Target state**: the related-party (1-HORIZON) share shrinks as external miners grow — a declining related-party share is the on-chain evidence the network is real.
 
 ### Cross-Subnet Consumption Loop (utility-token flywheel)

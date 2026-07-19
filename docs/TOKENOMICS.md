@@ -29,7 +29,7 @@ In Bittensor, burned tokens are removed from circulation **irreversibly**, while
 
 ### Where "recycle instead of burn" does not buy anything
 
-Under the current emission model, the miner-withholding penalty is **source-based, not method-based**: subnets are penalized for withholding miner emission regardless of whether that emission is recycled or burned. Routing emission through an owner-controlled hotkey and recycling it to dodge the `MinerBurned` penalty **does not work**. Switching methods is not an emission-share optimization.
+Switching between recycle and burn is **not an emission-share optimization** — it does not change a subnet's emission share, only how supply moves. Recycle and burn differ on supply dynamics (below), not on how much emission a subnet captures.
 
 ### Where it does matter
 
@@ -130,7 +130,7 @@ No SLA means SN90's validators **are** the SLA: scoring must measure exactly wha
 
 ### Keep the loop at the market layer
 
-If the subnet starts withholding miner emission to owner-controlled hotkeys to juice the economics, the penalty applies regardless of whether that emission is recycled or burned — the mechanism is source-aware, not method-aware. The clean version is entirely arm's-length at the protocol level: every consumer swaps on the open pool like anyone else, spends like anyone else, and SN90's edge is just being the subnet whose token has real consumers (subnets and AI workloads, not just one named partner). That is also the version where the flywheel narrative — usage-backed Alpha demand — is verifiable by anyone reading the chain.
+The clean version is entirely arm's-length at the market layer: every consumer swaps on the open pool like anyone else, spends like anyone else, and SN90's edge is just being the subnet whose token has real consumers (subnets and AI workloads, not just one named partner). That is also the version where the flywheel narrative — usage-backed Alpha demand — is verifiable by anyone reading the chain.
 
 ---
 
@@ -143,7 +143,6 @@ flowchart LR
     Proto -->|"41% miner stream<br/>(one pool)"| Pool["Miner emission pool<br/>(scored, competed for)"]
     Pool -->|"scored share<br/>shrinks as network grows"| Hori["1-HORIZON LTD<br/>miner operator<br/>GPU/TEE capex"]
     Pool -->|"scored share<br/>grows as network grows"| Ext["External miners<br/>(permissionless, competitive)"]
-    Hori -.->|"separate coldkeys<br/>(MinerBurned tripwire)"| Proto
 ```
 
 - **KubeTEE LTD — subnet owner**: owns the subnet layer (mechanism, the $198k (≈1,003 TAO) registration, the 18% owner stream — 100% conviction auto-locked at perpetuity). Receives value only through the owner-emission safe-harbor path.
@@ -152,10 +151,6 @@ flowchart LR
 ### What the split gets right
 
 Separating the subnet-owner entity from the miner entity means each receives value **exclusively through protocol safe-harbor channels**: KubeTEE's 18% arrives as owner emissions; 1-HORIZON's share arrives as scored miner emissions. Neither entity needs to sell tokens against promises, hold customer balances, or accumulate a treasury — all unused emissions are recycled. Capex lands in the right place — GPUs, TEE hardware, rack commitments sit in 1-HORIZON, insulated from the subnet-layer entity, which owns only the mechanism and IP.
-
-### The on-chain tripwire
-
-The `MinerBurned` penalty targets miner emission flowing to hotkeys owned by the subnet owner. Two separate Cyprus companies with genuinely separate coldkeys likely do not trigger the mechanical penalty — but the keys must **actually be separate**, not the same coldkey wearing two corporate hats. If 1-HORIZON's miner hotkeys trace to KubeTEE-controlled coldkeys, the subnet is withholding miner emission in the protocol's eyes, and the penalty applies regardless of what is done with it afterward.
 
 ### Concentration risk (classification risk is concentration, not existence)
 
