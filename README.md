@@ -81,7 +81,7 @@ As a member of the [Confidential Computing Consortium (CCC)](https://confidentia
 **Key Differentiators**:
 - **Security-First**: TEE-enabled infrastructure on a FIPS-140-2 validated RKE2 baseline in Early Access (FIPS-140-3 as a Phase 3 target) and Kata Containers isolation
 - **Armada-Scheduled**: multi-cluster batch scheduling with fair-use queuing, gang scheduling, and preemption across decentralized clusters
-- **NVIDIA-Powered**: NeMo Microservices, NIM models, and AI Blueprints as first-class confidential job types
+- **NVIDIA-Powered**: NeMo Microservices, NIM models, and AI Blueprints as first-class confidential job types — with the subnet goal of **surpassing NVIDIA NeMo's limitations** (experimental Kata sandbox, no CoCo + NIMCache, ephemeral data only, no multi-node NIM, vendor lock-in) and providing a **SOTA stack** via Bittensor subnet integrations run inside Kata + CoCo TEE (see [Bittensor Subnet Integrations (SOTA, Confidential-Ready)](#bittensor-subnet-integrations-sota-confidential-ready))
 - **Decentralized**: one hotkey per cluster, nodes co-located in a single data center, expanding across global regions
 - **Open Source**: Built on OpenInfra Foundation and CNCF projects with community-driven innovation
 
