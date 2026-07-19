@@ -28,19 +28,19 @@ KubeTEE AI is registered with the [**NVIDIA Inception Program**](https://www.nvi
 
 ### Bittensor Miner
 
-As part of Bittensor ecosystem as a miner since Febuary 2024, Pierre known as the french miner from Cyprus by Targon was the first to provide Confidential Computing nodes on Targon Subnet 4. We helped Chutes Subnet 64 to onboard B200/B300 nodes and helped Lium Subnet 51 to deploy recently Confidential Computing working with their stack.
+As part of Bittensor ecosystem as a miner since February 2024, Pierre known as the french miner from Cyprus by Targon was the first to provide Confidential Computing nodes on Targon Subnet 4. We helped Chutes Subnet 64 to onboard B200/B300 nodes and helped Lium Subnet 51 to deploy recently Confidential Computing working with their stack.
 
 I was also the first to provide Confidential Computing to Telegram Cocoon and Phala Network.
 
 ### Background
 
-With 40 years of expertise, Started in 1986 to install Linux and Novell servers and in 1992 one of the first internet provider in Canada, as an Infrastructure architect deploying internet in Moroco and managing tech stack at scale in cloud providers. My specialty is security and I did security audits for Fortune 500 companies.
+With 40 years of expertise, Started in 1986 to install Linux and Novell servers and in 1992 one of the first internet provider in Canada, as an Infrastructure architect deploying internet in Morocco and managing tech stack at scale in cloud providers. My specialty is security and I did security audits for Fortune 500 companies.
 
 ### Motivation
 
-My expertise for Confidential Computing, Kubernetes, networking and security at Kernel and hardware level can benefit Bittensor ecosystem and I want to help every subnets in the ecosystem by providing the most secure and efficient AI Factory stack to elevate Bittensor offering of decentrilized Artifical Inteligence.
+My expertise for Confidential Computing, Kubernetes, networking and security at Kernel and hardware level can benefit Bittensor ecosystem and I want to help every subnets in the ecosystem by providing the most secure and efficient AI Factory stack to elevate Bittensor offering of decentralized Artificial Intelligence.
 
-Providing High Quality infrastructure to the 2 Computing and Inference subnets on Bittensor for more than 2.5 years (Chutes #64, Targon #3 and Lium #51) with monitoring, upgrades and my help to improve each stack. I wanted to offer different tech stack that I belive Bittensor ecosystem can use and extend from.
+Providing High Quality infrastructure to the 2 Computing and Inference subnets on Bittensor for more than 2.5 years (Chutes #64, Targon #4 and Lium #51) with monitoring, upgrades and my help to improve each stack. I wanted to offer different tech stack that I believe Bittensor ecosystem can use and extend from.
 
 **Direct Engineering Collaboration**: KubeTEE AI works directly with **INTEL** and **NVIDIA** engineers throughout the development and testing process of the NVIDIA technology especialy Kata/CoCo Containers. This close collaboration ensures optimal integration of confidential computing features, early access to emerging technologies, and validation of our implementation against the most stringent security and performance standards.
 
@@ -115,6 +115,10 @@ As a member of the [Confidential Computing Consortium (CCC)](https://confidentia
     - [Early Access Topology](#early-access-topology)
   - [Supported AI Workloads (Job Types)](#supported-ai-workloads-job-types)
     - [NVIDIA NeMo Microservices](#nvidia-nemo-microservices)
+      - [NIM Operator — Experimental Kata & Dynamo Support](#nim-operator--experimental-kata--dynamo-support)
+      - [Kata / CoCo Limitations (NVIDIA)](#kata--coco-limitations-nvidia)
+      - [Bittensor Subnet Integrations (SOTA, Confidential-Ready)](#bittensor-subnet-integrations-sota-confidential-ready)
+      - [BitSec SN60 — Security Gate for AI Workload Promotion](#bitsec-sn60--security-gate-for-ai-workload-promotion)
   - [Subnet Economics](#subnet-economics)
     - [Incentive Mechanism: Infrastructure (Early Access)](#incentive-mechanism-infrastructure-early-access)
       - [Staging vs Production](#staging-vs-production)
@@ -186,7 +190,7 @@ Organizations running sensitive AI workloads — training, fine-tuning, inferenc
 - Kata Containers for workload isolation
 - Confidential Containers with Workload Identity Validation
 - Intel TDX/SGX
-- NVIDIA Hopper/Blackwell/Vera Ruben
+- NVIDIA Hopper/Blackwell/Vera Rubin
 
 CoCo provides transparent confidential image decryption and remote attestation via the KBS, so unmodified containers run inside the TEE. Confidential job execution uses the `kata-qemu-nvidia-gpu-tdx` (GPU) and `kata-qemu-tdx` (CPU) runtime classes — see [Armada Multi-Cluster Batch Scheduling](#armada-multi-cluster-batch-scheduling).
 
@@ -229,20 +233,19 @@ Armada addresses Kubernetes batch limitations that matter for the Factory: singl
 ### Security & Compliance
 
 #### Network Security
-- Linkerd mTLS communication within the cluster
-- Network Policies enforcement
+- Network Policies enforcement (Calico)
 - RBAC (Role-Based Access Control)
 
 #### Data Protection
 - **Rancher Longhorn**: Encrypted Storage with 3 Replicas
 - Encrypted Container Repository
-- External Secrets Manager (Vault & CoCo KBS Trustee)
+- External Secrets Manager (HashiCorp Vault + CoCo KBS/Trustee)
 
 #### Monitoring & Audit
 - Prometheus Metrics
 - Kubernetes Events tracking
 - UpTime, QoS, and Performance monitoring
-- ElasticSearch Audit logs
+- Loki + Grafana Alloy log aggregation
 
 ### Multi-Cluster Topology
 
@@ -397,8 +400,9 @@ KubeTEE Early Access uses a **single Infrastructure incentive mechanism**. Miner
 - **TEE Attestation** (Intel TDX/SGX, NVIDIA CC) must be proven — **no attestation = no emissions**
 
 **Resource Utilization Guidance**:
-- **Below 75% capacity**: Penalized — underutilized, not contributing proportionally to subnet demand
-- **Target ~80% capacity**: Optimal — ensures miners provide exactly what the subnet needs
+- **Below 75% capacity**: Penalized — underutilized; the target price drops to pull demand in and fill capacity
+- **Target ~75% capacity**: Optimal — the equilibrium anchor; price sits at the competitor average (see [Competitive Pricing](#competitive-pricing))
+- **Above 75% capacity**: Rationed — demand exceeds comfortable capacity; target price rises to ration and preserve headroom
 
 **Benefits**:
 - TEE compliance is enforced, not optional
@@ -426,7 +430,7 @@ Early Access pairs **emissions** (supply-side) with **Alpha / TAO paid jobs** pr
 
 **Early Access (Phase 0):**
 - **Alpha / TAO paid jobs** — compute priced at a **resources price per hour** that is **competitive** (benchmarked against Targon/Lium/Chutes) and **dynamic according to the job queues** (Armada queue depth + the 75% utilization target) — see [Competitive Pricing](./docs/COMPETITIVE-PRICING.md)
-- **Subnet 90 Alpha, Other Subnets Alpha, TAO** discounted for the Bittensor community
+- **Subnet 90 Alpha, Other Subnets Alpha, TAO** accepted as payment for compute at the published resources-per-hour price (no discounts — see [Tokenomics](#tokenomics--utility-token--depin-model) boundary conditions)
 
 **Phase 2:**
 - **USDC-on-BASE job billing** — pull-based, per-epoch metering of Armada job resource usage (fiat billing layered on top of the Early Access resources-per-hour pricing)
@@ -501,7 +505,7 @@ xychart-beta
     x-axis "Time (horizon unknown)" 0 --> 100
     y-axis "Value" 0 --> 100
     line "Emission subsidy" [88, 83, 77, 70, 62, 53, 43, 32]
-    line "Consumption revenue" [10, 15, 22, 31, 42, 50, 63, 79]
+    line "Consumption revenue" [10, 14, 19, 25, 31, 37, 41, 56]
 ```
 
 The amber **emission subsidy** line decays as emissions taper over an unknown horizon; the green **consumption revenue** line rises as consumer spend (from subnets and AI workloads) grows. They cross at the **crossover** — the point where net Alpha issuance ≈ 0 and consumers (not emissions) fund the miner budget through the pool. The exact date is unknown (recycle shifts halving thresholds), so the x-axis is an undated horizon, not a halving schedule.
@@ -546,7 +550,7 @@ Miners use the same hotkey-signed flow, scoped read-only to their own cluster (t
 
 ### Infrastructure Health
 - Uptime, QoS, capacity, and latency from Prometheus and Kubernetes events
-- FIPS-140-2/3 validated
+- FIPS-140-2 validated (FIPS-140-3 as a Phase 3 target)
 
 ### Competitive Pricing
 
@@ -642,7 +646,7 @@ flowchart LR
 
 **Minimum For Staging Permissionless Participation**:
 
-- ✅ INTEL TDX Compatible node with NVIDIA H100/H200
+- ✅ Intel TDX (AMD SEV-SNP, Phase 3) compatible node with NVIDIA H100/H200/B200/B300
 - ✅ BIOS TDX/SGX Enabled
 - ✅ Kernel TDX/SGX Enabled
 - ✅ One Cluster per Miner (labeled with `kubetee.ai/` prefixed labels)
@@ -681,7 +685,7 @@ flowchart LR
 - [ ] Alpha / TAO paid jobs (demand-side) — price compute at a **resources price per hour** that is **competitive** (benchmarked vs Targon/Lium/Chutes) and **dynamic according to the job queues** (Armada queue depth + the 75% utilization target set the resources price per hour per job class) — see [Competitive Pricing](./docs/COMPETITIVE-PRICING.md)
 - [ ] Competitive pricing dimension: scrape Targon (SN4) / Lium (SN51) / Chutes (SN64) price feeds, compute per-class target price, score miners on price competitiveness against a 75% utilization target (see [Competitive Pricing](./docs/COMPETITIVE-PRICING.md))
 - [ ] Confidential NeMo / NIM / Blueprint job templates
-- [ ] Confidential Subnets Owners and Approved Integrators templates.
+- [ ] Confidential job templates for subnet owners and approved integrators.
 
 ### Phase 1 — Expansion
 
@@ -731,7 +735,7 @@ flowchart LR
 
 ### Community & Support
 
-- **GitHub**: [KubeTEE-AI-Blueprints](https://github.com/KubeTEE-AI-Blueprints)
+- **GitHub**: [KubeTEE-AI/kubetee-subnet](https://github.com/KubeTEE-AI/kubetee-subnet)
 - **Documentation**: [docs/](./docs/)
 - **Discord**: Coming soon
 - **Twitter**: Coming soon
@@ -741,10 +745,3 @@ flowchart LR
 **Built by the KubeTEE Community**
 
 *Confidential compute for decentralized AI jobs — secured by TEE, scheduled by Armada, incentivized by Bittensor.*
-
-## Workers
-
-<!-- gsd: workers -->
-| Worker | Entrypoint | Component doc |
-|---|---|---|
-<!-- /gsd: workers -->

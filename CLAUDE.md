@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-KubeTEE AI is an enterprise-grade AI-as-a-Service (AIaaS) platform built on the Bittensor decentralized network. It provides Deep Research AI Agents running in Trusted Execution Environments (TEE) on decentralized Kubernetes infrastructure.
+KubeTEE AI is the **AI Factory** of the Bittensor network — it turns decentralized GPU clusters into a confidential AI factory. AI workloads run inside hardware-secured Trusted Execution Environments (TEE) using Kata Containers and Confidential Containers (CoCo), scheduled across Bittensor miner clusters by Armada, on decentralized RKE2 Kubernetes infrastructure.
 
 **Key Partnerships:**
 - NVIDIA Inception Program member (access to NeMo Microservices, NIM models, AI Blueprints)
@@ -16,39 +16,13 @@ KubeTEE AI is an enterprise-grade AI-as-a-Service (AIaaS) platform built on the 
 
 ## Bittensor Subnet Documentation
 
-Comprehensive Bittensor subnet development documentation is available in `docs/Chi/docs/`. This is essential reading for understanding subnet architecture, incentive design, and implementation patterns.
+Bittensor subnet development documentation lives upstream — see the official [Bittensor docs](https://docs.bittensor.com) and [Learn Bittensor](https://learnbittensor.org) for subnet architecture, incentive design, and implementation patterns. Local KubeTEE subnet docs are under `docs/` (see [Research & Documentation](README.md#research--documentation) in the README).
 
-**Start Here:**
-- `docs/Chi/docs/17-writing-a-subnet.md` - Simplicity-first approach, "what am I measuring?"
-- `docs/Chi/docs/15-validator-only-development.md` - **CRITICAL**: Validator-only development philosophy
-
-**Foundational Concepts:**
-- `docs/Chi/docs/01-overview.md` - What Bittensor is, key roles, network structure
-- `docs/Chi/docs/02-core-concepts.md` - Subnets, neurons, keys, tokens, stake, metagraph
-- `docs/Chi/docs/03-architecture.md` - Chain layer, SDK layer, communication primitives
-
-**Subnet Development:**
-- `docs/Chi/docs/04-mechanism-patterns.md` - **CRITICAL**: Production mechanism architectures (NOT just dendrite/synapse)
-- `docs/Chi/docs/06-building-miners.md` - Implementing miners across different patterns
-- `docs/Chi/docs/07-building-validators.md` - Scoring algorithms and weight setting
-- `docs/Chi/docs/08-incentive-design.md` - Designing effective reward mechanisms
-
-**Technical Reference:**
-- `docs/Chi/docs/09-python-sdk.md` - SDK classes, methods, usage patterns
-- `docs/Chi/docs/10-btcli-reference.md` - Command-line interface reference
-- `docs/Chi/docs/11-hyperparameters.md` - Configurable subnet parameters
-- `docs/Chi/docs/12-epoch-mechanism.md` - On-chain consensus and emissions
-
-**Deployment:**
-- `docs/Chi/docs/13-local-development.md` - Running localnet for development
-- `docs/Chi/docs/14-deployment.md` - Testnet and mainnet deployment
-- `docs/Chi/docs/16-how-to-use-template.md` - Step-by-step guide to creating a subnet
-
-**Key Insights from Chi Docs:**
-1. Most production subnets do NOT use traditional dendrite/synapse patterns - see `04-mechanism-patterns.md`
-2. **NEVER write miner code** - only write `validator.py`, miners read it to understand the interface
-3. Keep subnets minimal - focus on the validator (the "referee"), leave ingenuity to miners
-4. 256 UID slots per subnet with dynamic registration costs provide sybil resistance
+**Key Insights (still load-bearing for this subnet):**
+1. Most production subnets do NOT use traditional dendrite/synapse patterns — score measurable properties directly (this subnet reads the metagraph + Rancher v3 API directly, no synapse layer).
+2. **NEVER write miner code** — only write `scripts/validator.py`; infrastructure miners register clusters and the validator scores them.
+3. Keep subnets minimal — focus on the validator (the "referee"), leave ingenuity to miners.
+4. 256 UID slots per subnet with dynamic registration costs provide sybil resistance.
 
 ## Common Development Commands
 
@@ -77,7 +51,7 @@ pylint --fail-on=W,E,F --exit-zero ./
 
 ### Running Nodes
 
-**Miner (requires 8x H100/H200/B200 GPUs with TEE attestation):**
+**Miner (requires 8x H100/H200/B200/B300 GPUs with TEE attestation):**
 
 Infrastructure miners register their RKE2 clusters with Rancher Fleet (labeled with `kubetee.ai/*` hotkey/coldkey labels). No separate miner process is required - the validator communicates directly with the registered cluster via Rancher Fleet and scores it via TEE attestation + Armada job metrics. See `docs/NODE-REGISTRATION.md`.
 
@@ -133,7 +107,7 @@ KubeTEE Early Access uses a **single Bittensor incentive mechanism** that distri
 
 **Mechanism: Infrastructure (100% emissions)**
 - Rewards miners providing RKE2 cluster resources (GPU nodes) that run confidential AI jobs scheduled by Armada
-- Metrics: TEE attestation (Intel TDX/SGX, NVIDIA CC), Armada job success/throughput/fair-share, uptime, resource utilization, FIPS-140-3 progress
+- Metrics: TEE attestation (Intel TDX/SGX, NVIDIA CC), Armada job success/throughput/fair-share, uptime, resource utilization, FIPS-140-2 validated baseline (FIPS-140-3 Phase 3 target)
 - **Competitive pricing (Phase 0, Early Access):** miners are scored against the other Bittensor compute subnets — Targon (SN4, supply-side payout feed via `stats.targon.com`), Lium (SN51, demand-side rental prices), Chutes (SN64, demand-side inference prices) — each with a verifiable feed (public API + on-chain metagraph). Targon GPU miners all run 8-card nodes (same form factor as SN90); live per-8-card-node payouts are B300 ~64, B200 ~52, H200 ~28, H100 ~24 TAO/epoch — the supply-side band SN90 miner compensation must match. The validator discovers a per-job-class target price from competitor signals, SN90 demand (Armada queue depth), and a **75% average utilization target**, then weights miners on whether their delivered compute is priced competitively. This same target price is the **resources price per hour** consumers pay in Alpha/TAO for the compute they consume (demand-side). A miner with perfect attestation but a price 2× the competitor average scores low. See `docs/COMPETITIVE-PRICING.md`.
 - One hotkey per cluster; all nodes co-located in a single data center
 - No attestation = no emissions
@@ -315,7 +289,6 @@ All PRs require Claude Code review approval.
 - NeMo Microservices - LLM inference
 - NIM Models - Pre-trained models
 - AI Blueprints:
-  - AIQ Research Assistant
   - RAG (Retrieval-Augmented Generation)
   - Video Search and Summarization
   - Streaming Data to RAG
