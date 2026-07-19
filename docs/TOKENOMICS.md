@@ -71,6 +71,14 @@ Recycling all unused emissions reaches the same posture by a different route: th
 - Disclosure — especially important for a related-party structure.
 - No staking of accumulated balances for yield (would add a passive-income feature on top).
 
+### Owner conviction auto-locked to perpetuity
+
+The subnet owner commits to **auto-locking its conviction to perpetuity**: the owner's dTAO conviction — built by locking TAO into SN90's pool — is continuously re-locked on-chain so that it **never decays and is never withdrawn to liquidate**. This is a permanent, programmatic commitment, not a discretionary promise — the protocol enforces it, so it does not depend on the owner's ongoing goodwill.
+
+This complements the no-treasury posture on the owner side. The owner does not hold a discretionary liquid position to sell: value reaches the owner only through the 18% owner-emission safe-harbor stream, and the owner's own conviction is permanently locked out of the float. There is no large discretionary insider position to characterize as a Howey common-enterprise reliance factor — the owner has unilaterally removed its own exit.
+
+Mechanically, a perpetually locked owner conviction also reduces circulating supply and signals permanent alignment: the owner's economic interest is bound to SN90's long-run success, not to a liquidation event. This is the owner-side analog of "recycle, don't accumulate": where the subnet recycles spent Alpha instead of holding a treasury, the owner locks conviction instead of holding a liquid position.
+
 ---
 
 ## Cross-Subnet Consumption Loop
@@ -223,6 +231,7 @@ Given 1-HORIZON mines on the subnet its sister company owns, this must be closed
 2. **Discretionary accumulation** inserted between spend and recycle (no treasury — any accumulation is the poison; all unused emissions must be recycled).
 3. **Public messaging** that frames Alpha appreciation — rather than compute access — as the reason to hold.
 4. **Preferential Alpha placement**, side-letters, or volume discounts to large consumers — contaminates the loop into a primary distribution with investment characteristics.
+5. **Owner unlocking conviction** — auto-lock to perpetuity is the commitment; unlocking would re-introduce a discretionary liquid insider position and the common-enterprise reliance factor the design removes.
 
 The mechanism is defensible only as long as the story told about it matches the arrows.
 

@@ -120,6 +120,7 @@ As a member of the [Confidential Computing Consortium (CCC)](https://confidentia
       - [Staging vs Production](#staging-vs-production)
     - [Payments \& Revenue (Roadmap)](#payments--revenue-roadmap)
   - [Tokenomics — Utility Token \& DePIN Model](#tokenomics--utility-token--depin-model)
+    - [Owner Conviction Auto-Locked to Perpetuity](#owner-conviction-auto-locked-to-perpetuity)
     - [Recycle vs Burn](#recycle-vs-burn)
     - [Corporate Structure (vertically split)](#corporate-structure-vertically-split)
     - [Cross-Subnet Consumption Loop (utility-token flywheel)](#cross-subnet-consumption-loop-utility-token-flywheel)
@@ -436,6 +437,10 @@ Early Access pairs **emissions** (supply-side) with **Alpha / TAO paid jobs** pr
 ## Tokenomics — Utility Token & DePIN Model
 
 SN90 (KubeTEE) Alpha is a **utility token consumed to access confidential compute**, not a security. The design follows a DePIN subsidy model: external inference demand buys Alpha on the open market and spends it to consume compute; spent Alpha is **recycled** to unissued supply and re-emitted through the protocol's fixed emission split — a self-sustaining security budget for the compute network (the Bitcoin-fee model applied to Alpha). Full analysis: [Tokenomics — Utility Token & DePIN Model](./docs/TOKENOMICS.md).
+
+### Owner Conviction Auto-Locked to Perpetuity
+
+The subnet owner **auto-locks its dTAO conviction to perpetuity** — the owner's locked TAO/Alpha conviction is continuously re-locked on-chain so it never decays and is never withdrawn to liquidate. This is a permanent, programmatic commitment, not a discretionary promise: the owner holds no discretionary liquid position to sell, value reaches the owner only through the 18% owner-emission stream, and the owner's conviction is permanently out of the float. It complements the no-treasury posture on the owner side and removes the large-discretionary-insider-position fact pattern from the securities analysis (see [Tokenomics — Utility Token & DePIN Model](./docs/TOKENOMICS.md)).
 
 ### Recycle vs Burn
 
