@@ -403,11 +403,21 @@ External customers pay fiat for inference → SN64 (Chutes) swaps TAO for SN90 A
 ### DePIN Subsidy Trajectory
 
 ```mermaid
-flowchart LR
-    A["Pre-crossover<br/>emissions fund the subsidy<br/>net inflationary"] --> B["Crossover<br/>consumption = emissions<br/>net issuance ~ 0"] --> C["Post-crossover<br/>net-deflationary<br/>miners paid fully"]
-    KPI["Subsidy ratio KPI<br/>emission value / miner compensation<br/>monotonically declining"] -.-> A
-    Moat["Stack-efficiency moat grows<br/>K8s bin-packing · TEE premium · utilization<br/>70/30 at launch to 30/70 by crossover"] -.-> C
+---
+config:
+  themeVariables:
+    xyChart:
+      plotColorPalette: '#D97706, #16A34A'
+---
+xychart-beta
+    title "DePIN Subsidy Trajectory"
+    x-axis "Time — halvings decay the amber line" [t0, t1, t2, t3, t4, t5, t6, t7]
+    y-axis "Value" 0 --> 100
+    line "Emission subsidy" [88, 76, 64, 52, 40, 30, 22, 16]
+    line "Consumption revenue" [12, 24, 36, 48, 60, 70, 78, 84]
 ```
+
+The amber **emission subsidy** line decays with each halving; the green **consumption revenue** line rises as SN64 spend grows. They cross at the **crossover** — the point where net Alpha issuance ≈ 0 and consumers (not emissions) fund the miner budget through the pool.
 
 Miner compensation = emissions + consumption spend. While emissions cover most of the cost base, miners price compute below cash cost and SN64 pockets the gap (funded by Alpha dilution). The **subsidy ratio** (emission value ÷ total miner compensation) is the single on-chain KPI, monotonically declining:
 
