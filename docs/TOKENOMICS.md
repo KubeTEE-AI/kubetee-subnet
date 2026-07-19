@@ -143,7 +143,6 @@ flowchart LR
     Proto -->|41% miner stream| Hori["1-HORIZON LTD<br/>miner operator<br/>GPU/TEE capex"]
     Proto -->|41% miner stream| Ext["External miners<br/>(permissionless)"]
     Hori -.->|"separate coldkeys<br/>(MinerBurned tripwire)"| Proto
-    Kube -.->|"related-party license<br/>(off-chain, disclosed)"| Hori
 ```
 
 - **KubeTEE LTD — subnet owner**: owns the subnet layer (mechanism, the $198k (≈1,003 TAO) registration, the 18% owner stream — 100% conviction auto-locked at perpetuity). Receives value only through the owner-emission safe-harbor path.
