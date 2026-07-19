@@ -362,12 +362,12 @@ In this design, KubeTEE would use BitSec SN60 as a **mandatory security gate** t
 
 ```mermaid
 flowchart LR
-    WL["AI workload<br/>(NeMo/NIM/Blueprint job,<br/>subnet-integrated flow, or container image)"] -->|submit source / image / IaC| BS["BitSec SN60<br/>security agent analysis"]
-    BS -->|critical/high findings| Fix["Remediate & resubmit"]
+    WL["AI workload<br/>(NeMo/NIM/Blueprint job,<br/>subnet-integrated flow, or container image)"] -->|"submit source / image / IaC"| BS["BitSec SN60<br/>security agent analysis"]
+    BS -->|"critical/high findings"| Fix["Remediate & resubmit"]
     Fix --> BS
-    BS -->|clean report<br/>(no critical/high, attested)| Stg["Staging cluster (SN90)<br/>Kata + CoCo TEE"]
-    Stg -->|staging validation period<br/>+ attestation + uptime| Prod["Production cluster (SN90)<br/>multi-cluster, one hotkey / DC"]
-    BS -.->|report published| Audit["On-chain audit trail<br/>(verifiable)"]
+    BS -->|"clean report (no critical/high, attested)"| Stg["Staging cluster (SN90)<br/>Kata + CoCo TEE"]
+    Stg -->|"staging validation + attestation + uptime"| Prod["Production cluster (SN90)<br/>multi-cluster, one hotkey / DC"]
+    BS -.->|"report published"| Audit["On-chain audit trail<br/>(verifiable)"]
 ```
 
 **Proposed gate rules (design, subject to change during integration):**
