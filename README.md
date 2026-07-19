@@ -136,6 +136,7 @@ As a member of the [Confidential Computing Consortium (CCC)](https://confidentia
   - [Submitting a Confidential Job](#submitting-a-confidential-job)
     - [Miner Registration](#miner-registration)
   - [Workflow Orchestration (Airflow \& Metaflow)](#workflow-orchestration-airflow--metaflow)
+  - [Job Pricing MCP Server](#job-pricing-mcp-server)
   - [For Miners (Infrastructure)](#for-miners-infrastructure)
   - [Roadmap](#roadmap)
     - [Phase 0 — Early Access (Current)](#phase-0--early-access-current)
@@ -595,6 +596,40 @@ See [Workflow Orchestration — Airflow & Metaflow](./docs/WORKFLOW-ORCHESTRATIO
 
 ---
 
+## Job Pricing MCP Server
+
+The **Job Pricing MCP server** is an agent-facing [Model Context Protocol](https://modelcontextprotocol.io/) server that prices and deploys confidential compute jobs. An AI agent — or an orchestrator such as Airflow / Metaflow — calls the server to get a price for a job and submit it to Armada. It is the single, validator-aligned interface between "I want to run this" and "the job is queued on a miner cluster."
+
+**Why an MCP server:** the validator already discovers a per-job-class **target price** each epoch from Targon / Lium / Chutes signals, SN90 demand, and the 75% utilization target (see [Competitive Pricing](#competitive-pricing)). The MCP server exposes that target price as agent-callable tools so any consumer — an end-user agent, an integrator, or a pipeline orchestrator — quotes and deploys jobs against the same pricing the validator enforces on miners. Pricing is **discovered by the validator, quoted by the MCP server** — the server is a read client of the validator's published target price, not a price-setter.
+
+**Tools (design concept):**
+- `get_target_price(job_class, gpu_type)` — returns the current validator-established target price per compute unit (CU) for a job class.
+- `quote_job(resources, duration, job_class)` — calculates the resource price for a job: CU count (GPU type × count × hours, CPU-hours, or per-token) × target price → the Alpha/TAO cost the consumer pays.
+- `submit_job(job_spec, priced)` — deploys the priced job to the Armada queue with a confidential `runtimeClassName` (Phase 1+, when Armada is wired); returns the Armada job id for status / attestation tracking.
+
+**Flow:**
+
+```mermaid
+flowchart LR
+    Agent["AI Agent / Orchestrator<br/>(Airflow, Metaflow, end-user)"]
+    MCP["Job Pricing MCP Server"]
+    Val["Validator<br/>(publishes target price)"]
+    Arm["Armada Queue"]
+    TEE["Miner Cluster<br/>(Kata + CoCo TEE)"]
+
+    Val -->|"target price / epoch<br/>(Prometheus + on-chain)"| MCP
+    Agent -->|"quote_job / submit_job"| MCP
+    MCP -->|"CU x target price<br/>= Alpha/TAO cost"| Agent
+    MCP -->|"priced job spec"| Arm
+    Arm -->|"schedule pod"| TEE
+```
+
+**Confidentiality:** the MCP server is control-plane only — it prices and queues; it never sees job data. The job pods it deploys run inside `kata-qemu-nvidia-gpu-tdx` / `kata-qemu-tdx` TEEs with CoCo remote attestation; secrets are injected via the CoCo KBS. Payment for the quoted CU cost (Alpha/TAO transfer) is settled on-chain / via the Phase 2 escrow — the MCP server quotes the cost and records the quote, it does not custody funds.
+
+> **Status:** design concept — the Job Pricing MCP server is a Phase 1 roadmap item (agent-facing job deployment, alongside the Airflow / Metaflow connectors). The pricing it quotes is grounded in the Phase 0 [Competitive Pricing](./docs/COMPETITIVE-PRICING.md) target price; Armada deployment lands with the Phase 1 connectors.
+
+---
+
 ## For Miners (Infrastructure)
 
 **Early Access Cluster Rules**:
@@ -654,6 +689,7 @@ See [Workflow Orchestration — Airflow & Metaflow](./docs/WORKFLOW-ORCHESTRATIO
 - [ ] Automated TEE attestation cronjobs
 - [ ] Validator scoring expansion: TEE attestation + Armada job metrics + infrastructure health (replacing the Early Access liveness stand-in)
 - [ ] Apache Airflow + Metaflow Armada connectors — multi-step confidential pipelines (see [Workflow Orchestration](./docs/WORKFLOW-ORCHESTRATION.md))
+- [ ] Job Pricing MCP server — agent-facing MCP server that quotes a job's resource price (CU × validator target price → Alpha/TAO) and deploys it to Armada; pricing grounded in the Phase 0 [Competitive Pricing](./docs/COMPETITIVE-PRICING.md) target price (see [Job Pricing MCP Server](#job-pricing-mcp-server))
 - [ ] BitSec SN60 security gate — mandatory AI-workload security analysis (code/image/IaC) before promotion to staging/production (see [BitSec SN60 — Security Gate](#bitsec-sn60--security-gate-for-ai-workload-promotion))
 - [ ] Build documentation website
 

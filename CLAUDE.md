@@ -228,6 +228,8 @@ Payment processing, escrow, reseller/referrer attribution, and Alpha recycling c
 - `docs/COMPETITIVE-PRICING.md` - Competitive pricing scoring design: Targon/Lium/Chutes price feeds, per-class target price, 75% utilization target, how price becomes weights — Phase 0 (Early Access); the target price doubles as the compute-unit (CU) price for Alpha/TAO paid jobs
 - `docs/TOKENOMICS.md` - Utility token & DePIN model: recycle vs burn, no-treasury securities posture, cross-subnet consumption loop, subsidy trajectory
 
+**Job Pricing MCP Server (design concept, Phase 1):** an agent-facing [MCP](https://modelcontextprotocol.io/) server that prices and deploys confidential compute jobs. It is a **read client of the validator's published target price** (Phase 0 Competitive Pricing) — not a price-setter. Tools: `get_target_price(job_class, gpu_type)`, `quote_job(resources, duration, job_class)` → CU count × target price = Alpha/TAO cost, `submit_job(job_spec, priced)` → Armada queue with a confidential `runtimeClassName`. Control-plane only (prices + queues; never sees job data); job pods run in `kata-qemu-nvidia-gpu-tdx` / `kata-qemu-tdx` TEEs; payment settled on-chain / Phase 2 escrow. Used by end-user agents and orchestrators (Airflow / Metaflow). See README "Job Pricing MCP Server".
+
 ## Development Workflow
 
 **Commit & Push Policy:**
