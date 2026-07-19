@@ -230,6 +230,13 @@ Payment processing, escrow, reseller/referrer attribution, and Alpha recycling c
 
 ## Development Workflow
 
+**Commit & Push Policy:**
+- **Always commit and push when there is a change.** After completing a unit of work (an edit, a fix, a documentation update, a feature), stage, commit, and push it to `origin` — do not leave finished work sitting uncommitted in the working tree.
+- Commit only what was actually changed for the task; do not sweep unrelated files into the commit.
+- Follow the commit message convention: `<type>(subnet): <description>` with types `feat`, `fix`, `docs`, `refactor`, `chore`.
+- Push immediately after committing so `origin/main` reflects the current state of the work. If a push is rejected (remote moved), rebase on `origin/main` and push again — never force-push to `main`.
+- If a change is intentionally incomplete or WIP, say so explicitly in the commit message rather than leaving it uncommitted.
+
 **Branch Strategy:**
 - `main` - Production branch (protected)
 - `staging` - Active development branch

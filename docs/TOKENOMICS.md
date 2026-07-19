@@ -73,7 +73,7 @@ Recycling all unused emissions reaches the same posture by a different route: th
 
 ### Owner conviction auto-locked to perpetuity
 
-The subnet owner — **KubeTEE LTD** (owns the mechanism, the $198k (≈1,003 TAO) subnet registration, and the 18% owner emission stream; no token sales against promises, no customer balances, no treasury — all unused emissions are recycled; see [Corporate Structure](#corporate-structure-vertically-split)) — commits to **auto-locking its conviction to perpetuity**: the owner's dTAO conviction — built by locking TAO into SN90's pool — is continuously re-locked on-chain so that it **never decays and is never withdrawn to liquidate**. This is a permanent, programmatic commitment, not a discretionary promise — the protocol enforces it, so it does not depend on the owner's ongoing goodwill.
+The subnet owner — **KubeTEE LTD** (owns the mechanism, the $198k (≈1,003 TAO) subnet registration, and the 18% owner emission stream; no token sales against promises, no customer balances, no treasury — all unused emissions are recycled; see [Corporate Structure](#corporate-structure-vertically-split)) — commits to **auto-locking 100% of its conviction to perpetuity**: the owner's dTAO conviction — built by locking TAO into SN90's pool — is continuously re-locked on-chain so that it **never decays and is never withdrawn to liquidate**. This is a permanent, programmatic commitment, not a discretionary promise — the protocol enforces it, so it does not depend on the owner's ongoing goodwill.
 
 This complements the no-treasury posture on the owner side. The owner does not hold a discretionary liquid position to sell: value reaches the owner only through the 18% owner-emission safe-harbor stream, and the owner's own conviction is permanently locked out of the float. There is no large discretionary insider position to characterize as a Howey common-enterprise reliance factor — the owner has unilaterally removed its own exit.
 
@@ -146,7 +146,7 @@ flowchart LR
     Kube -.->|"related-party license<br/>(off-chain, disclosed)"| Hori
 ```
 
-- **KubeTEE LTD — subnet owner**: owns the subnet layer (mechanism, the $198k (≈1,003 TAO) registration, the 18% owner stream). Receives value only through the owner-emission safe-harbor path.
+- **KubeTEE LTD — subnet owner**: owns the subnet layer (mechanism, the $198k (≈1,003 TAO) registration, the 18% owner stream — 100% conviction auto-locked at perpetuity). Receives value only through the owner-emission safe-harbor path.
 - **1-HORIZON LTD — miner operator**: a miner competing inside SN90 for a slice of the 41%. Funds GPU, TEE hardware, and rack commitments. Registers, competes, and is deregistered under identical rules as every other miner — same registration cost, same immunity period, no reserved UIDs.
 
 ### What the split gets right
