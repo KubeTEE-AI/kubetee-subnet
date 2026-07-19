@@ -129,7 +129,7 @@ btcli stake add --wallet.name validator --wallet.hotkey default
 
 ### Incentive Mechanism (Single: Infrastructure)
 
-KubeTEE Early Access uses a **single Bittensor incentive mechanism** that distributes emissions as weights to miners based on the resources they provide in their RKE2 cluster and how reliably they execute Armada-scheduled confidential jobs. There is no benchmark, bounty, or referral mechanism in Early Access. Early Access pairs **emissions** (supply-side) with **Alpha / TAO paid jobs** priced at a **resources price per hour** — competitive and dynamic per the job queues (see [Competitive Pricing](README.md#competitive-pricing)). Fiat billing (USDC-on-BASE) and revenue share remain Phase 2 roadmap items.
+KubeTEE Early Access uses a **single Bittensor incentive mechanism** that distributes emissions as weights to miners based on the resources they provide in their RKE2 cluster and how reliably they execute Armada-scheduled confidential jobs. There is no benchmark, bounty, referral, or reseller mechanism — SN90 compute is already priced competitively because it is subsidized by Bittensor subnet emissions, and a referrer/reseller discount layer would be gamed for discounted pricing. Early Access pairs **emissions** (supply-side) with **Alpha / TAO paid jobs** priced at a **resources price per hour** — competitive and dynamic per the job queues (see [Competitive Pricing](README.md#competitive-pricing)). Fiat billing (USDC-on-BASE) remains a Phase 2 roadmap item.
 
 **Mechanism: Infrastructure (100% emissions)**
 - Rewards miners providing RKE2 cluster resources (GPU nodes) that run confidential AI jobs scheduled by Armada
@@ -139,7 +139,7 @@ KubeTEE Early Access uses a **single Bittensor incentive mechanism** that distri
 - No attestation = no emissions
 - Location: `scripts/miner_scoring.py`
 
-**Critical Detail:** A single weight matrix is used. The validator sets one set of weights per epoch via Bittensor `set_weights` (no `mechanism_id` split). The benchmark, bounty, and referrer mechanisms from the earlier design are removed for Early Access. The shipping Early Access validator scores node liveness only; competitive pricing (a Phase 0 dimension, required for Alpha/TAO resources-per-hour billing) and TEE/Armada/health scoring (Phase 1) are roadmap dimensions until their feeds are wired.
+**Critical Detail:** A single weight matrix is used. The validator sets one set of weights per epoch via Bittensor `set_weights` (no `mechanism_id` split). The benchmark, bounty, referrer, and reseller mechanisms from the earlier design are removed. The shipping Early Access validator scores node liveness only; competitive pricing (a Phase 0 dimension, required for Alpha/TAO resources-per-hour billing) and TEE/Armada/health scoring (Phase 1) are roadmap dimensions until their feeds are wired.
 
 ### Core Architecture Layers
 
@@ -184,7 +184,6 @@ VALIDATOR → set_weights → Bittensor emissions to miners
 
 PHASE 2 (planned):
      ├─→ USDC-on-BASE job billing (fiat, layered on resources-per-hour pricing)
-     └─→ Referrer / reseller revenue share
 ```
 
 ### Validator Rancher API Access (hotkey-signed auth)
@@ -219,7 +218,7 @@ Validators read cluster metrics and information from the **Rancher v3 REST API**
 - `scripts/print_subnet_stats.py` - Subnet stats printer (reuses one Subtensor connection)
 
 **Smart Contracts (Phase 2, not in Early Access):**
-Payment processing, escrow, reseller/referrer attribution, and Alpha recycling contracts (BASE L2) plus the Bittensor EVM registry are planned for Phase 2 and are **not included** in the Early Access repo.
+Payment processing, escrow, and Alpha recycling contracts (BASE L2) plus the Bittensor EVM registry are planned for Phase 2 and are **not included** in the Early Access repo.
 
 **Hardware Requirements:**
 - `docs/GPU-NODE-REQUIREMENTS.md` - Miner: 8x H100/H200/B200 GPUs with TEE attestation, Validator: no GPU needed
@@ -439,10 +438,9 @@ btcli wallet overview --wallet.name miner
 - TEE attestation verification (Kata cronjobs)
 - Armada job metric collection via Prometheus + Rancher v3 API (cluster/node state, resource info)
 - Weight calculation and on-chain `set_weights` (single mechanism)
-- (Phase 2) Revenue tracking and reseller/referrer payment distribution
 
 **Smart Contracts (Phase 2):** Deployment targets (not in Early Access):
-- BASE L2 (Coinbase) - USDC job billing, escrow, reseller/referrer attribution, Alpha recycling
+- BASE L2 (Coinbase) - USDC job billing, escrow, Alpha recycling
 - Bittensor EVM - optional Phase 2 registry (Early Access emissions are native `set_weights`, no contract)
 
 ## Key Takeaways
@@ -452,7 +450,7 @@ btcli wallet overview --wallet.name miner
 3. **TEE is mandatory** for miners (Intel TDX/SGX, NVIDIA Confidential Computing) — no attestation = no emissions
 4. **NVIDIA AI stack** (NeMo, NIM, Blueprints) runs as Armada-scheduled confidential jobs in Kata + CoCo TEE
 5. **Armada** is the multi-cluster batch scheduler across RKE2 miner clusters (one hotkey per cluster, single data center)
-6. **Early Access billing is emissions + Alpha/TAO paid jobs** — emissions reward miners for capacity (supply-side); consumers pay Alpha/TAO at a **resources price per hour** for compute consumed (demand-side), priced competitively vs Targon/Lium/Chutes and dynamically per the job queues. USDC-on-BASE fiat billing, revenue share, and referral program are Phase 2 roadmap
+6. **Early Access billing is emissions + Alpha/TAO paid jobs** — emissions reward miners for capacity (supply-side); consumers pay Alpha/TAO at a **resources price per hour** for compute consumed (demand-side), priced competitively vs Targon/Lium/Chutes and dynamically per the job queues. USDC-on-BASE fiat billing is a Phase 2 roadmap item. There is no referrer / reseller program — compute is already competitively priced via Bittensor emission subsidies, and a discount layer would be gamed
 7. **Security-first design** — FIPS-140-2 validated RKE2 baseline in Early Access (FIPS-140-3 as a Phase 3 target), CCC membership, confidential computing throughout
 8. **Hardware requirements** — 8x H100/H200/B200 GPUs minimum for miners
 9. **Current version 0.0.0** indicates template stage — production deployment requires significant additional work

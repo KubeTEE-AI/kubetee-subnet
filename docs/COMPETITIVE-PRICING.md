@@ -128,7 +128,7 @@ Every input is either a public API or on-chain data. The validator publishes the
 
 - **Phase 0 (Early Access, current):** add the competitive-pricing dimension — competitor feed scraping, target-price computation, price-competitiveness weighting, and the 75% utilization target — and use that target price as the **resources price per hour** for Alpha / TAO paid jobs (demand-side billing, dynamic per the job queues). The shipping validator scores node liveness only until the price feeds are wired.
 - **Phase 1 (Expansion):** add TEE-attestation + Armada-job-metrics + health scoring.
-- **Phase 2 (Paid Jobs):** layer **USDC-on-BASE fiat billing** on top of the Phase 0 resources-per-hour pricing, plus referrer / reseller revenue share and USDC→TAO→Alpha recycling.
+- **Phase 2 (Paid Jobs):** layer **USDC-on-BASE fiat billing** on top of the Phase 0 resources-per-hour pricing, plus USDC→TAO→Alpha recycling.
 - **Phase 3 (Job-Type Growth):** extend the price formula to new job classes as new workload types come online.
 
 ## References

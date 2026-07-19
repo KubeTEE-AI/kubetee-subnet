@@ -430,8 +430,9 @@ Early Access pairs **emissions** (supply-side) with **Alpha / TAO paid jobs** pr
 
 **Phase 2:**
 - **USDC-on-BASE job billing** — pull-based, per-epoch metering of Armada job resource usage (fiat billing layered on top of the Early Access resources-per-hour pricing)
-- **Referrer / integrator / reseller program** — revenue share with on-chain attribution
 - **Automated USDC→TAO→Alpha recycling** — unused emissions recycled
+
+> **No referrer / reseller program.** SN90 compute is already priced competitively because it is subsidized by Bittensor subnet emissions; a referrer / reseller discount layer would be gamed for discounted pricing and is intentionally not part of the model.
 
 ---
 
@@ -696,7 +697,6 @@ flowchart LR
 ### Phase 2 — Paid Jobs
 
 - [ ] USDC-on-BASE job billing (pull-based, per-epoch metering) — fiat billing layered on top of the Early Access Alpha / TAO resources-per-hour pricing
-- [ ] Referrer / integrator / reseller program (on-chain attribution)
 - [ ] Automated USDC→TAO→Alpha recycling (unused emissions recycled)
 
 ### Phase 3 — Job-Type Growth
