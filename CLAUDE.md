@@ -129,17 +129,17 @@ btcli stake add --wallet.name validator --wallet.hotkey default
 
 ### Incentive Mechanism (Single: Infrastructure)
 
-KubeTEE Early Access uses a **single Bittensor incentive mechanism** that distributes emissions as weights to miners based on the resources they provide in their RKE2 cluster and how reliably they execute Armada-scheduled confidential jobs. There is no benchmark, bounty, or referral mechanism in Early Access. Early Access pairs **emissions** (supply-side) with **Alpha / TAO paid jobs** priced in **compute units (CU)** — competitive and dynamic per the job queues (see [Competitive Pricing](README.md#competitive-pricing)). Fiat billing (USDC-on-BASE) and revenue share remain Phase 2 roadmap items.
+KubeTEE Early Access uses a **single Bittensor incentive mechanism** that distributes emissions as weights to miners based on the resources they provide in their RKE2 cluster and how reliably they execute Armada-scheduled confidential jobs. There is no benchmark, bounty, or referral mechanism in Early Access. Early Access pairs **emissions** (supply-side) with **Alpha / TAO paid jobs** priced at a **resources price per hour** — competitive and dynamic per the job queues (see [Competitive Pricing](README.md#competitive-pricing)). Fiat billing (USDC-on-BASE) and revenue share remain Phase 2 roadmap items.
 
 **Mechanism: Infrastructure (100% emissions)**
 - Rewards miners providing RKE2 cluster resources (GPU nodes) that run confidential AI jobs scheduled by Armada
 - Metrics: TEE attestation (Intel TDX/SGX, NVIDIA CC), Armada job success/throughput/fair-share, uptime, resource utilization, FIPS-140-3 progress
-- **Competitive pricing (Phase 0, Early Access):** miners are scored against the other Bittensor compute subnets — Targon (SN4, supply-side payout feed via `stats.targon.com`), Lium (SN51, demand-side rental prices), Chutes (SN64, demand-side inference prices) — each with a verifiable feed (public API + on-chain metagraph). Targon GPU miners all run 8-card nodes (same form factor as SN90); live per-8-card-node payouts are B300 ~64, B200 ~52, H200 ~28, H100 ~24 TAO/epoch — the supply-side band SN90 miner compensation must match. The validator discovers a per-job-class target price from competitor signals, SN90 demand (Armada queue depth), and a **75% average utilization target**, then weights miners on whether their delivered compute is priced competitively. This same target price is the **compute-unit (CU) price** consumers pay in Alpha/TAO for the compute they consume (demand-side). A miner with perfect attestation but a price 2× the competitor average scores low. See `docs/COMPETITIVE-PRICING.md`.
+- **Competitive pricing (Phase 0, Early Access):** miners are scored against the other Bittensor compute subnets — Targon (SN4, supply-side payout feed via `stats.targon.com`), Lium (SN51, demand-side rental prices), Chutes (SN64, demand-side inference prices) — each with a verifiable feed (public API + on-chain metagraph). Targon GPU miners all run 8-card nodes (same form factor as SN90); live per-8-card-node payouts are B300 ~64, B200 ~52, H200 ~28, H100 ~24 TAO/epoch — the supply-side band SN90 miner compensation must match. The validator discovers a per-job-class target price from competitor signals, SN90 demand (Armada queue depth), and a **75% average utilization target**, then weights miners on whether their delivered compute is priced competitively. This same target price is the **resources price per hour** consumers pay in Alpha/TAO for the compute they consume (demand-side). A miner with perfect attestation but a price 2× the competitor average scores low. See `docs/COMPETITIVE-PRICING.md`.
 - One hotkey per cluster; all nodes co-located in a single data center
 - No attestation = no emissions
 - Location: `scripts/miner_scoring.py`
 
-**Critical Detail:** A single weight matrix is used. The validator sets one set of weights per epoch via Bittensor `set_weights` (no `mechanism_id` split). The benchmark, bounty, and referrer mechanisms from the earlier design are removed for Early Access. The shipping Early Access validator scores node liveness only; competitive pricing (a Phase 0 dimension, required for Alpha/TAO compute-unit billing) and TEE/Armada/health scoring (Phase 1) are roadmap dimensions until their feeds are wired.
+**Critical Detail:** A single weight matrix is used. The validator sets one set of weights per epoch via Bittensor `set_weights` (no `mechanism_id` split). The benchmark, bounty, and referrer mechanisms from the earlier design are removed for Early Access. The shipping Early Access validator scores node liveness only; competitive pricing (a Phase 0 dimension, required for Alpha/TAO resources-per-hour billing) and TEE/Armada/health scoring (Phase 1) are roadmap dimensions until their feeds are wired.
 
 ### Core Architecture Layers
 
@@ -175,7 +175,7 @@ Fail-fast at startup on any missing/invalid static config (D14); at runtime, Ran
 ```
 EARLY ACCESS (Phase 0):
      ├─→ Emissions → miners (supply-side: capacity rewards)
-     └─→ Alpha / TAO paid jobs → compute units (CU) consumed
+     └─→ Alpha / TAO paid jobs → resource-hours consumed
           (price competitive vs Targon/Lium/Chutes, dynamic per job queues)
      ↓
 MINER (runs confidential Armada jobs)
@@ -183,7 +183,7 @@ MINER (runs confidential Armada jobs)
 VALIDATOR → set_weights → Bittensor emissions to miners
 
 PHASE 2 (planned):
-     ├─→ USDC-on-BASE job billing (fiat, layered on CU pricing)
+     ├─→ USDC-on-BASE job billing (fiat, layered on resources-per-hour pricing)
      └─→ Referrer / reseller revenue share
 ```
 
@@ -225,10 +225,10 @@ Payment processing, escrow, reseller/referrer attribution, and Alpha recycling c
 - `docs/GPU-NODE-REQUIREMENTS.md` - Miner: 8x H100/H200/B200 GPUs with TEE attestation, Validator: no GPU needed
 
 **Scoring & Economics Docs:**
-- `docs/COMPETITIVE-PRICING.md` - Competitive pricing scoring design: Targon/Lium/Chutes price feeds, per-class target price, 75% utilization target, how price becomes weights — Phase 0 (Early Access); the target price doubles as the compute-unit (CU) price for Alpha/TAO paid jobs
+- `docs/COMPETITIVE-PRICING.md` - Competitive pricing scoring design: Targon/Lium/Chutes price feeds, per-class target price, 75% utilization target, how price becomes weights — Phase 0 (Early Access); the target price doubles as the resources price per hour for Alpha/TAO paid jobs
 - `docs/TOKENOMICS.md` - Utility token & DePIN model: recycle vs burn, no-treasury securities posture, cross-subnet consumption loop, subsidy trajectory
 
-**Job Pricing MCP Server (design concept, Phase 1):** an agent-facing [MCP](https://modelcontextprotocol.io/) server that prices and deploys confidential compute jobs. It is a **read client of the validator's published target price** (Phase 0 Competitive Pricing) — not a price-setter. Tools: `get_target_price(job_class, gpu_type)`, `quote_job(resources, duration, job_class)` → CU count × target price = Alpha/TAO cost, `submit_job(job_spec, priced)` → Armada queue with a confidential `runtimeClassName`. Control-plane only (prices + queues; never sees job data); job pods run in `kata-qemu-nvidia-gpu-tdx` / `kata-qemu-tdx` TEEs; payment settled on-chain / Phase 2 escrow. Used by end-user agents and orchestrators (Airflow / Metaflow). See README "Job Pricing MCP Server".
+**Job Pricing MCP Server (design concept, Phase 1):** an agent-facing [MCP](https://modelcontextprotocol.io/) server that prices and deploys confidential compute jobs. It is a **read client of the validator's published target price** (Phase 0 Competitive Pricing) — not a price-setter. Tools: `get_target_price(job_class, gpu_type)`, `quote_job(resources, duration, job_class)` → resource-hours × target price per hour = Alpha/TAO cost, `submit_job(job_spec, priced)` → Armada queue with a confidential `runtimeClassName`. Control-plane only (prices + queues; never sees job data); job pods run in `kata-qemu-nvidia-gpu-tdx` / `kata-qemu-tdx` TEEs; payment settled on-chain / Phase 2 escrow. Used by end-user agents and orchestrators (Airflow / Metaflow). See README "Job Pricing MCP Server".
 
 ## Development Workflow
 
@@ -452,7 +452,7 @@ btcli wallet overview --wallet.name miner
 3. **TEE is mandatory** for miners (Intel TDX/SGX, NVIDIA Confidential Computing) — no attestation = no emissions
 4. **NVIDIA AI stack** (NeMo, NIM, Blueprints) runs as Armada-scheduled confidential jobs in Kata + CoCo TEE
 5. **Armada** is the multi-cluster batch scheduler across RKE2 miner clusters (one hotkey per cluster, single data center)
-6. **Early Access billing is emissions + Alpha/TAO paid jobs** — emissions reward miners for capacity (supply-side); consumers pay Alpha/TAO in **compute units** for compute consumed (demand-side), priced competitively vs Targon/Lium/Chutes and dynamically per the job queues. USDC-on-BASE fiat billing, revenue share, and referral program are Phase 2 roadmap
+6. **Early Access billing is emissions + Alpha/TAO paid jobs** — emissions reward miners for capacity (supply-side); consumers pay Alpha/TAO at a **resources price per hour** for compute consumed (demand-side), priced competitively vs Targon/Lium/Chutes and dynamically per the job queues. USDC-on-BASE fiat billing, revenue share, and referral program are Phase 2 roadmap
 7. **Security-first design** — FIPS-140-2 validated RKE2 baseline in Early Access (FIPS-140-3 as a Phase 3 target), CCC membership, confidential computing throughout
 8. **Hardware requirements** — 8x H100/H200/B200 GPUs minimum for miners
 9. **Current version 0.0.0** indicates template stage — production deployment requires significant additional work

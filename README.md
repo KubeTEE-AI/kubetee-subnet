@@ -163,7 +163,7 @@ KubeTEE is in **Early Access**. The first deployment targets **two clusters in t
 - Standing up the Armada multi-cluster batch scheduler across miner clusters
 - Running confidential AI jobs (NeMo / NIM / Blueprints) in Kata + CoCo TEE pods
 - The **validator incentive mechanism**: scoring miners on TEE attestation, Armada job success, uptime, and **competitive pricing** against the other compute subnets (Targon, Lium, Chutes) with a 75% utilization target
-- **Emissions + Alpha/TAO paid jobs** — emissions reward miners for capacity (supply-side); consumers pay Alpha/TAO in **compute units** for compute consumed (demand-side). USDC-on-BASE fiat billing is Phase 2 (see [Roadmap](#roadmap))
+- **Emissions + Alpha/TAO paid jobs** — emissions reward miners for capacity (supply-side); consumers pay Alpha/TAO at a **resources price per hour** for compute consumed (demand-side). USDC-on-BASE fiat billing is Phase 2 (see [Roadmap](#roadmap))
 - **Security**: Confidential Computing TEE on a FIPS-140-2 validated RKE2 baseline (FIPS-140-3 as a Phase 3 target)
 
 ---
@@ -387,7 +387,7 @@ flowchart LR
 
 ### Incentive Mechanism: Infrastructure (Early Access)
 
-KubeTEE Early Access uses a **single Infrastructure incentive mechanism**. Miners earn Bittensor emissions by providing confidential compute capacity and reliably executing Armada-scheduled jobs. Early Access pairs **emissions** (supply-side: miners earn for providing capacity) with **Alpha / TAO paid jobs** priced in compute units (demand-side: consumers spend Alpha/TAO for the compute they consume). Fiat billing (USDC-on-BASE) remains a Phase 2 roadmap item (see [Payments & Revenue](#payments--revenue-roadmap)).
+KubeTEE Early Access uses a **single Infrastructure incentive mechanism**. Miners earn Bittensor emissions by providing confidential compute capacity and reliably executing Armada-scheduled jobs. Early Access pairs **emissions** (supply-side: miners earn for providing capacity) with **Alpha / TAO paid jobs** priced at a resources price per hour (demand-side: consumers spend Alpha/TAO for the compute they consume). Fiat billing (USDC-on-BASE) remains a Phase 2 roadmap item (see [Payments & Revenue](#payments--revenue-roadmap)).
 
 **Purpose**: Reward miners for providing Kubernetes infrastructure that runs confidential AI jobs scheduled by Armada.
 
@@ -422,14 +422,14 @@ KubeTEE Early Access uses a **single Infrastructure incentive mechanism**. Miner
 
 ### Payments & Revenue (Roadmap)
 
-Early Access pairs **emissions** (supply-side) with **Alpha / TAO paid jobs** priced in compute units (demand-side). The remaining payment and revenue features are planned for Phase 2 (see [Roadmap](#roadmap)):
+Early Access pairs **emissions** (supply-side) with **Alpha / TAO paid jobs** priced at a resources price per hour (demand-side). The remaining payment and revenue features are planned for Phase 2 (see [Roadmap](#roadmap)):
 
 **Early Access (Phase 0):**
-- **Alpha / TAO paid jobs** — compute priced in **compute units (CU)** that are **competitive** (benchmarked against Targon/Lium/Chutes) and **dynamic according to the job queues** (Armada queue depth + the 75% utilization target) — see [Competitive Pricing](./docs/COMPETITIVE-PRICING.md)
+- **Alpha / TAO paid jobs** — compute priced at a **resources price per hour** that is **competitive** (benchmarked against Targon/Lium/Chutes) and **dynamic according to the job queues** (Armada queue depth + the 75% utilization target) — see [Competitive Pricing](./docs/COMPETITIVE-PRICING.md)
 - **Subnet 90 Alpha, Other Subnets Alpha, TAO** discounted for the Bittensor community
 
 **Phase 2:**
-- **USDC-on-BASE job billing** — pull-based, per-epoch metering of Armada job resource usage (fiat billing layered on top of the Early Access compute-unit pricing)
+- **USDC-on-BASE job billing** — pull-based, per-epoch metering of Armada job resource usage (fiat billing layered on top of the Early Access resources-per-hour pricing)
 - **Referrer / integrator / reseller program** — revenue share with on-chain attribution
 - **Automated USDC→TAO→Alpha recycling** — unused emissions recycled
 
@@ -562,7 +562,7 @@ The target price is a **scoring input, not a bill**. Miners are scored on whethe
 
 Every input is a public API or on-chain data; the validator publishes the scraped competitor prices and the computed target price each epoch as Prometheus metrics, so the weight vector is auditable end-to-end. Full design — competitor feeds, the target-price formula, scoring integration, and verifiability table: [Competitive Pricing & Miner Scoring](./docs/COMPETITIVE-PRICING.md).
 
-> **Status:** competitive pricing is an **Early Access (Phase 0)** scoring dimension — it is required to price the Alpha/TAO compute units competitively and dynamically per the job queues (USDC-on-BASE fiat billing stays Phase 2). The shipping Early Access validator scores node liveness only until the price feeds are wired (see [SUBNET.md](SUBNET.md)).
+> **Status:** competitive pricing is an **Early Access (Phase 0)** scoring dimension — it is required to set the Alpha/TAO resources price per hour competitively and dynamically per the job queues (USDC-on-BASE fiat billing stays Phase 2). The shipping Early Access validator scores node liveness only until the price feeds are wired (see [SUBNET.md](SUBNET.md)).
 
 ### Weight Setting
 - Scores are normalized per miner hotkey and set on-chain via Bittensor `set_weights` (single mechanism)
@@ -603,8 +603,8 @@ The **Job Pricing MCP server** is an agent-facing [Model Context Protocol](https
 **Why an MCP server:** the validator already discovers a per-job-class **target price** each epoch from Targon / Lium / Chutes signals, SN90 demand, and the 75% utilization target (see [Competitive Pricing](#competitive-pricing)). The MCP server exposes that target price as agent-callable tools so any consumer — an end-user agent, an integrator, or a pipeline orchestrator — quotes and deploys jobs against the same pricing the validator enforces on miners. Pricing is **discovered by the validator, quoted by the MCP server** — the server is a read client of the validator's published target price, not a price-setter.
 
 **Tools (design concept):**
-- `get_target_price(job_class, gpu_type)` — returns the current validator-established target price per compute unit (CU) for a job class.
-- `quote_job(resources, duration, job_class)` — calculates the resource price for a job: CU count (GPU type × count × hours, CPU-hours, or per-token) × target price → the Alpha/TAO cost the consumer pays.
+- `get_target_price(job_class, gpu_type)` — returns the current validator-established target resources price per hour for a job class.
+- `quote_job(resources, duration, job_class)` — calculates the resource price for a job: resource-hours (GPU type × count × hours, CPU-hours, or per-token) × target price per hour → the Alpha/TAO cost the consumer pays.
 - `submit_job(job_spec, priced)` — deploys the priced job to the Armada queue with a confidential `runtimeClassName` (Phase 1+, when Armada is wired); returns the Armada job id for status / attestation tracking.
 
 **Flow:**
@@ -619,12 +619,12 @@ flowchart LR
 
     Val -->|"target price / epoch<br/>(Prometheus + on-chain)"| MCP
     Agent -->|"quote_job / submit_job"| MCP
-    MCP -->|"CU x target price<br/>= Alpha/TAO cost"| Agent
+    MCP -->|"resource-hours x price/hour<br/>= Alpha/TAO cost"| Agent
     MCP -->|"priced job spec"| Arm
     Arm -->|"schedule pod"| TEE
 ```
 
-**Confidentiality:** the MCP server is control-plane only — it prices and queues; it never sees job data. The job pods it deploys run inside `kata-qemu-nvidia-gpu-tdx` / `kata-qemu-tdx` TEEs with CoCo remote attestation; secrets are injected via the CoCo KBS. Payment for the quoted CU cost (Alpha/TAO transfer) is settled on-chain / via the Phase 2 escrow — the MCP server quotes the cost and records the quote, it does not custody funds.
+**Confidentiality:** the MCP server is control-plane only — it prices and queues; it never sees job data. The job pods it deploys run inside `kata-qemu-nvidia-gpu-tdx` / `kata-qemu-tdx` TEEs with CoCo remote attestation; secrets are injected via the CoCo KBS. Payment for the quoted resource-hour cost (Alpha/TAO transfer) is settled on-chain / via the Phase 2 escrow — the MCP server quotes the cost and records the quote, it does not custody funds.
 
 > **Status:** design concept — the Job Pricing MCP server is a Phase 1 roadmap item (agent-facing job deployment, alongside the Airflow / Metaflow connectors). The pricing it quotes is grounded in the Phase 0 [Competitive Pricing](./docs/COMPETITIVE-PRICING.md) target price; Armada deployment lands with the Phase 1 connectors.
 
@@ -677,7 +677,7 @@ flowchart LR
 - [ ] Validator Rancher v3 API access: a validator authenticates by **signing a challenge with its Bittensor hotkey**; an auth mechanism connected to Rancher verifies the signature and issues a **read-only** Rancher v3 bearer token (bound to `cluster-readonly`) — see [Rancher v3 Access (Hotkey-signed Auth)](#rancher-v3-access-hotkey-signed-auth) and CLAUDE.md "Validator Rancher API Access"
 - [ ] Miner Rancher access on cluster creation: the miner authenticates with the same **hotkey-signed** flow, scoped **read-only** to their own cluster (the one labeled with their `kubetee.ai/miner-hotkey`, bound to `cluster-readonly`) so the miner can observe their cluster (subnet owner manages via Fleet)
 - [ ] Emissions rewards for miners providing confidential compute capacity (supply-side)
-- [ ] Alpha / TAO paid jobs (demand-side) — price compute in **compute units (CU)** that are **competitive** (benchmarked vs Targon/Lium/Chutes) and **dynamic according to the job queues** (Armada queue depth + the 75% utilization target set the CU price per job class) — see [Competitive Pricing](./docs/COMPETITIVE-PRICING.md)
+- [ ] Alpha / TAO paid jobs (demand-side) — price compute at a **resources price per hour** that is **competitive** (benchmarked vs Targon/Lium/Chutes) and **dynamic according to the job queues** (Armada queue depth + the 75% utilization target set the resources price per hour per job class) — see [Competitive Pricing](./docs/COMPETITIVE-PRICING.md)
 - [ ] Competitive pricing dimension: scrape Targon (SN4) / Lium (SN51) / Chutes (SN64) price feeds, compute per-class target price, score miners on price competitiveness against a 75% utilization target (see [Competitive Pricing](./docs/COMPETITIVE-PRICING.md))
 - [ ] Confidential NeMo / NIM / Blueprint job templates
 - [ ] Confidential Subnets Owners and Approved Integrators templates.
@@ -689,13 +689,13 @@ flowchart LR
 - [ ] Automated TEE attestation cronjobs
 - [ ] Validator scoring expansion: TEE attestation + Armada job metrics + infrastructure health (replacing the Early Access liveness stand-in)
 - [ ] Apache Airflow + Metaflow Armada connectors — multi-step confidential pipelines (see [Workflow Orchestration](./docs/WORKFLOW-ORCHESTRATION.md))
-- [ ] Job Pricing MCP server — agent-facing MCP server that quotes a job's resource price (CU × validator target price → Alpha/TAO) and deploys it to Armada; pricing grounded in the Phase 0 [Competitive Pricing](./docs/COMPETITIVE-PRICING.md) target price (see [Job Pricing MCP Server](#job-pricing-mcp-server))
+- [ ] Job Pricing MCP server — agent-facing MCP server that quotes a job's resource price (resource-hours × validator target price per hour → Alpha/TAO) and deploys it to Armada; pricing grounded in the Phase 0 [Competitive Pricing](./docs/COMPETITIVE-PRICING.md) target price (see [Job Pricing MCP Server](#job-pricing-mcp-server))
 - [ ] BitSec SN60 security gate — mandatory AI-workload security analysis (code/image/IaC) before promotion to staging/production (see [BitSec SN60 — Security Gate](#bitsec-sn60--security-gate-for-ai-workload-promotion))
 - [ ] Build documentation website
 
 ### Phase 2 — Paid Jobs
 
-- [ ] USDC-on-BASE job billing (pull-based, per-epoch metering) — fiat billing layered on top of the Early Access Alpha / TAO compute-unit pricing
+- [ ] USDC-on-BASE job billing (pull-based, per-epoch metering) — fiat billing layered on top of the Early Access Alpha / TAO resources-per-hour pricing
 - [ ] Referrer / integrator / reseller program (on-chain attribution)
 - [ ] Automated USDC→TAO→Alpha recycling (unused emissions recycled)
 
