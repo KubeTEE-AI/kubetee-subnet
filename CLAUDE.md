@@ -280,7 +280,7 @@ All PRs require Claude Code review approval.
 ## Technology Stack
 
 **Core Framework:**
-- bittensor (>=11.0.0) — Bittensor v11+ unified package (SDK + btcli), from [RaoFoundation/subtensor](https://github.com/RaoFoundation/subtensor) (`sdk/python`). SDK deps are `websockets`, `bittensor-core`, `typer`, `rich`, `eth-account` (no starlette/pydantic/torch).
+- bittensor (>=11.0.0.dev0) — Bittensor v11+ unified package (SDK + btcli), from [RaoFoundation/subtensor](https://github.com/RaoFoundation/subtensor) (`sdk/python`). Dev pre-release; SDK deps are `websockets`, `bittensor-core`, `typer`, `rich`, `eth-account` (no starlette/pydantic/torch). **TODO: bump pin to `>=11.0.0` once the stable 11.0.0 release is published.**
 
 **NVIDIA Stack:**
 - NeMo Microservices - LLM inference
