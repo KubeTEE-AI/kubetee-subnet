@@ -178,8 +178,8 @@ xychart-beta
     title "DePIN Subsidy Trajectory"
     x-axis "Time (horizon unknown)" 0 --> 100
     y-axis "Value" 0 --> 100
-    line "Emission subsidy" [88, 83, 77, 70, 62, 53, 43, 32]
-    line "Consumption revenue" [10, 14, 19, 25, 31, 37, 41, 56]
+    line "Emission subsidy" [88, 83, 77, 70, 62, 53, 43, 32, 22, 12, 5]
+    line "Consumption revenue" [10, 14, 19, 25, 31, 37, 41, 52, 63, 74, 84]
 ```
 
 The amber **emission subsidy** line decays as emissions taper over an unknown horizon; the green **consumption revenue** line rises as consumer spend (from subnets and AI workloads) grows. They cross at the **crossover** — the point where net Alpha issuance ≈ 0 and consumers (not emissions) fund the miner budget through the pool. The exact date is unknown (recycle shifts halving thresholds), so the x-axis is an undated horizon, not a halving schedule.
