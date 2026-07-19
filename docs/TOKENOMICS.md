@@ -139,9 +139,10 @@ If the subnet starts withholding miner emission to owner-controlled hotkeys to j
 ```mermaid
 flowchart LR
     Proto["Bittensor protocol<br/>41 / 41 / 18 emission split"]
-    Proto -->|18% owner stream| Kube["KubeTEE LTD<br/>subnet owner<br/>mechanism + IP"]
-    Proto -->|41% miner stream| Hori["1-HORIZON LTD<br/>miner operator<br/>GPU/TEE capex"]
-    Proto -->|41% miner stream| Ext["External miners<br/>(permissionless)"]
+    Proto -->|"18% owner stream"| Kube["KubeTEE LTD<br/>subnet owner<br/>mechanism + IP"]
+    Proto -->|"41% miner stream<br/>(one pool)"| Pool["Miner emission pool<br/>(scored, competed for)"]
+    Pool -->|"scored share<br/>shrinks as network grows"| Hori["1-HORIZON LTD<br/>miner operator<br/>GPU/TEE capex"]
+    Pool -->|"scored share<br/>grows as network grows"| Ext["External miners<br/>(permissionless, competitive)"]
     Hori -.->|"separate coldkeys<br/>(MinerBurned tripwire)"| Proto
 ```
 
