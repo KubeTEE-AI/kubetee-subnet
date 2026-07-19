@@ -161,7 +161,7 @@ KubeTEE is in **Early Access**. The first deployment targets **two clusters in t
 - Standing up the Armada multi-cluster batch scheduler across miner clusters
 - Running confidential AI jobs (NeMo / NIM / Blueprints) in Kata + CoCo TEE pods
 - The **validator incentive mechanism**: scoring miners on TEE attestation, Armada job success, uptime, and **competitive pricing** against the other compute subnets (Targon, Lium, Chutes) with a 75% utilization target
-- **Emissions-only** rewards (no USDC job billing yet — see [Roadmap](#roadmap))
+- **Emissions + Alpha/TAO paid jobs** — emissions reward miners for capacity (supply-side); consumers pay Alpha/TAO in **compute units** for compute consumed (demand-side). USDC-on-BASE fiat billing is Phase 2 (see [Roadmap](#roadmap))
 - **Security**: Confidential Computing TEE with FIPS-140-3 as the Early Access target on a FIPS-140-2 validated RKE2 baseline
 
 ---
@@ -385,7 +385,7 @@ flowchart LR
 
 ### Incentive Mechanism: Infrastructure (Early Access)
 
-KubeTEE Early Access uses a **single Infrastructure incentive mechanism**. Miners earn Bittensor emissions by providing confidential compute capacity and reliably executing Armada-scheduled jobs. Early Access is **emissions-only** — paid billing is a Phase 2 roadmap item (see [Payments & Revenue](#payments--revenue-roadmap)).
+KubeTEE Early Access uses a **single Infrastructure incentive mechanism**. Miners earn Bittensor emissions by providing confidential compute capacity and reliably executing Armada-scheduled jobs. Early Access pairs **emissions** (supply-side: miners earn for providing capacity) with **Alpha / TAO paid jobs** priced in compute units (demand-side: consumers spend Alpha/TAO for the compute they consume). Fiat billing (USDC-on-BASE) remains a Phase 2 roadmap item (see [Payments & Revenue](#payments--revenue-roadmap)).
 
 **Purpose**: Reward miners for providing Kubernetes infrastructure that runs confidential AI jobs scheduled by Armada.
 
@@ -420,10 +420,14 @@ KubeTEE Early Access uses a **single Infrastructure incentive mechanism**. Miner
 
 ### Payments & Revenue (Roadmap)
 
-Early Access is **emissions-only**. The following payment and revenue features are planned for Phase 2 (see [Roadmap](#roadmap)):
+Early Access pairs **emissions** (supply-side) with **Alpha / TAO paid jobs** priced in compute units (demand-side). The remaining payment and revenue features are planned for Phase 2 (see [Roadmap](#roadmap)):
 
-- **Subnet 90 Alpha, Other Subnets Alpha, TAO** Discounted for Bittensor community.
-- **USDC-on-BASE job billing** — pull-based, per-epoch metering of Armada job resource usage
+**Early Access (Phase 0):**
+- **Alpha / TAO paid jobs** — compute priced in **compute units (CU)** that are **competitive** (benchmarked against Targon/Lium/Chutes) and **dynamic according to the job queues** (Armada queue depth + the 75% utilization target) — see [Competitive Pricing](./docs/COMPETITIVE-PRICING.md)
+- **Subnet 90 Alpha, Other Subnets Alpha, TAO** discounted for the Bittensor community
+
+**Phase 2:**
+- **USDC-on-BASE job billing** — pull-based, per-epoch metering of Armada job resource usage (fiat billing layered on top of the Early Access compute-unit pricing)
 - **Referrer / integrator / reseller program** — revenue share with on-chain attribution
 - **Automated USDC→TAO→Alpha recycling** — unused emissions recycled
 
@@ -552,7 +556,7 @@ The target price is a **scoring input, not a bill**. Miners are scored on whethe
 
 Every input is a public API or on-chain data; the validator publishes the scraped competitor prices and the computed target price each epoch as Prometheus metrics, so the weight vector is auditable end-to-end. Full design — competitor feeds, the target-price formula, scoring integration, and verifiability table: [Competitive Pricing & Miner Scoring](./docs/COMPETITIVE-PRICING.md).
 
-> **Status:** competitive pricing is a **roadmap** scoring dimension (Phase 2, alongside USDC job billing — both depend on a real price existing). The shipping Early Access validator scores node liveness only (see [SUBNET.md](SUBNET.md)).
+> **Status:** competitive pricing is an **Early Access (Phase 0)** scoring dimension — it is required to price the Alpha/TAO compute units competitively and dynamically per the job queues (USDC-on-BASE fiat billing stays Phase 2). The shipping Early Access validator scores node liveness only until the price feeds are wired (see [SUBNET.md](SUBNET.md)).
 
 ### Weight Setting
 - Scores are normalized per miner hotkey and set on-chain via Bittensor `set_weights` (single mechanism)
@@ -632,7 +636,9 @@ See [Workflow Orchestration — Airflow & Metaflow](./docs/WORKFLOW-ORCHESTRATIO
 - [ ] KubeTEE-hosted validator offering: KubeTEE runs the validator code in a KubeTEE confidential cluster for operators without their own TEE infrastructure
 - [ ] Validator Rancher v3 API access: a validator authenticates by **signing a challenge with its Bittensor hotkey**; an auth mechanism connected to Rancher verifies the signature and issues a **read-only** Rancher v3 bearer token (bound to `cluster-readonly`) — see [Rancher v3 Access (Hotkey-signed Auth)](#rancher-v3-access-hotkey-signed-auth) and CLAUDE.md "Validator Rancher API Access"
 - [ ] Miner Rancher access on cluster creation: the miner authenticates with the same **hotkey-signed** flow, scoped **read-only** to their own cluster (the one labeled with their `kubetee.ai/miner-hotkey`, bound to `cluster-readonly`) so the miner can observe their cluster (subnet owner manages via Fleet)
-- [ ] Emissions-only rewards
+- [ ] Emissions rewards for miners providing confidential compute capacity (supply-side)
+- [ ] Alpha / TAO paid jobs (demand-side) — price compute in **compute units (CU)** that are **competitive** (benchmarked vs Targon/Lium/Chutes) and **dynamic according to the job queues** (Armada queue depth + the 75% utilization target set the CU price per job class) — see [Competitive Pricing](./docs/COMPETITIVE-PRICING.md)
+- [ ] Competitive pricing dimension: scrape Targon (SN4) / Lium (SN51) / Chutes (SN64) price feeds, compute per-class target price, score miners on price competitiveness against a 75% utilization target (see [Competitive Pricing](./docs/COMPETITIVE-PRICING.md))
 - [ ] FIPS-140-3 target on FIPS-140-2 validated RKE2 baseline
 - [ ] Confidential NeMo / NIM / Blueprint job templates
 - [ ] Confidential Subnets Owners and Approved Integrators templates.
@@ -649,8 +655,7 @@ See [Workflow Orchestration — Airflow & Metaflow](./docs/WORKFLOW-ORCHESTRATIO
 
 ### Phase 2 — Paid Jobs
 
-- [ ] Alpha, TAO, USDC-on-BASE job billing (pull-based, per-epoch metering)
-- [ ] Competitive pricing dimension: scrape Targon (SN4) / Lium (SN51) / Chutes (SN64) price feeds, compute per-class target price, score miners on price competitiveness against a 75% utilization target (see [Competitive Pricing](./docs/COMPETITIVE-PRICING.md))
+- [ ] USDC-on-BASE job billing (pull-based, per-epoch metering) — fiat billing layered on top of the Early Access Alpha / TAO compute-unit pricing
 - [ ] Referrer / integrator / reseller program (on-chain attribution)
 - [ ] Automated USDC→TAO→Alpha recycling (unused emissions recycled)
 

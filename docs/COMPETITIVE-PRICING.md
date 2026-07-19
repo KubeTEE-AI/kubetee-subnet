@@ -2,7 +2,7 @@
 
 This document is the full design behind the README [Validator Scoring & Attestation](../README.md#validator-scoring--attestation) → [Competitive Pricing](../README.md#competitive-pricing) subsection. It covers how SN90 (KubeTEE) keeps its compute priced competitively against the other Bittensor compute subnets — **Targon (SN4)**, **Lium (SN51)**, and **Chutes (SN64)** — and how that competitive price signal feeds miner weights.
 
-> **Status:** competitive pricing is a **roadmap** scoring dimension. The shipping Early Access validator scores node liveness only (see the [Early Access stand-in](../SUBNET.md) caveat). This document is the design target.
+> **Status:** competitive pricing is an **Early Access (Phase 0)** scoring dimension — it is required to price the Alpha / TAO **compute units (CU)** consumers pay for compute (demand-side), and it doubles as a miner-scoring input. The target price is **competitive** (benchmarked vs Targon/Lium/Chutes) and **dynamic according to the job queues** (Armada queue depth + the 75% utilization target). The shipping Early Access validator scores node liveness only until the price feeds are wired (see the [Early Access stand-in](../SUBNET.md) caveat). This document is the design target.
 
 ---
 
@@ -126,9 +126,9 @@ Every input is either a public API or on-chain data. The validator publishes the
 
 ## Roadmap alignment
 
-- **Phase 0 (Early Access, current):** liveness-only scoring. No competitive pricing yet.
+- **Phase 0 (Early Access, current):** add the competitive-pricing dimension — competitor feed scraping, target-price computation, price-competitiveness weighting, and the 75% utilization target — and use that target price as the **compute-unit (CU) price** for Alpha / TAO paid jobs (demand-side billing, dynamic per the job queues). The shipping validator scores node liveness only until the price feeds are wired.
 - **Phase 1 (Expansion):** add TEE-attestation + Armada-job-metrics + health scoring.
-- **Phase 2 (Paid Jobs):** add the competitive-pricing dimension — competitor feed scraping, target-price computation, price-competitiveness weighting, and the 75% utilization target. Lands alongside USDC job billing, because both depend on a real price existing.
+- **Phase 2 (Paid Jobs):** layer **USDC-on-BASE fiat billing** on top of the Phase 0 compute-unit pricing, plus referrer / reseller revenue share and USDC→TAO→Alpha recycling.
 - **Phase 3 (Job-Type Growth):** extend the price formula to new job classes as new workload types come online.
 
 ## References
