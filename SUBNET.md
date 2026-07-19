@@ -320,7 +320,6 @@ btcli subnets metagraph --netuid 1 --network ws://127.0.0.1:9944
 ---
 
 See also: `scripts/setup_single_node.py`, `scripts/validator.py`,
-`docker-compose.yml`, `.env.example`, `keys/README.md`,
-`docs/MINER_INFRA.md` (initial node infrastructure setup), and
+`docker-compose.yml`, `.env.example`, `keys/README.md`, and
 `docs/NODE-REGISTRATION.md` (miner-side node registration + the
 `kubetee.ai/miner-hotkey` label requirement).

@@ -661,7 +661,6 @@ flowchart LR
 - ✅ Successfully passed Staging validation period
 
 **Reference Documentation**:
-- [Miner Infrastructure Setup](./docs/MINER_INFRA.md) — initial node setup (kubelet kernel settings, etcd user/group, OS baseline) required before registration
 - [Node Registration](./docs/NODE-REGISTRATION.md) — Miner RKE2 node registration and the `kubetee.ai/miner-hotkey` label requirement
 - [GPU Node Requirements](./docs/GPU-NODE-REQUIREMENTS.md) — GPU/TEE hardware requirements (CPU TDX/SEV-SNP, BIOS, kernel)
 - [Cluster Naming Convention](./docs/CLUSTER_NAMING_CONVENTION.md) — `kubetee.ai/*` labels and Fleet GitOps targeting
@@ -716,7 +715,6 @@ flowchart LR
 ## Research & Documentation
 
 ### Documentation
-- [Miner Infrastructure Setup](./docs/MINER_INFRA.md) — initial node setup before registration (kernel, etcd user/group, OS baseline)
 - [Node Registration](./docs/NODE-REGISTRATION.md) — Miner RKE2 node registration and `kubetee.ai/*` labels
 - [GPU Node Requirements](./docs/GPU-NODE-REQUIREMENTS.md) — GPU/TEE hardware requirements
 - [Cluster Naming Convention](./docs/CLUSTER_NAMING_CONVENTION.md) — `kubetee.ai/*` labels and Fleet GitOps targeting

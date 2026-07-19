@@ -211,7 +211,7 @@ Because the GPU Operator owns the GPU software stack, the node must start from a
 
 **OS Requirement**:
 - ✅ Ubuntu 26.04 (clean installation, no pre-existing NVIDIA software)
-- ✅ Kernel 7.0.0-27-generic or newer (configured per [MINER_INFRA.md](MINER_INFRA.md))
+- ✅ Kernel 7.0.0-27-generic or newer
 - ✅ etcd user/group created
 
 ---
@@ -429,12 +429,10 @@ nvfwupd --query
 - **[NVIDIA DGX H100/H200 Firmware Update Guide](https://docs.nvidia.com/dgx/dgxh100-fw-update-guide/)** - MANDATORY reading for firmware updates
 - **[NVIDIA Secure AI Compatibility Matrix](https://www.nvidia.com/en-us/data-center/solutions/confidential-computing/secure-ai-compatibility-matrix/)** - Supported GPU + VBIOS + CUDA driver + Confidential Computing mode combinations (source of truth for CC firmware compatibility)
 - **[NODE-REGISTRATION.md](NODE-REGISTRATION.md)** - Complete registration guide
-- **[MINER_INFRA.md](MINER_INFRA.md)** - Initial infrastructure setup
 
 ### KubeTEE Documentation
 
 - **Node Registration**: [NODE-REGISTRATION.md](NODE-REGISTRATION.md)
-- **Infrastructure Setup**: [MINER_INFRA.md](MINER_INFRA.md)
 - **Cluster Creation**: `../../CREATE-CLUSTER-GUIDE.md`
 
 ---
