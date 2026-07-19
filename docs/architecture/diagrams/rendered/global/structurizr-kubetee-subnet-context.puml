@@ -1,0 +1,29 @@
+@startuml
+title <size:24>System Context View: KubeTEE Subnet</size>
+
+set separator none
+left to right direction
+
+<style>
+  root {
+    BackgroundColor: #ffffff
+    FontColor: #444444
+  }
+</style>
+
+!include <C4/C4>
+!include <C4/C4_Context>
+
+Person(Operator, "Operator", $descr="Runs the local compose stack, labels miner clusters, and remediates degraded mode.", $tags="", $link="")
+System(BittensorChainSubtensor, "Bittensor Chain (Subtensor)", $descr="Localnet in the dev stack; testnet/finney otherwise. Holds the metagraph, hyperparameters, and set_weights.", $tags="", $link="")
+System(Rancher, "Rancher", $descr="Cluster-management API the validator reads (read-only v3 API, plus one guarded reconciliation DELETE). Dev stack runs a self-contained containerised Rancher.", $tags="", $link="")
+System(KubeTEESubnet, "KubeTEE Subnet", $descr="Basic validator (g004): metagraph-driven miner discovery, Rancher-based liveness scoring, and alice-signed set_weights.", $tags="", $link="")
+
+Rel(Operator, KubeTEESubnet, "docker compose up -d --build; views logs via Dozzle", $techn="", $tags="", $link="")
+Rel(Operator, Rancher, "Manually sets kubetee.ai/miner-hotkey cluster label (Early Access registration)", $techn="", $tags="", $link="")
+Rel(KubeTEESubnet, BittensorChainSubtensor, "Creates subnet, registers/stakes triad, starts emissions, sets hypers (ownership permitting)", $techn="", $tags="", $link="")
+Rel(KubeTEESubnet, Rancher, "Read-only v3 API over pinned https origin + guarded DELETE", $techn="", $tags="", $link="")
+
+SHOW_LEGEND(true)
+hide stereotypes
+@enduml

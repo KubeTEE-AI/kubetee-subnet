@@ -1,0 +1,47 @@
+@startuml
+title <size:24>Component View: KubeTEE Subnet - basic_validator.py</size>
+
+set separator none
+left to right direction
+
+<style>
+  root {
+    BackgroundColor: #ffffff
+    FontColor: #444444
+  }
+</style>
+
+!include <C4/C4>
+!include <C4/C4_Context>
+!include <C4/C4_Component>
+
+System(BittensorChainSubtensor, "Bittensor Chain (Subtensor)", $descr="Localnet in the dev stack; testnet/finney otherwise. Holds the metagraph, hyperparameters, and set_weights.", $tags="", $link="")
+System(Rancher, "Rancher", $descr="Cluster-management API the validator reads (read-only v3 API, plus one guarded reconciliation DELETE). Dev stack runs a self-contained containerised Rancher.", $tags="", $link="")
+
+System_Boundary("KubeTEESubnet_boundary", "KubeTEE Subnet", $tags="") {
+  Container_Boundary("KubeTEESubnet.basic_validatorpy_boundary", "basic_validator.py", $tags="") {
+    Component(KubeTEESubnet.basic_validatorpy.load_configValidatorConfig, "load_config / ValidatorConfig", $techn="scripts/basic_validator.py", $descr="Fail-fast validation of all static config (share, poll interval, skip cap, reconcile params, hotkeys, RANCHER_URL/RANCHER_BEARER_TOKEN); refuses to start on any violation without echoing secrets.", $tags="", $link="")
+    Component(KubeTEESubnet.basic_validatorpy.BasicValidatorcycleloop, "BasicValidator cycle loop", $techn="scripts/basic_validator.py", $descr="Per-cycle: read metagraph, enumerate Rancher, run reconciliation, score miners, set alice-signed weights, log + export metrics. Never exits on runtime error; skips set_weights on Rancher outage; degraded mode after KUBETEE_MAX_CONSECUTIVE_SKIPS.", $tags="", $link="")
+    Component(KubeTEESubnet.basic_validatorpy.miner_scoringpy, "miner_scoring.py", $techn="scripts/miner_scoring.py", $descr="Binary fail-closed liveness score: 1 iff exactly one labelled active cluster with an active node; weight split KUBETEE_MINER_SHARE to scoring miners, rest to owner recycle UID.", $tags="", $link="")
+    Component(KubeTEESubnet.basic_validatorpy.chain_statepy, "chain_state.py", $techn="scripts/chain_state.py", $descr="Chain query helpers: subnet ownership, wallet stake, coldkey/hotkey SS58 resolution.", $tags="", $link="")
+    Component(KubeTEESubnet.basic_validatorpy.ReconciliationEngine, "ReconciliationEngine", $techn="scripts/reconciliation.py", $descr="Single guarded Rancher mutation: deletes labelled clusters whose hotkey left the metagraph, after persistence bounds and a same-cycle pre-delete recheck; 404/409 idempotent; unauthorized fails closed.", $tags="", $link="")
+    Component(KubeTEESubnet.basic_validatorpy.RancherClient, "RancherClient", $techn="scripts/rancher_client.py", $descr="Structurally GET-only client apart from the guarded DELETE; one pinned https origin, no redirects, complete pagination, never logs the token.", $tags="", $link="")
+    Component(KubeTEESubnet.basic_validatorpy.ValidatorMetrics, "ValidatorMetrics", $techn="scripts/validator_metrics.py", $descr="Prometheus text metrics on KUBETEE_METRICS_PORT 9100 (compose-internal only): rancher errors, set_weights results, skips, degraded flag, reconciliation counters.", $tags="", $link="")
+  }
+
+}
+
+Rel(KubeTEESubnet.basic_validatorpy.load_configValidatorConfig, KubeTEESubnet.basic_validatorpy.BasicValidatorcycleloop, "Supplies validated config or refuses startup", $techn="", $tags="", $link="")
+Rel(KubeTEESubnet.basic_validatorpy.BasicValidatorcycleloop, KubeTEESubnet.basic_validatorpy.chain_statepy, "Resolves ownership and hotkeys", $techn="", $tags="", $link="")
+Rel(KubeTEESubnet.basic_validatorpy.BasicValidatorcycleloop, BittensorChainSubtensor, "Reads metagraph; sets alice-signed weights", $techn="", $tags="", $link="")
+Rel(KubeTEESubnet.basic_validatorpy.BasicValidatorcycleloop, KubeTEESubnet.basic_validatorpy.miner_scoringpy, "Scores discovered miners", $techn="", $tags="", $link="")
+Rel(KubeTEESubnet.basic_validatorpy.BasicValidatorcycleloop, KubeTEESubnet.basic_validatorpy.ReconciliationEngine, "Runs guarded deregistration reconciliation", $techn="", $tags="", $link="")
+Rel(KubeTEESubnet.basic_validatorpy.BasicValidatorcycleloop, KubeTEESubnet.basic_validatorpy.ValidatorMetrics, "Exports cycle metrics", $techn="", $tags="", $link="")
+Rel(KubeTEESubnet.basic_validatorpy.miner_scoringpy, KubeTEESubnet.basic_validatorpy.RancherClient, "Enumerates labelled clusters and nodes", $techn="", $tags="", $link="")
+Rel(KubeTEESubnet.basic_validatorpy.ReconciliationEngine, KubeTEESubnet.basic_validatorpy.RancherClient, "Re-validates and deletes stale labelled clusters", $techn="", $tags="", $link="")
+Rel(KubeTEESubnet.basic_validatorpy.RancherClient, Rancher, "Read-only v3 API over pinned https origin + guarded DELETE", $techn="", $tags="", $link="")
+Rel(KubeTEESubnet.basic_validatorpy.chain_statepy, BittensorChainSubtensor, "Substrate queries", $techn="", $tags="", $link="")
+
+SHOW_LEGEND(true)
+hide stereotypes
+@enduml

@@ -616,3 +616,10 @@ See [Workflow Orchestration — Airflow & Metaflow](./docs/WORKFLOW-ORCHESTRATIO
 **Built by the KubeTEE Community**
 
 *Confidential compute for decentralized AI jobs — secured by TEE, scheduled by Armada, incentivized by Bittensor.*
+
+## Workers
+
+<!-- gsd: workers -->
+| Worker | Entrypoint | Component doc |
+|---|---|---|
+<!-- /gsd: workers -->
