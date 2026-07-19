@@ -6,7 +6,7 @@ This guide is for **miners** who need to register their nodes to an RKE2 cluster
 
 Before registering your node, ensure the infrastructure setup is complete:
 
-1. ✅ **Kernel settings configured** (see [MINER_INFRA.md](MINER_INFRA.md))
+1. ✅ **Kernel settings configured**
 2. ✅ **Node meets minimum requirements**:
    - Ubuntu 26.04
    - etcd user/group created
@@ -1272,7 +1272,6 @@ If you encounter issues:
 
 ## Additional Resources
 
-- **[MINER_INFRA.md](MINER_INFRA.md)** - Initial node infrastructure setup
 - **[Longhorn Documentation](https://longhorn.io/docs/)** - Official Longhorn docs
 - **[RKE2 Documentation](https://docs.rke2.io/)** - Official RKE2 docs
 - **[Rancher Documentation](https://rancher.com/docs/)** - Official Rancher docs
