@@ -446,7 +446,7 @@ SN90 (KubeTEE) Alpha is a **utility token consumed to access confidential comput
 
 ### Owner Conviction Auto-Locked to Perpetuity
 
-**KubeTEE LTD — subnet owner**: owns the mechanism, the $198k (≈1,003 TAO) subnet registration, and the 18% owner emission stream. No token sales against promises, no customer balances, no treasury — all unused emissions are recycled. KubeTEE LTD **auto-locks 100% of its dTAO conviction to perpetuity** — the owner's locked TAO/Alpha conviction is continuously re-locked on-chain so it never decays and is never withdrawn to liquidate. This is a permanent, programmatic commitment, not a discretionary promise: the owner holds no discretionary liquid position to sell, value reaches the owner only through the 18% owner-emission stream, and the owner's conviction is permanently out of the float. It complements the no-treasury posture on the owner side and removes the large-discretionary-insider-position fact pattern from the securities analysis (see [Tokenomics — Utility Token & DePIN Model](./docs/TOKENOMICS.md)).
+**KubeTEE AI LTD — subnet owner**: owns the mechanism, the $198k (≈1,003 TAO) subnet registration, and the 18% owner emission stream. No token sales against promises, no customer balances, no treasury — all unused emissions are recycled. KubeTEE AI LTD **auto-locks 100% of its dTAO conviction to perpetuity** — the owner's locked TAO/Alpha conviction is continuously re-locked on-chain so it never decays and is never withdrawn to liquidate. This is a permanent, programmatic commitment, not a discretionary promise: the owner holds no discretionary liquid position to sell, value reaches the owner only through the 18% owner-emission stream, and the owner's conviction is permanently out of the float. It complements the no-treasury posture on the owner side and removes the large-discretionary-insider-position fact pattern from the securities analysis (see [Tokenomics — Utility Token & DePIN Model](./docs/TOKENOMICS.md)).
 
 ### Recycle vs Burn
 
@@ -462,13 +462,13 @@ For a compute subnet whose product is ongoing work, **recycle** is the right eco
 ```mermaid
 flowchart LR
     Proto["Bittensor protocol<br/>41 / 41 / 18 emission split"]
-    Proto -->|"18% owner stream"| Kube["KubeTEE LTD<br/>subnet owner<br/>mechanism + IP"]
+    Proto -->|"18% owner stream"| Kube["KubeTEE AI LTD<br/>subnet owner<br/>mechanism + IP"]
     Proto -->|"41% miner stream<br/>(one pool)"| Pool["Miner emission pool<br/>(scored, competed for)"]
     Pool -->|"scored share<br/>shrinks as network grows"| Hori["1-HORIZON LTD<br/>miner operator<br/>GPU/TEE capex"]
     Pool -->|"scored share<br/>grows as network grows"| Ext["External miners<br/>(permissionless, competitive)"]
 ```
 
-- **KubeTEE LTD — subnet owner**: owns the mechanism, the $198k (≈1,003 TAO) subnet registration, and the **18% owner emission stream** (100% conviction auto-locked at perpetuity). No token sales against promises, no customer balances, no treasury — all unused emissions are recycled.
+- **KubeTEE AI LTD — subnet owner**: owns the mechanism, the $198k (≈1,003 TAO) subnet registration, and the **18% owner emission stream** (100% conviction auto-locked at perpetuity). No token sales against promises, no customer balances, no treasury — all unused emissions are recycled.
 - **1-HORIZON LTD — miner operator**: competes for the **41% miner share** like any miner; funds GPU/TEE capex. Registers, competes, and is deregistered under identical rules as every other miner.
 - **Target state**: the related-party (1-HORIZON) share shrinks as external miners grow — a declining related-party share is the on-chain evidence the network is real.
 
