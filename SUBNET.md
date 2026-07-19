@@ -317,15 +317,6 @@ btcli sudo set --netuid 1 --param recycle_or_burn --value Recycle --network ws:/
 btcli subnets metagraph --netuid 1 --network ws://127.0.0.1:9944
 ```
 
-## UAT
-
-The executable UAT runbook for the g004 acceptance demos (healthy split,
-score-0, runtime-outage skip, startup refusal, metrics scrape, degraded
-mode, and the operator-gated reconciliation demo) is
-[`docs/UAT-g004.md`](docs/UAT-g004.md). The live demos require operator
-actions and a running stack; they are executed at integration UAT, not by
-CI.
-
 ---
 
 See also: `scripts/setup_single_node.py`, `scripts/validator.py`,
