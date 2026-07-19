@@ -77,32 +77,32 @@ Recycling all unused emissions reaches the same posture by a different route: th
 
 ### The protocol-native (no-invoice) model
 
-The cleanest structure is the **protocol-native model**: SN90's Alpha is the access ticket to the compute; another subnet (e.g. SN64 / Chutes) acquires it on the open market and spends it to consume. No bilateral paper anywhere.
+The cleanest structure is the **protocol-native model**: SN90's Alpha is the access ticket to the compute; any other subnet or AI workload (e.g. an inference subnet like SN64 / Chutes) acquires it on the open market and spends it to consume. No bilateral paper anywhere.
 
 **Securities-wise this is the strongest possible fact pattern for SN90.** The absence of a contract is not a gap — it is the feature. There is no bilateral scheme to characterize as an investment contract, just spot acquisition of a token followed by its consumptive use, which lands squarely in the release's carve-out that securities laws generally do not apply to items purchased for use or consumption.
 
-Better still, it upgrades SN90's own token classification: an Alpha that **must be spent to obtain compute** is a token with genuine programmatic utility on a functional system — precisely the digital-commodity definition — rather than a token whose only story is speculation. SN64's demand gives organic, verifiable consumption.
+Better still, it upgrades SN90's own token classification: an Alpha that **must be spent to obtain compute** is a token with genuine programmatic utility on a functional system — precisely the digital-commodity definition — rather than a token whose only story is speculation. Demand from subnets and AI workloads gives organic, verifiable consumption.
 
 ### The flywheel
 
 ```mermaid
 flowchart LR
-    Cust["External customers<br/>pay fiat for inference"] --> SN64["SN64 (Chutes)<br/>inference / subscription"]
-    SN64 -->|swap TAO for Alpha<br/>on open pool| Pool["SN90 Alpha pool<br/>(open market, no discounts)"]
-    Pool -->|Alpha| SN64
-    SN64 -->|spend Alpha<br/>for compute| SN90["SN90 (KubeTEE)<br/>confidential compute"]
+    Cust["External customers<br/>pay fiat for AI workloads"] --> Cons["Subnets & AI workloads<br/>(e.g. SN64 / Chutes inference)"]
+    Cons -->|swap TAO for Alpha<br/>on open pool| Pool["SN90 Alpha pool<br/>(open market, no discounts)"]
+    Pool -->|Alpha| Cons
+    Cons -->|spend Alpha<br/>for compute| SN90["SN90 (KubeTEE)<br/>confidential compute"]
     SN90 -->|spent Alpha recycled| Unissued["Unissued supply<br/>(zero discretion)"]
     Unissued -->|re-emit via 41/41/18| Proto["Bittensor protocol"]
     Proto -->|miners / validators / owner| SN90
-    SN64 -.->|run validator on SN90| Val["SN64-aligned validator<br/>scores miner output = SLA"]
+    Cons -.->|run validator on SN90| Val["Consumer-aligned validator<br/>scores miner output = SLA"]
     Val -.->|Yuma Consensus| Proto
 ```
 
-The acquisition leg is where the value transfer happens: SN64 swaps TAO into SN90's pool to get Alpha — that swap is the real payment. Every purchase is TAO inflow into SN90's reserve and upward pressure on the Alpha price. Under the current emission model, each subnet's share of block emissions is proportional to its EMA token price normalized across all subnets, so sustained SN64 buying directly raises SN90's emission share. The flywheel: external inference revenue → SN64 buys SN90 Alpha → price and emissions rise → miner incentive grows → more compute capacity → more inference served. Because SN64's demand is funded by outside customers, this is genuinely **external demand one hop removed** — not the circular emissions-recycling pattern that gets subnets dismissed as hot-potato economics.
+The acquisition leg is where the value transfer happens: a consuming subnet or AI workload swaps TAO into SN90's pool to get Alpha — that swap is the real payment. Every purchase is TAO inflow into SN90's reserve and upward pressure on the Alpha price. Under the current emission model, each subnet's share of block emissions is proportional to its EMA token price normalized across all subnets, so sustained consumer buying directly raises SN90's emission share. The flywheel: external AI-workload revenue → consumers buy SN90 Alpha → price and emissions rise → miner incentive grows → more compute capacity → more workloads served. Because consumer demand is funded by outside customers, this is genuinely **external demand one hop removed** — not the circular emissions-recycling pattern that gets subnets dismissed as hot-potato economics.
 
 ### The spend leg (design decision)
 
-When SN64 spends Alpha for compute, SN90's mechanism decides what happens to it:
+When a consumer spends Alpha for compute, SN90's mechanism decides what happens to it:
 
 - **Burn** — permanent supply reduction, does not touch `SubnetAlphaOut`, maximum scarcity signal.
 - **Recycle** (chosen) — returns to unissued supply, reduces `SubnetAlphaOut`, extends the Alpha emission runway and pushes halving thresholds out; effectively refills the budget that pays miners.
@@ -112,17 +112,17 @@ Recycle is the mechanically interesting choice for a compute subnet: recycling c
 
 ### Reflexivity risks (the flywheel spins both ways)
 
-- **Concentration**: if SN64 becomes the dominant source of TAO inflow, SN90's emission share is a derivative of one customer's purchasing schedule. The day they pause, your price EMA decays, emission share follows, miner revenue drops, and capacity exits. Single-customer alpha demand is how a subnet deregisters fast.
-- **Predictability**: if SN64 buys on a fixed cadence sized to revenue, that flow is visible on-chain and will be front-run. Use continuous small swaps (TWAP-style) rather than monthly lumps — this also smooths the EMA rather than spiking it.
-- **Inventory exposure**: SN64 holds SN90 Alpha between purchase and spend, carrying the token's volatility as working-capital risk. The deeper the pool, the smaller that risk; pool depth is partly the subnet owner's problem to solve.
+- **Concentration**: if any single subnet or AI workload becomes the dominant source of TAO inflow, SN90's emission share is a derivative of one customer's purchasing schedule. The day they pause, your price EMA decays, emission share follows, miner revenue drops, and capacity exits. Single-customer alpha demand is how a subnet deregisters fast — diversify the consumer base across multiple subnets and workloads.
+- **Predictability**: if a consumer buys on a fixed cadence sized to revenue, that flow is visible on-chain and will be front-run. Use continuous small swaps (TWAP-style) rather than monthly lumps — this also smooths the EMA rather than spiking it.
+- **Inventory exposure**: a consumer holds SN90 Alpha between purchase and spend, carrying the token's volatility as working-capital risk. The deeper the pool, the smaller that risk; pool depth is partly the subnet owner's problem to solve.
 
 ### Quality enforcement without contracts
 
-No SLA means SN90's validators **are** the SLA: scoring must measure exactly what SN64 consumes — latency, throughput, uptime, correctness of the compute delivered — or miners will optimize for the metric while SN64 experiences something worse. An elegant protocol-native option: SN64 (or an entity aligned with them) runs a validator on SN90, so the customer's own quality observations feed Yuma Consensus directly. The customer scores the vendor's workers, and the chain settles it.
+No SLA means SN90's validators **are** the SLA: scoring must measure exactly what consumers experience — latency, throughput, uptime, correctness of the compute delivered — or miners will optimize for the metric while consumers experience something worse. An elegant protocol-native option: a consuming subnet or AI workload (or an entity aligned with them) runs a validator on SN90, so the customer's own quality observations feed Yuma Consensus directly. The customer scores the vendor's workers, and the chain settles it.
 
 ### Keep the loop at the market layer
 
-If the subnet starts withholding miner emission to owner-controlled hotkeys to juice the economics, the penalty applies regardless of whether that emission is recycled or burned — the mechanism is source-aware, not method-aware. The clean version is entirely arm's-length at the protocol level: SN64 swaps on the open pool like anyone else, spends like anyone else, and SN90's edge is just being the subnet whose token has a real consumer. That is also the version where the flywheel narrative — usage-backed Alpha demand — is verifiable by anyone reading the chain.
+If the subnet starts withholding miner emission to owner-controlled hotkeys to juice the economics, the penalty applies regardless of whether that emission is recycled or burned — the mechanism is source-aware, not method-aware. The clean version is entirely arm's-length at the protocol level: every consumer swaps on the open pool like anyone else, spends like anyone else, and SN90's edge is just being the subnet whose token has real consumers (subnets and AI workloads, not just one named partner). That is also the version where the flywheel narrative — usage-backed Alpha demand — is verifiable by anyone reading the chain.
 
 ---
 
@@ -151,12 +151,12 @@ The `MinerBurned` penalty targets miner emission flowing to hotkeys owned by the
 
 ### Concentration risk (classification risk is concentration, not existence)
 
-A related-party miner on the subnet is unremarkable — most owner teams bootstrap capacity this way. What degrades both the DePIN story and the digital-commodity posture is **1-HORIZON becoming the dominant miner**: at that point the network is not meaningfully permissionless, the compute SN64 pays for is mostly produced by the owner's sister company, and token value starts depending on one director's operational decisions across both entities — the managerial-efforts prong creeping back in. This is the "own a DC, fully self-mine, limit access" anti-pattern.
+A related-party miner on the subnet is unremarkable — most owner teams bootstrap capacity this way. What degrades both the DePIN story and the digital-commodity posture is **1-HORIZON becoming the dominant miner**: at that point the network is not meaningfully permissionless, the compute consumers pay for is mostly produced by the owner's sister company, and token value starts depending on one director's operational decisions across both entities — the managerial-efforts prong creeping back in. This is the "own a DC, fully self-mine, limit access" anti-pattern.
 
 ### Load-bearing mitigations (in order)
 
 1. The incentive mechanism must be **objective and published**, scoring measurable compute properties so no validator judgment call can favor 1-HORIZON.
-2. The validator set should include parties KubeTEE does not control (an SN64-aligned validator doubles as both quality signal and independence proof).
+2. The validator set should include parties KubeTEE does not control (a consumer-aligned validator from a consuming subnet or AI workload doubles as both quality signal and independence proof).
 3. 1-HORIZON registers, competes, and is deregistered under identical rules as every other miner — same registration cost, same immunity period, no reserved UIDs.
 4. **Want external miners to out-compete 1-HORIZON over time** — a declining related-party share is the on-chain evidence the network is real. Target state: a taostats chart where the related-party (purple) share shrinks as external (gray) miners grow.
 
@@ -179,31 +179,31 @@ xychart-beta
     line "Consumption revenue" [10, 15, 22, 31, 42, 50, 63, 79]
 ```
 
-The amber **emission subsidy** line decays as emissions taper over an unknown horizon; the green **consumption revenue** line rises as SN64 spend grows. They cross at the **crossover** — the point where net Alpha issuance ≈ 0 and consumers (not emissions) fund the miner budget through the pool. The exact date is unknown (recycle shifts halving thresholds), so the x-axis is an undated horizon, not a halving schedule.
+The amber **emission subsidy** line decays as emissions taper over an unknown horizon; the green **consumption revenue** line rises as consumer spend (from subnets and AI workloads) grows. They cross at the **crossover** — the point where net Alpha issuance ≈ 0 and consumers (not emissions) fund the miner budget through the pool. The exact date is unknown (recycle shifts halving thresholds), so the x-axis is an undated horizon, not a halving schedule.
 
 ### The DePIN subsidy thesis
 
-SN64 gets compute at below-market price because SN90 emissions subsidize the cost of compute. This is the goal of SN90: help subsidize the cost of compute, with a more efficient tech stack that monetizes compute better than a VM.
+Consumers (subnets and AI workloads) get compute at below-market price because SN90 emissions subsidize the cost of compute. This is the goal of SN90: help subsidize the cost of compute, with a more efficient tech stack that monetizes compute better than a VM.
 
 ### Mechanics of who is paying
 
-A miner's all-in compensation is **emissions plus consumption spend**. When emissions cover most of the cost base, miners can price delivered compute below their cash cost, and SN64 pockets the gap. That gap is not free — it is paid by **Alpha dilution**, i.e., by stakers and holders absorbing issuance. The honest description: token holders are collectively funding customer acquisition for the compute network. That is legitimate DePIN bootstrapping (the Helium/Filecoin/io.net playbook), and stated that way it is also classification-safe — the discount is protocol-programmatic, available to anyone who buys Alpha on the open pool, not a managerial pricing decision.
+A miner's all-in compensation is **emissions plus consumption spend**. When emissions cover most of the cost base, miners can price delivered compute below their cash cost, and the consumer pockets the gap. That gap is not free — it is paid by **Alpha dilution**, i.e., by stakers and holders absorbing issuance. The honest description: token holders are collectively funding customer acquisition for the compute network. That is legitimate DePIN bootstrapping (the Helium/Filecoin/io.net playbook), and stated that way it is also classification-safe — the discount is protocol-programmatic, available to anyone who buys Alpha on the open pool, not a managerial pricing decision.
 
 ### Net issuance and the crossover
 
 Net Alpha issuance = emissions out − consumption recycled back.
 
 - **Pre-crossover (amber)**: low utilization; inflation-funding the subsidy.
-- **Crossover**: as SN64's spend grows, recycling offsets more of the emission; when consumption spend equals emissions, net issuance is roughly zero, and the "subsidy" has become a closed loop where consumers fund the miner budget through the pool.
+- **Crossover**: as consumer spend grows, recycling offsets more of the emission; when consumption spend equals emissions, net issuance is roughly zero, and the "subsidy" has become a closed loop where consumers fund the miner budget through the pool.
 - **Post-crossover**: net-deflationary while still paying miners fully.
 
 This gives a single on-chain KPI worth publishing from day one — the **subsidy ratio** (emission value ÷ total miner compensation) — and its required trajectory is **monotonically down**. That number declining is simultaneously the economic health metric, the DePIN credibility proof, and the answer to anyone claiming the token only exists to farm emissions.
 
 ### Defenses against the reflexive spiral
 
-Failure mode: Alpha price falls → subsidy value shrinks → below-market pricing evaporates → SN64 routes compute elsewhere → consumption falls → price falls further.
+Failure mode: Alpha price falls → subsidy value shrinks → below-market pricing evaporates → consumers route compute elsewhere → consumption falls → price falls further.
 
-1. **Subsidy tapers by policy expectation, not by surprise.** If SN64 builds unit economics assuming permanent 40%-below-market compute, the first halving breaks their margin model and the demand simultaneously. Consumers should price in a published glide path.
+1. **Subsidy tapers by policy expectation, not by surprise.** If a consumer builds unit economics assuming permanent 40%-below-market compute, the first halving breaks their margin model and the demand simultaneously. Consumers should price in a published glide path.
 2. **Stack efficiency is the moat.** If the KubeTEE stack genuinely extracts more revenue per GPU-hour than VM rental — Kubernetes bin-packing multiple workloads per card instead of dedicated-VM idle time, TEE attestation commanding a confidential-compute premium, higher effective utilization — then part of the discount is structural and survives emission decay. Emissions buy time; stack efficiency is the moat. A subnet whose price advantage is 70% subsidy / 30% efficiency at launch needs to be 30/70 by crossover.
 
 ### Wash consumption (attack surface specific to subsidized-compute subnets)

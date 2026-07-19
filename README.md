@@ -387,18 +387,18 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    Cust["External customers<br/>pay fiat for inference"] --> SN64["SN64 (Chutes)<br/>inference / subscription"]
-    SN64 -->|swap TAO for Alpha<br/>on open pool| Pool["SN90 Alpha pool<br/>(open market, no discounts)"]
-    Pool -->|Alpha| SN64
-    SN64 -->|spend Alpha<br/>for compute| SN90["SN90 (KubeTEE)<br/>confidential compute"]
+    Cust["External customers<br/>pay fiat for AI workloads"] --> Cons["Subnets & AI workloads<br/>(e.g. SN64 / Chutes inference)"]
+    Cons -->|swap TAO for Alpha<br/>on open pool| Pool["SN90 Alpha pool<br/>(open market, no discounts)"]
+    Pool -->|Alpha| Cons
+    Cons -->|spend Alpha<br/>for compute| SN90["SN90 (KubeTEE)<br/>confidential compute"]
     SN90 -->|spent Alpha recycled| Unissued["Unissued supply<br/>(zero discretion)"]
     Unissued -->|re-emit via 41/41/18| Proto["Bittensor protocol"]
     Proto -->|miners / validators / owner| SN90
-    SN64 -.->|run validator on SN90| Val["SN64-aligned validator<br/>scores miner output = SLA"]
+    Cons -.->|run validator on SN90| Val["Consumer-aligned validator<br/>scores miner output = SLA"]
     Val -.->|Yuma Consensus| Proto
 ```
 
-External customers pay fiat for inference → SN64 (Chutes) swaps TAO for SN90 Alpha on the **open pool** (no discounts, no allocations, no side-letters) → spends Alpha to consume SN90 confidential compute → spent Alpha is **recycled** to unissued supply → re-emitted via the **41/41/18** split (miners / validators / owner). An **SN64-aligned validator** on SN90 scores miner output — the protocol-native SLA (no contract needed). This is external demand one hop removed, not circular emissions-farming.
+External customers pay fiat for AI workloads → a consuming subnet or AI workload (e.g. SN64 / Chutes) swaps TAO for SN90 Alpha on the **open pool** (no discounts, no allocations, no side-letters) → spends Alpha to consume SN90 confidential compute → spent Alpha is **recycled** to unissued supply → re-emitted via the **41/41/18** split (miners / validators / owner). A **consumer-aligned validator** on SN90 scores miner output — the protocol-native SLA (no contract needed). This is external demand one hop removed, not circular emissions-farming.
 
 ### DePIN Subsidy Trajectory
 
@@ -417,9 +417,9 @@ xychart-beta
     line "Consumption revenue" [10, 15, 22, 31, 42, 50, 63, 79]
 ```
 
-The amber **emission subsidy** line decays as emissions taper over an unknown horizon; the green **consumption revenue** line rises as SN64 spend grows. They cross at the **crossover** — the point where net Alpha issuance ≈ 0 and consumers (not emissions) fund the miner budget through the pool. The exact date is unknown (recycle shifts halving thresholds), so the x-axis is an undated horizon, not a halving schedule.
+The amber **emission subsidy** line decays as emissions taper over an unknown horizon; the green **consumption revenue** line rises as consumer spend (from subnets and AI workloads) grows. They cross at the **crossover** — the point where net Alpha issuance ≈ 0 and consumers (not emissions) fund the miner budget through the pool. The exact date is unknown (recycle shifts halving thresholds), so the x-axis is an undated horizon, not a halving schedule.
 
-Miner compensation = emissions + consumption spend. While emissions cover most of the cost base, miners price compute below cash cost and SN64 pockets the gap (funded by Alpha dilution). The **subsidy ratio** (emission value ÷ total miner compensation) is the single on-chain KPI, monotonically declining:
+Miner compensation = emissions + consumption spend. While emissions cover most of the cost base, miners price compute below cash cost and the consumer pockets the gap (funded by Alpha dilution). The **subsidy ratio** (emission value ÷ total miner compensation) is the single on-chain KPI, monotonically declining:
 
 - **Pre-crossover** (amber): net inflationary; emissions fund the subsidy.
 - **Crossover**: consumption spend = emissions → net Alpha issuance ≈ 0; consumers fund the miner budget through the pool.
