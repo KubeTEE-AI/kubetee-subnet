@@ -173,13 +173,13 @@ config:
 ---
 xychart-beta
     title "DePIN Subsidy Trajectory"
-    x-axis "Time — halvings decay the amber line" [t0, t1, t2, t3, t4, t5, t6, t7]
+    x-axis "Time (horizon unknown)" 0 --> 100
     y-axis "Value" 0 --> 100
-    line "Emission subsidy" [88, 76, 64, 52, 40, 30, 22, 16]
-    line "Consumption revenue" [12, 24, 36, 48, 60, 70, 78, 84]
+    line "Emission subsidy" [88, 83, 77, 70, 62, 53, 43, 32]
+    line "Consumption revenue" [10, 15, 22, 31, 42, 50, 63, 79]
 ```
 
-The amber **emission subsidy** line decays with each halving; the green **consumption revenue** line rises as SN64 spend grows. They cross at the **crossover** — the point where net Alpha issuance ≈ 0 and consumers (not emissions) fund the miner budget through the pool.
+The amber **emission subsidy** line decays as emissions taper over an unknown horizon; the green **consumption revenue** line rises as SN64 spend grows. They cross at the **crossover** — the point where net Alpha issuance ≈ 0 and consumers (not emissions) fund the miner budget through the pool. The exact date is unknown (recycle shifts halving thresholds), so the x-axis is an undated horizon, not a halving schedule.
 
 ### The DePIN subsidy thesis
 
