@@ -280,7 +280,7 @@ All PRs require Claude Code review approval.
 ## Technology Stack
 
 **Core Framework:**
-- Bittensor SDK (>=9.11.1) - Decentralized network protocol
+- bittensor (>=10.0.0) — Bittensor v11+ unified package (SDK + btcli), from [RaoFoundation/subtensor](https://github.com/RaoFoundation/subtensor) (`sdk/python`)
 - Starlette (>=0.30.0) - ASGI web framework
 - Pydantic (>=2) - Data validation
 - PyTorch (>=2) - ML model support
