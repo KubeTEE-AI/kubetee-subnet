@@ -79,7 +79,7 @@ As a member of the [Confidential Computing Consortium (CCC)](https://confidentia
 **Mission**: To turn decentralized GPU clusters into a confidential AI factory — running AI training, inference, and data-processing jobs in Trusted Execution Environments, scheduled fairly across Bittensor miner clusters by Armada, with the highest standards of security, compliance, and performance.
 
 **Key Differentiators**:
-- **Security-First**: TEE-enabled infrastructure with FIPS-140-3 as the Early Access target (FIPS-140-2 validated RKE2 baseline) and Kata Containers isolation
+- **Security-First**: TEE-enabled infrastructure on a FIPS-140-2 validated RKE2 baseline in Early Access (FIPS-140-3 as a Phase 3 target) and Kata Containers isolation
 - **Armada-Scheduled**: multi-cluster batch scheduling with fair-use queuing, gang scheduling, and preemption across decentralized clusters
 - **NVIDIA-Powered**: NeMo Microservices, NIM models, and AI Blueprints as first-class confidential job types
 - **Decentralized**: one hotkey per cluster, nodes co-located in a single data center, expanding across global regions
@@ -162,7 +162,7 @@ KubeTEE is in **Early Access**. The first deployment targets **two clusters in t
 - Running confidential AI jobs (NeMo / NIM / Blueprints) in Kata + CoCo TEE pods
 - The **validator incentive mechanism**: scoring miners on TEE attestation, Armada job success, uptime, and **competitive pricing** against the other compute subnets (Targon, Lium, Chutes) with a 75% utilization target
 - **Emissions + Alpha/TAO paid jobs** — emissions reward miners for capacity (supply-side); consumers pay Alpha/TAO in **compute units** for compute consumed (demand-side). USDC-on-BASE fiat billing is Phase 2 (see [Roadmap](#roadmap))
-- **Security**: Confidential Computing TEE with FIPS-140-3 as the Early Access target on a FIPS-140-2 validated RKE2 baseline
+- **Security**: Confidential Computing TEE on a FIPS-140-2 validated RKE2 baseline (FIPS-140-3 as a Phase 3 target)
 
 ---
 
@@ -171,7 +171,7 @@ KubeTEE is in **Early Access**. The first deployment targets **two clusters in t
 Organizations running sensitive AI workloads — training, fine-tuning, inference, data processing — face an impossible choice between security, cost, and trust. KubeTEE resolves all three:
 
 1. **Private data & models must stay private** — Public cloud AI and traditional deployments expose data in memory and give providers/insiders access. KubeTEE enforces hardware TEE isolation (Intel TDX/SGX, NVIDIA CC) via Kata + CoCo, with remote attestation so you can verify the exact code running on your data; data is protected at rest, in transit, and in use.
-2. **Regulated workloads need verifiable compute** — Healthcare (HIPAA), Finance (SOC2/PCI-DSS), Government (FedRAMP) need proof of isolation. KubeTEE provides FIPS-140-3 target on FIPS-140-2 validated RKE2, cryptographic attestation, audit trails (Prometheus, Kubernetes events), and isolated namespaces for tenant separation.
+2. **Regulated workloads need verifiable compute** — Healthcare (HIPAA), Finance (SOC2/PCI-DSS), Government (FedRAMP) need proof of isolation. KubeTEE provides a FIPS-140-2 validated RKE2 baseline (FIPS-140-3 as a Phase 3 target), cryptographic attestation, audit trails (Prometheus, Kubernetes events), and isolated namespaces for tenant separation.
 3. **Trust in decentralized infrastructure** — Centralized clouds are single points of failure with vendor lock-in. KubeTEE's decentralized multi-cluster architecture, Bittensor incentives, validator attestation, and open standards (Kubernetes, Armada, Kata, CoCo) remove the single point of failure and the lock-in.
 
 ---
@@ -193,7 +193,7 @@ CoCo provides transparent confidential image decryption and remote attestation v
 #### Kubernetes High Availability
 
 **RKE2 Rancher Kubernetes**
-- [FIPS-140-2 validated](https://docs.rke2.io/security/fips_support) U.S. Federal Government Grade Security, with FIPS-140-3 as the Early Access target
+- [FIPS-140-2 validated](https://docs.rke2.io/security/fips_support) U.S. Federal Government Grade Security (Early Access baseline), with FIPS-140-3 as a Phase 3 target
 - Fully conformant distribution focused on security and compliance
 
 **Multi-Cluster Management**
@@ -247,7 +247,7 @@ Armada addresses Kubernetes batch limitations that matter for the Factory: singl
 #### Subnet Owner Infrastructure
 - Global Multi-Cluster Control Plane with Rancher on Confidential Computing TEE
 - Rancher Multi-Cluster Management with Fleet for GitOps
-  - RKE2 Rancher Kubernetes with FIPS-140-3 target (FIPS-140-2 validated baseline)
+  - RKE2 Rancher Kubernetes (FIPS-140-2 validated baseline in Early Access; FIPS-140-3 as a Phase 3 target)
   - Kata Containers (TEE)
   - [Confidential Containers](https://confidentialcontainers.org/docs/overview/) Operator
   - Armada Server (controller, scheduler, lookout + Pulsar/Redis/Postgres)
@@ -639,7 +639,6 @@ See [Workflow Orchestration — Airflow & Metaflow](./docs/WORKFLOW-ORCHESTRATIO
 - [ ] Emissions rewards for miners providing confidential compute capacity (supply-side)
 - [ ] Alpha / TAO paid jobs (demand-side) — price compute in **compute units (CU)** that are **competitive** (benchmarked vs Targon/Lium/Chutes) and **dynamic according to the job queues** (Armada queue depth + the 75% utilization target set the CU price per job class) — see [Competitive Pricing](./docs/COMPETITIVE-PRICING.md)
 - [ ] Competitive pricing dimension: scrape Targon (SN4) / Lium (SN51) / Chutes (SN64) price feeds, compute per-class target price, score miners on price competitiveness against a 75% utilization target (see [Competitive Pricing](./docs/COMPETITIVE-PRICING.md))
-- [ ] FIPS-140-3 target on FIPS-140-2 validated RKE2 baseline
 - [ ] Confidential NeMo / NIM / Blueprint job templates
 - [ ] Confidential Subnets Owners and Approved Integrators templates.
 
@@ -664,6 +663,7 @@ See [Workflow Orchestration — Airflow & Metaflow](./docs/WORKFLOW-ORCHESTRATIO
 - [ ] More job templates
 - [ ] Multi-arch TEE (Intel TDX + AMD SEV-SNP)
 - [ ] Additional confidential compute runtimes
+- [ ] FIPS-140-3 target on FIPS-140-2 validated RKE2 baseline
 - [ ] NIM Operator Kata Sandbox + Dynamo production-readiness — graduate NVIDIA's [experimental Kata Sandbox](https://docs.nvidia.com/nim-operator/latest/kata-sandbox.html) and [experimental Dynamo](https://docs.nvidia.com/nim-operator/latest/dynamo.html) support to production confidential deployments (KubeTEE working with the NVIDIA NIM Operator and Kata Containers teams)
 
 ---

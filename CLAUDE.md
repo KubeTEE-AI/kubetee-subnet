@@ -320,7 +320,7 @@ All PRs require Claude Code review approval.
   - **Bittensor subnet integrations (SOTA, confidential-ready):** KubeTEE replaces/augments NeMo stack layers with SOTA Bittensor subnets run inside `kata-qemu-nvidia-gpu-tdx` / `kata-qemu-tdx` — Gradients SN56 (AutoML fine-tuning → NeMo Customizer), Affine SN120 (RL/reason mining → Customizer), Albedo SN97 (coding-LLM king-of-the-hill → Customizer/eval), Orion SN27 (data curation → Data Designer), Desearch SN22 (real-time search → Retriever/RAG), Chutes SN64 + Parallax (decentralized MoE training/inference, TEE-only migration → distributed training/inference), Hippius SN75 (S3+IPFS storage, already AMD SEV-SNP CC → solves CoCo ephemeral-data-only limit), Ditto SN118 (agent memory/context), **BitSec SN60 (security gate — design concept, planned pre-promotion analysis of AI workload code/image before staging/production; to be detailed during integration)**. Open set — any subnet with a verifiable SOTA feed for a NeMo layer is a candidate. See README "Bittensor Subnet Integrations (SOTA, Confidential-Ready)" and "BitSec SN60 — Security Gate for AI Workload Promotion".
 
 **Infrastructure:**
-- Kubernetes (RKE2) - FIPS-140-2 validated container orchestration (FIPS-140-3 target)
+- Kubernetes (RKE2) - FIPS-140-2 validated container orchestration (FIPS-140-3 as a Phase 3 target)
 - Rancher - Multi-cluster management
 - Kata Containers - Secure container runtime with TEE support
 - Prometheus - Metrics collection
@@ -328,7 +328,7 @@ All PRs require Claude Code review approval.
 **Security:**
 - Intel TDX/SGX - CPU-based TEE
 - NVIDIA Confidential Computing - GPU-based TEE (Hopper/Blackwell)
-- FIPS-140-3 target on a FIPS-140-2 validated baseline
+- FIPS-140-2 validated baseline (FIPS-140-3 as a Phase 3 target)
 
 **Blockchain:**
 - Bittensor - native emissions via `set_weights` (Early Access)
@@ -398,7 +398,7 @@ btcli wallet overview --wallet.name miner
 **TEE Requirements:**
 - Miners MUST provide TEE attestation (Intel TDX/SGX or NVIDIA CC)
 - 8-GPU nodes required (H100/H200/B200/B300)
-- FIPS-140-3 target (FIPS-140-2 validated baseline) mandatory
+- FIPS-140-2 validated baseline mandatory (FIPS-140-3 as a Phase 3 target)
 
 **Blacklist Logic:**
 - Implemented in miner's `blacklist()` method
@@ -417,7 +417,7 @@ btcli wallet overview --wallet.name miner
 - Armada multi-cluster batch scheduler integration
 - Multi-cluster Kubernetes setup with Rancher Fleet (RKE2)
 - TEE attestation service integration (Kata + CoCo)
-- FIPS-140-3 target on a FIPS-140-2 validated baseline
+- FIPS-140-2 validated baseline (FIPS-140-3 as a Phase 3 target)
 
 **Miner Implementation:** Infrastructure miners register their RKE2 clusters with Rancher Fleet (no separate miner process). Validators communicate directly with registered Kubernetes clusters via Rancher Fleet and score them via TEE attestation + Armada job metrics. Miners must provide:
 - Kubernetes cluster with Rancher Fleet agent
@@ -444,6 +444,6 @@ btcli wallet overview --wallet.name miner
 4. **NVIDIA AI stack** (NeMo, NIM, Blueprints) runs as Armada-scheduled confidential jobs in Kata + CoCo TEE
 5. **Armada** is the multi-cluster batch scheduler across RKE2 miner clusters (one hotkey per cluster, single data center)
 6. **Early Access billing is emissions + Alpha/TAO paid jobs** — emissions reward miners for capacity (supply-side); consumers pay Alpha/TAO in **compute units** for compute consumed (demand-side), priced competitively vs Targon/Lium/Chutes and dynamically per the job queues. USDC-on-BASE fiat billing, revenue share, and referral program are Phase 2 roadmap
-7. **Security-first design** — FIPS-140-3 target on FIPS-140-2 validated RKE2, CCC membership, confidential computing throughout
+7. **Security-first design** — FIPS-140-2 validated RKE2 baseline in Early Access (FIPS-140-3 as a Phase 3 target), CCC membership, confidential computing throughout
 8. **Hardware requirements** — 8x H100/H200/B200 GPUs minimum for miners
 9. **Current version 0.0.0** indicates template stage — production deployment requires significant additional work
