@@ -63,11 +63,18 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.KUBETEE_DISPATCH_TOKEN }}
         run: |
-          curl -sf -X POST \
+          http_code=$(curl -s -o /tmp/dispatch_response.json -w "%{http_code}" -X POST \
             -H "Authorization: Bearer ${GH_TOKEN}" \
             -H "Accept: application/vnd.github+json" \
             "https://api.github.com/repos/KubeTEE-AI/kubetee/dispatches" \
-            -d "{\"event_type\":\"subnet-pushed\",\"client_payload\":{\"sha\":\"${{ github.sha }}\"}}"
+            -d "{\"event_type\":\"subnet-pushed\",\"client_payload\":{\"sha\":\"${{ github.sha }}\"}}")
+          echo "HTTP status: $http_code"
+          echo "Response body:"
+          cat /tmp/dispatch_response.json
+          if [ "$http_code" -lt 200 ] || [ "$http_code" -ge 300 ]; then
+            echo "::error::dispatch failed with HTTP $http_code"
+            exit 1
+          fi
 
   publish:
     name: Publish image
