@@ -1,9 +1,10 @@
 name: Docs
 
-# Lint-only caller for the KubeTEE docs subsystem (kubetee-ci docs-lint.yml).
-# This repo is public-bound: generated architecture docs (C4, ARCHITECTURE.md)
-# are produced by the private kubetee root's "Docs Subnet" workflow and live
-# there, never committed back here.
+# Generated architecture docs (C4, ARCHITECTURE.md) are produced by the
+# private kubetee root's "Docs Repos" workflow and live there, never
+# committed back here. This repo only runs a generic, public-safe lint pass
+# (vendored directly -- no cross-repo call, since a public repo's workflow
+# cannot reliably call into a private repo's reusable workflow for forks).
 
 on:
   push:
@@ -12,6 +13,32 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-${{ github.repository }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  docs:
-    uses: KubeTEE-AI/kubetee-ci/.github/workflows/docs-lint.yml@main
+  docs-lint:
+    name: Validate repo docs
+    runs-on: [self-hosted, linux, X64]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate Markdown
+        uses: DavidAnson/markdownlint-cli2-action@v16
+        with:
+          globs: |
+            **/*.md
+            !**/node_modules/**
+
+      - name: Check links
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: --no-progress --include-fragments --exclude '^https?://' './**/*.md'
+          fail: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
