@@ -42,7 +42,7 @@ PROTECTED_CLUSTER_IDS = frozenset({"local"})
 class _Absence:
     cycles: int
     first_missing_at: float
-    metagraph_blocks: list[str]
+    metagraph_blocks: list[int]
 
 
 class ReconciliationEngine:
@@ -83,7 +83,7 @@ class ReconciliationEngine:
         self,
         registered_hotkeys: set[str] | None,
         clusters: list[dict] | None,
-        metagraph_block: str | None,
+        metagraph_block: int | None,
         refresh_registered: Callable[[], set[str] | None],
     ) -> None:
         """Evaluate reconciliation for one validator cycle.
@@ -120,7 +120,7 @@ class ReconciliationEngine:
                 record = _Absence(cycles=0, first_missing_at=now, metagraph_blocks=[])
                 self._absences[hotkey] = record
             record.cycles += 1
-            record.metagraph_blocks.append(str(metagraph_block))
+            record.metagraph_blocks.append(metagraph_block)
 
             elapsed = now - record.first_missing_at
             if record.cycles < self._min_cycles or elapsed < self._min_seconds:

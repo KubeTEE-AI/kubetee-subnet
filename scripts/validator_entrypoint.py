@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-Validator container entrypoint for the KubeTEE single-node testing pyramid.
+"""Validator container entrypoint for the KubeTEE single-node testing pyramid.
 
 Behavior:
   1. First run btcli-powered setup (register subnet, fund, register the
@@ -63,12 +62,29 @@ def main() -> None:
     ]
 
     print(f"\n$ {' '.join(setup_cmd)}")
-    setup_proc = subprocess.run(setup_cmd, env=os.environ.copy())
+    setup_proc = subprocess.run(
+        setup_cmd,
+        env=os.environ.copy(),
+        capture_output=True,
+        text=True,
+    )
 
     if setup_proc.returncode == 0:
-        print("\n=== Setup script exited successfully ===")
+        print("\n=== Setup script exited successfully ===\n")
     else:
-        print(f"\n=== Setup script exited with code {setup_proc.returncode} ===")
+        print(f"\n=== Setup script exited with code {setup_proc.returncode} ===\n")
+        if setup_proc.stderr:
+            stderr_lines = setup_proc.stderr.strip().split("\n")
+            tail = stderr_lines[-30:]
+            print("Setup stderr (last 30 lines):")
+            for line in tail:
+                print(f"  | {line}")
+        if setup_proc.stdout:
+            stdout_lines = setup_proc.stdout.strip().split("\n")
+            tail = stdout_lines[-20:]
+            print("Setup stdout (last 20 lines):")
+            for line in tail:
+                print(f"  | {line}")
         print("Continuing to validator anyway (setup steps are best-effort with --yes; inspect dozzle logs).")
 
     # The basic validator reads /app/.kubetee_netuid itself (load_config), so

@@ -68,7 +68,7 @@ gracefully).
 See also:
 - `scripts/setup_single_node.py` (the constants + ensure_dev_wallet)
 - `SUBNET.md` (how to run the stack)
-- docker-compose.yml + Dockerfile.validator (the self-setup flow)
+- docker-compose.yml + Dockerfile (the self-setup flow)
 - fdn-subnet's `scripts/register_live_subnet.py` and `docs/runbooks/key-management.md` for the source pattern.
 
 ## Optional: pre-placing key files

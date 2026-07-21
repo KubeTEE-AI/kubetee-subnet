@@ -108,10 +108,18 @@ def decide_cycle(
     (missing entries are treated as 0 — never as open trust).
     """
     hotkeys = [n.get("hotkey") for n in neurons]
+    if not all(hotkeys):
+        return SkipCycle(SkipReason.IDENTITY_VIOLATION, "neuron missing hotkey in metagraph")
     if len(hotkeys) != len(set(hotkeys)):
         return SkipCycle(SkipReason.IDENTITY_VIOLATION, "duplicate hotkey in metagraph")
 
-    by_hotkey = {n["hotkey"]: n["uid"] for n in neurons}
+    by_hotkey = {}
+    for n in neurons:
+        uid = n.get("uid")
+        hotkey = n.get("hotkey")
+        if hotkey is None or uid is None:
+            return SkipCycle(SkipReason.IDENTITY_VIOLATION, "neuron missing hotkey or uid")
+        by_hotkey[hotkey] = uid
     owner_uid = by_hotkey.get(config.owner_hotkey)
     if owner_uid is None:
         return SkipCycle(SkipReason.OWNER_UNRESOLVED, "owner hotkey not registered")

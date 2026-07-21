@@ -27,8 +27,8 @@ RUN uv pip install --system --no-cache torch --index-url https://download.pytorc
 # Use uv for installation (recommended for the project)
 RUN uv pip install --system --no-cache -r requirements.txt
 
-# Ensure btcli is available (bittensor package may not include the CLI in all versions)
-RUN uv pip install --system --no-cache bittensor-cli
+# btcli is bundled by bittensor>=11.0.0.dev0 (unified SDK from RaoFoundation/subtensor).
+# If downgrading to a pre-unified release, add `bittensor-cli` to requirements.txt.
 
 # Make sure /usr/local/bin is in PATH (uv --system puts scripts there)
 ENV PATH="/usr/local/bin:${PATH}"

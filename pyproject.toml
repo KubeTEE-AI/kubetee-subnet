@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kubetee-subnet"
+version = "0.0.0"
+description = "KubeTEE Bittensor subnet — confidential inference on TEE-protected GPU clusters"
+requires-python = ">=3.13"
+dependencies = [
+    "bittensor>=11.0.0.dev0",
+    "prometheus-client>=0.20",
+    "rich>=13",
+    "docker>=7.0.0",
+]
+
+[project.scripts]
+kubetee-validator = "scripts.validator:main"
+kubetee-validator-entrypoint = "scripts.validator_entrypoint:main"
+kubetee-print-subnet-stats = "scripts.print_subnet_stats:main"
+kubetee-setup-single-node = "scripts.setup_single_node:main"
+
+[tool.setuptools.packages.find]
+include = ["scripts*", "tests*"]
