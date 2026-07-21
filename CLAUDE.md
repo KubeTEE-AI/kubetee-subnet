@@ -58,6 +58,8 @@ Infrastructure miners register their RKE2 clusters with Rancher Fleet (labeled w
 **Validator (self-contained compose stack — see SUBNET.md):**
 ```bash
 # Runs its own Rancher + localnet chain + validator
+# The compose stack lives in the root kubetee workspace
+cd ..
 docker compose up -d --build
 # Logs: http://localhost:8080 (dozzle)
 ```
