@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import pathlib
 import sys
+import urllib.error
 
 import pytest
 
@@ -228,4 +229,4 @@ def test_transport_url_error_is_wrapped_cleanly():
     with pytest.raises(RancherError) as exc:
         client.list_clusters()
     assert exc.value.category == ErrorCategory.TRANSPORT
-    assert "URLError" not in str(exc.value)  # generic message, not raw exception
+    assert "transport failure" in str(exc.value)
