@@ -110,6 +110,12 @@ class ValidatorMetrics:
             "Reconciliation deletions that hit 404/409 (already absent/conflict)",
             registry=self.registry,
         )
+        self._cycles_total = Counter(
+            "kubetee_cycles_total",
+            "Total validator cycles by outcome",
+            ["outcome"],
+            registry=self.registry,
+        )
 
         self._consecutive_count = 0
         self._in_degraded = False
@@ -122,6 +128,8 @@ class ValidatorMetrics:
             self._recon_suppressed.labels(reason=reason.value)
         for result in ("success", "failure"):
             self._set_weights.labels(result=result)
+        for outcome in ("skip", "weights_set", "weights_rejected"):
+            self._cycles_total.labels(outcome=outcome)
 
     # -- properties ----------------------------------------------------------
 
@@ -182,6 +190,11 @@ class ValidatorMetrics:
         if not isinstance(reason, SuppressionReason):
             raise ValueError("reason must be a SuppressionReason member")
         self._recon_suppressed.labels(reason=reason.value).inc()
+
+    def record_cycle_outcome(self, outcome: str) -> None:
+        if outcome not in ("skip", "weights_set", "weights_rejected"):
+            raise ValueError(f"invalid cycle outcome: {outcome!r}")
+        self._cycles_total.labels(outcome=outcome).inc()
 
     # -- exposition ------------------------------------------------------------
 
