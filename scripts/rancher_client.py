@@ -66,6 +66,9 @@ class UrllibTransport:
                 return resp.status, resp.read().decode("utf-8", errors="replace")
         except urllib.error.HTTPError as exc:
             return exc.code, exc.read().decode("utf-8", errors="replace")
+        except urllib.error.URLError as exc:
+            # Connection-level failures (DNS, refused, timeout) propagate as transport errors
+            return 0, f"URLError: {exc.reason}"
 
 
 class RancherClient:
@@ -78,6 +81,7 @@ class RancherClient:
         transport=None,
         timeout: float = 30.0,
         user_agent: str = USER_AGENT,
+        max_pages: int = 1000,
     ) -> None:
         parts = urlsplit(base_url.strip())
         if parts.scheme != "https" or not parts.netloc:
@@ -89,6 +93,7 @@ class RancherClient:
         self._transport = transport if transport is not None else UrllibTransport()
         self._timeout = timeout
         self._user_agent = user_agent
+        self._max_pages = max_pages
 
     def __repr__(self) -> str:  # never include the token
         return f"RancherClient(origin={self._origin!r})"
@@ -176,7 +181,7 @@ class RancherClient:
         """Follow marker pagination to exhaustion, failing closed otherwise."""
         items: list[dict] = []
         url = first_url
-        for _ in range(_MAX_PAGES):
+        for _ in range(self._max_pages):
             doc = self._parse_json(self._request("GET", url))
             data = doc.get("data")
             pagination = doc.get("pagination")
@@ -205,4 +210,6 @@ class RancherClient:
                     "partial page without a next link; enumeration unprovable"
                 )
             return items
-        raise IncompleteEnumeration("pagination did not terminate")
+        raise IncompleteEnumeration(
+                f"pagination did not terminate after {self._max_pages} pages"
+            )

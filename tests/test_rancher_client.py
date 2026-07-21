@@ -216,3 +216,16 @@ def test_error_bodies_are_not_reproduced_in_messages():
     with pytest.raises(RancherError) as excinfo:
         client.list_clusters()
     assert TOKEN not in str(excinfo.value)
+
+
+def test_transport_url_error_is_wrapped_cleanly():
+    """URLError from transport is wrapped as TRANSPORT, not raw."""
+    class _URLErrorTransport:
+        def request(self, method, url, headers, timeout):
+            raise urllib.error.URLError("name or service not known")
+
+    client = RancherClient("https://valid.example.com", "token-abc", transport=_URLErrorTransport())
+    with pytest.raises(RancherError) as exc:
+        client.list_clusters()
+    assert exc.value.category == ErrorCategory.TRANSPORT
+    assert "URLError" not in str(exc.value)  # generic message, not raw exception
