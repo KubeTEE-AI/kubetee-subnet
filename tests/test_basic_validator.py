@@ -72,11 +72,61 @@ class _StopLoop(BaseException):
     (which must catch only Exception) can never swallow it."""
 
 
+class FakeNeuron:
+    def __init__(self, uid: int, hotkey: str):
+        self.uid = uid
+        self.hotkey = hotkey
+
+
 class FakeMetagraph:
-    def __init__(self, neurons: list[dict], block: int = 100):
-        self.uids = [n["uid"] for n in neurons]
-        self.hotkeys = [n["hotkey"] for n in neurons]
+    def __init__(self, neurons: list[FakeNeuron], block: int = 100):
+        self.neurons = neurons
         self.block = block
+
+
+class _FakeBalance:
+    def __init__(self, tao: float = 0.0):
+        self.tao = tao
+class FakeSubnetsNamespace:
+    """Mimics subtensor.subnets in v11."""
+
+    def __init__(
+        self,
+        neurons: list[dict],
+        metagraph_errors=None,
+        calls: list | None = None,
+    ):
+        self._neurons = neurons
+        self._metagraph_errors = list(metagraph_errors or [])
+        self.calls = calls if calls is not None else []
+
+    def metagraph(self, netuid: int):
+        self.calls.append("metagraph")
+        if self._metagraph_errors:
+            error = self._metagraph_errors.pop(0)
+            if error is not None:
+                raise error
+        return FakeMetagraph(
+            [FakeNeuron(n["uid"], n["hotkey"]) for n in self._neurons]
+        )
+
+
+class FakeStakingNamespace:
+    """Mimics bt.staking v11 namespace."""
+
+    def get(self, coldkey, hotkey, netuid):
+        return _FakeBalance(0.0)
+
+
+class FakeResult:
+    """Mimics the result of subtensor.execute(intent) in v11."""
+
+    def __init__(self, success: bool, message: str = "ok"):
+        self.is_success = success
+        self._message = message
+
+    def __str__(self) -> str:
+        return self._message
 
 
 class FakeSubtensor:
@@ -87,31 +137,30 @@ class FakeSubtensor:
         metagraph_errors=None,
         calls: list | None = None,
     ):
-        self.neurons = neurons
+        self.subnets = FakeSubnetsNamespace(neurons, metagraph_errors=metagraph_errors, calls=calls)
+        self.staking = FakeStakingNamespace()
+        self.hyperparameters = object()
         self.set_weights_calls: list[dict] = []
         self._set_weights_results = list(set_weights_results or [])
-        self._metagraph_errors = list(metagraph_errors or [])
         self.calls = calls if calls is not None else []
 
-    def metagraph(self, netuid: int):
-        self.calls.append("metagraph")
-        if self._metagraph_errors:
-            error = self._metagraph_errors.pop(0)
-            if error is not None:
-                raise error
-        return FakeMetagraph(self.neurons)
-
-    def set_weights(self, wallet, netuid, uids, weights):
+    def execute(self, intent, wallet):
         self.calls.append("set_weights")
         self.set_weights_calls.append(
-            {"wallet": wallet, "netuid": netuid, "uids": uids, "weights": weights}
+            {
+                "wallet": wallet,
+                "netuid": intent.netuid,
+                "uids": intent.uids,
+                "weights": intent.weights,
+            }
         )
         if self._set_weights_results:
-            result = self._set_weights_results.pop(0)
-            if isinstance(result, Exception):
-                raise result
-            return result
-        return (True, "ok")
+            raw = self._set_weights_results.pop(0)
+            if isinstance(raw, Exception):
+                raise raw
+            success, message = raw
+            return FakeResult(success, message)
+        return FakeResult(True, "ok")
 
 
 class FakeRancher:

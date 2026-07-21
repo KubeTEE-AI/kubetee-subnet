@@ -70,23 +70,35 @@ class _FakeBalance:
         self.tao = tao
 
 
-class FakeSubtensor:
-    def __init__(self, owner_ss58="5OWNER", stake_by_coldkey=None, hyperparams=None):
+class FakeSubnetsNamespace:
+    def __init__(self, owner_ss58="5OWNER"):
         self._owner_ss58 = owner_ss58
-        self._stake_by_coldkey = stake_by_coldkey or {}
-        self._hyperparams = hyperparams if hyperparams is not None else _FakeHyperparams()
 
-    def subnet_exists(self, netuid):
-        return True
-
-    def get_subnet_info(self, netuid):
+    def subnet(self, netuid):
         return _FakeSubnetInfo(self._owner_ss58)
 
-    def get_subnet_hyperparameters(self, netuid):
+
+class FakeStakingNamespace:
+    def __init__(self, stake_by_coldkey=None):
+        self._stake_by_coldkey = stake_by_coldkey or {}
+
+    def get(self, coldkey_ss58, hotkey_ss58, netuid):
+        return _FakeBalance(self._stake_by_coldkey.get(coldkey_ss58, 0.0))
+
+
+class FakeHyperparamsNamespace:
+    def __init__(self, hyperparams=None):
+        self._hyperparams = hyperparams if hyperparams is not None else _FakeHyperparams()
+
+    def get(self, netuid):
         return self._hyperparams
 
-    def get_stake(self, coldkey_ss58, hotkey_ss58, netuid):
-        return _FakeBalance(self._stake_by_coldkey.get(coldkey_ss58, 0.0))
+
+class FakeSubtensor:
+    def __init__(self, owner_ss58="5OWNER", stake_by_coldkey=None, hyperparams=None):
+        self.subnets = FakeSubnetsNamespace(owner_ss58=owner_ss58)
+        self.staking = FakeStakingNamespace(stake_by_coldkey=stake_by_coldkey)
+        self.hyperparameters = FakeHyperparamsNamespace(hyperparams=hyperparams)
 
 
 def _wallets(owner_ss58="5OWNER", miner_ss58="5MINER"):
