@@ -201,3 +201,11 @@ def test_degenerate_share_zero_reproduces_owner_only_behavior():
 def test_missing_score_treated_as_zero():
     outcome = decide_cycle(base_neurons(), {}, CONFIG)
     assert outcome.weights == {0: 1.0, 2: 0.0, 1: 0.0}
+
+
+def test_malformed_neuron_skips_instead_of_crashing():
+    config = CycleConfig(owner_hotkey="5OWNER", validator_hotkey="5VALIDATOR", miner_share=0.1)
+    neurons = [{"uid": 0, "hotkey": "5OWNER"}, {"uid": 1, "hotkey": "5VALIDATOR"}, {"uid": 2}]  # missing hotkey
+    result = decide_cycle(neurons, {}, config)
+    assert isinstance(result, SkipCycle)
+    assert result.reason == SkipReason.IDENTITY_VIOLATION
