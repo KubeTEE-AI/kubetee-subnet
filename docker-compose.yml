@@ -133,7 +133,7 @@ services:
   validator:
     build:
       context: .
-      dockerfile: Dockerfile.validator
+      dockerfile: Dockerfile
     container_name: kubetee-validator
     depends_on:
       chain:
@@ -275,7 +275,7 @@ services:
   miner-1:
     build:
       context: .
-      dockerfile: Dockerfile.validator  # reuse or make miner image; for now stub
+      dockerfile: Dockerfile  # reuse or make miner image; for now stub
     container_name: kubetee-miner-1
     profiles: ["with-miners"]
     environment:
