@@ -36,13 +36,17 @@ import time
 from collections.abc import Callable, Mapping
 from urllib.parse import urlsplit
 
+from infrastructure_validation import (
+    HOTKEY_LABEL,
+    InfrastructurePolicy,
+    ValidationProfile,
+    validate_miner,
+)
 from miner_scoring import (
-    MINER_LABEL,
     CycleConfig,
     SkipCycle,
     SkipReason,
     decide_cycle,
-    score_miner,
     validate_share,
 )
 from prometheus_client import start_http_server
@@ -77,6 +81,8 @@ class ValidatorConfig:
     reconcile_min_seconds: float
     owner_hotkey: str
     validator_hotkey: str
+    chain_network: str
+    validation_profile: ValidationProfile
     rancher_url: str
     rancher_token: str
     metrics_port: int
@@ -145,17 +151,35 @@ class ValidatorConfig:
         )
         max_skips = parse_int("KUBETEE_MAX_CONSECUTIVE_SKIPS", 10, 1)
         reconcile_cycles = parse_int("KUBETEE_RECONCILE_MIN_CYCLES", 3, 1)
-        reconcile_seconds = parse_float("KUBETEE_RECONCILE_MIN_SECONDS", 900.0, 0.0)
+        reconcile_seconds = parse_float(
+            "KUBETEE_RECONCILE_MIN_SECONDS", 900.0, 0.0
+        )
         netuid = parse_int("KUBETEE_SUBNET_NETUID", 1, 0)
         metrics_port = parse_int("KUBETEE_METRICS_PORT", 9100, 1, 65535)
 
         owner_hotkey = require("KUBETEE_OWNER_HOTKEY")
         validator_hotkey = require("KUBETEE_VALIDATOR_HOTKEY")
-        if owner_hotkey and validator_hotkey and owner_hotkey == validator_hotkey:
+        if (
+            owner_hotkey
+            and validator_hotkey
+            and owner_hotkey == validator_hotkey
+        ):
             fail(
                 "KUBETEE_VALIDATOR_HOTKEY",
                 "must differ from KUBETEE_OWNER_HOTKEY",
             )
+
+        chain_network = require("KUBETEE_CHAIN_NETWORK")
+        profile_raw = require("KUBETEE_VALIDATION_PROFILE")
+        validation_profile = ValidationProfile.PRODUCTION
+        if profile_raw:
+            try:
+                validation_profile = ValidationProfile(profile_raw)
+            except ValueError:
+                fail(
+                    "KUBETEE_VALIDATION_PROFILE",
+                    "must be production or debug",
+                )
 
         rancher_url = require("RANCHER_URL")
         if rancher_url:
@@ -181,10 +205,14 @@ class ValidatorConfig:
             reconcile_min_seconds=reconcile_seconds,
             owner_hotkey=owner_hotkey,
             validator_hotkey=validator_hotkey,
+            chain_network=chain_network,
+            validation_profile=validation_profile,
             rancher_url=rancher_url,
             rancher_token=rancher_token,
             metrics_port=metrics_port,
-            metrics_addr=(env.get("KUBETEE_METRICS_ADDR") or "0.0.0.0").strip(),
+            metrics_addr=(
+                env.get("KUBETEE_METRICS_ADDR") or "0.0.0.0"
+            ).strip(),
         )
 
 
@@ -231,6 +259,9 @@ class BasicValidator:
             validator_hotkey=config.validator_hotkey,
             miner_share=config.miner_share,
         )
+        self._infrastructure_policy = InfrastructurePolicy.for_profile(
+            config.validation_profile
+        )
 
     # -- redaction (AC5) ------------------------------------------------------
 
@@ -256,7 +287,11 @@ class BasicValidator:
         try:
             meta = subtensor.subnets.metagraph(self._config.netuid)
             neurons = [
-                {"uid": int(n.uid), "hotkey": str(n.hotkey)}
+                {
+                    "uid": int(n.uid),
+                    "hotkey": str(n.hotkey),
+                    "coldkey": str(n.coldkey),
+                }
                 for n in meta.neurons
             ]
             block = getattr(meta, "block", None)
@@ -289,7 +324,7 @@ class BasicValidator:
                 c
                 for c in clusters
                 if isinstance(c, dict)
-                and (c.get("labels") or {}).get(MINER_LABEL) == hotkey
+                and (c.get("labels") or {}).get(HOTKEY_LABEL) == hotkey
             ]
             if len(matches) != 1:
                 continue
@@ -297,7 +332,9 @@ class BasicValidator:
             if not isinstance(cluster_id, str) or not cluster_id:
                 continue
             try:
-                nodes_by_cluster[cluster_id] = self._rancher.list_nodes(cluster_id)
+                nodes_by_cluster[cluster_id] = self._rancher.list_nodes(
+                    cluster_id
+                )
             except ValueError:
                 continue  # invalid id: unfetched -> score 0
         return nodes_by_cluster
@@ -330,8 +367,22 @@ class BasicValidator:
         # 1. metagraph (identity preconditions re-checked every cycle)
         neurons, block = self._read_neurons(subtensor)
         if neurons is None:
-            self._reconciler.run_cycle(None, None, None, self._refresh_registered)
-            self._record_skip(SkipReason.METAGRAPH_UNAVAILABLE, "metagraph read failed")
+            self._reconciler.run_cycle(
+                None, None, None, self._refresh_registered
+            )
+            self._record_skip(
+                SkipReason.METAGRAPH_UNAVAILABLE, "metagraph read failed"
+            )
+            return "skip"
+        identity_check = decide_cycle(neurons, {}, self._cycle_config)
+        if isinstance(identity_check, SkipCycle):
+            self._reconciler.run_cycle(
+                None,
+                None,
+                block,
+                self._refresh_registered,
+            )
+            self._record_skip(identity_check.reason, identity_check.detail)
             return "skip"
         registered = {n["hotkey"] for n in neurons}
         miners = sorted(
@@ -359,10 +410,21 @@ class BasicValidator:
             registered, clusters, block, self._refresh_registered
         )
 
-        # 4. scoring (binary fail-closed) + identity validation
-        scores = {
-            hotkey: score_miner(hotkey, clusters, nodes_by_cluster)
+        # 4. infrastructure validation (binary fail-closed) + identity checks
+        neurons_by_hotkey = {neuron["hotkey"]: neuron for neuron in neurons}
+        verdicts = {
+            hotkey: validate_miner(
+                neurons_by_hotkey[hotkey],
+                clusters,
+                nodes_by_cluster,
+                self._config.netuid,
+                self._config.chain_network,
+                self._infrastructure_policy,
+            )
             for hotkey in miners
+        }
+        scores = {
+            hotkey: verdict.score for hotkey, verdict in verdicts.items()
         }
         decision = decide_cycle(neurons, scores, self._cycle_config)
         if isinstance(decision, SkipCycle):
@@ -421,9 +483,11 @@ class BasicValidator:
         """D14 liveness corollary: no runtime error may terminate the loop.
         Only operator signals (BaseException path) stop the process."""
         self._log.info(
-            "basic validator started: netuid=%d poll=%gs share=%g "
-            "max_consecutive_skips=%d rancher=%s",
+            "basic validator started: netuid=%d chain_network=%s profile=%s "
+            "poll=%gs share=%g max_consecutive_skips=%d rancher=%s",
             self._config.netuid,
+            self._config.chain_network,
+            self._config.validation_profile.value,
             self._config.poll_seconds,
             self._config.miner_share,
             self._config.max_consecutive_skips,
@@ -469,17 +533,25 @@ def main(env: Mapping[str, str] | None = None) -> None:
     _LOG.propagate = False
 
     wallet = bt.Wallet(name=config.wallet_name, hotkey=config.wallet_hotkey)
-    metrics = ValidatorMetrics(max_consecutive_skips=config.max_consecutive_skips)
+    metrics = ValidatorMetrics(
+        max_consecutive_skips=config.max_consecutive_skips
+    )
     # Compose keeps this port off the host network (AC11: compose-internal).
     start_http_server(
-        config.metrics_port, addr=config.metrics_addr, registry=metrics.registry
+        config.metrics_port,
+        addr=config.metrics_addr,
+        registry=metrics.registry,
     )
     client = RancherClient(config.rancher_url, config.rancher_token)
 
     def evidence_sink(event: dict) -> None:
         _LOG.info(
             "reconciliation evidence: event=%(event)s correlation_id=%(correlation_id)s",
-            {"event": event.get("event"), "correlation_id": event.get("correlation_id"), **event},
+            {
+                "event": event.get("event"),
+                "correlation_id": event.get("correlation_id"),
+                **event,
+            },
         )
 
     reconciler = ReconciliationEngine(
