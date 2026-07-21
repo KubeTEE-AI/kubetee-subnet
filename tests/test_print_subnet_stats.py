@@ -110,8 +110,13 @@ class FakeHyperparamsNamespace:
     def __init__(self, hyperparams=None):
         self._hyperparams = hyperparams if hyperparams is not None else _FakeHyperparams()
 
-    def get(self, netuid):
-        return self._hyperparams
+    def __getattr__(self, name):
+        if name.startswith("_"):
+            raise AttributeError(name)
+        # Return a callable that returns the hyperparameter value
+        def _read(netuid=None):
+            return getattr(self._hyperparams, name, "?")
+        return _read
 
 
 class FakeSubtensor:
@@ -137,7 +142,7 @@ def test_build_report_reflects_real_owned_state_with_stake():
     assert report["ownership"]["owner_ss58"] == "5OWNER"
     assert report["stake"]["owner"]["stake_tao"] == 200.0
     assert report["stake"]["miner"]["stake_tao"] == 50.0
-    assert report["hyperparameters"]["owner_cut_auto_lock_enabled"] is True
+    assert report["hyperparameters"]["immunity_period"] == 3
     assert report["hyperparameters"]["recycle_or_burn"] == "Recycle"
 
 
