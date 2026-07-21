@@ -23,7 +23,6 @@ from urllib.parse import urlsplit
 USER_AGENT = "kubetee-validator/0.1"
 _KNOWN_PAGINATION_FIELDS = {"first", "next", "last", "limit", "total", "partial"}
 _CLUSTER_ID = re.compile(r"^[a-z0-9][a-z0-9-]{0,62}$")
-_MAX_PAGES = 1000  # backstop against a pathological next-page loop
 
 
 class ErrorCategory(enum.Enum):
@@ -211,5 +210,5 @@ class RancherClient:
                 )
             return items
         raise IncompleteEnumeration(
-                f"pagination did not terminate after {self._max_pages} pages"
-            )
+            f"pagination did not terminate after {self._max_pages} pages"
+        )
