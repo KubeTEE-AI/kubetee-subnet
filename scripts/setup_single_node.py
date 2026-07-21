@@ -123,13 +123,13 @@ def ensure_dev_wallet(name: str, seed: str, hotkey: str = "default", dry_run=Fal
     # Pipe 'y' to handle any "overwrite?" prompts that --quiet/--overwrite don't fully suppress in all btcli versions.
     run([
         "sh", "-c",
-        f"yes y | btcli wallet regen-coldkey --wallet.name {name} --wallet-hotkey {hotkey} --wallet-path {base_wallet_path} --seed {seed} --no-use-password --overwrite --quiet"
+        f"yes y | btcli wallet regen-coldkey --wallet {name} --wallet-hotkey {hotkey} --wallet-path {base_wallet_path} --seed {seed} --no-use-password --overwrite --quiet"
     ], check=False, dry_run=dry_run)
 
     # Hotkey 
     run([
         "sh", "-c",
-        f"yes y | btcli wallet regen-hotkey --wallet.name {name} --wallet-hotkey {hotkey} --wallet-path {base_wallet_path} --seed {seed} --no-use-password --overwrite --quiet"
+        f"yes y | btcli wallet regen-hotkey --wallet {name} --wallet-hotkey {hotkey} --wallet-path {base_wallet_path} --seed {seed} --no-use-password --overwrite --quiet"
     ], check=False, dry_run=dry_run)
 
     print(f"  dev wallet {name} ready (cold+hot seed-pinned).")
@@ -149,7 +149,7 @@ def get_wallet_coldkey_ss58(name: str, hotkey: str = "default", dry_run=False) -
     base_wallet_path = str(Path.home() / ".bittensor" / "wallets")
     res = run([
         "btcli", "wallet", "inspect",
-        "--wallet.name", name,
+        "--wallet", name,
         "--wallet-hotkey", hotkey,
         "--wallet-path", base_wallet_path,
         "--quiet"
@@ -173,7 +173,7 @@ def fund_from_alice(dest_name: str, amount: int = 10000, chain_endpoint: str = "
     base_wallet_path = str(Path.home() / ".bittensor" / "wallets")
     run([
         "sh", "-c",
-        f"yes y | btcli wallet regen-coldkey --wallet.name alice --wallet-path {base_wallet_path} --seed {DEV_ALICE_SEED} --no-use-password --quiet"
+        f"yes y | btcli wallet regen-coldkey --wallet alice --wallet-path {base_wallet_path} --seed {DEV_ALICE_SEED} --no-use-password --quiet"
     ], check=False, dry_run=dry_run)
 
     # Resolve the *actual* address for dest_name (critical so we fund the wallet we later use for create/sudo)
@@ -182,7 +182,7 @@ def fund_from_alice(dest_name: str, amount: int = 10000, chain_endpoint: str = "
         "btcli", "wallet", "transfer",
         "--dest", dest_ss58,
         "--amount", str(amount),
-        "--wallet.name", "alice",
+        "--wallet", "alice",
         "--wallet-hotkey", "default",
         "--network", chain_endpoint,
         "--yes",
@@ -195,7 +195,7 @@ def create_subnet_if_needed(netuid: int, owner_name: str, chain_endpoint: str = 
     # (If a specific netuid already exists we won't be its owner, so we force a fresh one.)
     res = run([
         "btcli", "subnet", "create",
-        "--wallet.name", owner_name,
+        "--wallet", owner_name,
         "--wallet-hotkey", "default",
         "--network", chain_endpoint,
         "--yes"
@@ -267,7 +267,7 @@ def register_neuron(netuid: int, wallet_name: str, hotkey: str = "default", as_v
     run([
         "btcli", "subnet", "register",
         "--netuid", str(netuid),
-        "--wallet.name", wallet_name,
+        "--wallet", wallet_name,
         "--wallet-hotkey", hotkey,
         "--network", chain_endpoint,
         "--yes",
@@ -281,7 +281,7 @@ def start_emissions(netuid: int, owner_name: str, chain_endpoint: str = "ws://12
     run([
         "btcli", "subnets", "start",
         "--netuid", str(netuid),
-        "--wallet.name", owner_name,
+        "--wallet", owner_name,
         "--wallet-hotkey", "default",
         "--network", chain_endpoint,
         "--yes"
@@ -295,7 +295,7 @@ def add_stake(netuid: int, wallet_name: str, amount: int = 100, chain_endpoint: 
     run([
         "btcli", "stake", "add",
         "--netuid", str(netuid),
-        "--wallet.name", wallet_name,
+        "--wallet", wallet_name,
         "--wallet-hotkey", "default",
         "--amount", str(amount),
         "--network", chain_endpoint,
@@ -311,7 +311,7 @@ def set_hyperparam(netuid: int, owner_name: str, param: str, value: str, chain_e
         "--netuid", str(netuid),
         "--param", param,
         "--value", value,
-        "--wallet.name", owner_name,
+        "--wallet", owner_name,
         "--wallet-hotkey", "default",
         "--network", chain_endpoint,
         "--yes"
