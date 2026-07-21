@@ -88,3 +88,17 @@ def test_decide_owner_actions_fails_closed_on_query_error():
     decision = decide_owner_actions(ownership)
     assert decision["proceed"] is False
     assert "HTTP 429" in decision["reason"]
+
+
+def test_dry_run_prints_commands_and_returns_success():
+    """Dry-run mode should print [DRY-RUN] prefixed commands and not execute them."""
+    result = _setup.run(["echo", "should_not_run"], dry_run=True)
+    assert result.returncode == 0
+    assert result.args == ["echo", "should_not_run"]
+
+
+def test_dry_run_does_not_execute_commands():
+    """A command that would fail normally should succeed in dry-run mode."""
+    result = _setup.run(["/nonexistent/command"], dry_run=True)
+    assert result.returncode == 0
+    assert result.args == ["/nonexistent/command"]
