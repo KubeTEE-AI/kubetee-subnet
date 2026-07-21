@@ -224,15 +224,19 @@ registration + hyperparam setup, then starts the basic validator. First
 boot takes a few minutes (Rancher bootstrap); later `up`s after `down`
 **without** `-v` are much faster (the Rancher control plane persists).
 
+### Running the Validator (Compose Stack)
+
+The compose stack lives in the root `kubetee` workspace:
+
 ```bash
-cd repos/subnet/kubetee-subnet
-
-# Build images and start everything detached
+cd ..
 docker compose up -d --build
-
-# View live logs in browser (Dozzle)
-# Open http://localhost:8080
+# Logs: http://localhost:8080 (dozzle)
 ```
+
+The `kubetee-subnet` repo provides the validator container image (`Dockerfile.validator`); the compose file wires it together with Rancher, localnet chain, and Dozzle.
+
+For standalone development without compose, see the [Local Development](#local-development) section below.
 
 Services (all using deterministic pinned dev accounts, see `keys/README.md`):
 
