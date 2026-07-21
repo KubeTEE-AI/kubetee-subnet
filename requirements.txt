@@ -3,10 +3,8 @@ pytest>=8
 numpy>=1
 setuptools>=68
 # Bittensor v11+ unified package (SDK + btcli)
-# Installs from RaoFoundation/subtensor sdk/python distribution
-# SDK deps: websockets, bittensor-core, typer, rich, eth-account
-# TODO: bump to >=11.0.0 once the stable 11.0.0 release is published.
-bittensor>=11.0.0.dev0
+# Installs from PyPI: bittensor 11.0.0 stable
+bittensor>=11.0.0
 # For local dev / compose images
 docker>=7.0.0
 
