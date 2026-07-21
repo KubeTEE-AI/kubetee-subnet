@@ -29,8 +29,9 @@ query_wallet_stake = _chain_state.query_wallet_stake
 
 
 class _FakeSubnetInfo:
-    def __init__(self, owner_ss58):
+    def __init__(self, owner_ss58, neuron_count=1):
         self.owner_ss58 = owner_ss58
+        self.neuron_count = neuron_count
 
 
 class _FakeBalance:
@@ -38,27 +39,61 @@ class _FakeBalance:
         self.tao = tao
 
 
-class FakeSubtensor:
-    def __init__(self, exists=True, owner_ss58=None, stake_tao=0.0,
-                 raise_on_stake=None, raise_on_info=None):
+class _FakeDelegateInfo:
+    def __init__(self, owner, registrations):
+        self.owner = owner
+        self.registrations = registrations
+
+
+class FakeSubnetsNamespace:
+    def __init__(self, exists=True, owner_ss58=None, raise_on_info=None):
         self._exists = exists
         self._owner_ss58 = owner_ss58
-        self._stake_tao = stake_tao
-        self._raise_on_stake = raise_on_stake
         self._raise_on_info = raise_on_info
 
-    def subnet_exists(self, netuid):
-        return self._exists
-
-    def get_subnet_info(self, netuid):
+    def subnet(self, netuid):
         if self._raise_on_info:
             raise self._raise_on_info
-        return _FakeSubnetInfo(self._owner_ss58)
+        return _FakeSubnetInfo(
+            self._owner_ss58,
+            neuron_count=1 if self._exists else 0,
+        )
 
-    def get_stake(self, coldkey_ss58, hotkey_ss58, netuid):
+
+class FakeDelegationNamespace:
+    """Mimics Subtensor().delegation.*"""
+
+    def __init__(self, owner_ss58, netuid):
+        self._owner_ss58 = owner_ss58
+        self._netuid = netuid
+
+    def delegates(self):
+        return [_FakeDelegateInfo(self._owner_ss58, [self._netuid])]
+
+
+class FakeStakingNamespace:
+    def __init__(self, stake_tao=0.0, raise_on_stake=None):
+        self._stake_tao = stake_tao
+        self._raise_on_stake = raise_on_stake
+
+    def get(self, coldkey_ss58, hotkey_ss58, netuid):
         if self._raise_on_stake:
             raise self._raise_on_stake
         return _FakeBalance(self._stake_tao)
+
+
+class FakeSubtensor:
+    def __init__(self, exists=True, owner_ss58=None, stake_tao=0.0,
+                 raise_on_stake=None, raise_on_info=None):
+        self.subnets = FakeSubnetsNamespace(
+            exists=exists, owner_ss58=owner_ss58, raise_on_info=raise_on_info
+        )
+        self.delegation = FakeDelegationNamespace(
+            owner_ss58=owner_ss58, netuid=1
+        )
+        self.staking = FakeStakingNamespace(
+            stake_tao=stake_tao, raise_on_stake=raise_on_stake
+        )
 
 
 def test_query_subnet_ownership_owned():

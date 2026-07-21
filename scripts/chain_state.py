@@ -34,10 +34,15 @@ def query_subnet_ownership(
     """
     sub = subtensor if subtensor is not None else bt.Subtensor(network=chain_endpoint)
     try:
-        if not sub.subnet_exists(netuid):
+        info = sub.subnets.subnet(netuid)
+        if info.neuron_count == 0:
             return {"exists": False, "owner_ss58": None, "owned_by_us": False, "error": None}
-        info = sub.get_subnet_info(netuid=netuid)
-        owner_ss58 = getattr(info, "owner_ss58", None)
+        # Find the subnet owner via delegates registered on this netuid
+        owner_ss58 = None
+        for delegate in sub.delegation.delegates():
+            if netuid in delegate.registrations:
+                owner_ss58 = delegate.owner
+                break
         return {
             "exists": True,
             "owner_ss58": owner_ss58,
@@ -63,7 +68,7 @@ def query_wallet_stake(
     """
     sub = subtensor if subtensor is not None else bt.Subtensor(network=chain_endpoint)
     try:
-        balance = sub.get_stake(coldkey_ss58=coldkey_ss58, hotkey_ss58=hotkey_ss58, netuid=netuid)
+        balance = sub.staking.get(coldkey_ss58=coldkey_ss58, hotkey_ss58=hotkey_ss58, netuid=netuid)
         return {"stake_tao": float(balance.tao), "error": None}
     except Exception as e:
         return {"stake_tao": None, "error": str(e)}

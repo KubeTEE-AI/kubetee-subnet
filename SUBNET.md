@@ -234,7 +234,7 @@ docker compose up -d --build
 # Logs: http://localhost:8080 (dozzle)
 ```
 
-The `kubetee-subnet` repo provides the validator container image (`Dockerfile.validator`); the compose file wires it together with Rancher, localnet chain, and Dozzle.
+The `kubetee-subnet` repo provides the validator container image (`Dockerfile`); the compose file wires it together with Rancher, localnet chain, and Dozzle.
 
 For standalone development without compose, see the [Local Development](#local-development) section below.
 

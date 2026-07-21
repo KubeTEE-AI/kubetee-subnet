@@ -33,6 +33,17 @@ HYPER_FIELDS = [
     "activity_cutoff",
 ]
 
+# v11 hyperparameter reads (mapped from old HYPER_FIELDS where available)
+_V11_HYPER_READS = {
+    "immunity_period": "immunity_period",
+    "weights_rate_limit": "weights_rate_limit",
+    "difficulty": "difficulty",
+    "min_allowed_weights": "min_allowed_weights",
+    "max_weight_limit": "max_weight_limit",
+    "reveal_period": "reveal_period",
+    "subnet_emission_enabled": "subnet_emission_enabled",
+}
+
 
 def build_report(netuid: int, chain_endpoint: str, wallets: dict, subtensor=None) -> dict:
     """Query real chain state for netuid + the given wallets.
@@ -44,12 +55,19 @@ def build_report(netuid: int, chain_endpoint: str, wallets: dict, subtensor=None
     report = {"netuid": netuid, "network": chain_endpoint}
 
     try:
-        h = sub.get_subnet_hyperparameters(netuid=netuid)
-        hypers = {f: getattr(h, f, "?") for f in HYPER_FIELDS}
+        info = sub.subnets.subnet(netuid=netuid)
+        tempo = info.tempo if hasattr(info, "tempo") else "?"
+        hypers = {"tempo": tempo}
+        for name, read_name in _V11_HYPER_READS.items():
+            try:
+                hypers[name] = getattr(sub.hyperparameters, read_name)(netuid=netuid)
+            except Exception:
+                hypers[name] = "?"
         try:
-            hypers["recycle_or_burn"] = h.recycle_or_burn
+            enabled = sub.hyperparameters.subnet_emission_enabled(netuid=netuid)
+            hypers["recycle_or_burn"] = "Recycle" if enabled else "Burn"
         except Exception:
-            pass
+            hypers["recycle_or_burn"] = "?"
         report["hyperparameters"] = hypers
         report["hyperparameters_error"] = None
     except Exception as e:

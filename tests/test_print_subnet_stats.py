@@ -51,8 +51,9 @@ _OLD_HARDCODED_CONVICTION_TEXT = "sudo failed - not owner"
 
 
 class _FakeSubnetInfo:
-    def __init__(self, owner_ss58):
+    def __init__(self, owner_ss58, neuron_count=1):
         self.owner_ss58 = owner_ss58
+        self.neuron_count = neuron_count
 
 
 class _FakeHyperparams:
@@ -70,23 +71,60 @@ class _FakeBalance:
         self.tao = tao
 
 
-class FakeSubtensor:
-    def __init__(self, owner_ss58="5OWNER", stake_by_coldkey=None, hyperparams=None):
+class _FakeDelegateInfo:
+    def __init__(self, owner, registrations):
+        self.owner = owner
+        self.registrations = registrations
+
+
+class FakeSubnetsNamespace:
+    def __init__(self, owner_ss58="5OWNER", exists=True):
         self._owner_ss58 = owner_ss58
+        self._exists = exists
+
+    def subnet(self, netuid):
+        return _FakeSubnetInfo(
+            self._owner_ss58,
+            neuron_count=1 if self._exists else 0,
+        )
+
+
+class FakeDelegationNamespace:
+    def __init__(self, owner_ss58="5OWNER", netuid=1):
+        self._owner_ss58 = owner_ss58
+        self._netuid = netuid
+
+    def delegates(self):
+        return [_FakeDelegateInfo(self._owner_ss58, [self._netuid])]
+
+
+class FakeStakingNamespace:
+    def __init__(self, stake_by_coldkey=None):
         self._stake_by_coldkey = stake_by_coldkey or {}
+
+    def get(self, coldkey_ss58, hotkey_ss58, netuid):
+        return _FakeBalance(self._stake_by_coldkey.get(coldkey_ss58, 0.0))
+
+
+class FakeHyperparamsNamespace:
+    def __init__(self, hyperparams=None):
         self._hyperparams = hyperparams if hyperparams is not None else _FakeHyperparams()
 
-    def subnet_exists(self, netuid):
-        return True
+    def __getattr__(self, name):
+        if name.startswith("_"):
+            raise AttributeError(name)
+        # Return a callable that returns the hyperparameter value
+        def _read(netuid=None):
+            return getattr(self._hyperparams, name, "?")
+        return _read
 
-    def get_subnet_info(self, netuid):
-        return _FakeSubnetInfo(self._owner_ss58)
 
-    def get_subnet_hyperparameters(self, netuid):
-        return self._hyperparams
-
-    def get_stake(self, coldkey_ss58, hotkey_ss58, netuid):
-        return _FakeBalance(self._stake_by_coldkey.get(coldkey_ss58, 0.0))
+class FakeSubtensor:
+    def __init__(self, owner_ss58="5OWNER", stake_by_coldkey=None, hyperparams=None):
+        self.subnets = FakeSubnetsNamespace(owner_ss58=owner_ss58)
+        self.delegation = FakeDelegationNamespace(owner_ss58=owner_ss58)
+        self.staking = FakeStakingNamespace(stake_by_coldkey=stake_by_coldkey)
+        self.hyperparameters = FakeHyperparamsNamespace(hyperparams=hyperparams)
 
 
 def _wallets(owner_ss58="5OWNER", miner_ss58="5MINER"):
@@ -104,7 +142,7 @@ def test_build_report_reflects_real_owned_state_with_stake():
     assert report["ownership"]["owner_ss58"] == "5OWNER"
     assert report["stake"]["owner"]["stake_tao"] == 200.0
     assert report["stake"]["miner"]["stake_tao"] == 50.0
-    assert report["hyperparameters"]["owner_cut_auto_lock_enabled"] is True
+    assert report["hyperparameters"]["immunity_period"] == 3
     assert report["hyperparameters"]["recycle_or_burn"] == "Recycle"
 
 

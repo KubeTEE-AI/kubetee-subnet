@@ -254,10 +254,10 @@ class BasicValidator:
 
     def _read_neurons(self, subtensor) -> tuple[list[dict] | None, int | None]:
         try:
-            meta = subtensor.metagraph(self._config.netuid)
+            meta = subtensor.subnets.metagraph(self._config.netuid)
             neurons = [
-                {"uid": int(uid), "hotkey": str(hotkey)}
-                for uid, hotkey in zip(meta.uids, meta.hotkeys, strict=True)
+                {"uid": int(n.uid), "hotkey": str(n.hotkey)}
+                for n in meta.neurons
             ]
             block = getattr(meta, "block", None)
             return neurons, int(block) if block is not None else None
@@ -377,12 +377,14 @@ class BasicValidator:
         uids = sorted(decision.weights)
         weights = [decision.weights[uid] for uid in uids]
         try:
-            success, message = subtensor.set_weights(
-                wallet=self._wallet,
-                netuid=self._config.netuid,
-                uids=uids,
-                weights=weights,
+            from bittensor.intents.weights import SetWeights
+
+            intent = SetWeights(
+                netuid=self._config.netuid, uids=uids, weights=weights
             )
+            result = subtensor.execute(intent, wallet=self._wallet)
+            success = result.is_success
+            message = str(result)
         except Exception as error:
             self._chain_dirty = True
             self._metrics.record_set_weights(False)
