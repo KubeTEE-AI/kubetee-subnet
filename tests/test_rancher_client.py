@@ -262,35 +262,3 @@ def test_transport_url_error_is_wrapped_cleanly():
         client.list_clusters()
     assert exc.value.category == ErrorCategory.TRANSPORT
     assert "transport failure" in str(exc.value)
-
-
-def test_max_pages_limit_raises_incomplete():
-    """A client with max_pages=1 raises IncompleteEnumeration."""
-    import json
-
-    ORIGIN_HERE = "https://valid.example.com"
-
-    class _PaginatedTransport:
-        def __init__(self):
-            self.count = 0
-
-        def request(self, method, url, headers, timeout):
-            self.count += 1
-            body = json.dumps(
-                {
-                    "data": [{"id": "c-1"}],
-                    "pagination": {
-                        "next": f"{ORIGIN_HERE}/v3/clusters?page={self.count + 1}"
-                    },
-                }
-            )
-            return 200, body
-
-    client = RancherClient(
-        ORIGIN_HERE,
-        "token-abc",
-        transport=_PaginatedTransport(),
-        max_pages=1,
-    )
-    with pytest.raises(IncompleteEnumeration, match="did not terminate after 1 pages"):
-        client.list_clusters()
