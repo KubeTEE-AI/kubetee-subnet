@@ -1,7 +1,7 @@
 """Guarded deregistration reconciliation (g004 V5, spec §4.2a).
 
 The single Rancher mutation the validator may ever perform: removing a
-cluster whose ``kubetee.ai/miner-hotkey`` label points at a hotkey that has
+cluster whose canonical ``kubetee.ai/hotkey`` label points at a hotkey that has
 verifiably left the metagraph. Every guard is mandatory and fail-closed:
 
 - runs only on cycles whose metagraph read AND complete Rancher enumeration
@@ -31,10 +31,11 @@ import time
 import uuid as uuid_module
 from collections.abc import Callable, Iterable
 
+from infrastructure_validation import HOTKEY_LABEL
 from rancher_client import ErrorCategory, RancherError
 from validator_metrics import SuppressionReason, ValidatorMetrics
 
-MINER_LABEL = "kubetee.ai/miner-hotkey"
+MINER_LABEL = HOTKEY_LABEL
 PROTECTED_CLUSTER_IDS = frozenset({"local"})
 
 

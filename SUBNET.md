@@ -8,11 +8,13 @@ operational policies that come with it.
 legacy v10 `bittensor-subnet-template`. The structure is being modernized for
 Bittensor 11+ (signed requests for neuron comms + unified `bittensor` SDK).
 
-**Early Access scoring caveat:** the basic validator scores **node liveness
-only** — a binary, fail-closed check against the Rancher v3 API. It is a
-liveness proxy, **not** TEE attestation, capacity, or job-quality scoring
-(those are the future scoring epic, see `README.md`). Liveness scoring
-establishes no eligibility, attestation, or security compliance.
+**Early Access scoring boundary:** the basic validator applies a binary,
+fail-closed **infrastructure-readiness** policy to a fresh Rancher v3 snapshot.
+Production checks canonical enrollment identity, cluster/node readiness, HA
+roles, per-node CPU and memory, supported eight-GPU workers, passthrough
+wiring, and the confidential runtime handler. This does **not** prove fresh
+TEE attestation, a live tunnel/probe, workload identity, Armada readiness, or
+an unexpired KeyLease; those remain independent serving gates.
 
 ## The Basic Validator (Early Access)
 
@@ -25,14 +27,17 @@ Each cycle (every `KUBETEE_POLL_SECONDS`, minimum 60s) the validator:
    `KUBETEE_VALIDATOR_HOTKEY`). UIDs are resolved by hotkey SS58 — there is
    no fixed-UID configuration.
 2. **Enumerates Rancher** (read-only, complete pagination): finds each
-   miner's cluster by the `kubetee.ai/miner-hotkey` label and reads its
-   nodes.
+   miner's unique cluster by the canonical `kubetee.ai/hotkey` binding label
+   and reads its nodes.
 3. **Runs deregistration reconciliation** (the single guarded Rancher
    mutation — see below).
-4. **Scores each miner** binary fail-closed: `1` iff exactly one labeled
-   cluster matches, the cluster is `active`, and at least one node is
-   `active`; anything missing, ambiguous, transitional, or unverifiable
-   scores `0`.
+4. **Validates each miner** binary fail-closed. The `production` profile
+   requires the canonical binding, Ready cluster/nodes, 3 etcd, 3
+   control-plane, a schedulable worker, at least 8 CPU/16 GiB per active
+   node, and supported eight-GPU passthrough workers exposing
+   `kata-qemu-nvidia-gpu-tdx`. The explicit `debug` profile retains strict
+   identity/state checks but accepts one active node for the disposable
+   local stack. A complete per-miner failure scores `0` immediately.
 5. **Sets weights**, signed by **alice** (`BT_WALLET=alice`): each scoring
    miner gets `KUBETEE_MINER_SHARE / N`; the owner recycle UID gets
    `1 − KUBETEE_MINER_SHARE` (or `1.0` when no miner scores); all other
@@ -43,24 +48,20 @@ Each cycle (every `KUBETEE_POLL_SECONDS`, minimum 60s) the validator:
 With no scoring miner the subnet degenerates to owner-only recycle
 (100% owner weight) — the behavior of the retired owner validator.
 
-### Manual cluster label step (Early Access)
+### Canonical enrollment binding
 
-The miner→cluster mapping is the `kubetee.ai/miner-hotkey` cluster label,
-whose value is the miner's hotkey SS58. In Early Access the **operator sets
-this label manually** when registering the miner's cluster (registration is
-operator-performed, not permissionless):
+Onboarding writes the platform binding contract to the Rancher Cluster: the
+nine labels `kubetee.ai/binding-id`, `hotkey`, `coldkey`, `provider-id`,
+`binding-status`, `generation`, `netuid`, `network`, and
+`origin-fp-prefix`, plus the `kubetee.ai/enrollment-uid` annotation. The
+validator reads only that annotation and never copies or logs other
+enrollment evidence.
 
-1. Rancher UI → Cluster Management → select the miner's cluster → Edit
-   Config → Labels & Annotations, **or** the equivalent `kubectl label
-   clusters.provisioning.cattle.io ...` on the management cluster.
-2. Add label `kubetee.ai/miner-hotkey=<miner hotkey SS58>` (for the Early
-   Access miner this is **bob's** hotkey).
-3. Exactly one cluster may carry a given hotkey value — duplicates score 0
-   (ambiguous, fail-closed).
-
-A registered miner without a labeled active cluster scores 0. The label is
-trusted only because the operator sets it; binding labels to verified
-enrollment is part of the future permissionless epic.
+`kubetee.ai/binding-status=ENROLLED` means onboarding completed; it is not an
+eligibility verdict. Every validation cycle rechecks the binding against the
+fresh metagraph. Missing/malformed identity, a non-`ENROLLED` state, a stale
+UID/coldkey/netuid/network, duplicate hotkey candidate, or duplicate binding
+ID scores `0`. The validator never writes validation state back to Rancher.
 
 ### Configurable weight split (D12)
 
@@ -125,10 +126,11 @@ extended.
 - **Startup (fail-fast):** every static config value is validated before
   the loop starts — `KUBETEE_MINER_SHARE`, `KUBETEE_POLL_SECONDS` (≥ 60),
   `KUBETEE_MAX_CONSECUTIVE_SKIPS`, reconcile parameters, owner + validator
-  hotkeys (present, distinct), and `RANCHER_URL`/`RANCHER_BEARER_TOKEN`
-  (present, well-formed https origin). Any violation → the process refuses
-  to start with a clear error naming every offending variable (values of
-  secrets are never echoed).
+  hotkeys (present, distinct), exact `KUBETEE_VALIDATION_PROFILE`
+  (`production` or `debug`), `KUBETEE_CHAIN_NETWORK`, and
+  `RANCHER_URL`/`RANCHER_BEARER_TOKEN` (present, well-formed https origin).
+  Any violation → the process refuses to start with a clear error naming
+  every offending variable (values of secrets are never echoed).
 - **Runtime (never exit):** once started, the validator **never exits on a
   runtime error**. A Rancher outage (transport error, timeout, 5xx, auth
   rejection) **skips `set_weights` for that cycle** — our own observability
@@ -166,7 +168,7 @@ from the last successful cycle and stay that way until scoring recovers.
 
 ### Deregistration reconciliation (single guarded mutation)
 
-When a `kubetee.ai/miner-hotkey`-labeled cluster's hotkey is no longer
+When a `kubetee.ai/hotkey`-labeled cluster's hotkey is no longer
 registered on the metagraph, the validator removes that cluster from
 Rancher — the **only** write it can ever perform. Guards (all mandatory,
 fail-closed): runs only after a fresh successful metagraph read **and** a
@@ -189,7 +191,9 @@ mapping). Key series: `kubetee_rancher_errors_total{category}`,
 `kubetee_set_weights_total{result}`, `kubetee_cycles_skipped_total{reason}`,
 `kubetee_consecutive_skips`, `kubetee_degraded_mode`,
 `kubetee_last_successful_scoring_timestamp`, `kubetee_miners_discovered`,
-`kubetee_miners_scoring`, `kubetee_reconciliation_deletions_total`,
+`kubetee_miners_scoring`, `kubetee_validation_status{status}`,
+`kubetee_validation_reason{reason}`,
+`kubetee_reconciliation_deletions_total`,
 `kubetee_reconciliation_suppressed_total{reason}`,
 `kubetee_reconciliation_conflicts_total`. All label values are fixed enums;
 no metric or label ever carries secret material.
@@ -210,9 +214,11 @@ This gives you a fast local chain + the validator (and optional miners) with ful
   mints the validator's Rancher token automatically each `up`. Use a `.env`
   (copy `.env.example`, never commit it) only to override tunables or to
   point the validator at an **external** Rancher (`RANCHER_URL` +
-  `RANCHER_BEARER_TOKEN`). The validator still refuses to start without a
-  Rancher URL + token in its environment (by design, D14) — in the compose
-  stack these are supplied by the stack itself.
+  `RANCHER_BEARER_TOKEN` + `KUBETEE_CHAIN_NETWORK`). External mode selects
+  the `production` policy; the self-contained stack explicitly selects
+  `debug`. The validator still refuses to start without all required values
+  (by design, D14) — in the local compose stack they are supplied by the
+  stack itself.
 
 ### 2. Start the stack (chain + Rancher + miner-cluster + validator + dozzle)
 
@@ -288,6 +294,7 @@ BT_WALLET=alice \
 KUBETEE_OWNER_HOTKEY=5FLbZav21bAsjH5SAdmJZwTP5C4b3bcaaWqC6GSmGmsbzUJ9 \
 KUBETEE_VALIDATOR_HOTKEY=5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY \
 RANCHER_URL=... RANCHER_BEARER_TOKEN=... \
+KUBETEE_CHAIN_NETWORK=finney KUBETEE_VALIDATION_PROFILE=production \
 python scripts/validator.py
 ```
 
@@ -326,4 +333,4 @@ btcli subnets metagraph --netuid 1 --network ws://127.0.0.1:9944
 See also: `scripts/setup_single_node.py`, `scripts/validator.py`,
 `docker-compose.yml`, `.env.example`, `keys/README.md`, and
 `docs/NODE-REGISTRATION.md` (miner-side node registration + the
-`kubetee.ai/miner-hotkey` label requirement).
+canonical enrolled-cluster binding requirement).

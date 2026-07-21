@@ -17,13 +17,28 @@
    "state": "active",
    "transitioning": "no",
    "transitioningMessage": "",
+   "conditions": [
+    {
+     "type": "Ready",
+     "status": "True"
+    }
+   ],
    "labels": {
     "kubetee.ai/continent": "eu",
     "kubetee.ai/country": "zz",
     "kubetee.ai/city": "testcity",
-    "kubetee.ai/miner-hotkey": "5FAKEminerHotkeyFAKEFAKEFAKEFAKEFAKEFAKEFAKEabcd",
-    "kubetee.ai/miner-coldkey": "5FAKEminerColdkeyFAKEFAKEFAKEFAKEFAKEFAKEFAKEabc",
-    "kubetee.ai/miner-uid": "0"
+    "kubetee.ai/binding-id": "binding-aaa",
+    "kubetee.ai/hotkey": "5FAKEminerHotkeyFAKEFAKEFAKEFAKEFAKEFAKEFAKEabcd",
+    "kubetee.ai/coldkey": "5FAKEminerColdkeyFAKEFAKEFAKEFAKEFAKEFAKEFAKEabc",
+    "kubetee.ai/provider-id": "00000000-0000-4000-8000-0000000000aa",
+    "kubetee.ai/binding-status": "ENROLLED",
+    "kubetee.ai/generation": "1",
+    "kubetee.ai/netuid": "90",
+    "kubetee.ai/network": "finney",
+    "kubetee.ai/origin-fp-prefix": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcde"
+   },
+   "annotations": {
+    "kubetee.ai/enrollment-uid": "0"
    },
    "links": {
     "self": "https://rancher.example/v3/clusters/cluster-aaa",

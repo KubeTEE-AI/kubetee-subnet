@@ -112,10 +112,18 @@ KubeTEE Early Access uses a **single Bittensor incentive mechanism** that distri
 - Metrics: TEE attestation (Intel TDX/SGX, NVIDIA CC), Armada job success/throughput/fair-share, uptime, resource utilization, FIPS-140-2 validated baseline (FIPS-140-3 Phase 3 target)
 - **Competitive pricing (Phase 0, Early Access):** miners are scored against the other Bittensor compute subnets — Targon (SN4, supply-side payout feed via `stats.targon.com`), Lium (SN51, demand-side rental prices), Chutes (SN64, demand-side inference prices) — each with a verifiable feed (public API + on-chain metagraph). Targon GPU miners all run 8-card nodes (same form factor as SN90); live per-8-card-node payouts are B300 ~64, B200 ~52, H200 ~28, H100 ~24 TAO/epoch — the supply-side band SN90 miner compensation must match. The validator discovers a per-job-class target price from competitor signals, SN90 demand (Armada queue depth), and a **75% average utilization target**, then weights miners on whether their delivered compute is priced competitively. This same target price is the **resources price per hour** consumers pay in Alpha/TAO for the compute they consume (demand-side). A miner with perfect attestation but a price 2× the competitor average scores low. See `docs/COMPETITIVE-PRICING.md`.
 - One hotkey per cluster; all nodes co-located in a single data center
-- No attestation = no emissions
+- Fresh TEE attestation is a planned independent gate; it is not implemented
+  by the current infrastructure-ready slice
 - Location: `scripts/miner_scoring.py`
 
-**Critical Detail:** A single weight matrix is used. The validator sets one set of weights per epoch via Bittensor `set_weights` (no `mechanism_id` split). The benchmark, bounty, referrer, and reseller mechanisms from the earlier design are removed. The shipping Early Access validator scores node liveness only; competitive pricing (a Phase 0 dimension, required for Alpha/TAO resources-per-hour billing) and TEE/Armada/health scoring (Phase 1) are roadmap dimensions until their feeds are wired.
+**Critical Detail:** A single weight matrix is used. The validator sets one
+set of weights per epoch via Bittensor `set_weights` (no `mechanism_id`
+split). The benchmark, bounty, referrer, and reseller mechanisms from the
+earlier design are removed. The shipping Early Access validator produces a
+binary infrastructure-readiness score from canonical enrollment identity,
+Rancher readiness, HA topology, capacity, GPU passthrough, and runtime wiring.
+Competitive pricing, fresh TEE attestation, Armada/job health, tunnel/probe,
+workload identity, and KeyLease feeds remain roadmap dimensions.
 
 ### Core Architecture Layers
 
@@ -130,7 +138,8 @@ Validator Loop (scripts/validator.py) — per cycle:
   ├── metagraph read (chain_state.py)
   ├── Rancher v3 enumeration (rancher_client.py) — read-only, fail-closed pagination
   ├── reconciliation (reconciliation.py) — guarded deregistration on sustained absence
-  ├── scoring (miner_scoring.py) — binary fail-closed node-liveness + S/N weight split
+  ├── validation (infrastructure_validation.py) — pure fail-closed policy
+  ├── scoring (miner_scoring.py) — verdict scores + S/N weight split
   ├── metrics (validator_metrics.py) — Prometheus + degraded-mode skip accountant
   └── set_weights on-chain (alice signs)
 ```
@@ -141,9 +150,15 @@ Validator Loop (scripts/validator.py) — per cycle:
 1. Read the metagraph (`scripts/chain_state.py`) — discover miners by hotkey
 2. Enumerate clusters/nodes via the read-only Rancher v3 API (`scripts/rancher_client.py`)
 3. Reconcile — guarded deregistration of clusters whose hotkey has been absent from the metagraph for ≥3 cycles / ≥900s (`scripts/reconciliation.py`)
-4. Score — binary fail-closed node-liveness per miner (one labeled cluster, active, ≥1 active node), split weights between scoring miners and the owner recycle UID (`scripts/miner_scoring.py`)
-5. Set weights on-chain via Bittensor `set_weights`, signed by alice
-6. Emit Prometheus metrics + cycle-evidence logs (`scripts/validator_metrics.py`)
+4. Validate — recompute the binary infrastructure verdict for every miner
+   from the canonical binding and complete cluster/node snapshot
+   (`scripts/infrastructure_validation.py`); explicit evidence failures score
+   zero, while a Rancher evidence outage skips the whole cycle
+5. Split weights between eligible miners and the owner recycle UID
+   (`scripts/miner_scoring.py`)
+6. Set weights on-chain via Bittensor `set_weights`, signed by alice
+7. Emit bounded verdict metrics + aggregate cycle-evidence logs
+   (`scripts/validator_metrics.py`)
 
 Fail-fast at startup on any missing/invalid static config (D14); at runtime, Rancher outage / rejected set_weights / unexpected errors degrade to skip/backoff and the loop continues.
 
@@ -170,7 +185,7 @@ Validators read cluster metrics and information from the **Rancher v3 REST API**
 - A Rancher v3 call requires a bearer token (`Authorization: Bearer token-xxxxx:yyyyy`); the kubeconfig client cert used for `kubectl` does **not** work for `/v3`.
 - **Flow:** the validator (or miner) signs a challenge with its Bittensor **hotkey** (SR25519). An auth mechanism connected to Rancher — a custom external auth provider (SAML / OIDC) backed by the subnet — verifies the signature on-chain, maps the hotkey to a Rancher principal, and issues a **short-lived, read-only** Rancher v3 bearer token. The hotkey is the only credential; no long-lived admin token is held by the validator. Tracked as tasks in the subnet [Roadmap](README.md#roadmap) (Phase 0).
   - **Validators** receive a **read-only** token (bound to `cluster-readonly`) to pull cluster/node metrics across clusters for scoring.
-  - **Miners** receive a **read-only** principal (bound to `cluster-readonly`) scoped to **their own cluster** (the cluster labeled with their `kubetee.ai/miner-hotkey`), provisioned automatically **when a new cluster is created** — they can observe their cluster (nodes, workloads, metrics) while the subnet owner manages it via Fleet GitOps.
+  - **Miners** receive a **read-only** principal (bound to `cluster-readonly`) scoped to **their own cluster** (the cluster carrying their canonical `kubetee.ai/hotkey` binding), provisioned automatically **when a new cluster is created** — they can observe their cluster (nodes, workloads, metrics) while the subnet owner manages it via Fleet GitOps.
 - Alternative considered (not chosen): **Subnet-owner-issued per-validator tokens** — the subnet owner pre-provisions a read-only Rancher API key per validator hotkey (delivered out-of-band); the validator loads it like `.env`. Simpler but moves trust to out-of-band delivery and lacks hotkey-binding.
 - Whatever the mechanism: validator tokens must be **read-only** (bound to `cluster-readonly`); miner tokens are scoped to their own cluster; all tokens are **short-lived or rotatable** and never exposed.
 - References: `../CREATE-CLUSTER-GUIDE.md` (v3 API + `.env` token sourcing), `../cluster-readonly-roletemplate.yaml` (read-only RoleTemplate to bind validator principals to).
@@ -182,7 +197,8 @@ Validators read cluster metrics and information from the **Rancher v3 REST API**
 - `scripts/validator.py` - Validator main loop (g004): metagraph → Rancher enumeration → reconciliation → scoring → set_weights, with fail-fast startup and degraded-mode skip/backoff
 
 **Core Scoring & Reconciliation:**
-- `scripts/miner_scoring.py` - Miner discovery + binary fail-closed node-liveness score + S/N weight split
+- `scripts/infrastructure_validation.py` - Pure canonical-binding and infrastructure-readiness policy
+- `scripts/miner_scoring.py` - Miner identity validation + verdict-to-weight S/N split
 - `scripts/reconciliation.py` - Guarded deregistration engine (absence thresholds, pre-delete recheck, protected clusters)
 - `scripts/validator_metrics.py` - Prometheus metrics + degraded-mode skip accountant
 - `scripts/chain_state.py` - Real on-chain ownership/stake queries (no hardcoded values)

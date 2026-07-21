@@ -940,8 +940,7 @@ def test_reconciliation_suppression_log_is_redacted(caplog):
         "id": "c-gone",
         "uuid": "uuid-gone",
         "state": "active",
-        # Reconciliation's label migration is covered in Task 4.
-        "labels": {"kubetee.ai/miner-hotkey": gone},
+        "labels": {HOTKEY_LABEL: gone},
     }
     list_body = json.dumps({"data": [cluster], "pagination": {"limit": -1}})
     get_body = json.dumps(cluster)

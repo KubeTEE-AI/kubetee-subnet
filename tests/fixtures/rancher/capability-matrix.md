@@ -1,4 +1,4 @@
-# g004 V1 — Staging Rancher token capability matrix
+# g004 V2 — Rancher v3 capability and fixture-boundary matrix
 
 Captured read-only against `staging-rancher.kubetee.ai` on 2026-07-16 with
 the Early Access `.env` account API key (no scope). Response **classes**
@@ -36,10 +36,10 @@ AC12 operator-gated demo against a disposable cluster proves DELETE.
   user.
 - Secret-bearing fields observed on live objects and therefore dropped by
   the fixture allowlist: cluster `caCert`, `clusterSecrets`,
-  `importedConfig`, `appliedSpec`, `annotations`; node `ipAddress`,
-  `hostname`, `customConfig`, `info`, `annotations`.
-- Live label observation (recorded for V9 UAT prep, no values here): the
-  miner cluster's `kubetee.ai/miner-hotkey` label currently holds the
-  **Alice** dev address while `miner-coldkey` holds **Bob's** — per the
-  approved spec, bob is the miner, so the operator must relabel
-  `miner-hotkey` to bob's hotkey before the AC9(a) healthy demo.
+  `importedConfig`, `appliedSpec`, and all annotations except the synthetic
+  enrollment UID; node `ipAddress`, `hostname`, `customConfig`, `info`, and
+  `annotations`.
+- The 2026-07-16 live capture predated the canonical binding contract and had
+  inconsistent dev identities. Its values are historical evidence only. The
+  synthetic fixtures now use the PR #35 canonical binding keys and do not
+  claim that staging has been relabeled or validated.

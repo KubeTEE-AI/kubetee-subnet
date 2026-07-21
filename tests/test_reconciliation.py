@@ -23,7 +23,7 @@ from validator_metrics import ValidatorMetrics
 
 GONE = "5GoneMinerHotkeyFAKEFAKEFAKEFAKEFAKEFAKEFAKEabcd"
 BOB = "5BobHotkeyFAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKEab"
-LABEL = "kubetee.ai/miner-hotkey"
+LABEL = "kubetee.ai/hotkey"
 
 
 class FakeClock:
@@ -235,6 +235,22 @@ def test_unlabeled_and_internal_clusters_never_considered():
     clock.advance(10)
     engine.run_cycle(registered_hotkeys={BOB}, clusters=[mgmt, internal],
                      metagraph_block="0xabc", refresh_registered=lambda: set())
+    assert client.deleted == []
+
+
+def test_retired_miner_hotkey_label_is_not_a_reconciliation_candidate():
+    engine, client, _, clock, _ = make_engine(min_cycles=1, min_seconds=0)
+    legacy = cluster("c-legacy", hotkey=None)
+    retired_label = "kubetee.ai/" + "miner-hotkey"
+    legacy["labels"] = {retired_label: GONE}
+    for _ in range(2):
+        engine.run_cycle(
+            registered_hotkeys={BOB},
+            clusters=[legacy],
+            metagraph_block="0xabc",
+            refresh_registered=lambda: set(),
+        )
+        clock.advance(10)
     assert client.deleted == []
 
 

@@ -10,8 +10,8 @@
 #   3. read the Rancher CA via /v3         -> /shared/rancher-ca.crt
 #   4. create an imported cluster, fetch its registration manifest
 #   5. apply the manifest into the rancher/k3s `miner-cluster` downstream
-#   6. wait for the downstream to go active, then label it with bob's hotkey
-#      (via the /k8s/clusters/local proxy PATCH - the API form of `kubectl label`)
+#   6. wait for the downstream to go active, then apply a synthetic canonical
+#      ENROLLED binding for bob via the /k8s/clusters/local proxy PATCH
 #
 # The minted token is ephemeral (regenerated every `up`); it is written to a
 # shared volume and never printed. All operations were proven end-to-end
@@ -21,6 +21,10 @@ set -eu
 RANCHER="${RANCHER_URL:-https://rancher}"
 BOOT="${BOOTSTRAP_PASSWORD:?bootstrap password required}"
 MINER_HOTKEY="${MINER_HOTKEY:?bob hotkey ss58 required}"
+MINER_COLDKEY="${MINER_COLDKEY:?bob coldkey ss58 required}"
+MINER_UID="${MINER_UID:?bob enrollment uid required}"
+MINER_NETUID="${MINER_NETUID:?subnet netuid required}"
+MINER_NETWORK="${MINER_NETWORK:?chain network required}"
 CLUSTER_NAME="${CLUSTER_NAME:-kubetee-uat}"
 SHARED="${SHARED_DIR:-/shared}"
 K3S_KUBECONFIG="${K3S_KUBECONFIG:-/k3s-out/kubeconfig.yaml}"
@@ -171,7 +175,7 @@ kubectl -n cattle-system patch deployment cattle-cluster-agent --type merge \
   -p "{\"spec\":{\"template\":{\"spec\":{\"hostAliases\":[{\"ip\":\"$RANCHER_IP\",\"hostnames\":[\"rancher\"]}]}}}}"
 log "patched agent hostAlias rancher -> $RANCHER_IP"
 
-# --- 6. wait active, then label via /k8s proxy PATCH -------------------------
+# --- 6. wait active, then bind via /k8s proxy PATCH --------------------------
 for _ in $(seq 1 60); do
   ST=$(cr "$RANCHER/v3/clusters/$CID" -H "Authorization: Bearer $LTOK" | jq -r .state)
   N=$(cr "$RANCHER/v3/nodes?clusterId=$CID" -H "Authorization: Bearer $LTOK" | jq -r '.data | length')
@@ -179,10 +183,37 @@ for _ in $(seq 1 60); do
   [ "$ST" = "active" ] && [ "$N" -ge 1 ] && break
   sleep 6
 done
+ORIGIN_FP=$(printf '%s' "local-rancher-binding:$CID" | sha256sum | awk '{print $1}')
+ORIGIN_FP_PREFIX=${ORIGIN_FP%?}
+PATCH_BODY=$(jq -n \
+  --arg hotkey "$MINER_HOTKEY" \
+  --arg coldkey "$MINER_COLDKEY" \
+  --arg uid "$MINER_UID" \
+  --arg netuid "$MINER_NETUID" \
+  --arg network "$MINER_NETWORK" \
+  --arg prefix "$ORIGIN_FP_PREFIX" \
+  '{
+    metadata: {
+      labels: {
+        "kubetee.ai/binding-id": "local-bob-binding",
+        "kubetee.ai/hotkey": $hotkey,
+        "kubetee.ai/coldkey": $coldkey,
+        "kubetee.ai/provider-id": "00000000-0000-4000-8000-000000000002",
+        "kubetee.ai/binding-status": "ENROLLED",
+        "kubetee.ai/generation": "1",
+        "kubetee.ai/netuid": $netuid,
+        "kubetee.ai/network": $network,
+        "kubetee.ai/origin-fp-prefix": $prefix
+      },
+      annotations: {
+        "kubetee.ai/enrollment-uid": $uid
+      }
+    }
+  }')
 cr -X PATCH "$RANCHER/k8s/clusters/local/apis/management.cattle.io/v3/clusters/$CID" \
    -H "Authorization: Bearer $LTOK" -H 'Content-Type: application/merge-patch+json' \
-   -d "{\"metadata\":{\"labels\":{\"kubetee.ai/miner-hotkey\":\"$MINER_HOTKEY\"}}}" >/dev/null
-log "labelled $CID with kubetee.ai/miner-hotkey=<bob>"
+   -d "$PATCH_BODY" >/dev/null
+log "applied canonical synthetic ENROLLED binding to $CID"
 
 echo "$CID" > "$SHARED/cluster-id"
 touch "$SHARED/ready"

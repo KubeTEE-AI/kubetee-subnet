@@ -78,8 +78,9 @@ DEV_OWNER_SEED = "0x398f0c28f98885e046333d4a41c19cee4c37368a9832c749be0086a2a9b4
 DEV_OWNER_COLD_SS58 = "5FLbZav21bAsjH5SAdmJZwTP5C4b3bcaaWqC6GSmGmsbzUJ9"
 
 # Pinned dev seed for the "bob" miner wallet (g004 D7): the miner whose
-# Rancher cluster (labeled kubetee.ai/miner-hotkey) the basic validator
-# scores. Replaces the retired legacy sample "miner" wallet. Localnet-only,
+# Rancher cluster carries the canonical kubetee.ai/hotkey binding used by
+# the basic validator. Replaces the retired legacy sample "miner" wallet.
+# Localnet-only,
 # PUBLIC by design. NOTE (#20): must be an ordinary random hex seed - the
 # previous all-0x0b value was serialised as raw bytes into the keyfile's
 # secretSeed, producing a wallet bittensor could not read back (bob could

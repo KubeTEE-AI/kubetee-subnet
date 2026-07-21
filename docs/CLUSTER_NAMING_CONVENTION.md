@@ -66,21 +66,29 @@ The current UID of the miner on the Bittensor subnet.
 | `oc-au-sydney-345` | Oceania, Australia, Sydney | Miner UID 345 in Sydney |
 | `me-ae-dubai-678` | Middle East, UAE, Dubai | Miner UID 678 in Dubai |
 
-## Required Cluster Labels
+## Required Cluster Binding
 
-While the cluster name includes the UID for human readability, clusters **MUST** be labeled with these identifiers:
+The cluster name may include the UID for human readability, but machine
+identity comes from the canonical enrollment binding written by the platform:
 
 ```yaml
 labels:
-  # Required labels
-  environment: <staging|production>
-  kubetee.ai/continent: <eu|na|sa|as|af|oc|me>
-  kubetee.ai/country: <2-letter-country-code>
-  kubetee.ai/city: <city-name-lowercase>
-  kubetee.ai/miner-hotkey: <MINER_HOTKEY_SS58_ADDRESS>
-  kubetee.ai/miner-coldkey: <MINER_COLDKEY_SS58_ADDRESS>
-  kubetee.ai/miner-uid: <MINER_UID_NUMBER>
+  kubetee.ai/binding-id: <OPAQUE_BINDING_ID>
+  kubetee.ai/hotkey: <MINER_HOTKEY_SS58_ADDRESS>
+  kubetee.ai/coldkey: <MINER_COLDKEY_SS58_ADDRESS>
+  kubetee.ai/provider-id: <PROVIDER_UUID>
+  kubetee.ai/binding-status: ENROLLED
+  kubetee.ai/generation: "1"
+  kubetee.ai/netuid: <SUBNET_NETUID>
+  kubetee.ai/network: <CHAIN_NETWORK>
+  kubetee.ai/origin-fp-prefix: <63_LOWERCASE_HEX_CHARACTERS>
+annotations:
+  kubetee.ai/enrollment-uid: <MINER_UID_NUMBER>
 ```
+
+Geographic and Fleet labels such as `environment`,
+`kubetee.ai/continent`, `kubetee.ai/country`, and `kubetee.ai/city` remain
+optional deployment metadata; they are not enrollment identity.
 
 **Why `kubetee.ai/` prefix?**
 - Follows Kubernetes best practices for custom labels
@@ -88,16 +96,24 @@ labels:
 - Makes it clear these are KubeTEE-specific labels
 - `environment` doesn't need prefix as it's a common standard label
 
-**Example**:
+**Synthetic shape**:
 ```yaml
 labels:
   environment: production
   kubetee.ai/continent: eu
   kubetee.ai/country: fr
   kubetee.ai/city: paris
-  kubetee.ai/miner-hotkey: "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
-  kubetee.ai/miner-coldkey: "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
-  kubetee.ai/miner-uid: "123"
+  kubetee.ai/binding-id: "binding-example"
+  kubetee.ai/hotkey: "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+  kubetee.ai/coldkey: "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+  kubetee.ai/provider-id: "00000000-0000-4000-8000-000000000123"
+  kubetee.ai/binding-status: "ENROLLED"
+  kubetee.ai/generation: "1"
+  kubetee.ai/netuid: "90"
+  kubetee.ai/network: "finney"
+  kubetee.ai/origin-fp-prefix: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcde"
+annotations:
+  kubetee.ai/enrollment-uid: "123"
 ```
 
 **Optional labels** (can be added for advanced targeting):
@@ -106,7 +122,7 @@ labels:
   # Optional infrastructure labels
   kubetee.ai/tee-enabled: <true|false>
   kubetee.ai/gpu-enabled: <true|false>
-  kubetee.ai/gpu-type: <h100|h200|a100>
+  kubetee.ai/gpu-type: <h100|h200|b200|b300>
 ```
 
 ## Why Use Both Name and Labels?
@@ -116,19 +132,22 @@ labels:
 - Easy to understand location and current UID
 - Used for display purposes
 
-**Labels**:
-- `kubetee.ai/continent`, `kubetee.ai/country`, `kubetee.ai/city`: Geographic identification
-- `kubetee.ai/miner-hotkey` / `kubetee.ai/miner-coldkey`: Permanent identification that never changes
-- `kubetee.ai/miner-uid`: Current UID as a label that can be updated when UID changes
-- Used for programmatic cluster selection and geographic targeting
-- Prevents issues when targeting clusters after UID changes
+**Binding metadata**:
+- `kubetee.ai/hotkey` and `kubetee.ai/coldkey` identify the current chain
+  identity.
+- `kubetee.ai/enrollment-uid` is the current UID annotation.
+- `binding-id`, `provider-id`, `generation`, `netuid`, `network`, and
+  `origin-fp-prefix` bind that identity to one enrollment record and origin.
+- `binding-status=ENROLLED` means onboarding completed; it does not mean that
+  infrastructure validation or serving readiness passed.
 
-**When UID Changes**:
-If a miner deregisters and re-registers (UID changes from 123 to 456):
-1. Update the `kubetee.ai/miner-uid` label: `kubectl label cluster.management.cattle.io/${CLUSTER_ID} kubetee.ai/miner-uid=456 --overwrite`
-2. Optionally rename the cluster from `eu-fr-paris-123` to `eu-fr-paris-456`
-3. Hotkey, coldkey, and geographic labels remain unchanged
-4. Deployments targeting by hotkey/coldkey continue to work without changes
+**When chain identity changes**:
+
+Do not patch binding labels or annotations manually. Deregistration,
+re-registration, hotkey/coldkey rotation, or UID changes must go through the
+platform enrollment/rotation workflow so generation and origin evidence stay
+coherent. Fleet selectors that use the canonical hotkey continue to work only
+after the platform commits the replacement binding.
 
 ## Creating a Cluster
 
@@ -141,7 +160,7 @@ COUNTRY="fr"             # 2-letter country code
 CITY="paris"             # Full city name (lowercase)
 MINER_UID="123"          # Current miner UID
 
-# Permanent identifiers
+# Current chain identity (committed by platform enrollment, not this script)
 MINER_HOTKEY="5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
 MINER_COLDKEY="5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
 
@@ -154,24 +173,12 @@ echo "Coldkey: ${MINER_COLDKEY}"
 echo "UID: ${MINER_UID}"
 ```
 
-## Updating UID Label When UID Changes
+## Updating Enrollment Identity
 
-```bash
-#!/bin/bash
-
-# When miner UID changes (e.g., after deregistration/re-registration)
-CLUSTER_ID="c-xxxxx"
-NEW_MINER_UID="456"
-
-# Update the miner-uid label
-kubectl label cluster.management.cattle.io/${CLUSTER_ID} \
-  kubetee.ai/miner-uid=${NEW_MINER_UID} \
-  --overwrite
-
-echo "Updated kubetee.ai/miner-uid label to: ${NEW_MINER_UID}"
-echo "Note: Hotkey, coldkey, and geographic labels remain unchanged"
-echo "Fleet deployments targeting by hotkey/coldkey continue to work"
-```
+Use the platform rotation or re-enrollment workflow. Direct `kubectl label`
+or `kubectl annotate` changes to canonical binding metadata are unsupported:
+the validator compares the complete binding to the fresh metagraph and fails
+closed on stale, partial, duplicated, or malformed values.
 
 ## Fleet GitOps Targeting
 
@@ -225,7 +232,8 @@ spec:
     clusterName: eu-fr-paris-123
 ```
 
-**Alternative**: Target by permanent hotkey/coldkey labels (recommended for programmatic targeting):
+**Alternative**: Target by the canonical hotkey binding (recommended for
+programmatic miner targeting):
 
 ```yaml
 apiVersion: fleet.cattle.io/v1alpha1
@@ -238,7 +246,7 @@ spec:
   - name: miner-cluster
     clusterSelector:
       matchLabels:
-        kubetee.ai/miner-hotkey: "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+        kubetee.ai/hotkey: "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
 ```
 
 **Target all clusters in a specific continent**:
@@ -277,7 +285,7 @@ spec:
 |--------|----------|---------|
 | **Environment Label** | Deploy to all staging or production clusters | `environment: production` |
 | **Cluster Name** | Deploy to one specific cluster | `clusterName: eu-fr-paris-123` |
-| **Hotkey/Coldkey Label** | Deploy to specific miner's cluster (survives UID changes) | `kubetee.ai/miner-hotkey: "5Grw..."` |
+| **Canonical Hotkey Label** | Deploy to the cluster bound to a miner hotkey | `kubetee.ai/hotkey: "5Grw..."` |
 | **Continent** | Deploy to all clusters in a continent | `kubetee.ai/continent: eu` |
 | **Country** | Deploy to all clusters in a country | `kubetee.ai/country: fr` |
 | **City** | Deploy to all clusters in a city | `kubetee.ai/city: paris` |
@@ -306,8 +314,7 @@ This ensures workloads deploy correctly even if cluster names or UIDs change.
 
 ## Summary
 
-✅ **Cluster Name**: `<continent>-<country>-<city>-<uid>` for human readability  
-✅ **Cluster Labels**: Use `miner-hotkey` and `miner-coldkey` for permanent identification  
-✅ **Fleet Targeting**: Always use hotkey/coldkey labels in cluster selectors  
-✅ **UID Changes**: Don't affect cluster targeting when using proper labels  
-
+✅ **Cluster Name**: `<continent>-<country>-<city>-<uid>` for human readability
+✅ **Cluster Binding**: Use the platform-managed canonical binding labels and enrollment UID annotation
+✅ **Fleet Targeting**: Use `kubetee.ai/hotkey` when a miner-specific selector is required
+✅ **Identity Changes**: Use platform rotation/re-enrollment; never patch trust metadata manually

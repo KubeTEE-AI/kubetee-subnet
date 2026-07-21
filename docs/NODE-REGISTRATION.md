@@ -13,23 +13,34 @@ Before registering your node, ensure the infrastructure setup is complete:
    - Minimum resources: 8 CPU cores, 16 GB RAM
    - Minimum storage: 800 GB OS disk + 3 TB data disk
 3. ✅ **Network connectivity** to Rancher management cluster
-4. ✅ **GPU nodes** (optional): 
+4. ✅ **GPU worker nodes** (at least one for production eligibility):
    - **CPU with TDX (Intel 5th/6th Gen) or SEV-SNP (AMD 4th/5th Gen)** - MANDATORY for GPU nodes
-   - **Exactly 8x NVIDIA H100 or H200 GPUs with PPCIe mode** - MANDATORY for GPU nodes
+   - **Exactly 8x NVIDIA H100, H200, B200, or B300 GPUs with PPCIe mode** - MANDATORY for GPU nodes
    - **Latest firmware installed** - See [NVIDIA DGX Firmware Guide](https://docs.nvidia.com/dgx/dgxh100-fw-update-guide/)
    - VFIO/IOMMU configured for passthrough
 
-## Miner Hotkey Label (Early Access scoring requirement)
+## Enrolled Cluster Binding and Validation
 
-The subnet validator finds your cluster through the
-`kubetee.ai/miner-hotkey` **cluster label**, whose value is your miner
-hotkey SS58. In Early Access this label is applied **by the KubeTEE
-operator** as a manual step when your cluster is registered (registration
-is operator-performed, not permissionless). A registered miner whose
-cluster is missing the label — or whose label holds a stale hotkey — scores
-**0** and earns no miner share; exactly one cluster may carry a given
-hotkey value. See [SUBNET.md](../SUBNET.md) ("Manual cluster label step")
-for the labeling procedure and the scoring rule.
+The platform enrollment flow identifies the cluster through the canonical
+`kubetee.ai/hotkey` label and writes the full binding contract: binding ID,
+hotkey, coldkey, provider ID, binding status, generation, netuid, network,
+origin fingerprint prefix, and the `kubetee.ai/enrollment-uid` annotation.
+These are operator-controlled trust metadata; miners must not hand-edit them.
+
+`kubetee.ai/binding-status=ENROLLED` confirms onboarding only. On every
+complete cycle, the subnet validator compares the binding to the fresh
+metagraph and validates the Rancher cluster/node inventory. The production
+profile requires Ready HA topology (3 etcd and 3 control-plane nodes), a
+schedulable worker, at least 8 CPU cores and 16 GiB per active node, and at
+least one schedulable eight-GPU H100/H200/B200/B300 worker with
+`vm-passthrough` and `kata-qemu-nvidia-gpu-tdx`. Any explicit missing,
+malformed, ambiguous, or unhealthy evidence scores **0**. A Rancher outage
+skips the whole weight cycle instead of blaming miners.
+
+This infrastructure verdict does not prove current TEE attestation, a live
+tunnel and end-to-end probe, expected workload identity, Armada readiness,
+or an unexpired KeyLease. Those remain separate serving requirements. See
+[SUBNET.md](../SUBNET.md) for the complete policy and debug profile.
 
 ## Cluster Architecture Requirements
 
@@ -1283,4 +1294,3 @@ If you encounter issues:
 **For**: KubeTEE Miners  
 **Cluster Type**: RKE2 via Rancher  
 **Storage**: Longhorn with multi-disk support
-
