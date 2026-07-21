@@ -539,6 +539,8 @@ def test_healthy_miner_gets_share_and_owner_gets_rest():
     assert sample(metrics, "kubetee_set_weights_total", result="success") == 1
     assert sample(metrics, "kubetee_miners_discovered") == 1
     assert sample(metrics, "kubetee_miners_scoring") == 1
+    assert sample(metrics, "kubetee_validation_status", status="eligible") == 1
+    assert sample(metrics, "kubetee_validation_reason", reason="eligible") == 1
 
 
 def test_metagraph_coldkey_reaches_validator_snapshot():
@@ -652,7 +654,7 @@ def test_two_miners_can_receive_different_complete_verdicts():
 
 def test_registered_miner_without_cluster_scores_zero():
     """D10: Rancher reachable but no labeled cluster -> that miner scores 0."""
-    validator, subtensor, *_ = build_validator(
+    validator, subtensor, _, _, metrics, _ = build_validator(
         rancher=FakeRancher(clusters=[])
     )
 
@@ -660,6 +662,33 @@ def test_registered_miner_without_cluster_scores_zero():
     call = subtensor.set_weights_calls[0]
     assert call["uids"] == [0, 1, 2]
     assert call["weights"] == [1.0, 0.0, 0.0]
+    assert (
+        sample(metrics, "kubetee_validation_status", status="suspended") == 1
+    )
+    assert (
+        sample(
+            metrics,
+            "kubetee_validation_reason",
+            reason="cluster_missing",
+        )
+        == 1
+    )
+
+
+def test_validation_logs_only_aggregate_reasons(caplog):
+    clusters, nodes = active_bob_cluster()
+    validator, *_ = build_validator(
+        rancher=FakeRancher(clusters=clusters, nodes_by_cluster=nodes)
+    )
+
+    with caplog.at_level(logging.INFO, logger="basic_validator"):
+        assert validator.run_cycle() == "weights_set"
+
+    assert "validation_reasons={'eligible': 1}" in caplog.text
+    assert "binding-bob" not in caplog.text
+    assert "kubetee.ai/enrollment-uid" not in caplog.text
+    assert "a" * 63 not in caplog.text
+    assert TOKEN not in caplog.text
 
 
 # ---------------------------------------------------------------------------

@@ -28,6 +28,7 @@ without the SDK) exercises everything through injected seams.
 from __future__ import annotations
 
 import dataclasses
+import collections
 import logging
 import math
 import os
@@ -431,6 +432,11 @@ class BasicValidator:
             self._record_skip(decision.reason, decision.detail)
             return "skip"
 
+        self._metrics.record_validation_results(tuple(verdicts.values()))
+        reason_counts = collections.Counter(
+            verdict.reason.value for verdict in verdicts.values()
+        )
+        validation_reasons = dict(sorted(reason_counts.items()))
         scoring_count = sum(decision.miner_scores.values())
         self._metrics.record_scoring_result(len(miners), scoring_count)
         self._metrics.record_successful_scoring()
@@ -462,11 +468,11 @@ class BasicValidator:
         if success:
             self._log.info(
                 "set_weights accepted on chain: netuid=%d miners=%d scoring=%d "
-                "scores=%s uids=%s weights=%s",
+                "validation_reasons=%s uids=%s weights=%s",
                 self._config.netuid,
                 len(miners),
                 scoring_count,
-                decision.miner_scores,
+                validation_reasons,
                 uids,
                 weights,
             )

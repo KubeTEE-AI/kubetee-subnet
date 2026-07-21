@@ -11,10 +11,16 @@ Degraded mode (spec D10/AC13): consecutive skipped cycles beyond
 
 from __future__ import annotations
 
+import collections
 import enum
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 
+from infrastructure_validation import (
+    ValidationReason,
+    ValidationStatus,
+    ValidationVerdict,
+)
 from miner_scoring import SkipReason
 from prometheus_client import (
     CollectorRegistry,
@@ -45,11 +51,18 @@ class ValidatorMetrics:
         clock: Callable[[], float] = time.time,
         registry: CollectorRegistry | None = None,
     ) -> None:
-        if not isinstance(max_consecutive_skips, int) or max_consecutive_skips < 1:
-            raise ValueError("max_consecutive_skips must be a positive integer")
+        if (
+            not isinstance(max_consecutive_skips, int)
+            or max_consecutive_skips < 1
+        ):
+            raise ValueError(
+                "max_consecutive_skips must be a positive integer"
+            )
         self._max_skips = max_consecutive_skips
         self._clock = clock
-        self.registry = registry if registry is not None else CollectorRegistry()
+        self.registry = (
+            registry if registry is not None else CollectorRegistry()
+        )
 
         self._rancher_errors = Counter(
             "kubetee_rancher_errors",
@@ -94,6 +107,18 @@ class ValidatorMetrics:
             "Miners with score 1 this cycle",
             registry=self.registry,
         )
+        self._validation_status = Gauge(
+            "kubetee_validation_status",
+            "Current miners by infrastructure validation status",
+            ["status"],
+            registry=self.registry,
+        )
+        self._validation_reason = Gauge(
+            "kubetee_validation_reason",
+            "Current miners by fixed infrastructure validation reason",
+            ["reason"],
+            registry=self.registry,
+        )
         self._recon_deleted = Counter(
             "kubetee_reconciliation_deletions",
             "Reconciliation cluster deletions performed",
@@ -126,6 +151,10 @@ class ValidatorMetrics:
             self._skips.labels(reason=reason.value)
         for reason in SuppressionReason:
             self._recon_suppressed.labels(reason=reason.value)
+        for status in ValidationStatus:
+            self._validation_status.labels(status=status.value)
+        for reason in ValidationReason:
+            self._validation_reason.labels(reason=reason.value)
         for result in ("success", "failure"):
             self._set_weights.labels(result=result)
         for outcome in ("skip", "weights_set", "weights_rejected"):
@@ -174,11 +203,36 @@ class ValidatorMetrics:
         self._last_success.set(self._clock())
 
     def record_set_weights(self, success: bool) -> None:
-        self._set_weights.labels(result="success" if success else "failure").inc()
+        self._set_weights.labels(
+            result="success" if success else "failure"
+        ).inc()
 
     def record_scoring_result(self, discovered: int, scoring: int) -> None:
         self._discovered.set(discovered)
         self._scoring.set(scoring)
+
+    def record_validation_results(
+        self, verdicts: Sequence[ValidationVerdict]
+    ) -> None:
+        if not all(
+            isinstance(verdict, ValidationVerdict)
+            and isinstance(verdict.status, ValidationStatus)
+            and isinstance(verdict.reason, ValidationReason)
+            for verdict in verdicts
+        ):
+            raise ValueError(
+                "verdicts must contain fixed-enum ValidationVerdict members"
+            )
+        statuses = collections.Counter(verdict.status for verdict in verdicts)
+        reasons = collections.Counter(verdict.reason for verdict in verdicts)
+        for status in ValidationStatus:
+            self._validation_status.labels(status=status.value).set(
+                statuses[status]
+            )
+        for reason in ValidationReason:
+            self._validation_reason.labels(reason=reason.value).set(
+                reasons[reason]
+            )
 
     def record_reconciliation_deletion(self) -> None:
         self._recon_deleted.inc()
@@ -186,7 +240,9 @@ class ValidatorMetrics:
     def record_reconciliation_conflict(self) -> None:
         self._recon_conflicts.inc()
 
-    def record_reconciliation_suppressed(self, reason: SuppressionReason) -> None:
+    def record_reconciliation_suppressed(
+        self, reason: SuppressionReason
+    ) -> None:
         if not isinstance(reason, SuppressionReason):
             raise ValueError("reason must be a SuppressionReason member")
         self._recon_suppressed.labels(reason=reason.value).inc()
