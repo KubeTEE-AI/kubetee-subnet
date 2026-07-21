@@ -51,8 +51,9 @@ _OLD_HARDCODED_CONVICTION_TEXT = "sudo failed - not owner"
 
 
 class _FakeSubnetInfo:
-    def __init__(self, owner_ss58):
+    def __init__(self, owner_ss58, neuron_count=1):
         self.owner_ss58 = owner_ss58
+        self.neuron_count = neuron_count
 
 
 class _FakeHyperparams:
@@ -70,12 +71,31 @@ class _FakeBalance:
         self.tao = tao
 
 
+class _FakeDelegateInfo:
+    def __init__(self, owner, registrations):
+        self.owner = owner
+        self.registrations = registrations
+
+
 class FakeSubnetsNamespace:
-    def __init__(self, owner_ss58="5OWNER"):
+    def __init__(self, owner_ss58="5OWNER", exists=True):
         self._owner_ss58 = owner_ss58
+        self._exists = exists
 
     def subnet(self, netuid):
-        return _FakeSubnetInfo(self._owner_ss58)
+        return _FakeSubnetInfo(
+            self._owner_ss58,
+            neuron_count=1 if self._exists else 0,
+        )
+
+
+class FakeDelegationNamespace:
+    def __init__(self, owner_ss58="5OWNER", netuid=1):
+        self._owner_ss58 = owner_ss58
+        self._netuid = netuid
+
+    def delegates(self):
+        return [_FakeDelegateInfo(self._owner_ss58, [self._netuid])]
 
 
 class FakeStakingNamespace:
@@ -97,6 +117,7 @@ class FakeHyperparamsNamespace:
 class FakeSubtensor:
     def __init__(self, owner_ss58="5OWNER", stake_by_coldkey=None, hyperparams=None):
         self.subnets = FakeSubnetsNamespace(owner_ss58=owner_ss58)
+        self.delegation = FakeDelegationNamespace(owner_ss58=owner_ss58)
         self.staking = FakeStakingNamespace(stake_by_coldkey=stake_by_coldkey)
         self.hyperparameters = FakeHyperparamsNamespace(hyperparams=hyperparams)
 

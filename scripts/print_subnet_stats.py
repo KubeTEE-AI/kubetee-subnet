@@ -44,7 +44,7 @@ def build_report(netuid: int, chain_endpoint: str, wallets: dict, subtensor=None
     report = {"netuid": netuid, "network": chain_endpoint}
 
     try:
-        h = sub.get_subnet_hyperparameters(netuid=netuid)
+        h = sub.hyperparameters.get(netuid=netuid)
         hypers = {f: getattr(h, f, "?") for f in HYPER_FIELDS}
         try:
             hypers["recycle_or_burn"] = h.recycle_or_burn
