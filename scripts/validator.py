@@ -470,7 +470,10 @@ def main(env: Mapping[str, str] | None = None) -> None:
     client = RancherClient(config.rancher_url, config.rancher_token)
 
     def evidence_sink(event: dict) -> None:
-        _LOG.info("reconciliation evidence: %s", event)
+        _LOG.info(
+            "reconciliation evidence: event=%(event)s correlation_id=%(correlation_id)s",
+            {"event": event.get("event"), "correlation_id": event.get("correlation_id"), **event},
+        )
 
     reconciler = ReconciliationEngine(
         client,
