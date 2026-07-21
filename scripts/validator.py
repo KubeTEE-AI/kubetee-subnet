@@ -306,6 +306,7 @@ class BasicValidator:
 
     def _record_skip(self, reason: SkipReason, detail: str) -> None:
         entered_degraded = self._metrics.record_skip(reason)
+        self._metrics.record_cycle_outcome("skip")
         self._log.warning(
             "cycle skipped set_weights: reason=%s detail=%s consecutive=%d",
             reason.value,
@@ -389,6 +390,7 @@ class BasicValidator:
                 "set_weights raised, will back off and retry: %s",
                 self._render(error),
             )
+            self._metrics.record_cycle_outcome("weights_rejected")
             return "weights_rejected"
 
         # 6. log + metrics (honest, redacted)
@@ -404,11 +406,13 @@ class BasicValidator:
                 uids,
                 weights,
             )
+            self._metrics.record_cycle_outcome("weights_set")
             return "weights_set"
         self._log.warning(
             "set_weights rejected by chain (no success claimed): %s",
             self._redact(str(message)),
         )
+        self._metrics.record_cycle_outcome("weights_rejected")
         return "weights_rejected"
 
     def run_forever(self) -> None:
