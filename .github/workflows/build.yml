@@ -24,7 +24,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Build validator image
-        run: docker build -f Dockerfile.validator -t kubetee-validator:test .
+        run: docker build -f Dockerfile -t kubetee-validator:test .
 
       - name: Build docker compose services (dry)
         run: docker compose build validator
