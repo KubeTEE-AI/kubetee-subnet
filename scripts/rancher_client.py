@@ -23,7 +23,6 @@ from urllib.parse import urlsplit
 USER_AGENT = "kubetee-validator/0.1"
 _KNOWN_PAGINATION_FIELDS = {"first", "next", "last", "limit", "total", "partial"}
 _CLUSTER_ID = re.compile(r"^[a-z0-9][a-z0-9-]{0,62}$")
-_MAX_PAGES = 1000  # backstop against a pathological next-page loop
 
 
 class ErrorCategory(enum.Enum):
@@ -66,6 +65,9 @@ class UrllibTransport:
                 return resp.status, resp.read().decode("utf-8", errors="replace")
         except urllib.error.HTTPError as exc:
             return exc.code, exc.read().decode("utf-8", errors="replace")
+        except urllib.error.URLError as exc:
+            # Connection-level failures (DNS, refused, timeout) propagate as transport errors
+            return 0, f"URLError: {exc.reason}"
 
 
 class RancherClient:
@@ -78,6 +80,7 @@ class RancherClient:
         transport=None,
         timeout: float = 30.0,
         user_agent: str = USER_AGENT,
+        max_pages: int = 1000,
     ) -> None:
         parts = urlsplit(base_url.strip())
         if parts.scheme != "https" or not parts.netloc:
@@ -89,6 +92,7 @@ class RancherClient:
         self._transport = transport if transport is not None else UrllibTransport()
         self._timeout = timeout
         self._user_agent = user_agent
+        self._max_pages = max_pages
 
     def __repr__(self) -> str:  # never include the token
         return f"RancherClient(origin={self._origin!r})"
@@ -176,7 +180,7 @@ class RancherClient:
         """Follow marker pagination to exhaustion, failing closed otherwise."""
         items: list[dict] = []
         url = first_url
-        for _ in range(_MAX_PAGES):
+        for _ in range(self._max_pages):
             doc = self._parse_json(self._request("GET", url))
             data = doc.get("data")
             pagination = doc.get("pagination")
@@ -205,4 +209,6 @@ class RancherClient:
                     "partial page without a next link; enumeration unprovable"
                 )
             return items
-        raise IncompleteEnumeration("pagination did not terminate")
+        raise IncompleteEnumeration(
+            f"pagination did not terminate after {self._max_pages} pages"
+        )

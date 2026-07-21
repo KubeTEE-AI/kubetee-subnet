@@ -252,14 +252,15 @@ class BasicValidator:
             self._chain_dirty = False
         return self._subtensor
 
-    def _read_neurons(self, subtensor) -> tuple[list[dict] | None, object]:
+    def _read_neurons(self, subtensor) -> tuple[list[dict] | None, int | None]:
         try:
             meta = subtensor.metagraph(self._config.netuid)
             neurons = [
                 {"uid": int(uid), "hotkey": str(hotkey)}
                 for uid, hotkey in zip(meta.uids, meta.hotkeys, strict=True)
             ]
-            return neurons, getattr(meta, "block", None)
+            block = getattr(meta, "block", None)
+            return neurons, int(block) if block is not None else None
         except Exception as error:  # fail closed; recreate only after failure
             self._chain_dirty = True
             self._log.warning("metagraph read failed: %s", self._render(error))
@@ -305,6 +306,7 @@ class BasicValidator:
 
     def _record_skip(self, reason: SkipReason, detail: str) -> None:
         entered_degraded = self._metrics.record_skip(reason)
+        self._metrics.record_cycle_outcome("skip")
         self._log.warning(
             "cycle skipped set_weights: reason=%s detail=%s consecutive=%d",
             reason.value,
@@ -388,6 +390,7 @@ class BasicValidator:
                 "set_weights raised, will back off and retry: %s",
                 self._render(error),
             )
+            self._metrics.record_cycle_outcome("weights_rejected")
             return "weights_rejected"
 
         # 6. log + metrics (honest, redacted)
@@ -403,11 +406,13 @@ class BasicValidator:
                 uids,
                 weights,
             )
+            self._metrics.record_cycle_outcome("weights_set")
             return "weights_set"
         self._log.warning(
             "set_weights rejected by chain (no success claimed): %s",
             self._redact(str(message)),
         )
+        self._metrics.record_cycle_outcome("weights_rejected")
         return "weights_rejected"
 
     def run_forever(self) -> None:
@@ -470,7 +475,10 @@ def main(env: Mapping[str, str] | None = None) -> None:
     client = RancherClient(config.rancher_url, config.rancher_token)
 
     def evidence_sink(event: dict) -> None:
-        _LOG.info("reconciliation evidence: %s", event)
+        _LOG.info(
+            "reconciliation evidence: event=%(event)s correlation_id=%(correlation_id)s",
+            {"event": event.get("event"), "correlation_id": event.get("correlation_id"), **event},
+        )
 
     reconciler = ReconciliationEngine(
         client,

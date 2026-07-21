@@ -155,3 +155,14 @@ def test_reconciliation_counters():
         'kubetee_reconciliation_suppressed_total{reason="below_threshold"} 1.0'
         in text
     )
+
+
+def test_cycle_outcome_counter():
+    metrics, _ = make_metrics()
+    metrics.record_cycle_outcome("skip")
+    metrics.record_cycle_outcome("weights_set")
+    metrics.record_cycle_outcome("weights_rejected")
+    text = metrics.exposition().decode()
+    assert 'kubetee_cycles_total{outcome="skip"} 1.0' in text
+    assert 'kubetee_cycles_total{outcome="weights_set"} 1.0' in text
+    assert 'kubetee_cycles_total{outcome="weights_rejected"} 1.0' in text
