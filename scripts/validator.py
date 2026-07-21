@@ -252,14 +252,15 @@ class BasicValidator:
             self._chain_dirty = False
         return self._subtensor
 
-    def _read_neurons(self, subtensor) -> tuple[list[dict] | None, object]:
+    def _read_neurons(self, subtensor) -> tuple[list[dict] | None, int | None]:
         try:
             meta = subtensor.metagraph(self._config.netuid)
             neurons = [
                 {"uid": int(uid), "hotkey": str(hotkey)}
                 for uid, hotkey in zip(meta.uids, meta.hotkeys, strict=True)
             ]
-            return neurons, getattr(meta, "block", None)
+            block = getattr(meta, "block", None)
+            return neurons, int(block) if block is not None else None
         except Exception as error:  # fail closed; recreate only after failure
             self._chain_dirty = True
             self._log.warning("metagraph read failed: %s", self._render(error))
