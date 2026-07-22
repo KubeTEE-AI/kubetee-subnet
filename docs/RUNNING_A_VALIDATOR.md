@@ -57,7 +57,7 @@ docker compose -p kubetee-subnet exec validator \
 docker compose -p kubetee-subnet exec validator sh -lc '
   NETUID=$(cat /app/.kubetee_netuid)
   btcli subnets metagraph --netuid "$NETUID" --network ws://chain:9944
-  btcli stake list --network ws://chain:9944
+  btcli stake list --wallet alice --network ws://chain:9944
 '
 docker compose -p kubetee-subnet logs -f validator
 docker compose -p kubetee-subnet exec validator \

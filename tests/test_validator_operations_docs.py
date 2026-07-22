@@ -50,6 +50,7 @@ def test_operations_guide_covers_safe_dynamic_localnet_inspection():
     assert "make subnet-clean" in text
     assert "NETUID=$(cat /app/.kubetee_netuid)" in text
     assert 'btcli subnets metagraph --netuid "$NETUID" --network ws://chain:9944' in text
+    assert "btcli stake list --wallet alice --network ws://chain:9944" in text
     assert "validator permit" in text
     assert "stake" in text
     assert "weights" in text
