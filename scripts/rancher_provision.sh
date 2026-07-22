@@ -34,6 +34,21 @@ K3S_KUBECONFIG="${K3S_KUBECONFIG:-/k3s-out/kubeconfig.yaml}"
 log() { echo "[uat-init $(date -u +%H:%M:%SZ)] $*"; }
 cr()  { curl -sk --max-time 25 "$@"; }
 
+wait_for_rancher_auth_endpoint() {
+  # `/ping` turns green before the management API has finished publishing the
+  # local auth provider. Gate the first credential-bearing request on the
+  # endpoint it actually uses, with a bounded condition wait.
+  for _ in $(seq 1 120); do
+    if cr "$RANCHER/v3-public/localProviders/local" 2>/dev/null \
+      | jq -e '.type == "localProvider"' >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 3
+  done
+  log "Rancher v3 auth endpoint did not become ready"
+  return 1
+}
+
 # --- tools (alpine base) -----------------------------------------------------
 command -v jq >/dev/null 2>&1 || apk add --no-cache curl jq bind-tools >/dev/null
 if ! command -v kubectl >/dev/null 2>&1; then
@@ -50,6 +65,7 @@ rm -f "$SHARED/ready"
 log "waiting for Rancher API at $RANCHER ..."
 until [ "$(cr "$RANCHER/ping" 2>/dev/null)" = "pong" ]; do sleep 3; done
 log "Rancher up; logging in"
+wait_for_rancher_auth_endpoint
 LTOK=$(cr -X POST "$RANCHER/v3-public/localProviders/local?action=login" \
         -H 'Content-Type: application/json' \
         -d "{\"username\":\"admin\",\"password\":\"$BOOT\"}" | jq -r .token)

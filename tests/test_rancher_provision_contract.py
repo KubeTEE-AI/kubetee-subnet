@@ -47,6 +47,17 @@ def test_local_provisioner_never_logs_bootstrap_url_or_binding_identity():
     assert "canonical synthetic ENROLLED binding to $CID" not in text
 
 
+def test_local_provisioner_waits_for_v3_auth_endpoint_before_login():
+    text = (ROOT / "scripts" / "rancher_provision.sh").read_text()
+
+    gate = text.index('wait_for_rancher_auth_endpoint()')
+    login = text.index("LTOK=", gate)
+    assert gate < login
+    assert '"$RANCHER/v3-public/localProviders/local"' in text[gate:login]
+    assert "for _ in $(seq 1 120)" in text[gate:login]
+    assert "Rancher v3 auth endpoint did not become ready" in text[gate:login]
+
+
 def test_local_provisioner_reconciles_exact_validator_authority():
     text = (ROOT / "scripts" / "rancher_provision.sh").read_text()
 
