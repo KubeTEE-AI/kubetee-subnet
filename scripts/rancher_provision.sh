@@ -32,7 +32,7 @@ SHARED="${SHARED_DIR:-/shared}"
 K3S_KUBECONFIG="${K3S_KUBECONFIG:-/k3s-out/kubeconfig.yaml}"
 EXT_TOKEN_API="$RANCHER/apis/ext.cattle.io/v1/tokens"
 EXT_TOKEN_LIMIT="100"
-EXT_TOKEN_USER_LABEL="authn.management.cattle.io/token-userId"
+EXT_TOKEN_USER_LABEL="cattle.io/user-id"
 VALIDATOR_TOKEN_TTL_MS="3600000"
 PLATFORM_TOKEN_TTL_MS="300000"
 RANCHER_ID_PATTERN='^[A-Za-z0-9][A-Za-z0-9._-]{0,253}$'
@@ -90,7 +90,7 @@ list_ext_tokens() {
   cr -fG "$EXT_TOKEN_API" \
     -H "Authorization: Bearer $auth_token" \
     --data-urlencode "limit=$EXT_TOKEN_LIMIT" \
-    --data-urlencode "labelSelector=authn.management.cattle.io/token-userId=$user_id"
+    --data-urlencode "labelSelector=$EXT_TOKEN_USER_LABEL=$user_id"
 }
 
 delete_ext_tokens_except() {
@@ -176,8 +176,18 @@ delete_known_login() {
   printf '%s' "$login_id" | jq -eR --arg pattern "$RANCHER_ID_PATTERN" \
     'test($pattern)' >/dev/null \
     || { log "login token id validation failed"; return 1; }
-  cr -f -X DELETE "$RANCHER/v3/tokens/$login_id" \
-    -H "Authorization: Bearer $admin_token" >/dev/null
+  for _ in $(seq 1 20); do
+    status=$(cr -o /dev/null -w '%{http_code}' -X DELETE \
+      "$RANCHER/v3/tokens/$login_id" \
+      -H "Authorization: Bearer $admin_token" || true)
+    case "$status" in
+      200|204) return 0 ;;
+      404) sleep 1 ;;
+      *) log "login token deletion failed"; return 1 ;;
+    esac
+  done
+  log "login token deletion did not become ready"
+  return 1
 }
 
 wait_for_ext_token_api() {

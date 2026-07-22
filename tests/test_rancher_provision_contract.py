@@ -65,7 +65,10 @@ def test_local_provisioner_uses_bounded_extension_token_api_only():
 
     assert 'EXT_TOKEN_API="$RANCHER/apis/ext.cattle.io/v1/tokens"' in text
     assert 'EXT_TOKEN_LIMIT="100"' in text
-    assert 'authn.management.cattle.io/token-userId=$user_id' in text
+    assert 'EXT_TOKEN_USER_LABEL="cattle.io/user-id"' in text
+    assert "authn.management.cattle.io/token-userId" not in text
+    list_helper = text[text.index("list_ext_tokens()") : text.index("delete_ext_tokens_except()")]
+    assert '--data-urlencode "labelSelector=$EXT_TOKEN_USER_LABEL=$user_id"' in list_helper
     assert '"$RANCHER/v3/token"' not in text
     assert '"$RANCHER/v3/tokens?' not in text
     assert "metadata.continue" in text
@@ -108,6 +111,21 @@ def test_local_provisioner_deletes_only_known_legacy_login_ids():
     assert 'delete_known_login "$LTOK" "$PLATFORM_LOGIN_TOKEN_ID"' in text
     assert 'delete_known_login "$LTOK" "$ADMIN_LOGIN_TOKEN_ID"' in text
     assert '"$RANCHER/v3/tokens/$login_id"' in text
+
+
+def test_local_provisioner_retries_exact_login_deletion_only_after_404():
+    text = (ROOT / "scripts" / "rancher_provision.sh").read_text()
+    deletion = text[
+        text.index("delete_known_login()") : text.index("wait_for_ext_token_api()")
+    ]
+
+    assert "for _ in $(seq 1 20); do" in deletion
+    assert "status=$(cr -o /dev/null -w '%{http_code}' -X DELETE \\" in deletion
+    assert '"$RANCHER/v3/tokens/$login_id"' in deletion
+    assert "200|204) return 0 ;;" in deletion
+    assert "404) sleep 1 ;;" in deletion
+    assert '*) log "login token deletion failed"; return 1 ;;' in deletion
+    assert 'log "login token deletion did not become ready"' in deletion
 
 
 def test_local_provisioner_reconciles_exact_validator_authority():
