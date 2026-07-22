@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pathlib
+import re
 
 ROOT = pathlib.Path(__file__).parent.parent
 GUIDE = ROOT / "docs" / "RUNNING_A_VALIDATOR.md"
@@ -38,6 +39,32 @@ def test_operations_guide_records_the_public_mainnet_snapshot_defaults():
     assert "not DNS-resolvable" in text
 
 
+def test_operations_guide_has_one_complete_copyable_production_environment_block():
+    text = GUIDE.read_text(encoding="utf-8")
+
+    expected_block = """```dotenv
+KUBETEE_VALIDATION_PROFILE=production
+BT_NETWORK=finney
+KUBETEE_SUBNET_NETUID=90
+KUBETEE_OWNER_HOTKEY=5EKtGWqskt8qBqdAZ78pSWRCYRuYmDc5XbwJPDqH1EpiSTEE
+KUBETEE_CHAIN_NETWORK=finney
+RANCHER_URL=https://rancher.kubetee.ai
+RANCHER_CA_FILE=/shared/rancher-ca.crt
+BT_WALLET=<operator wallet name>
+BT_WALLET_HOTKEY=<operator wallet hotkey name>
+KUBETEE_VALIDATOR_HOTKEY=<registered validator hotkey>
+RANCHER_BEARER_TOKEN=<operator-supplied Rancher API token>
+```"""
+
+    assert text.count(expected_block) == 1
+
+
+def test_operations_guide_records_snapshot_provenance_date():
+    text = GUIDE.read_text(encoding="utf-8")
+
+    assert "2026-07-23" in text
+
+
 def test_operations_guide_sets_the_in_container_rancher_ca_file():
     text = GUIDE.read_text(encoding="utf-8")
 
@@ -71,7 +98,7 @@ def test_operations_guide_explicitly_replaces_the_provisional_rancher_origin():
 def test_operations_guide_never_exposes_credentials_or_bootstraps_chain_state():
     text = GUIDE.read_text(encoding="utf-8")
 
-    assert "RANCHER_BEARER_TOKEN=<" not in text
+    assert "RANCHER_BEARER_TOKEN=<operator-supplied Rancher API token>" in text
     assert "token-" not in text
     assert "BEGIN PRIVATE KEY" not in text
     assert "overrides the local bootstrap entrypoint" in text
@@ -87,7 +114,7 @@ def test_operations_guide_keeps_external_environment_file_outside_checkout():
         f"`{external_env_file}` outside the\nrepository."
     ) in text
     assert f"chmod 600 {external_env_file}" in text
-    assert text.count(f"--env-file {external_env_file}") == 1
+    assert text.count(f"--env-file {external_env_file}") == 3
     assert "--env-file validator.env" not in text
 
 
@@ -116,3 +143,22 @@ def test_operations_guide_requires_a_dedicated_hotkey_only_wallet_root():
     assert "wallet root contains only the signing hotkey and public coldkey metadata" in text
     assert "Do not mount a normal/operator wallet root" in text
     assert "private coldkey or recovery material" in text
+
+
+def test_operations_guide_has_an_executable_named_container_recreate_sequence():
+    text = GUIDE.read_text(encoding="utf-8")
+
+    assert re.search(
+        r"docker stop kubetee-validator\n"
+        r"docker rm kubetee-validator\n"
+        r"docker run -d --name kubetee-validator",
+        text,
+    )
+
+
+def test_operations_guide_has_an_explicit_prior_digest_rollback_command():
+    text = GUIDE.read_text(encoding="utf-8")
+
+    assert "Prior reviewed digest:" in text
+    assert "docker run -d --name kubetee-validator" in text
+    assert "@sha256:<prior-reviewed-digest>" in text

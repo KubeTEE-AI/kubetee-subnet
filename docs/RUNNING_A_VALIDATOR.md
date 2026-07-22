@@ -20,33 +20,26 @@ it is not a reason to broaden permissions.
 
 ## Finney mainnet
 
-This is a public snapshot of the KubeTEE mainnet defaults recorded with
-BTCLI v11 at block 8680289:
+This is a public snapshot of the KubeTEE mainnet defaults recorded on
+2026-07-23 with BTCLI v11 at block 8680289. Create a private environment file at `/secure/path/validator.env` outside the
+repository. Use this one block and replace every angle-bracketed operator placeholder before starting:
 
 ```dotenv
+KUBETEE_VALIDATION_PROFILE=production
+BT_NETWORK=finney
 KUBETEE_SUBNET_NETUID=90
 KUBETEE_OWNER_HOTKEY=5EKtGWqskt8qBqdAZ78pSWRCYRuYmDc5XbwJPDqH1EpiSTEE
 KUBETEE_CHAIN_NETWORK=finney
 RANCHER_URL=https://rancher.kubetee.ai
-```
-
-`https://rancher.kubetee.ai` is provisional and not DNS-resolvable. Replace `https://rancher.kubetee.ai` with the operator's active Rancher HTTPS origin before starting the container. The owner hotkey above is a public recycle identity, not a credential.
-
-Create a private environment file at `/secure/path/validator.env` outside the
-repository. The public snapshot defaults above can be copied separately. Set
-the following required private file values from operator-controlled systems;
-the names-only rows deliberately do not disclose their values:
-
-```dotenv
-BT_NETWORK=finney
 RANCHER_CA_FILE=/shared/rancher-ca.crt
-
-# Required operator-supplied values; do not put their values in this manual.
-BT_WALLET
-BT_WALLET_HOTKEY
-KUBETEE_VALIDATOR_HOTKEY
-RANCHER_BEARER_TOKEN
+BT_WALLET=<operator wallet name>
+BT_WALLET_HOTKEY=<operator wallet hotkey name>
+KUBETEE_VALIDATOR_HOTKEY=<registered validator hotkey>
+RANCHER_BEARER_TOKEN=<operator-supplied Rancher API token>
 ```
+
+`https://rancher.kubetee.ai` is provisional and not DNS-resolvable. It cannot
+be used to start the validator. Replace `https://rancher.kubetee.ai` with the operator's active Rancher HTTPS origin before starting the container. The owner hotkey above is a public recycle identity, not a credential. The token row is a placeholder, not a token value.
 
 `RANCHER_CA_FILE` is the in-container CA path that corresponds to the
 read-only host mount in the start command. Keep wallet names, credentials, CA
@@ -95,12 +88,28 @@ docker stop kubetee-validator
 ## Upgrade and rollback
 
 For an upgrade, review and record a replacement immutable digest before
-stopping the container. Recreate the named container with the approved
-replacement digest and the same read-only mounts, loopback metrics binding,
-and environment file. Retain the prior digest so a rollback is an explicit
-replacement with that prior digest; do not use a moving tag for an unattended
-mainnet process. This manual intentionally gives no generic destructive chain
-or Rancher recovery commands.
+stopping the container. Recreate the named container with the approved digest
+and the same read-only mounts, loopback metrics binding, and environment file:
+
+```bash
+docker stop kubetee-validator
+docker rm kubetee-validator
+docker run -d --name kubetee-validator --restart unless-stopped --env-file /secure/path/validator.env -v /secure/path/validator-wallet:/root/.bittensor:ro -v /secure/path/rancher-ca.crt:/shared/rancher-ca.crt:ro -p 127.0.0.1:9100:9100 ghcr.io/kubetee-ai/kubetee-subnet@sha256:6ee1381b131885cdc65256845fb264bd51d0fe14dd675b742c9d33998cf63008 python -u scripts/validator.py
+```
+
+Substitute only the reviewed replacement digest in that command; do not use a
+moving tag. To roll back, record and use the exact prior reviewed digest, then
+perform the same named-container recreate sequence:
+
+```bash
+# Prior reviewed digest: ghcr.io/kubetee-ai/kubetee-subnet@sha256:<prior-reviewed-digest>
+docker stop kubetee-validator
+docker rm kubetee-validator
+docker run -d --name kubetee-validator --restart unless-stopped --env-file /secure/path/validator.env -v /secure/path/validator-wallet:/root/.bittensor:ro -v /secure/path/rancher-ca.crt:/shared/rancher-ca.crt:ro -p 127.0.0.1:9100:9100 ghcr.io/kubetee-ai/kubetee-subnet@sha256:<prior-reviewed-digest> python -u scripts/validator.py
+```
+
+This manual intentionally gives no generic destructive chain or Rancher
+recovery commands.
 
 ## Official Bittensor references
 
