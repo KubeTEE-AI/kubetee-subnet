@@ -53,6 +53,22 @@ login_to_rancher() {
   return 1
 }
 
+wait_for_admin_token_collection() {
+  # Rancher can finish role reconciliation before its token collection returns
+  # the API shape required for the validator-token cleanup below. Do not treat
+  # a transient response as an empty collection.
+  for _ in $(seq 1 120); do
+    if cr -f "$RANCHER/v3/tokens?limit=1" \
+      -H "Authorization: Bearer $LTOK" 2>/dev/null \
+      | jq -e '(.data | type == "array")' >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 3
+  done
+  log "Rancher token collection did not become ready"
+  return 1
+}
+
 # --- tools (alpine base) -----------------------------------------------------
 command -v jq >/dev/null 2>&1 || apk add --no-cache curl jq bind-tools >/dev/null
 if ! command -v kubectl >/dev/null 2>&1; then
@@ -202,6 +218,7 @@ log "bindings verified exact (user-base + $VAL_ROLE_NAME)"
 # 2d. revoke tokens from earlier disposable runs before logging in and minting
 # this run's only long-lived validator token. The login token is created after
 # cleanup so it cannot be selected accidentally.
+wait_for_admin_token_collection
 OLD_TOKENS=$(cr "$RANCHER/v3/tokens?limit=-1&userId=$USER_ID" \
                -H "Authorization: Bearer $LTOK")
 for TOKEN_ID in $(printf '%s' "$OLD_TOKENS" | jq -r \

@@ -60,6 +60,17 @@ def test_local_provisioner_waits_for_successful_v3_login_before_provisioning():
     assert "Rancher v3 login did not become ready" in text[gate:login]
 
 
+def test_local_provisioner_waits_for_a_well_formed_admin_token_collection():
+    text = (ROOT / "scripts" / "rancher_provision.sh").read_text()
+
+    gate = text.index('wait_for_admin_token_collection()')
+    cleanup = text.index("OLD_TOKENS=", gate)
+    assert '"$RANCHER/v3/tokens?limit=1"' in text[gate:cleanup]
+    assert "(.data | type == \"array\")" in text[gate:cleanup]
+    assert "Rancher token collection did not become ready" in text[gate:cleanup]
+    assert text.index("wait_for_admin_token_collection", gate + 1) < cleanup
+
+
 def test_local_provisioner_reconciles_exact_validator_authority():
     text = (ROOT / "scripts" / "rancher_provision.sh").read_text()
 
