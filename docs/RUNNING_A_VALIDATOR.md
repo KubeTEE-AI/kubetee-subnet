@@ -89,7 +89,7 @@ appropriate operator-controlled system.
 | `BT_NETWORK` | Finney network or operator-approved RPC endpoint. |
 | `BT_WALLET` | Existing validator wallet name. |
 | `BT_WALLET_HOTKEY` | Existing validator signing hotkey name. |
-| `BITTENSOR_WALLET_DIR` | Host directory holding the validator wallet. |
+| `BITTENSOR_WALLET_DIR` | Dedicated validator wallet root. |
 | `KUBETEE_SUBNET_NETUID` | Existing KubeTEE subnet identifier. |
 | `KUBETEE_OWNER_HOTKEY` | Registered subnet-owner hotkey. |
 | `KUBETEE_VALIDATOR_HOTKEY` | Registered validator hotkey. |
@@ -97,6 +97,10 @@ appropriate operator-controlled system.
 | `RANCHER_BEARER_TOKEN` | Least-privilege Rancher credential. |
 | `RANCHER_CA_FILE` | Required host path to the Rancher CA/bundle file. |
 | `KUBETEE_CHAIN_NETWORK` | Exact network identity in the enrollment binding. |
+
+`BITTENSOR_WALLET_DIR` must point to a dedicated validator wallet root that
+contains only the required signing hotkey and public coldkey metadata.
+Do not mount a normal/operator wallet root, private coldkey or recovery material.
 
 Before starting, protect the file and validate the rendered configuration.
 Run these commands from the root KubeTEE workspace, where the external compose

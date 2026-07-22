@@ -63,3 +63,12 @@ def test_operations_guide_requires_external_rancher_ca_bundle_path():
     text = GUIDE.read_text(encoding="utf-8")
 
     assert "Required host path to the Rancher CA/bundle file." in text
+
+
+def test_operations_guide_requires_a_dedicated_hotkey_only_wallet_root():
+    text = GUIDE.read_text(encoding="utf-8")
+
+    assert "`BITTENSOR_WALLET_DIR` must point to a dedicated validator wallet root" in text
+    assert "only the required signing hotkey and public coldkey metadata" in text
+    assert "Do not mount a normal/operator wallet root" in text
+    assert "private coldkey or recovery material" in text
