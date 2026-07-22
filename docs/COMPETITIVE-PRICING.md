@@ -2,7 +2,10 @@
 
 This document is the full design behind the README [Validator Scoring & Attestation](../README.md#validator-scoring--attestation) → [Competitive Pricing](../README.md#competitive-pricing) subsection. It covers how SN90 (KubeTEE) keeps its compute priced competitively against the other Bittensor compute subnets — **Targon (SN4)**, **Lium (SN51)**, and **Chutes (SN64)** — and how that competitive price signal feeds miner weights.
 
-> **Status:** competitive pricing is an **Early Access (Phase 0)** scoring dimension — it is required to set the Alpha / TAO **resources price per hour** consumers pay for compute (demand-side), and it doubles as a miner-scoring input. The target price is **competitive** (benchmarked vs Targon/Lium/Chutes) and **dynamic according to the job queues** (Armada queue depth + the 75% utilization target). The shipping Early Access validator scores node liveness only until the price feeds are wired (see the [Early Access stand-in](../SUBNET.md) caveat). This document is the design target.
+> **Status:** competitive pricing is a planned scoring dimension and this
+> document is its design target. The shipping validator currently produces a
+> binary infrastructure-readiness score; competitor and job-queue price feeds
+> are not wired into weights yet (see [SUBNET.md](../SUBNET.md)).
 
 ---
 
@@ -126,7 +129,12 @@ Every input is either a public API or on-chain data. The validator publishes the
 
 ## Roadmap alignment
 
-- **Phase 0 (Early Access, current):** add the competitive-pricing dimension — competitor feed scraping, target-price computation, price-competitiveness weighting, and the 75% utilization target — and use that target price as the **resources price per hour** for Alpha / TAO paid jobs (demand-side billing, dynamic per the job queues). The shipping validator scores node liveness only until the price feeds are wired.
+- **Phase 0 (planned extension):** add the competitive-pricing dimension —
+  competitor feed scraping, target-price computation, price-competitiveness
+  weighting, and the 75% utilization target — and use that target price as
+  the **resources price per hour** for Alpha / TAO paid jobs (demand-side
+  billing, dynamic per the job queues). The current binary score is limited to
+  infrastructure readiness.
 - **Phase 1 (Expansion):** add TEE-attestation + Armada-job-metrics + health scoring.
 - **Phase 2 (Paid Jobs):** layer **USDC-on-BASE fiat billing** on top of the Phase 0 resources-per-hour pricing, plus USDC→TAO→Alpha recycling.
 - **Phase 3 (Job-Type Growth):** extend the price formula to new job classes as new workload types come online.

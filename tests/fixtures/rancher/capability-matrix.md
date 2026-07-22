@@ -1,4 +1,4 @@
-# g004 V1 — Staging Rancher token capability matrix
+# g004 V2 — Rancher v3 capability and fixture-boundary matrix
 
 Captured read-only against `staging-rancher.kubetee.ai` on 2026-07-16 with
 the Early Access `.env` account API key (no scope). Response **classes**
@@ -29,17 +29,18 @@ AC12 operator-gated demo against a disposable cluster proves DELETE.
   are only valid on `/k8s/clusters/<id>/…`. The Early Access key must be a
   **No Scope** account key; least-privilege comes from the account's role
   bindings, not token scoping. (Verified empirically during V1 bring-up.)
-- The account behind the current key is an operator/admin account — the
-  D6 debt as recorded in the spec. A `cluster-readonly` RoleTemplate
-  exists on this Rancher (observed in role-template bindings) and is the
-  designated future least-privilege binding for a dedicated validator
-  user.
+- The account behind the historical capture key is an operator/admin account
+  and must not be reused by a validator. The combined validator/reconciler
+  requires a dedicated role with cluster/node GET/list plus cluster DELETE
+  and no other verbs/resources. A `cluster-readonly` RoleTemplate observed on
+  this Rancher is insufficient while guarded reconciliation remains in the
+  same process; it becomes suitable only after mutation authority is split.
 - Secret-bearing fields observed on live objects and therefore dropped by
   the fixture allowlist: cluster `caCert`, `clusterSecrets`,
-  `importedConfig`, `appliedSpec`, `annotations`; node `ipAddress`,
-  `hostname`, `customConfig`, `info`, `annotations`.
-- Live label observation (recorded for V9 UAT prep, no values here): the
-  miner cluster's `kubetee.ai/miner-hotkey` label currently holds the
-  **Alice** dev address while `miner-coldkey` holds **Bob's** — per the
-  approved spec, bob is the miner, so the operator must relabel
-  `miner-hotkey` to bob's hotkey before the AC9(a) healthy demo.
+  `importedConfig`, `appliedSpec`, and all annotations except the synthetic
+  enrollment UID; node `ipAddress`, `hostname`, `customConfig`, `info`, and
+  `annotations`.
+- The 2026-07-16 live capture predated the canonical binding contract and had
+  inconsistent dev identities. Its values are historical evidence only. The
+  synthetic fixtures now use the PR #35 canonical binding keys and do not
+  claim that staging has been relabeled or validated.

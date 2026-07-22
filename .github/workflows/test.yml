@@ -25,11 +25,11 @@ jobs:
 
       - name: Lint shell scripts (shellcheck)
         run: |
-          files=$(git ls-files '*.sh')
-          if [ -z "$files" ]; then echo "no shell scripts"; exit 0; fi
-          echo "shellcheck: $files"
+          mapfile -t files < <(git ls-files '*.sh')
+          if [ "${#files[@]}" -eq 0 ]; then echo "no shell scripts"; exit 0; fi
+          printf 'shellcheck: %s\n' "${files[*]}"
           docker run --rm -v "$PWD:/mnt:ro" -w /mnt koalaman/shellcheck:stable \
-            -S warning $files
+            -S warning "${files[@]}"
 
       - name: Secret scan (committed tokens / private keys)
         run: |

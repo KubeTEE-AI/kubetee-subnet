@@ -11,6 +11,10 @@ Run:
   python -m pytest tests/test_chain_state.py -q --tb=line
 """
 
+# Protocol fakes retain SDK call signatures even when a case ignores an
+# argument.
+# pylint: disable=unused-argument
+
 import importlib.util
 import sys
 from pathlib import Path
@@ -19,7 +23,9 @@ _this_dir = Path(__file__).parent
 _root = _this_dir.parent
 _script_path = _root / "scripts" / "chain_state.py"
 
-_spec = importlib.util.spec_from_file_location("chain_state_under_test", _script_path)
+_spec = importlib.util.spec_from_file_location(
+    "chain_state_under_test", _script_path
+)
 _chain_state = importlib.util.module_from_spec(_spec)
 sys.modules[_spec.name] = _chain_state
 _spec.loader.exec_module(_chain_state)
@@ -28,10 +34,10 @@ query_subnet_ownership = _chain_state.query_subnet_ownership
 query_wallet_stake = _chain_state.query_wallet_stake
 
 
-class _FakeSubnetInfo:
-    def __init__(self, owner_ss58, neuron_count=1):
-        self.owner_ss58 = owner_ss58
-        self.neuron_count = neuron_count
+class _FakeMetagraph:
+    def __init__(self, block, owner_coldkey):
+        self.block = block
+        self.owner_coldkey = owner_coldkey
 
 
 class _FakeBalance:
@@ -39,36 +45,17 @@ class _FakeBalance:
         self.tao = tao
 
 
-class _FakeDelegateInfo:
-    def __init__(self, owner, registrations):
-        self.owner = owner
-        self.registrations = registrations
-
-
 class FakeSubnetsNamespace:
-    def __init__(self, exists=True, owner_ss58=None, raise_on_info=None):
-        self._exists = exists
-        self._owner_ss58 = owner_ss58
-        self._raise_on_info = raise_on_info
+    def __init__(self, metagraph=None, raise_on_metagraph=None):
+        self._metagraph = metagraph
+        self._raise_on_metagraph = raise_on_metagraph
+        self.metagraph_calls = []
 
-    def subnet(self, netuid):
-        if self._raise_on_info:
-            raise self._raise_on_info
-        return _FakeSubnetInfo(
-            self._owner_ss58,
-            neuron_count=1 if self._exists else 0,
-        )
-
-
-class FakeDelegationNamespace:
-    """Mimics Subtensor().delegation.*"""
-
-    def __init__(self, owner_ss58, netuid):
-        self._owner_ss58 = owner_ss58
-        self._netuid = netuid
-
-    def delegates(self):
-        return [_FakeDelegateInfo(self._owner_ss58, [self._netuid])]
+    def metagraph(self, netuid, block, commitments):
+        self.metagraph_calls.append((netuid, block, commitments))
+        if self._raise_on_metagraph:
+            raise self._raise_on_metagraph
+        return self._metagraph
 
 
 class FakeStakingNamespace:
@@ -83,31 +70,57 @@ class FakeStakingNamespace:
 
 
 class FakeSubtensor:
-    def __init__(self, exists=True, owner_ss58=None, stake_tao=0.0,
-                 raise_on_stake=None, raise_on_info=None):
+    def __init__(
+        self,
+        block=41,
+        metagraph=None,
+        stake_tao=0.0,
+        raise_on_stake=None,
+        raise_on_metagraph=None,
+    ):
+        self._block = block
+        self.block_calls = 0
         self.subnets = FakeSubnetsNamespace(
-            exists=exists, owner_ss58=owner_ss58, raise_on_info=raise_on_info
-        )
-        self.delegation = FakeDelegationNamespace(
-            owner_ss58=owner_ss58, netuid=1
+            metagraph=metagraph, raise_on_metagraph=raise_on_metagraph
         )
         self.staking = FakeStakingNamespace(
             stake_tao=stake_tao, raise_on_stake=raise_on_stake
         )
 
+    def block(self):
+        self.block_calls += 1
+        return self._block
+
 
 def test_query_subnet_ownership_owned():
-    fake = FakeSubtensor(exists=True, owner_ss58="5OWNER")
-    result = query_subnet_ownership(
-        netuid=1, our_coldkey_ss58="5OWNER", chain_endpoint="ws://ignored", subtensor=fake
+    fake = FakeSubtensor(
+        metagraph=_FakeMetagraph(block=41, owner_coldkey="5OWNER")
     )
-    assert result == {"exists": True, "owner_ss58": "5OWNER", "owned_by_us": True, "error": None}
+    result = query_subnet_ownership(
+        netuid=2,
+        our_coldkey_ss58="5OWNER",
+        chain_endpoint="ws://ignored",
+        subtensor=fake,
+    )
+    assert result == {
+        "exists": True,
+        "owner_ss58": "5OWNER",
+        "owned_by_us": True,
+        "error": None,
+    }
+    assert fake.block_calls == 1
+    assert fake.subnets.metagraph_calls == [(2, 41, False)]
 
 
 def test_query_subnet_ownership_not_owned():
-    fake = FakeSubtensor(exists=True, owner_ss58="5SOMEONEELSE")
+    fake = FakeSubtensor(
+        metagraph=_FakeMetagraph(block=41, owner_coldkey="5SOMEONEELSE")
+    )
     result = query_subnet_ownership(
-        netuid=1, our_coldkey_ss58="5OWNER", chain_endpoint="ws://ignored", subtensor=fake
+        netuid=1,
+        our_coldkey_ss58="5OWNER",
+        chain_endpoint="ws://ignored",
+        subtensor=fake,
     )
     assert result["exists"] is True
     assert result["owner_ss58"] == "5SOMEONEELSE"
@@ -116,26 +129,93 @@ def test_query_subnet_ownership_not_owned():
 
 
 def test_query_subnet_ownership_missing_subnet():
-    fake = FakeSubtensor(exists=False)
+    fake = FakeSubtensor(metagraph=None)
     result = query_subnet_ownership(
-        netuid=99, our_coldkey_ss58="5OWNER", chain_endpoint="ws://ignored", subtensor=fake
+        netuid=99,
+        our_coldkey_ss58="5OWNER",
+        chain_endpoint="ws://ignored",
+        subtensor=fake,
     )
-    assert result == {"exists": False, "owner_ss58": None, "owned_by_us": False, "error": None}
+    assert result == {
+        "exists": False,
+        "owner_ss58": None,
+        "owned_by_us": False,
+        "error": None,
+    }
 
 
 def test_query_subnet_ownership_query_error_is_reported_not_swallowed():
-    fake = FakeSubtensor(exists=True, raise_on_info=RuntimeError("HTTP 429"))
+    fake = FakeSubtensor(raise_on_metagraph=RuntimeError("HTTP 429"))
     result = query_subnet_ownership(
-        netuid=1, our_coldkey_ss58="5OWNER", chain_endpoint="ws://ignored", subtensor=fake
+        netuid=1,
+        our_coldkey_ss58="5OWNER",
+        chain_endpoint="ws://ignored",
+        subtensor=fake,
     )
     assert result["owned_by_us"] is False
     assert result["error"] == "HTTP 429"
 
 
+def test_query_subnet_ownership_rejects_stale_metagraph():
+    fake = FakeSubtensor(
+        metagraph=_FakeMetagraph(block=40, owner_coldkey="5OWNER")
+    )
+    result = query_subnet_ownership(
+        netuid=2,
+        our_coldkey_ss58="5OWNER",
+        chain_endpoint="ws://ignored",
+        subtensor=fake,
+    )
+    assert result == {
+        "exists": None,
+        "owner_ss58": None,
+        "owned_by_us": False,
+        "error": "ownership snapshot is not pinned to the requested head",
+    }
+
+
+def test_query_subnet_ownership_rejects_missing_canonical_owner():
+    fake = FakeSubtensor(metagraph=_FakeMetagraph(block=41, owner_coldkey=""))
+    result = query_subnet_ownership(
+        netuid=2,
+        our_coldkey_ss58="5OWNER",
+        chain_endpoint="ws://ignored",
+        subtensor=fake,
+    )
+    assert result == {
+        "exists": None,
+        "owner_ss58": None,
+        "owned_by_us": False,
+        "error": "ownership snapshot has no canonical owner",
+    }
+
+
+def test_query_subnet_ownership_rejects_non_string_canonical_owner():
+    fake = FakeSubtensor(
+        metagraph=_FakeMetagraph(block=41, owner_coldkey=None)
+    )
+    result = query_subnet_ownership(
+        netuid=2,
+        our_coldkey_ss58="5OWNER",
+        chain_endpoint="ws://ignored",
+        subtensor=fake,
+    )
+    assert result == {
+        "exists": None,
+        "owner_ss58": None,
+        "owned_by_us": False,
+        "error": "ownership snapshot has no canonical owner",
+    }
+
+
 def test_query_wallet_stake_success():
     fake = FakeSubtensor(stake_tao=12.5)
     result = query_wallet_stake(
-        netuid=1, coldkey_ss58="5A", hotkey_ss58="5A", chain_endpoint="ws://ignored", subtensor=fake
+        netuid=1,
+        coldkey_ss58="5A",
+        hotkey_ss58="5A",
+        chain_endpoint="ws://ignored",
+        subtensor=fake,
     )
     assert result == {"stake_tao": 12.5, "error": None}
 
@@ -143,7 +223,11 @@ def test_query_wallet_stake_success():
 def test_query_wallet_stake_error_is_reported_not_swallowed():
     fake = FakeSubtensor(raise_on_stake=RuntimeError("HTTP 429"))
     result = query_wallet_stake(
-        netuid=1, coldkey_ss58="5A", hotkey_ss58="5A", chain_endpoint="ws://ignored", subtensor=fake
+        netuid=1,
+        coldkey_ss58="5A",
+        hotkey_ss58="5A",
+        chain_endpoint="ws://ignored",
+        subtensor=fake,
     )
     assert result["stake_tao"] is None
     assert result["error"] == "HTTP 429"

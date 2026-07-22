@@ -18,7 +18,49 @@
    "state": "active",
    "transitioning": "no",
    "transitioningMessage": "",
-   "labels": {},
+   "conditions": [
+    {
+     "type": "Ready",
+     "status": "True"
+    },
+    {
+     "type": "MemoryPressure",
+     "status": "False"
+    },
+    {
+     "type": "DiskPressure",
+     "status": "False"
+    },
+    {
+     "type": "PIDPressure",
+     "status": "False"
+    },
+    {
+     "type": "NetworkUnavailable",
+     "status": "False"
+    }
+   ],
+   "etcd": true,
+   "controlPlane": true,
+   "worker": true,
+   "unschedulable": false,
+   "capacity": {
+    "cpu": "8",
+    "memory": "16Gi",
+    "nvidia.com/gpu": "8"
+   },
+   "allocatable": {
+    "nvidia.com/gpu": "8"
+   },
+   "labels": {
+    "nvidia.com/gpu.product": "NVIDIA-H100-80GB-HBM3",
+    "nvidia.com/gpu.workload.config": "vm-passthrough"
+   },
+   "runtimeHandlers": [
+    {
+     "name": "kata-qemu-nvidia-gpu-tdx"
+    }
+   ],
    "links": {
     "self": "https://rancher.example/v3/nodes/cluster-aaa:node-aaa"
    }

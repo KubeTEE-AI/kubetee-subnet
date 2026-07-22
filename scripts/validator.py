@@ -27,6 +27,7 @@ without the SDK) exercises everything through injected seams.
 
 from __future__ import annotations
 
+import collections
 import dataclasses
 import logging
 import math
@@ -34,19 +35,29 @@ import os
 import pathlib
 import time
 from collections.abc import Callable, Mapping
+from numbers import Integral
 from urllib.parse import urlsplit
 
+from infrastructure_validation import (
+    HOTKEY_LABEL,
+    InfrastructurePolicy,
+    ValidationProfile,
+    validate_miner,
+)
 from miner_scoring import (
-    MINER_LABEL,
     CycleConfig,
     SkipCycle,
     SkipReason,
     decide_cycle,
-    score_miner,
     validate_share,
 )
 from prometheus_client import start_http_server
-from rancher_client import RancherClient, RancherError
+from rancher_client import (
+    ErrorCategory,
+    RancherClient,
+    RancherError,
+    normalize_https_origin,
+)
 from reconciliation import ReconciliationEngine
 from validator_metrics import ValidatorMetrics
 
@@ -56,6 +67,36 @@ DEFAULT_NETWORK = "ws://chain:9944"
 DEFAULT_WALLET = "alice"  # the validator signing identity (D7)
 DEFAULT_NETUID_FILE = "/app/.kubetee_netuid"
 MIN_POLL_SECONDS = 60.0
+DEBUG_MIN_POLL_SECONDS = 5.0
+
+_SKIP_DETAILS = {
+    SkipReason.METAGRAPH_UNAVAILABLE: "metagraph_read_failed",
+    SkipReason.METAGRAPH_STALE: "metagraph_block_not_advanced",
+    SkipReason.OWNER_UNRESOLVED: "owner_hotkey_unresolved",
+    SkipReason.IDENTITY_VIOLATION: "metagraph_identity_violation",
+    SkipReason.UNEXPECTED_RUNTIME: "unexpected_runtime_error",
+}
+_RANCHER_SKIP_DETAILS = {
+    ErrorCategory.TRANSPORT: "rancher_transport_failure",
+    ErrorCategory.AUTH: "rancher_auth_failure",
+    ErrorCategory.MALFORMED: "rancher_malformed_response",
+    ErrorCategory.INCOMPLETE: "rancher_incomplete_enumeration",
+}
+
+
+def _log_reconciliation_evidence(event: dict) -> None:
+    """Emit only the fixed audit fields approved for destructive actions."""
+    _LOG.info(
+        "reconciliation evidence: event=%r correlation_id=%r cluster_id=%r "
+        "absence_cycles=%r metagraph_blocks=%r response_class=%r detail=%r",
+        event.get("event"),
+        event.get("correlation_id"),
+        event.get("cluster_id"),
+        event.get("absence_cycles"),
+        event.get("metagraph_blocks"),
+        event.get("response_class"),
+        event.get("detail"),
+    )
 
 
 class ConfigError(ValueError):
@@ -77,8 +118,11 @@ class ValidatorConfig:
     reconcile_min_seconds: float
     owner_hotkey: str
     validator_hotkey: str
+    chain_network: str
+    validation_profile: ValidationProfile
     rancher_url: str
     rancher_token: str
+    rancher_ca_file: str | None
     metrics_port: int
     metrics_addr: str
 
@@ -133,6 +177,17 @@ class ValidatorConfig:
                 return default
             return value
 
+        profile_raw = require("KUBETEE_VALIDATION_PROFILE")
+        validation_profile = ValidationProfile.PRODUCTION
+        if profile_raw:
+            try:
+                validation_profile = ValidationProfile(profile_raw)
+            except ValueError:
+                fail(
+                    "KUBETEE_VALIDATION_PROFILE",
+                    "must be production or debug",
+                )
+
         raw_share = str(env.get("KUBETEE_MINER_SHARE") or "0.10").strip()
         miner_share = 0.10
         try:
@@ -141,28 +196,55 @@ class ValidatorConfig:
             fail("KUBETEE_MINER_SHARE", "must be finite and within [0, 1]")
 
         poll_seconds = parse_float(
-            "KUBETEE_POLL_SECONDS", MIN_POLL_SECONDS, MIN_POLL_SECONDS
+            "KUBETEE_POLL_SECONDS",
+            MIN_POLL_SECONDS,
+            (
+                DEBUG_MIN_POLL_SECONDS
+                if validation_profile is ValidationProfile.DEBUG
+                else MIN_POLL_SECONDS
+            ),
         )
         max_skips = parse_int("KUBETEE_MAX_CONSECUTIVE_SKIPS", 10, 1)
         reconcile_cycles = parse_int("KUBETEE_RECONCILE_MIN_CYCLES", 3, 1)
-        reconcile_seconds = parse_float("KUBETEE_RECONCILE_MIN_SECONDS", 900.0, 0.0)
+        reconcile_seconds = parse_float(
+            "KUBETEE_RECONCILE_MIN_SECONDS", 900.0, 0.0
+        )
         netuid = parse_int("KUBETEE_SUBNET_NETUID", 1, 0)
         metrics_port = parse_int("KUBETEE_METRICS_PORT", 9100, 1, 65535)
 
         owner_hotkey = require("KUBETEE_OWNER_HOTKEY")
         validator_hotkey = require("KUBETEE_VALIDATOR_HOTKEY")
-        if owner_hotkey and validator_hotkey and owner_hotkey == validator_hotkey:
+        if (
+            owner_hotkey
+            and validator_hotkey
+            and owner_hotkey == validator_hotkey
+        ):
             fail(
                 "KUBETEE_VALIDATOR_HOTKEY",
                 "must differ from KUBETEE_OWNER_HOTKEY",
             )
 
+        chain_network = require("KUBETEE_CHAIN_NETWORK")
+
+        network = (env.get("BT_NETWORK") or DEFAULT_NETWORK).strip()
+        wallet_name = (env.get("BT_WALLET") or DEFAULT_WALLET).strip()
+        wallet_hotkey = (env.get("BT_WALLET_HOTKEY") or "default").strip()
+        if validation_profile is ValidationProfile.PRODUCTION and (
+            profile_raw == ValidationProfile.PRODUCTION.value
+        ):
+            network = require("BT_NETWORK")
+            wallet_name = require("BT_WALLET")
+            wallet_hotkey = require("BT_WALLET_HOTKEY")
+            require("KUBETEE_SUBNET_NETUID")
+
         rancher_url = require("RANCHER_URL")
         if rancher_url:
-            parts = urlsplit(rancher_url)
-            if parts.scheme != "https" or not parts.netloc:
+            try:
+                rancher_url = normalize_https_origin(rancher_url)
+            except ValueError:
                 fail("RANCHER_URL", "must be a https origin")
         rancher_token = require("RANCHER_BEARER_TOKEN")
+        rancher_ca_file = (env.get("RANCHER_CA_FILE") or "").strip() or None
 
         if errors:
             raise ConfigError(
@@ -170,9 +252,9 @@ class ValidatorConfig:
             )
 
         return cls(
-            network=(env.get("BT_NETWORK") or DEFAULT_NETWORK).strip(),
-            wallet_name=(env.get("BT_WALLET") or DEFAULT_WALLET).strip(),
-            wallet_hotkey=(env.get("BT_WALLET_HOTKEY") or "default").strip(),
+            network=network,
+            wallet_name=wallet_name,
+            wallet_hotkey=wallet_hotkey,
             netuid=netuid,
             miner_share=miner_share,
             poll_seconds=poll_seconds,
@@ -181,10 +263,15 @@ class ValidatorConfig:
             reconcile_min_seconds=reconcile_seconds,
             owner_hotkey=owner_hotkey,
             validator_hotkey=validator_hotkey,
+            chain_network=chain_network,
+            validation_profile=validation_profile,
             rancher_url=rancher_url,
             rancher_token=rancher_token,
+            rancher_ca_file=rancher_ca_file,
             metrics_port=metrics_port,
-            metrics_addr=(env.get("KUBETEE_METRICS_ADDR") or "0.0.0.0").strip(),
+            metrics_addr=(
+                env.get("KUBETEE_METRICS_ADDR") or "0.0.0.0"
+            ).strip(),
         )
 
 
@@ -194,7 +281,7 @@ def load_config(env: Mapping[str, str] | None = None) -> ValidatorConfig:
     data = dict(os.environ if env is None else env)
     path = (data.get("KUBETEE_NETUID_FILE") or DEFAULT_NETUID_FILE).strip()
     try:
-        text = pathlib.Path(path).read_text().strip()
+        text = pathlib.Path(path).read_text(encoding="utf-8").strip()
     except OSError:
         text = ""
     if text:
@@ -226,19 +313,15 @@ class BasicValidator:
         self._log = _LOG
         self._subtensor = None
         self._chain_dirty = False
+        self._last_metagraph_block: int | None = None
         self._cycle_config = CycleConfig(
             owner_hotkey=config.owner_hotkey,
             validator_hotkey=config.validator_hotkey,
             miner_share=config.miner_share,
         )
-
-    # -- redaction (AC5) ------------------------------------------------------
-
-    def _redact(self, text: str) -> str:
-        return text.replace(self._config.rancher_token, "<redacted-token>")
-
-    def _render(self, error: BaseException) -> str:
-        return self._redact(f"{type(error).__name__}: {error}")
+        self._infrastructure_policy = InfrastructurePolicy.for_profile(
+            config.validation_profile
+        )
 
     # -- chain session (AC6: one connection, recreated only after failure) -----
 
@@ -254,24 +337,57 @@ class BasicValidator:
 
     def _read_neurons(self, subtensor) -> tuple[list[dict] | None, int | None]:
         try:
-            meta = subtensor.subnets.metagraph(self._config.netuid)
-            neurons = [
-                {"uid": int(n.uid), "hotkey": str(n.hotkey)}
-                for n in meta.neurons
-            ]
+            head = subtensor.block()
+            if isinstance(head, bool) or not isinstance(head, int) or head < 0:
+                raise ValueError("chain head block is invalid")
+            meta = subtensor.subnets.metagraph(
+                self._config.netuid,
+                block=head,
+            )
+            neurons = []
+            for neuron in meta.neurons:
+                raw_uid = getattr(neuron, "uid", None)
+                if isinstance(raw_uid, bool) or not isinstance(
+                    raw_uid, Integral
+                ):
+                    uid = raw_uid
+                else:
+                    uid = int(raw_uid)
+                neurons.append(
+                    {
+                        "uid": uid,
+                        "hotkey": getattr(neuron, "hotkey", None),
+                        "coldkey": getattr(neuron, "coldkey", None),
+                    }
+                )
             block = getattr(meta, "block", None)
-            return neurons, int(block) if block is not None else None
-        except Exception as error:  # fail closed; recreate only after failure
+            if (
+                isinstance(block, bool)
+                or not isinstance(block, int)
+                or block != head
+            ):
+                raise ValueError("metagraph is not pinned to the chain head")
+            return neurons, block
+        # The injected chain SDK does not expose one stable transport exception.
+        # pylint: disable-next=broad-exception-caught
+        except Exception:  # fail closed; never reflect remote exception text
             self._chain_dirty = True
-            self._log.warning("metagraph read failed: %s", self._render(error))
+            self._log.warning("metagraph read failed")
             return None, None
 
-    def _refresh_registered(self) -> set[str] | None:
+    def _refresh_registered(
+        self, minimum_block: int | None = None
+    ) -> set[str] | None:
         """Fresh metagraph read for the reconciliation pre-delete recheck."""
         if self._subtensor is None:
             return None
-        neurons, _ = self._read_neurons(self._subtensor)
-        if neurons is None:
+        neurons, block = self._read_neurons(self._subtensor)
+        if neurons is None or block is None:
+            return None
+        if minimum_block is not None and block < minimum_block:
+            return None
+        identity_check = decide_cycle(neurons, {}, self._cycle_config)
+        if isinstance(identity_check, SkipCycle):
             return None
         return {n["hotkey"] for n in neurons}
 
@@ -289,7 +405,8 @@ class BasicValidator:
                 c
                 for c in clusters
                 if isinstance(c, dict)
-                and (c.get("labels") or {}).get(MINER_LABEL) == hotkey
+                and isinstance(c.get("labels"), dict)
+                and c["labels"].get(HOTKEY_LABEL) == hotkey
             ]
             if len(matches) != 1:
                 continue
@@ -297,20 +414,33 @@ class BasicValidator:
             if not isinstance(cluster_id, str) or not cluster_id:
                 continue
             try:
-                nodes_by_cluster[cluster_id] = self._rancher.list_nodes(cluster_id)
+                nodes_by_cluster[cluster_id] = self._rancher.list_nodes(
+                    cluster_id
+                )
             except ValueError:
                 continue  # invalid id: unfetched -> score 0
         return nodes_by_cluster
 
     # -- one cycle (spec 4.2 order) --------------------------------------------
 
-    def _record_skip(self, reason: SkipReason, detail: str) -> None:
+    def _record_skip(
+        self,
+        reason: SkipReason,
+        rancher_category: ErrorCategory | None = None,
+    ) -> None:
+        if reason is SkipReason.RANCHER_UNAVAILABLE:
+            detail = _RANCHER_SKIP_DETAILS.get(
+                rancher_category,
+                "rancher_unknown_failure",
+            )
+        else:
+            detail = _SKIP_DETAILS.get(reason, "unspecified_skip")
         entered_degraded = self._metrics.record_skip(reason)
         self._metrics.record_cycle_outcome("skip")
         self._log.warning(
             "cycle skipped set_weights: reason=%s detail=%s consecutive=%d",
             reason.value,
-            self._redact(detail),
+            detail,
             self._metrics.consecutive_skips,
         )
         if entered_degraded:
@@ -330,9 +460,34 @@ class BasicValidator:
         # 1. metagraph (identity preconditions re-checked every cycle)
         neurons, block = self._read_neurons(subtensor)
         if neurons is None:
-            self._reconciler.run_cycle(None, None, None, self._refresh_registered)
-            self._record_skip(SkipReason.METAGRAPH_UNAVAILABLE, "metagraph read failed")
+            self._reconciler.run_cycle(
+                None, None, None, self._refresh_registered
+            )
+            self._record_skip(SkipReason.METAGRAPH_UNAVAILABLE)
             return "skip"
+        identity_check = decide_cycle(neurons, {}, self._cycle_config)
+        if isinstance(identity_check, SkipCycle):
+            self._reconciler.run_cycle(
+                None,
+                None,
+                block,
+                self._refresh_registered,
+            )
+            self._record_skip(identity_check.reason)
+            return "skip"
+        if block is None or (
+            self._last_metagraph_block is not None
+            and block <= self._last_metagraph_block
+        ):
+            self._reconciler.run_cycle(
+                None,
+                None,
+                block,
+                self._refresh_registered,
+            )
+            self._record_skip(SkipReason.METAGRAPH_STALE)
+            return "skip"
+        self._last_metagraph_block = block
         registered = {n["hotkey"] for n in neurons}
         miners = sorted(
             registered
@@ -350,7 +505,7 @@ class BasicValidator:
             self._reconciler.run_cycle(
                 registered, None, block, self._refresh_registered
             )
-            self._record_skip(SkipReason.RANCHER_UNAVAILABLE, str(error))
+            self._record_skip(SkipReason.RANCHER_UNAVAILABLE, error.category)
             return "skip"
 
         # 3. reconciliation (spec 4.2a; requires fresh metagraph + complete
@@ -359,16 +514,32 @@ class BasicValidator:
             registered, clusters, block, self._refresh_registered
         )
 
-        # 4. scoring (binary fail-closed) + identity validation
-        scores = {
-            hotkey: score_miner(hotkey, clusters, nodes_by_cluster)
+        # 4. infrastructure validation (binary fail-closed) + identity checks
+        neurons_by_hotkey = {neuron["hotkey"]: neuron for neuron in neurons}
+        verdicts = {
+            hotkey: validate_miner(
+                neurons_by_hotkey[hotkey],
+                clusters,
+                nodes_by_cluster,
+                self._config.netuid,
+                self._config.chain_network,
+                self._infrastructure_policy,
+            )
             for hotkey in miners
+        }
+        scores = {
+            hotkey: verdict.score for hotkey, verdict in verdicts.items()
         }
         decision = decide_cycle(neurons, scores, self._cycle_config)
         if isinstance(decision, SkipCycle):
-            self._record_skip(decision.reason, decision.detail)
+            self._record_skip(decision.reason)
             return "skip"
 
+        self._metrics.record_validation_results(tuple(verdicts.values()))
+        reason_counts = collections.Counter(
+            verdict.reason.value for verdict in verdicts.values()
+        )
+        validation_reasons = dict(sorted(reason_counts.items()))
         scoring_count = sum(decision.miner_scores.values())
         self._metrics.record_scoring_result(len(miners), scoring_count)
         self._metrics.record_successful_scoring()
@@ -383,15 +554,13 @@ class BasicValidator:
                 netuid=self._config.netuid, uids=uids, weights=weights
             )
             result = subtensor.execute(intent, wallet=self._wallet)
-            success = result.is_success
-            message = str(result)
-        except Exception as error:
+            success = result.success
+        # Bittensor can surface transport and submission failures from plugins.
+        # pylint: disable-next=broad-exception-caught
+        except Exception:
             self._chain_dirty = True
             self._metrics.record_set_weights(False)
-            self._log.warning(
-                "set_weights raised, will back off and retry: %s",
-                self._render(error),
-            )
+            self._log.warning("set_weights raised; will back off and retry")
             self._metrics.record_cycle_outcome("weights_rejected")
             return "weights_rejected"
 
@@ -400,20 +569,17 @@ class BasicValidator:
         if success:
             self._log.info(
                 "set_weights accepted on chain: netuid=%d miners=%d scoring=%d "
-                "scores=%s uids=%s weights=%s",
+                "validation_reasons=%s uids=%s weights=%s",
                 self._config.netuid,
                 len(miners),
                 scoring_count,
-                decision.miner_scores,
+                validation_reasons,
                 uids,
                 weights,
             )
             self._metrics.record_cycle_outcome("weights_set")
             return "weights_set"
-        self._log.warning(
-            "set_weights rejected by chain (no success claimed): %s",
-            self._redact(str(message)),
-        )
+        self._log.warning("set_weights rejected by chain; no success claimed")
         self._metrics.record_cycle_outcome("weights_rejected")
         return "weights_rejected"
 
@@ -421,9 +587,11 @@ class BasicValidator:
         """D14 liveness corollary: no runtime error may terminate the loop.
         Only operator signals (BaseException path) stop the process."""
         self._log.info(
-            "basic validator started: netuid=%d poll=%gs share=%g "
-            "max_consecutive_skips=%d rancher=%s",
+            "basic validator started: netuid=%d chain_network=%s profile=%s "
+            "poll=%gs share=%g max_consecutive_skips=%d rancher=%s",
             self._config.netuid,
+            self._config.chain_network,
+            self._config.validation_profile.value,
             self._config.poll_seconds,
             self._config.miner_share,
             self._config.max_consecutive_skips,
@@ -432,11 +600,11 @@ class BasicValidator:
         while True:
             try:
                 self.run_cycle()
-            except Exception as error:  # never exit on a runtime error (D14)
-                self._log.error(
-                    "unexpected cycle error (loop continues): %s",
-                    self._render(error),
-                )
+            # The process liveness contract intentionally guards every cycle.
+            # pylint: disable-next=broad-exception-caught
+            except Exception:  # never exit on a runtime error (D14)
+                self._log.error("unexpected cycle error; loop continues")
+                self._record_skip(SkipReason.UNEXPECTED_RUNTIME)
             self._sleep(self._config.poll_seconds)
 
 
@@ -469,25 +637,29 @@ def main(env: Mapping[str, str] | None = None) -> None:
     _LOG.propagate = False
 
     wallet = bt.Wallet(name=config.wallet_name, hotkey=config.wallet_hotkey)
-    metrics = ValidatorMetrics(max_consecutive_skips=config.max_consecutive_skips)
+    metrics = ValidatorMetrics(
+        max_consecutive_skips=config.max_consecutive_skips
+    )
     # Compose keeps this port off the host network (AC11: compose-internal).
     start_http_server(
-        config.metrics_port, addr=config.metrics_addr, registry=metrics.registry
+        config.metrics_port,
+        addr=config.metrics_addr,
+        registry=metrics.registry,
     )
-    client = RancherClient(config.rancher_url, config.rancher_token)
-
-    def evidence_sink(event: dict) -> None:
-        _LOG.info(
-            "reconciliation evidence: event=%(event)s correlation_id=%(correlation_id)s",
-            {"event": event.get("event"), "correlation_id": event.get("correlation_id"), **event},
-        )
+    client = RancherClient(
+        config.rancher_url,
+        config.rancher_token,
+        ca_file=config.rancher_ca_file,
+    )
 
     reconciler = ReconciliationEngine(
         client,
         metrics,
+        expected_netuid=config.netuid,
+        expected_network=config.chain_network,
         min_cycles=config.reconcile_min_cycles,
         min_seconds=config.reconcile_min_seconds,
-        evidence_sink=evidence_sink,
+        evidence_sink=_log_reconciliation_evidence,
     )
     validator = BasicValidator(
         config=config,

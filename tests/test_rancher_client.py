@@ -7,17 +7,28 @@ never appears in errors or repr), plus exhaustive fail-closed pagination
 per tests/fixtures/rancher/contract.json.
 """
 
+# Transport fakes preserve keyword-compatible protocol signatures, and one
+# boundary test intentionally calls the private raw-request guard.
+# pylint: disable=unused-argument,protected-access,unnecessary-lambda
+
 from __future__ import annotations
 
+import http.client
+import io
 import json
 import pathlib
+import socketserver
 import sys
+import threading
+import time
 import urllib.error
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent.parent / "scripts"))
 
+import rancher_client
 from rancher_client import (
     ErrorCategory,
     IncompleteEnumeration,
@@ -28,6 +39,94 @@ from rancher_client import (
 FIXTURES = pathlib.Path(__file__).parent / "fixtures" / "rancher"
 ORIGIN = "https://rancher.example"
 TOKEN = "token-fake1:secretsecretsecret"
+
+
+class _SlowTrickleServer(ThreadingHTTPServer):
+    response_body: bytes
+    response_interval_seconds: float
+
+
+class _HeaderTrickleServer(socketserver.ThreadingTCPServer):
+    response_prefix: bytes
+    trickle_bytes: bytes
+    response_suffix: bytes
+    response_interval_seconds: float
+
+
+class _HeaderTrickleHandler(socketserver.BaseRequestHandler):
+    def handle(self):
+        server = self.server
+        connection = self.request
+        connection.settimeout(1)
+        request = bytearray()
+        while b"\r\n\r\n" not in request and len(request) <= 8192:
+            chunk = connection.recv(1024)
+            if not chunk:
+                return
+            request.extend(chunk)
+        try:
+            connection.sendall(server.response_prefix)
+            for byte in server.trickle_bytes:
+                connection.sendall(bytes([byte]))
+                time.sleep(server.response_interval_seconds)
+            connection.sendall(server.response_suffix)
+        except OSError:
+            return
+
+
+class _SlowTrickleHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        server = self.server
+        self.send_response(200)
+        self.send_header("Content-Length", str(len(server.response_body)))
+        self.end_headers()
+        for byte in server.response_body:
+            try:
+                self.wfile.write(bytes([byte]))
+                self.wfile.flush()
+            except (BrokenPipeError, ConnectionResetError):
+                break
+            time.sleep(server.response_interval_seconds)
+
+    def log_message(self, format, *args):  # pylint: disable=redefined-builtin
+        del format, args
+        return None
+
+
+@pytest.fixture(name="slow_trickle_url")
+def fixture_slow_trickle_url():
+    server = _SlowTrickleServer(("127.0.0.1", 0), _SlowTrickleHandler)
+    server.response_body = (
+        b'{"type":"collection","resourceType":"cluster","data":[],'
+        b'"pagination":{"total":0}}'
+    )
+    server.response_interval_seconds = 0.01
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    host, port = server.server_address
+    try:
+        yield f"http://{host}:{port}"
+    finally:
+        server.shutdown()
+        thread.join()
+        server.server_close()
+
+
+@pytest.fixture(name="header_trickle_server")
+def fixture_header_trickle_server():
+    server = _HeaderTrickleServer(("127.0.0.1", 0), _HeaderTrickleHandler)
+    server.response_prefix = b""
+    server.trickle_bytes = b""
+    server.response_suffix = b""
+    server.response_interval_seconds = 0.01
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield server
+    finally:
+        server.shutdown()
+        thread.join()
+        server.server_close()
 
 
 def load(name: str) -> str:
@@ -50,7 +149,9 @@ class FakeTransport:
         return self.routes[url]
 
 
-def make_client(routes: dict[str, tuple[int, str]]) -> tuple[RancherClient, FakeTransport]:
+def make_client(
+    routes: dict[str, tuple[int, str]],
+) -> tuple[RancherClient, FakeTransport]:
     transport = FakeTransport(routes)
     client = RancherClient(base_url=ORIGIN, token=TOKEN, transport=transport)
     return client, transport
@@ -64,6 +165,21 @@ def test_rejects_non_https_origin():
         RancherClient(base_url="http://rancher.example", token=TOKEN)
 
 
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://rancher.example/v3",
+        "https://rancher.example?scope=all",
+        "https://rancher.example#fragment",
+        "https://user:embedded-secret@rancher.example",
+    ],
+)
+def test_rejects_non_origin_or_credential_bearing_url(url):
+    with pytest.raises(ValueError) as excinfo:
+        RancherClient(base_url=url, token=TOKEN)
+    assert "embedded-secret" not in str(excinfo.value)
+
+
 def test_rejects_empty_token():
     with pytest.raises(ValueError):
         RancherClient(base_url=ORIGIN, token="  ")
@@ -75,12 +191,47 @@ def test_repr_and_str_never_contain_token():
     assert TOKEN not in str(client)
 
 
+def test_custom_ca_is_scoped_to_the_rancher_transport(monkeypatch):
+    observed: list[str | None] = []
+
+    def fake_context(*, cafile=None):
+        observed.append(cafile)
+        return object()
+
+    monkeypatch.setattr(
+        rancher_client.ssl, "create_default_context", fake_context
+    )
+    monkeypatch.setattr(
+        rancher_client.urllib.request,
+        "HTTPSHandler",
+        lambda *, context: object(),
+    )
+    monkeypatch.setattr(
+        rancher_client.urllib.request,
+        "build_opener",
+        lambda *handlers: object(),
+    )
+
+    RancherClient(
+        base_url=ORIGIN,
+        token=TOKEN,
+        ca_file="/run/secrets/rancher-ca.crt",
+    )
+
+    assert observed == ["/run/secrets/rancher-ca.crt"]
+
+
 def test_every_request_is_get_except_the_single_delete():
     routes = {
         f"{ORIGIN}/v3/clusters?limit=-1": (200, load("clusters.json")),
-        f"{ORIGIN}/v3/clusters/cluster-aaa": (200, json.dumps(
-            json.loads(load("clusters.json"))["data"][0])),
-        f"{ORIGIN}/v3/nodes?clusterId=cluster-aaa&limit=-1": (200, load("nodes.json")),
+        f"{ORIGIN}/v3/clusters/cluster-aaa": (
+            200,
+            json.dumps(json.loads(load("clusters.json"))["data"][0]),
+        ),
+        f"{ORIGIN}/v3/nodes?clusterId=cluster-aaa&limit=-1": (
+            200,
+            load("nodes.json"),
+        ),
         f"{ORIGIN}/v3/clusters/cluster-bbb": (200, "{}"),
     }
     client, transport = make_client(routes)
@@ -96,6 +247,18 @@ def test_every_request_is_get_except_the_single_delete():
         assert url.startswith(f"{ORIGIN}/v3/")
 
 
+@pytest.mark.parametrize("status", [0, 500, 503])
+def test_delete_transport_status_is_an_error_not_a_success(status):
+    client, _ = make_client(
+        {f"{ORIGIN}/v3/clusters/cluster-bbb": (status, "unavailable")}
+    )
+
+    with pytest.raises(RancherError) as excinfo:
+        client.delete_cluster("cluster-bbb")
+
+    assert excinfo.value.category is ErrorCategory.TRANSPORT
+
+
 def test_auth_and_user_agent_headers_on_every_request():
     client, transport = make_client(
         {f"{ORIGIN}/v3/clusters?limit=-1": (200, load("clusters.json"))}
@@ -108,7 +271,17 @@ def test_auth_and_user_agent_headers_on_every_request():
 
 def test_cluster_id_is_validated_before_url_interpolation():
     client, _ = make_client({})
-    for bad in ("", "a/b", "x?y", "c m", "../local"):
+    for bad in (
+        "",
+        "a/b",
+        "x?y",
+        "c m",
+        "../local",
+        " cluster-aaa ",
+        None,
+        123,
+        [],
+    ):
         with pytest.raises(ValueError):
             client.get_cluster(bad)
         with pytest.raises(ValueError):
@@ -121,7 +294,10 @@ def test_cluster_id_is_validated_before_url_interpolation():
 def test_pagination_followed_to_exhaustion():
     routes = {
         f"{ORIGIN}/v3/clusters?limit=-1": (200, load("clusters-page1.json")),
-        f"{ORIGIN}/v3/clusters?limit=1&marker=cluster-bbb": (200, load("clusters-page2.json")),
+        f"{ORIGIN}/v3/clusters?limit=1&marker=cluster-bbb": (
+            200,
+            load("clusters-page2.json"),
+        ),
     }
     client, transport = make_client(routes)
     clusters = client.list_clusters()
@@ -132,23 +308,102 @@ def test_pagination_followed_to_exhaustion():
 def test_partial_without_next_fails_closed():
     page = json.loads(load("clusters-page1.json"))
     del page["pagination"]["next"]
-    client, _ = make_client({f"{ORIGIN}/v3/clusters?limit=-1": (200, json.dumps(page))})
+    client, _ = make_client(
+        {f"{ORIGIN}/v3/clusters?limit=-1": (200, json.dumps(page))}
+    )
     with pytest.raises(IncompleteEnumeration):
         client.list_clusters()
 
 
 def test_unknown_pagination_field_fails_closed():
     page = json.loads(load("clusters.json"))
-    page["pagination"]["continuationToken"] = "opaque"
-    client, _ = make_client({f"{ORIGIN}/v3/clusters?limit=-1": (200, json.dumps(page))})
-    with pytest.raises(IncompleteEnumeration):
+    hostile_field = "attacker-controlled-pagination-field"
+    page["pagination"][hostile_field] = "opaque"
+    client, _ = make_client(
+        {f"{ORIGIN}/v3/clusters?limit=-1": (200, json.dumps(page))}
+    )
+    with pytest.raises(IncompleteEnumeration) as excinfo:
         client.list_clusters()
+
+    assert hostile_field not in str(excinfo.value)
+
+
+@pytest.mark.parametrize(
+    ("resource", "field", "wrong_value"),
+    [
+        ("clusters", "type", "not-a-collection"),
+        ("clusters", "resourceType", "node"),
+        ("nodes", "type", "not-a-collection"),
+        ("nodes", "resourceType", "cluster"),
+    ],
+)
+def test_collection_envelope_must_match_the_allowlisted_resource(
+    resource, field, wrong_value
+):
+    if resource == "clusters":
+        page = json.loads(load("clusters.json"))
+        first_url = f"{ORIGIN}/v3/clusters?limit=-1"
+    else:
+        page = json.loads(load("nodes.json"))
+        first_url = f"{ORIGIN}/v3/nodes?clusterId=cluster-aaa&limit=-1"
+    page[field] = wrong_value
+    client, _ = make_client({first_url: (200, json.dumps(page))})
+
+    with pytest.raises(RancherError) as excinfo:
+        if resource == "clusters":
+            client.list_clusters()
+        else:
+            client.list_nodes("cluster-aaa")
+
+    assert excinfo.value.category is ErrorCategory.MALFORMED
+
+
+@pytest.mark.parametrize(
+    ("resource", "wrong_type"),
+    [("clusters", "node"), ("nodes", "cluster")],
+)
+def test_collection_item_type_must_match_the_allowlisted_resource(
+    resource, wrong_type
+):
+    if resource == "clusters":
+        page = json.loads(load("clusters.json"))
+        first_url = f"{ORIGIN}/v3/clusters?limit=-1"
+    else:
+        page = json.loads(load("nodes.json"))
+        first_url = f"{ORIGIN}/v3/nodes?clusterId=cluster-aaa&limit=-1"
+    page["data"][0]["type"] = wrong_type
+    client, _ = make_client({first_url: (200, json.dumps(page))})
+
+    with pytest.raises(RancherError) as excinfo:
+        if resource == "clusters":
+            client.list_clusters()
+        else:
+            client.list_nodes("cluster-aaa")
+
+    assert excinfo.value.category is ErrorCategory.MALFORMED
 
 
 def test_missing_pagination_object_fails_closed():
     page = json.loads(load("clusters.json"))
     del page["pagination"]
-    client, _ = make_client({f"{ORIGIN}/v3/clusters?limit=-1": (200, json.dumps(page))})
+    client, _ = make_client(
+        {f"{ORIGIN}/v3/clusters?limit=-1": (200, json.dumps(page))}
+    )
+    with pytest.raises(IncompleteEnumeration):
+        client.list_clusters()
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [("next", 0), ("next", [])],
+)
+def test_malformed_terminal_pagination_fails_closed(field, value):
+    page = json.loads(load("clusters.json"))
+    page["pagination"][field] = value
+    client, _ = make_client(
+        {f"{ORIGIN}/v3/clusters?limit=-1": (200, json.dumps(page))}
+    )
+
     with pytest.raises(IncompleteEnumeration):
         client.list_clusters()
 
@@ -164,11 +419,139 @@ def test_cross_origin_next_url_is_refused_and_unauthenticated():
     assert all(r["url"].startswith(ORIGIN) for r in transport.requests)
 
 
+def test_repeated_next_url_is_refused_before_an_extra_request():
+    first_url = f"{ORIGIN}/v3/clusters?limit=-1"
+    page = json.loads(load("clusters-page1.json"))
+    page["pagination"]["next"] = first_url
+    client, transport = make_client({first_url: (200, json.dumps(page))})
+
+    with pytest.raises(IncompleteEnumeration):
+        client.list_clusters()
+
+    assert len(transport.requests) == 1
+
+
+def test_same_origin_next_url_cannot_escape_the_allowlisted_resource():
+    page = json.loads(load("clusters-page1.json"))
+    page["pagination"]["next"] = f"{ORIGIN}/v3/secrets?limit=1"
+    client, transport = make_client(
+        {f"{ORIGIN}/v3/clusters?limit=-1": (200, json.dumps(page))}
+    )
+
+    with pytest.raises(IncompleteEnumeration):
+        client.list_clusters()
+
+    assert [request["url"] for request in transport.requests] == [
+        f"{ORIGIN}/v3/clusters?limit=-1"
+    ]
+
+
+def test_node_pagination_cannot_drop_the_cluster_filter():
+    page = json.loads(load("nodes.json"))
+    page["pagination"].update(
+        {
+            "partial": True,
+            "total": 2,
+            "next": f"{ORIGIN}/v3/nodes?limit=1&marker=node-next",
+        }
+    )
+    client, transport = make_client(
+        {
+            f"{ORIGIN}/v3/nodes?clusterId=cluster-aaa&limit=-1": (
+                200,
+                json.dumps(page),
+            )
+        }
+    )
+
+    with pytest.raises(IncompleteEnumeration):
+        client.list_nodes("cluster-aaa")
+
+    assert len(transport.requests) == 1
+
+
+def test_cluster_pagination_cannot_add_a_narrowing_filter():
+    page = json.loads(load("clusters-page1.json"))
+    page["pagination"][
+        "next"
+    ] = f"{ORIGIN}/v3/clusters?limit=1&marker=cluster-bbb&name=one-cluster"
+    client, transport = make_client(
+        {f"{ORIGIN}/v3/clusters?limit=-1": (200, json.dumps(page))}
+    )
+
+    with pytest.raises(IncompleteEnumeration):
+        client.list_clusters()
+
+    assert len(transport.requests) == 1
+
+
+def test_non_object_collection_item_is_malformed_not_silently_dropped():
+    page = json.loads(load("clusters.json"))
+    page["data"].append("not-an-object")
+    page["pagination"]["total"] += 1
+    client, _ = make_client(
+        {f"{ORIGIN}/v3/clusters?limit=-1": (200, json.dumps(page))}
+    )
+
+    with pytest.raises(RancherError) as excinfo:
+        client.list_clusters()
+
+    assert excinfo.value.category is ErrorCategory.MALFORMED
+
+
+@pytest.mark.parametrize(
+    ("resource", "bad_id"),
+    [
+        ("clusters", "../local"),
+        ("clusters", "Cluster-AAA"),
+        ("nodes", "node-without-cluster-prefix"),
+        ("nodes", "cluster-aaa:../node"),
+    ],
+)
+def test_collection_item_ids_must_be_canonical(resource, bad_id):
+    if resource == "clusters":
+        page = json.loads(load("clusters.json"))
+        first_url = f"{ORIGIN}/v3/clusters?limit=-1"
+    else:
+        page = json.loads(load("nodes.json"))
+        first_url = f"{ORIGIN}/v3/nodes?clusterId=cluster-aaa&limit=-1"
+    page["data"][0]["id"] = bad_id
+    client, _ = make_client({first_url: (200, json.dumps(page))})
+
+    with pytest.raises(RancherError) as excinfo:
+        if resource == "clusters":
+            client.list_clusters()
+        else:
+            client.list_nodes("cluster-aaa")
+
+    assert excinfo.value.category is ErrorCategory.MALFORMED
+
+
+def test_duplicate_collection_ids_are_incomplete():
+    page = json.loads(load("clusters.json"))
+    page["data"][1]["id"] = page["data"][0]["id"]
+    client, _ = make_client(
+        {f"{ORIGIN}/v3/clusters?limit=-1": (200, json.dumps(page))}
+    )
+
+    with pytest.raises(IncompleteEnumeration):
+        client.list_clusters()
+
+
+def test_final_page_count_mismatch_is_incomplete_even_without_partial_flag():
+    page = json.loads(load("clusters.json"))
+    page["data"].pop()
+    client, _ = make_client(
+        {f"{ORIGIN}/v3/clusters?limit=-1": (200, json.dumps(page))}
+    )
+
+    with pytest.raises(IncompleteEnumeration):
+        client.list_clusters()
+
+
 def test_max_pages_limit_raises_incomplete():
     """A client with max_pages=1 raises IncompleteEnumeration."""
-    import json
-
-    ORIGIN_HERE = "https://valid.example.com"
+    origin_here = "https://valid.example.com"
 
     class _PaginatedTransport:
         def __init__(self):
@@ -178,35 +561,110 @@ def test_max_pages_limit_raises_incomplete():
             self.count += 1
             body = json.dumps(
                 {
-                    "data": [{"id": "c-1"}],
+                    "type": "collection",
+                    "resourceType": "cluster",
+                    "data": [{"id": "c-1", "type": "cluster"}],
                     "pagination": {
-                        "next": f"{ORIGIN_HERE}/v3/clusters?page={self.count + 1}"
+                        "total": 2,
+                        "partial": True,
+                        "next": f"{origin_here}/v3/clusters?page={self.count + 1}",
                     },
                 }
             )
             return 200, body
 
     client = RancherClient(
-        ORIGIN_HERE,
+        origin_here,
         "token-abc",
         transport=_PaginatedTransport(),
         max_pages=1,
     )
-    with pytest.raises(IncompleteEnumeration, match="did not terminate after 1 pages"):
+    with pytest.raises(
+        IncompleteEnumeration, match="did not terminate after 1 pages"
+    ):
         client.list_clusters()
+
+
+def test_multipage_collection_has_a_cumulative_byte_budget():
+    first = load("clusters-page1.json")
+    second = load("clusters-page2.json")
+    routes = {
+        f"{ORIGIN}/v3/clusters?limit=-1": (200, first),
+        f"{ORIGIN}/v3/clusters?limit=1&marker=cluster-bbb": (200, second),
+    }
+    transport = FakeTransport(routes)
+    client = RancherClient(
+        base_url=ORIGIN,
+        token=TOKEN,
+        transport=transport,
+        max_collection_bytes=len(first.encode("utf-8"))
+        + len(second.encode("utf-8"))
+        - 1,
+    )
+
+    with pytest.raises(IncompleteEnumeration, match="byte budget"):
+        client.list_clusters()
+
+    assert len(transport.requests) == 2
+
+
+def test_multipage_collection_has_a_whole_enumeration_deadline():
+    class _Clock:
+        def __init__(self):
+            self.now = 0.0
+
+        def __call__(self):
+            return self.now
+
+    class _AdvancingTransport(FakeTransport):
+        def request(self, method, url, headers, timeout):
+            result = super().request(method, url, headers, timeout)
+            clock.now += 0.6
+            return result
+
+    clock = _Clock()
+    transport = _AdvancingTransport(
+        {
+            f"{ORIGIN}/v3/clusters?limit=-1": (
+                200,
+                load("clusters-page1.json"),
+            ),
+            f"{ORIGIN}/v3/clusters?limit=1&marker=cluster-bbb": (
+                200,
+                load("clusters-page2.json"),
+            ),
+        }
+    )
+    client = RancherClient(
+        base_url=ORIGIN,
+        token=TOKEN,
+        transport=transport,
+        collection_timeout=1.0,
+        monotonic=clock,
+    )
+
+    with pytest.raises(IncompleteEnumeration, match="deadline"):
+        client.list_clusters()
+
+    assert len(transport.requests) == 2
 
 
 # --- error categories -------------------------------------------------------
 
 
-@pytest.mark.parametrize("status,category", [
-    (401, ErrorCategory.AUTH),
-    (403, ErrorCategory.AUTH),
-    (500, ErrorCategory.TRANSPORT),
-    (503, ErrorCategory.TRANSPORT),
-])
+@pytest.mark.parametrize(
+    "status,category",
+    [
+        (401, ErrorCategory.AUTH),
+        (403, ErrorCategory.AUTH),
+        (500, ErrorCategory.TRANSPORT),
+        (503, ErrorCategory.TRANSPORT),
+    ],
+)
 def test_http_status_maps_to_fixed_enum(status, category):
-    client, _ = make_client({f"{ORIGIN}/v3/clusters?limit=-1": (status, "denied")})
+    client, _ = make_client(
+        {f"{ORIGIN}/v3/clusters?limit=-1": (status, "denied")}
+    )
     with pytest.raises(RancherError) as excinfo:
         client.list_clusters()
     assert excinfo.value.category is category
@@ -223,10 +681,211 @@ def test_redirect_is_refused_not_followed():
 
 
 def test_malformed_json_fails_closed():
-    client, _ = make_client({f"{ORIGIN}/v3/clusters?limit=-1": (200, "not-json{")})
+    client, _ = make_client(
+        {f"{ORIGIN}/v3/clusters?limit=-1": (200, "not-json{")}
+    )
     with pytest.raises(RancherError) as excinfo:
         client.list_clusters()
     assert excinfo.value.category is ErrorCategory.MALFORMED
+
+
+@pytest.mark.parametrize(
+    ("body", "hostile_marker"),
+    [
+        (
+            '{"type":"collection","resourceType":"cluster","data":[],'
+            '"pagination":{"total":0},'
+            '"pagination":{"total":0,"attacker-pagination":"secret"}}',
+            "attacker-pagination",
+        ),
+        (
+            '{"type":"collection","resourceType":"cluster","data":['
+            '{"id":"cluster-aaa","type":"cluster","labels":{'
+            '"kubetee.ai/hotkey":"first",'
+            '"kubetee.ai/hotkey":"attacker-hotkey"}}],'
+            '"pagination":{"total":1}}',
+            "attacker-hotkey",
+        ),
+    ],
+)
+def test_duplicate_json_keys_fail_closed_without_reflection(
+    body, hostile_marker
+):
+    client, _ = make_client({f"{ORIGIN}/v3/clusters?limit=-1": (200, body)})
+
+    with pytest.raises(RancherError) as excinfo:
+        client.list_clusters()
+
+    assert excinfo.value.category is ErrorCategory.MALFORMED
+    assert hostile_marker not in str(excinfo.value)
+
+
+def test_non_utf8_response_fails_closed_without_reflection():
+    body = (
+        b'{"type":"collection","resourceType":"cluster","data":[],'
+        b'"unused":"\xff","pagination":{"total":0}}'
+    )
+
+    class _Response:
+        status = 200
+
+        def __init__(self):
+            self.headers = {}
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self, _limit):
+            return body
+
+    class _Opener:
+        def open(self, _request, timeout):
+            return _Response()
+
+    transport = object.__new__(rancher_client.UrllibTransport)
+    transport._opener = _Opener()
+    transport._max_response_bytes = 1024
+    client = RancherClient(base_url=ORIGIN, token=TOKEN, transport=transport)
+
+    with pytest.raises(RancherError) as excinfo:
+        client.list_clusters()
+
+    assert excinfo.value.category is ErrorCategory.MALFORMED
+    assert repr(body) not in str(excinfo.value)
+
+
+def test_urllib_transport_enforces_absolute_deadline_against_slow_trickle(
+    slow_trickle_url,
+):
+    timeout_seconds = 0.15
+    transport = rancher_client.UrllibTransport(max_response_bytes=1024)
+    client = RancherClient(
+        base_url=ORIGIN,
+        token=TOKEN,
+        transport=transport,
+        timeout=timeout_seconds,
+        max_response_bytes=1024,
+    )
+    client._origin = slow_trickle_url
+
+    started = time.monotonic()
+    with pytest.raises(RancherError) as excinfo:
+        client.list_clusters()
+    elapsed = time.monotonic() - started
+
+    assert excinfo.value.category is ErrorCategory.TRANSPORT
+    assert timeout_seconds * 0.5 <= elapsed < 0.55
+
+
+@pytest.mark.parametrize("trickle_part", ["status", "headers"])
+def test_urllib_transport_enforces_deadline_while_open_parses_response(
+    header_trickle_server, trickle_part
+):
+    terminal = b"Content-Length: 2\r\nContent-Type: application/json\r\n\r\n{}"
+    if trickle_part == "status":
+        header_trickle_server.response_prefix = b""
+        header_trickle_server.trickle_bytes = (
+            b"HTTP/1.1 200 " + (b"x" * 48) + b"\r\n"
+        )
+        header_trickle_server.response_suffix = terminal
+    else:
+        header_trickle_server.response_prefix = b"HTTP/1.1 200 OK\r\n"
+        header_trickle_server.trickle_bytes = (
+            b"X-Slow: " + (b"x" * 48) + b"\r\n"
+        )
+        header_trickle_server.response_suffix = terminal
+
+    timeout_seconds = 0.15
+    host, port = header_trickle_server.server_address
+    client = RancherClient(
+        base_url=ORIGIN,
+        token=TOKEN,
+        transport=rancher_client.UrllibTransport(max_response_bytes=1024),
+        timeout=timeout_seconds,
+        max_response_bytes=1024,
+    )
+    client._origin = f"http://{host}:{port}"
+
+    started = time.monotonic()
+    with pytest.raises(RancherError) as excinfo:
+        client.list_clusters()
+    elapsed = time.monotonic() - started
+
+    assert excinfo.value.category is ErrorCategory.TRANSPORT
+    assert timeout_seconds * 0.5 <= elapsed < 0.5
+
+
+def test_deadline_https_handler_dispatches_only_context_and_deadline(
+    monkeypatch,
+):
+    context = object()
+    handler = rancher_client._DeadlineHTTPSHandler(context=context)
+    request = rancher_client.urllib.request.Request(
+        "https://rancher.invalid/synthetic"
+    )
+    deadline = time.monotonic() + 1
+    setattr(request, rancher_client._REQUEST_DEADLINE_ATTRIBUTE, deadline)
+    observed = {}
+
+    def fake_do_open(connection, dispatched_request, **kwargs):
+        observed.update(
+            connection=connection,
+            request=dispatched_request,
+            kwargs=kwargs,
+        )
+        return object()
+
+    monkeypatch.setattr(handler, "do_open", fake_do_open)
+
+    result = handler.https_open(request)
+
+    assert result is not None
+    assert observed == {
+        "connection": rancher_client._DeadlineHTTPSConnection,
+        "request": request,
+        "kwargs": {"context": context, "deadline": deadline},
+    }
+
+
+@pytest.mark.parametrize("status", [302, 401, 500])
+def test_urllib_transport_closes_every_http_error_response(status):
+    body = io.BytesIO(b"upstream body must not be read")
+    error = urllib.error.HTTPError(
+        ORIGIN,
+        status,
+        "synthetic",
+        http.client.HTTPMessage(),
+        body,
+    )
+
+    class _HTTPErrorOpener:
+        def open(self, _request, timeout):
+            raise error
+
+    transport = object.__new__(rancher_client.UrllibTransport)
+    transport._opener = _HTTPErrorOpener()
+    transport._max_response_bytes = 1024
+
+    assert transport.request("GET", ORIGIN, {}, 1) == (status, "")
+    assert body.closed is True
+
+
+@pytest.mark.parametrize("constant", ["NaN", "Infinity", "-Infinity"])
+def test_nonstandard_json_constants_fail_closed_without_reflection(constant):
+    body = (
+        '{"type":"collection","resourceType":"cluster","data":[],'
+        f'"unused":{constant},"pagination":{{"total":0}}}}'
+    )
+    client, _ = make_client({f"{ORIGIN}/v3/clusters?limit=-1": (200, body)})
+
+    with pytest.raises(RancherError) as excinfo:
+        client.list_clusters()
+
+    assert excinfo.value.category is ErrorCategory.MALFORMED
+    assert constant not in str(excinfo.value)
 
 
 class ExplodingTransport:
@@ -235,7 +894,9 @@ class ExplodingTransport:
 
 
 def test_transport_exception_wrapped_and_token_scrubbed():
-    client = RancherClient(base_url=ORIGIN, token=TOKEN, transport=ExplodingTransport())
+    client = RancherClient(
+        base_url=ORIGIN, token=TOKEN, transport=ExplodingTransport()
+    )
     with pytest.raises(RancherError) as excinfo:
         client.list_clusters()
     assert excinfo.value.category is ErrorCategory.TRANSPORT
@@ -243,21 +904,85 @@ def test_transport_exception_wrapped_and_token_scrubbed():
     assert TOKEN not in repr(excinfo.value)
 
 
+def test_transport_exception_message_does_not_reflect_remote_text():
+    hostile_marker = "REMOTE-ATTACKER-CONTROLLED-MARKER"
+
+    class _HostileTransport:
+        def request(self, method, url, headers, timeout):
+            raise ConnectionError(hostile_marker)
+
+    client = RancherClient(
+        base_url=ORIGIN, token=TOKEN, transport=_HostileTransport()
+    )
+
+    with pytest.raises(RancherError) as excinfo:
+        client.list_clusters()
+
+    assert hostile_marker not in str(excinfo.value)
+
+
+def test_non_origin_refusal_does_not_reflect_supplied_host():
+    hostile_host = "attacker-controlled.example"
+    client, _ = make_client({})
+
+    with pytest.raises(IncompleteEnumeration) as excinfo:
+        client._raw("GET", f"https://{hostile_host}/v3/clusters")
+
+    assert hostile_host not in str(excinfo.value)
+
+
 def test_error_bodies_are_not_reproduced_in_messages():
     secret_body = json.dumps({"message": "denied", "leak": TOKEN})
-    client, _ = make_client({f"{ORIGIN}/v3/clusters?limit=-1": (401, secret_body)})
+    client, _ = make_client(
+        {f"{ORIGIN}/v3/clusters?limit=-1": (401, secret_body)}
+    )
     with pytest.raises(RancherError) as excinfo:
         client.list_clusters()
     assert TOKEN not in str(excinfo.value)
 
 
+def test_oversized_response_body_fails_before_json_parsing():
+    client = RancherClient(
+        base_url=ORIGIN,
+        token=TOKEN,
+        transport=FakeTransport(
+            {f"{ORIGIN}/v3/clusters?limit=-1": (200, "x" * 65)}
+        ),
+        max_response_bytes=64,
+    )
+
+    with pytest.raises(RancherError) as excinfo:
+        client.list_clusters()
+
+    assert excinfo.value.category is ErrorCategory.TRANSPORT
+
+
+def test_collection_total_over_item_ceiling_is_incomplete():
+    client = RancherClient(
+        base_url=ORIGIN,
+        token=TOKEN,
+        transport=FakeTransport(
+            {f"{ORIGIN}/v3/clusters?limit=-1": (200, load("clusters.json"))}
+        ),
+        max_collection_items=1,
+    )
+
+    with pytest.raises(IncompleteEnumeration):
+        client.list_clusters()
+
+
 def test_transport_url_error_is_wrapped_cleanly():
     """URLError from transport is wrapped as TRANSPORT, not raw."""
+
     class _URLErrorTransport:
         def request(self, method, url, headers, timeout):
             raise urllib.error.URLError("name or service not known")
 
-    client = RancherClient("https://valid.example.com", "token-abc", transport=_URLErrorTransport())
+    client = RancherClient(
+        "https://valid.example.com",
+        "token-abc",
+        transport=_URLErrorTransport(),
+    )
     with pytest.raises(RancherError) as exc:
         client.list_clusters()
     assert exc.value.category == ErrorCategory.TRANSPORT

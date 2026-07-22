@@ -14,6 +14,11 @@ import pytest
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent.parent / "scripts"))
 
+from infrastructure_validation import (
+    ValidationReason,
+    ValidationStatus,
+    ValidationVerdict,
+)
 from miner_scoring import SkipReason
 from rancher_client import ErrorCategory
 from validator_metrics import (
@@ -32,7 +37,10 @@ class FakeClock:
 
 def make_metrics(max_skips: int = 10) -> tuple[ValidatorMetrics, FakeClock]:
     clock = FakeClock()
-    return ValidatorMetrics(max_consecutive_skips=max_skips, clock=clock), clock
+    return (
+        ValidatorMetrics(max_consecutive_skips=max_skips, clock=clock),
+        clock,
+    )
 
 
 # --- exposition hygiene (AC11) ----------------------------------------------
@@ -53,6 +61,8 @@ def test_exposition_contains_expected_metric_names():
         "kubetee_reconciliation_deletions_total",
         "kubetee_reconciliation_suppressed_total",
         "kubetee_reconciliation_conflicts_total",
+        "kubetee_validation_status",
+        "kubetee_validation_reason",
     ):
         assert name in text, name
 
@@ -60,9 +70,17 @@ def test_exposition_contains_expected_metric_names():
 def test_labels_are_fixed_enums_only():
     metrics, _ = make_metrics()
     with pytest.raises((ValueError, KeyError, TypeError)):
-        metrics.record_rancher_error("token-abc12:leak")  # not an ErrorCategory
+        metrics.record_rancher_error(
+            "token-abc12:leak"
+        )  # not an ErrorCategory
     with pytest.raises((ValueError, KeyError, TypeError)):
         metrics.record_skip("arbitrary string")  # not a SkipReason
+    with pytest.raises((ValueError, KeyError, TypeError)):
+        metrics.record_validation_results(["arbitrary string"])
+    with pytest.raises((ValueError, KeyError, TypeError)):
+        metrics.record_validation_results(
+            [ValidationVerdict("eligible", ValidationReason.ELIGIBLE)]
+        )
 
 
 def test_exposition_never_contains_free_text():
@@ -82,6 +100,60 @@ def test_scoring_gauges_are_aggregate_not_per_hotkey():
     assert "kubetee_miners_discovered 3.0" in text
     assert "kubetee_miners_scoring 2.0" in text
     assert "hotkey" not in text  # bounded cardinality: no per-miner labels
+
+
+def test_validation_metrics_are_bounded_aggregates():
+    metrics, _ = make_metrics()
+    metrics.record_validation_results(
+        [
+            ValidationVerdict(
+                ValidationStatus.ELIGIBLE,
+                ValidationReason.ELIGIBLE,
+                "c-secret-identifier",
+            ),
+            ValidationVerdict(
+                ValidationStatus.SUSPENDED,
+                ValidationReason.CLUSTER_MISSING,
+            ),
+            ValidationVerdict(
+                ValidationStatus.SUSPENDED,
+                ValidationReason.CLUSTER_MISSING,
+            ),
+        ]
+    )
+    text = metrics.exposition().decode()
+
+    assert 'kubetee_validation_status{status="eligible"} 1.0' in text
+    assert 'kubetee_validation_status{status="suspended"} 2.0' in text
+    assert 'kubetee_validation_reason{reason="cluster_missing"} 2.0' in text
+    assert 'kubetee_validation_reason{reason="eligible"} 1.0' in text
+    assert "c-secret-identifier" not in text
+
+
+def test_validation_metrics_replace_previous_cycle_values():
+    metrics, _ = make_metrics()
+    metrics.record_validation_results(
+        [
+            ValidationVerdict(
+                ValidationStatus.SUSPENDED,
+                ValidationReason.CLUSTER_MISSING,
+            )
+        ]
+    )
+    metrics.record_validation_results(
+        [
+            ValidationVerdict(
+                ValidationStatus.ELIGIBLE,
+                ValidationReason.ELIGIBLE,
+                "c-miner",
+            )
+        ]
+    )
+    text = metrics.exposition().decode()
+
+    assert 'kubetee_validation_status{status="eligible"} 1.0' in text
+    assert 'kubetee_validation_status{status="suspended"} 0.0' in text
+    assert 'kubetee_validation_reason{reason="cluster_missing"} 0.0' in text
 
 
 # --- skip accounting / degraded mode (AC13 boundaries) ----------------------
@@ -120,8 +192,12 @@ def test_degraded_mode_clears_on_recovery():
 def test_degraded_transitions_reported_once_for_logging():
     metrics, _ = make_metrics(max_skips=1)
     assert metrics.record_skip(SkipReason.RANCHER_UNAVAILABLE) is False
-    assert metrics.record_skip(SkipReason.RANCHER_UNAVAILABLE) is True  # entered
-    assert metrics.record_skip(SkipReason.RANCHER_UNAVAILABLE) is False  # already in
+    assert (
+        metrics.record_skip(SkipReason.RANCHER_UNAVAILABLE) is True
+    )  # entered
+    assert (
+        metrics.record_skip(SkipReason.RANCHER_UNAVAILABLE) is False
+    )  # already in
 
 
 def test_max_skips_validated_fail_fast():

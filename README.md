@@ -132,8 +132,8 @@ As a member of the [Confidential Computing Consortium (CCC)](https://confidentia
   - [Validator Scoring \& Attestation](#validator-scoring--attestation)
     - [Validator Runtime (TEE)](#validator-runtime-tee)
     - [Rancher v3 Access (Hotkey-signed Auth)](#rancher-v3-access-hotkey-signed-auth)
-    - [TEE Attestation](#tee-attestation)
-    - [Armada Job Metrics](#armada-job-metrics)
+    - [TEE Attestation](#tee-attestation-planned-gate)
+    - [Armada Job Metrics](#armada-job-metrics-planned-gate)
     - [Infrastructure Health](#infrastructure-health)
     - [Competitive Pricing](#competitive-pricing)
     - [Weight Setting](#weight-setting)
@@ -263,13 +263,21 @@ Armada addresses Kubernetes batch limitations that matter for the Factory: singl
 - One Cluster per Miner (identified by hotkey/coldkey, not UID)
   - One data center per cluster — all nodes co-located in a single DC
   - Regional deployment (One Region/Zone Control Plane with same region workers)
-  - Cluster labeled with `kubetee.ai/` prefixed labels for permanent identification
-  - Required labels: `kubetee.ai/continent`, `kubetee.ai/country`, `kubetee.ai/city`, `kubetee.ai/miner-hotkey`, `kubetee.ai/miner-coldkey`, `kubetee.ai/miner-uid`
+  - Cluster carries the platform-managed canonical enrollment binding
+  - Required binding labels: `kubetee.ai/binding-id`,
+    `kubetee.ai/hotkey`, `kubetee.ai/coldkey`,
+    `kubetee.ai/provider-id`, `kubetee.ai/binding-status`,
+    `kubetee.ai/generation`, `kubetee.ai/netuid`,
+    `kubetee.ai/network`, and `kubetee.ai/origin-fp-prefix`; current UID is
+    the `kubetee.ai/enrollment-uid` annotation
 - Kata Containers and CoCo Containers (TEE)
 - Armada Executor + Installer (scheduled by the subnet-owner Armada Server)
 - Fleet Agent for automated deployments
 
-**Important**: Clusters are labeled with `kubetee.ai/miner-hotkey` and `kubetee.ai/miner-coldkey` for permanent identification. These labels never change, while `kubetee.ai/miner-uid` can be updated if a miner deregisters and re-registers on the subnet.
+**Important**: `kubetee.ai/binding-status=ENROLLED` means onboarding
+completed, not that the cluster is eligible for weights or serving. Identity
+changes go through platform rotation/re-enrollment so the full canonical
+binding remains coherent.
 
 ### Early Access Topology
 
@@ -524,7 +532,13 @@ Defenses: subsidy tapers by a **published glide path** (not surprise); **stack e
 
 The validator is the subnet's referee. In Early Access it scores each miner (one hotkey per cluster) on a single Infrastructure mechanism and sets Bittensor weights each epoch.
 
-> **Current Early Access stand-in:** the shipping validator scores node liveness only today; the full TEE-attestation + Armada + health scoring below is the design target (see [Roadmap](#roadmap) and [SUBNET.md](SUBNET.md)).
+> **Current Early Access boundary:** the shipping validator implements the
+> infrastructure-ready gate: canonical enrollment identity, Rancher
+> cluster/node readiness, production HA topology, minimum CPU/memory,
+> supported eight-GPU workers, passthrough wiring, and the confidential
+> runtime handler. Fresh TEE attestation, tunnel/probe, workload identity,
+> Armada, and KeyLease serving gates remain future work (see
+> [SUBNET.md](SUBNET.md)).
 
 ### Validator Runtime (TEE)
 
@@ -534,22 +548,36 @@ The validator is the subnet's referee — so the referee itself must be trustwor
 
 ### Rancher v3 Access (Hotkey-signed Auth)
 
-To read cluster and node metrics for scoring, the validator calls the **Rancher v3 REST API**. Access is granted by **hotkey-signed authentication**: the validator signs a challenge with its Bittensor **hotkey** (SR25519), and an auth mechanism connected to Rancher verifies the signature on-chain, maps the hotkey to a Rancher principal, and issues a **short-lived, read-only** Rancher v3 bearer token bound to `cluster-readonly`. The hotkey is the only credential — no long-lived admin token is held by the validator — and it stays inside the validator's TEE pod.
+To read cluster and node evidence, the validator calls the **Rancher v3 REST
+API**. The current combined validator/reconciler needs a least-privilege token
+with cluster/node GET/list and cluster DELETE, with no create/update/patch or
+unrelated-resource authority. DELETE is reachable only through the guarded
+deregistration state machine. An optional `RANCHER_CA_FILE` applies only to
+the Rancher HTTP client, not the chain client's TLS trust store. The token
+stays inside the validator's TEE pod.
 
-Miners use the same hotkey-signed flow, scoped read-only to their own cluster (the one labeled with their `kubetee.ai/miner-hotkey`), provisioned automatically when their cluster is created.
+Hotkey-signed issuance remains planned. It must issue the same narrow
+read-plus-delete validator role while reconciliation is in-process, or issue a
+truly read-only scoring token after reconciliation moves behind a separate
+operator-owned mutation credential/controller.
 
-### TEE Attestation
-- The validator runs attestation cronjobs inside Kata Containers to verify each miner cluster's TEE (Intel TDX/SGX, NVIDIA CC)
-- CoCo remote attestation confirms the confidential container image and runtime are unmodified
-- **No valid attestation → zero emissions** for that miner
+Miners use the same hotkey-signed flow, scoped read-only to their own cluster
+(the one carrying their canonical `kubetee.ai/hotkey` binding), provisioned
+automatically when their cluster is created.
 
-### Armada Job Metrics
-- The validator pulls Armada scheduler/executor metrics via Prometheus: job success rate, throughput, scheduling latency, preemption fairness, and gang-scheduling success
-- Miners that reliably execute confidential jobs under `kata-*` runtime classes score higher
+### TEE Attestation (planned gate)
+- A future attestation verifier will check each miner cluster's TEE (Intel TDX/SGX, NVIDIA CC)
+- CoCo remote attestation is intended to prove the confidential container image and runtime are unmodified
+- This evidence is not consumed by the current infrastructure-ready validator
+
+### Armada Job Metrics (planned gate)
+- Future scoring will consume Armada scheduler/executor job success, throughput, latency, fairness, and gang-scheduling evidence
+- Current weights do not claim Armada job-quality verification
 
 ### Infrastructure Health
-- Uptime, QoS, capacity, and latency from Prometheus and Kubernetes events
-- FIPS-140-2 validated (FIPS-140-3 as a Phase 3 target)
+- Current validation covers Rancher-reported readiness, topology, capacity,
+  GPU passthrough, and runtime-handler inventory
+- Uptime history, QoS, latency, and FIPS validation remain later evidence feeds
 
 ### Competitive Pricing
 
@@ -566,7 +594,10 @@ The target price is a **scoring input, not a bill**. Miners are scored on whethe
 
 Every input is a public API or on-chain data; the validator publishes the scraped competitor prices and the computed target price each epoch as Prometheus metrics, so the weight vector is auditable end-to-end. Full design — competitor feeds, the target-price formula, scoring integration, and verifiability table: [Competitive Pricing & Miner Scoring](./docs/COMPETITIVE-PRICING.md).
 
-> **Status:** competitive pricing is an **Early Access (Phase 0)** scoring dimension — it is required to set the Alpha/TAO resources price per hour competitively and dynamically per the job queues (USDC-on-BASE fiat billing stays Phase 2). The shipping Early Access validator scores node liveness only until the price feeds are wired (see [SUBNET.md](SUBNET.md)).
+> **Status:** competitive pricing remains a planned scoring dimension. The
+> shipping validator currently produces the binary infrastructure-readiness
+> score; pricing feeds are not wired into weights yet (see
+> [SUBNET.md](SUBNET.md)).
 
 ### Weight Setting
 - Scores are normalized per miner hotkey and set on-chain via Bittensor `set_weights` (single mechanism)
@@ -651,17 +682,17 @@ flowchart LR
 - ✅ One Cluster per Miner (labeled with `kubetee.ai/` prefixed labels)
 - ✅ Same Regional deployment (Workers in same Data Center)
 - ✅ Cluster registered with Rancher for Fleet management
-- ✅ Cluster must be labeled with required labels:
-  - `kubetee.ai/continent`, `kubetee.ai/country`, `kubetee.ai/city` (geographic identification)
-  - `kubetee.ai/miner-hotkey`, `kubetee.ai/miner-coldkey` (permanent miner identification)
-  - `kubetee.ai/miner-uid` (current UID, updateable)
+- ✅ Cluster carries all nine canonical enrollment labels plus the
+  `kubetee.ai/enrollment-uid` annotation
+- ✅ `binding-status=ENROLLED` and binding identity match the fresh metagraph
+- ✅ Production Rancher inventory passes the infrastructure-readiness policy
 
 **For Production Participation**:
 
 - ✅ Successfully passed Staging validation period
 
 **Reference Documentation**:
-- [Node Registration](./docs/NODE-REGISTRATION.md) — Miner RKE2 node registration and the `kubetee.ai/miner-hotkey` label requirement
+- [Node Registration](./docs/NODE-REGISTRATION.md) — Miner RKE2 node registration and canonical binding validation
 - [GPU Node Requirements](./docs/GPU-NODE-REQUIREMENTS.md) — GPU/TEE hardware requirements (CPU TDX/SEV-SNP, BIOS, kernel)
 - [Cluster Naming Convention](./docs/CLUSTER_NAMING_CONVENTION.md) — `kubetee.ai/*` labels and Fleet GitOps targeting
 - [FIPS-140-3 Target](./docs/FIPS-140-3.md) — RKE2 + Kata + CoCo FIPS stack
@@ -675,11 +706,12 @@ flowchart LR
 - [ ] Deploy 2 US clusters (one hotkey each, nodes co-located in a single DC)
 - [ ] Armada Server on the subnet-owner control plane; Armada Executor on each miner cluster
 - [ ] Kata + CoCo TEE runtime classes (`kata-qemu-nvidia-gpu-tdx`, `kata-qemu-tdx`)
-- [ ] Single Infrastructure validator mechanism (design: TEE attestation + Armada job metrics + uptime; Early Access stand-in: node liveness)
+- [x] Binary Infrastructure validator gate (binding identity, Rancher readiness, HA, capacity, GPU/runtime wiring)
+- [ ] Extend scoring with fresh TEE attestation, Armada job metrics, serving probes, workload identity, and KeyLease freshness
 - [ ] Validator runs in a TEE (Kata + CoCo) on the control plane; CoCo attestation proves the validator code is unmodified
 - [ ] KubeTEE-hosted validator offering: KubeTEE runs the validator code in a KubeTEE confidential cluster for operators without their own TEE infrastructure
-- [ ] Validator Rancher v3 API access: a validator authenticates by **signing a challenge with its Bittensor hotkey**; an auth mechanism connected to Rancher verifies the signature and issues a **read-only** Rancher v3 bearer token (bound to `cluster-readonly`) — see [Rancher v3 Access (Hotkey-signed Auth)](#rancher-v3-access-hotkey-signed-auth) and CLAUDE.md "Validator Rancher API Access"
-- [ ] Miner Rancher access on cluster creation: the miner authenticates with the same **hotkey-signed** flow, scoped **read-only** to their own cluster (the one labeled with their `kubetee.ai/miner-hotkey`, bound to `cluster-readonly`) so the miner can observe their cluster (subnet owner manages via Fleet)
+- [ ] Validator Rancher v3 API access: a validator authenticates by **signing a challenge with its Bittensor hotkey**; an auth mechanism connected to Rancher verifies the signature and issues the narrow cluster/node-read plus guarded-cluster-delete role. Split reconciliation behind an operator-owned mutation credential/controller before describing validator scoring tokens as read-only — see [Rancher v3 Access (Hotkey-signed Auth)](#rancher-v3-access-hotkey-signed-auth) and CLAUDE.md "Validator Rancher API Access"
+- [ ] Miner Rancher access on cluster creation: the miner authenticates with the same **hotkey-signed** flow, scoped **read-only** to their own cluster (the one carrying their canonical `kubetee.ai/hotkey` binding, bound to `cluster-readonly`) so the miner can observe their cluster (subnet owner manages via Fleet)
 - [ ] Emissions rewards for miners providing confidential compute capacity (supply-side)
 - [ ] Alpha / TAO paid jobs (demand-side) — price compute at a **resources price per hour** that is **competitive** (benchmarked vs Targon/Lium/Chutes) and **dynamic according to the job queues** (Armada queue depth + the 75% utilization target set the resources price per hour per job class) — see [Competitive Pricing](./docs/COMPETITIVE-PRICING.md)
 - [ ] Competitive pricing dimension: scrape Targon (SN4) / Lium (SN51) / Chutes (SN64) price feeds, compute per-class target price, score miners on price competitiveness against a 75% utilization target (see [Competitive Pricing](./docs/COMPETITIVE-PRICING.md))

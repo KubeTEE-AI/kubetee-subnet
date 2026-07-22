@@ -24,8 +24,9 @@ for the g004 triad (D7):
   `sudo start`, sets hypers, and is the **recycle target** the owner share
   of weights points at).
 - `DEV_BOB_SEED` — pinned dev seed for the **bob miner wallet**: the miner
-  whose Rancher cluster (labeled `kubetee.ai/miner-hotkey`) the basic
-  validator scores. Replaces the retired legacy sample `miner` wallet (its
+  whose Rancher cluster carries the canonical `kubetee.ai/hotkey` binding
+  label used by the basic validator. Replaces the retired legacy sample
+  `miner` wallet (its
   pinned seed constant was removed with it). Must be an ordinary random hex
   seed (#20): the earlier all-`0x0b` value serialised into an unreadable
   keyfile, so bob could never sign or register.

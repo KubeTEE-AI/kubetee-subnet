@@ -1,14 +1,18 @@
 {
-  "contract_version": 1,
-  "source": "staging-rancher.kubetee.ai /v3 API, captured read-only 2026-07-16; all values below re-expressed synthetically per the g004 V1 field allowlist",
+  "contract_version": 3,
+  "source": "Rancher /v3 response shape captured read-only 2026-07-16; canonical binding and readiness fields are synthetic and aligned with kubetee-platform PR #35",
   "collection": {
     "type": "collection",
     "pagination_fields": ["first", "next", "last", "limit", "total", "partial"],
     "next_page": "follow pagination.next URL (marker-based) until the field is absent",
     "incomplete_signals": [
-      "pagination.partial is true and pagination.next is absent",
       "pagination object missing on a collection",
-      "unrecognized pagination fields beyond the listed set"
+      "unrecognized pagination fields beyond the listed set",
+      "pagination.total is invalid, changes between pages, or differs from the exact collected count",
+      "pagination.next changes origin, collection path, or the clusterId filter",
+      "pagination.next repeats a previously visited URL",
+      "a collection item is not an object or lacks a valid unique id",
+      "the response byte ceiling or collection item ceiling is exceeded"
     ],
     "server_max_limit": 10000
   },
@@ -19,11 +23,25 @@
     "transitioning_ok_value": "no",
     "identity_fields": ["id", "uuid"],
     "label_container": "labels",
-    "miner_label_key": "kubetee.ai/miner-hotkey",
+    "miner_label_key": "kubetee.ai/hotkey",
+    "required_binding_labels": [
+      "kubetee.ai/binding-id",
+      "kubetee.ai/hotkey",
+      "kubetee.ai/coldkey",
+      "kubetee.ai/provider-id",
+      "kubetee.ai/binding-status",
+      "kubetee.ai/generation",
+      "kubetee.ai/netuid",
+      "kubetee.ai/network",
+      "kubetee.ai/origin-fp-prefix"
+    ],
+    "enrollment_uid_annotation": "kubetee.ai/enrollment-uid",
+    "enrolled_value": "ENROLLED (onboarding complete; not an eligibility verdict)",
+    "ready_condition": {"type": "Ready", "status": "True"},
     "delete_authorization_signal": "links.remove (presence is an inference only, never proof)",
     "conditional_delete": "unsupported: norman v3 objects expose uuid but no resourceVersion; the pre-delete recheck is a GET re-validating id, uuid, label value, and non-management identity",
-    "management_cluster_markers": ["internal flag", "id c-x* naming for imported management", "absence of kubetee.ai labels"],
-    "secret_bearing_fields_dropped": ["caCert", "clusterSecrets", "annotations", "appliedSpec", "importedConfig"]
+    "management_cluster_markers": ["internal flag", "id local", "absence of canonical kubetee.ai binding labels"],
+    "secret_bearing_fields_dropped": ["caCert", "clusterSecrets", "all annotations except kubetee.ai/enrollment-uid", "appliedSpec", "importedConfig"]
   },
   "node": {
     "state_field": "state",
@@ -31,6 +49,13 @@
     "transitioning_field": "transitioning",
     "transitioning_ok_value": "no",
     "identity_fields": ["id", "uuid", "clusterId"],
+    "ready_condition": {"type": "Ready", "status": "True"},
+    "pressure_conditions": ["MemoryPressure", "DiskPressure", "PIDPressure", "NetworkUnavailable"],
+    "role_fields": ["etcd", "controlPlane", "worker", "unschedulable"],
+    "resource_fields": ["cpu", "memory", "nvidia.com/gpu"],
+    "gpu_label_fields": ["nvidia.com/gpu.product", "nvidia.com/gpu.workload.config"],
+    "runtime_handlers_field": "runtimeHandlers",
+    "runtime_handler": "kata-qemu-nvidia-gpu-tdx",
     "secret_bearing_fields_dropped": ["ipAddress", "hostname", "requestedHostname", "customConfig", "annotations", "info"]
   },
   "observed_states": {
