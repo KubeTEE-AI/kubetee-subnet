@@ -42,6 +42,7 @@ import argparse
 import os
 import subprocess
 import time
+from numbers import Integral
 from pathlib import Path
 
 # bittensor may be present inside the validator container image (and often on host too)
@@ -443,6 +444,96 @@ def registration_plan(owner_wallet: str = "owner") -> list[dict]:
     ]
 
 
+def _registration_is_present(
+    netuid: int,
+    wallet_name: str,
+    hotkey: str,
+    chain_endpoint: str,
+) -> bool:
+    """Return whether one exact, head-pinned local identity is registered.
+
+    This is deliberately stricter than a hotkey-only lookup: registration is
+    usable only when its UID and coldkey exactly match the configured wallet.
+    """
+    read_failed = False
+    present = False
+    try:
+        if (
+            isinstance(netuid, bool)
+            or not isinstance(netuid, Integral)
+            or netuid < 0
+            or not isinstance(wallet_name, str)
+            or not wallet_name
+            or not isinstance(hotkey, str)
+            or not hotkey
+            or not isinstance(chain_endpoint, str)
+            or not chain_endpoint
+            or bt is None
+        ):
+            raise ValueError("invalid registration configuration")
+
+        wallet = bt.Wallet(name=wallet_name, hotkey=hotkey)
+        expected_hotkey = wallet.hotkey.ss58_address
+        expected_coldkey = wallet.coldkeypub.ss58_address
+        if (
+            not isinstance(expected_hotkey, str)
+            or not expected_hotkey
+            or not isinstance(expected_coldkey, str)
+            or not expected_coldkey
+        ):
+            raise ValueError("invalid local wallet identity")
+
+        subtensor = bt.Subtensor(network=chain_endpoint)
+        head = subtensor.block()
+        if isinstance(head, bool) or not isinstance(head, int) or head < 0:
+            raise ValueError("invalid chain head")
+        metagraph = subtensor.subnets.metagraph(int(netuid), block=head)
+        block = getattr(metagraph, "block", None)
+        neurons = getattr(metagraph, "neurons", None)
+        if (
+            isinstance(block, bool)
+            or not isinstance(block, int)
+            or block != head
+            or isinstance(neurons, (str, bytes))
+            or not hasattr(neurons, "__iter__")
+        ):
+            raise ValueError("invalid head-pinned metagraph")
+
+        matches = 0
+        for neuron in neurons:
+            uid = getattr(neuron, "uid", None)
+            neuron_hotkey = getattr(neuron, "hotkey", None)
+            neuron_coldkey = getattr(neuron, "coldkey", None)
+            if (
+                isinstance(uid, bool)
+                or not isinstance(uid, Integral)
+                or uid < 0
+                or not isinstance(neuron_hotkey, str)
+                or not neuron_hotkey
+                or not isinstance(neuron_coldkey, str)
+                or not neuron_coldkey
+            ):
+                raise ValueError("invalid neuron")
+            if neuron_hotkey == expected_hotkey:
+                matches += 1
+                if neuron_coldkey != expected_coldkey:
+                    raise ValueError("registration coldkey mismatch")
+
+        if matches == 1:
+            present = True
+        elif matches > 1:
+            raise ValueError("ambiguous registration identity")
+    # The SDK does not offer a stable, safe exception hierarchy. Never expose
+    # wallet or transport details while deciding whether registration is safe.
+    # pylint: disable-next=broad-exception-caught
+    except Exception:
+        read_failed = True
+
+    if read_failed:
+        raise RuntimeError("unable to verify neuron registration")
+    return present
+
+
 def register_neuron(
     netuid: int,
     wallet_name: str,
@@ -451,30 +542,49 @@ def register_neuron(
     chain_endpoint: str = "ws://127.0.0.1:9944",
     dry_run: bool = False,
 ):
+    if dry_run:
+        print("[DRY-RUN] registration command would be executed")
+        return
+
     role = "validator" if as_validator else "miner"
     print(
         f"Registering {wallet_name} as {role} on netuid {netuid} "
         f"(network={chain_endpoint}) ..."
     )
-    # Use burned register on local (faucet enabled).
-    run(
-        [
-            "btcli",
-            "subnet",
-            "register",
-            "--netuid",
-            str(netuid),
-            "--wallet",
-            wallet_name,
-            "--wallet-hotkey",
-            hotkey,
-            "--network",
-            chain_endpoint,
-            "--yes",
-        ],
-        check=True,
-        dry_run=dry_run,
-    )
+    if _registration_is_present(netuid, wallet_name, hotkey, chain_endpoint):
+        return
+
+    command = [
+        "btcli",
+        "subnet",
+        "register",
+        "--netuid",
+        str(netuid),
+        "--wallet",
+        wallet_name,
+        "--wallet-hotkey",
+        hotkey,
+        "--network",
+        chain_endpoint,
+        "--yes",
+    ]
+    registration_failed = False
+    try:
+        subprocess.run(
+            command,
+            check=True,
+            capture_output=True,
+            text=True,
+            shell=False,
+        )
+    # Do not surface command output or implementation-specific errors.
+    # pylint: disable-next=broad-exception-caught
+    except Exception:
+        registration_failed = True
+    if registration_failed:
+        raise RuntimeError("neuron registration failed")
+    if not _registration_is_present(netuid, wallet_name, hotkey, chain_endpoint):
+        raise RuntimeError("neuron registration postcondition failed")
 
 
 def start_emissions(
@@ -681,10 +791,9 @@ def main():
             dry_run=dry_run,
         )
 
-    # Verify real on-chain ownership before attempting owner-only sudo calls.
-    # create_subnet_if_needed's regex-parsed btcli stdout is NOT proof of ownership
-    # (e.g. it silently falls back to the requested netuid when `btcli subnet create`
-    # fails, such as with a SubtokenDisabled chain error) - only a live query is.
+    # Verify the live netuid and owner identity before owner-only sudo calls.
+    # Subnet creation and triad registration have already required their exact
+    # live postconditions; this independent owner query gates sudo operations.
     our_owner_ss58 = get_wallet_coldkey_ss58(owner, dry_run=dry_run)
     ownership = chain_state.query_subnet_ownership(
         netuid, our_owner_ss58, chain_endpoint

@@ -45,6 +45,52 @@ decide_owner_actions = _setup.decide_owner_actions
 registration_plan = _setup.registration_plan
 
 
+class _RegistrationNeuron:
+    def __init__(self, uid, hotkey, coldkey):
+        self.uid = uid
+        self.hotkey = hotkey
+        self.coldkey = coldkey
+
+
+def _install_registration_sdk(monkeypatch, metagraphs, *, head=17):
+    """Install a synthetic SDK that records the exact head-pinned read shape."""
+    calls = {"wallet": [], "subtensor": [], "block": 0, "metagraph": []}
+
+    class FakeWallet:
+        def __init__(self, name, hotkey):
+            calls["wallet"].append((name, hotkey))
+            self.hotkey = SimpleNamespace(ss58_address="5HOT")
+            self.coldkeypub = SimpleNamespace(ss58_address="5COLD")
+
+    class FakeSubtensor:
+        def __init__(self, network):
+            calls["subtensor"].append(network)
+            self.subnets = SimpleNamespace(metagraph=self.metagraph)
+
+        def block(self):
+            calls["block"] += 1
+            return head
+
+        def metagraph(self, netuid, block):
+            calls["metagraph"].append((netuid, block))
+            return metagraphs.pop(0)
+
+    monkeypatch.setattr(
+        _setup, "bt", SimpleNamespace(Wallet=FakeWallet, Subtensor=FakeSubtensor)
+    )
+    return calls
+
+
+def _registration_metagraph(neurons, block=17):
+    return SimpleNamespace(neurons=neurons, block=block)
+
+
+def _assert_fixed_registration_error(error):
+    assert error.value.__cause__ is None
+    assert error.value.__context__ is None
+    assert str(error.value) == "unable to verify neuron registration"
+
+
 def test_registration_plan_is_owner_alice_bob_triad():
     """g004 D7: owner (recycle target) registers first for a stable UID,
     then alice (validator, signs set_weights), then bob (miner)."""
@@ -144,26 +190,144 @@ def test_command_helpers_propagate_dry_run(monkeypatch):
     _setup.add_stake(1, "alice", dry_run=True)
     _setup.set_conviction_and_recycle(1, "owner", dry_run=True)
 
-    assert len(calls) == 5
+    assert len(calls) == 4
     assert all(kwargs["dry_run"] is True for _, kwargs in calls)
 
 
+def test_registration_state_reads_one_head_pinned_metagraph_for_exact_identity(
+    monkeypatch,
+):
+    calls = _install_registration_sdk(
+        monkeypatch,
+        [_registration_metagraph([_RegistrationNeuron(3, "5HOT", "5COLD")])],
+    )
+
+    assert _setup._registration_is_present(42, "owner", "default", "ws://chain")
+    assert calls == {
+        "wallet": [("owner", "default")],
+        "subtensor": ["ws://chain"],
+        "block": 1,
+        "metagraph": [(42, 17)],
+    }
+
+
+@pytest.mark.parametrize(
+    "metagraph",
+    [
+        _registration_metagraph([_RegistrationNeuron(True, "5HOT", "5COLD")]),
+        _registration_metagraph([_RegistrationNeuron(-1, "5HOT", "5COLD")]),
+        _registration_metagraph([_RegistrationNeuron("3", "5HOT", "5COLD")]),
+        _registration_metagraph([_RegistrationNeuron(3, "5HOT", "5OTHER")]),
+        _registration_metagraph(
+            [
+                _RegistrationNeuron(3, "5HOT", "5COLD"),
+                _RegistrationNeuron(4, "5HOT", "5COLD"),
+            ]
+        ),
+        _registration_metagraph([SimpleNamespace(uid=3, hotkey="5HOT")]),
+        _registration_metagraph("not-neurons"),
+        _registration_metagraph([_RegistrationNeuron(3, "5HOT", "5COLD")], block=18),
+    ],
+)
+def test_registration_state_fails_closed_for_malformed_or_ambiguous_identity(
+    monkeypatch, metagraph
+):
+    _install_registration_sdk(monkeypatch, [metagraph])
+
+    with pytest.raises(RuntimeError) as error:
+        _setup._registration_is_present(42, "owner", "default", "ws://chain")
+
+    _assert_fixed_registration_error(error)
+
+
+@pytest.mark.parametrize("head", [True, -1, "17"])
+def test_registration_state_fails_closed_for_invalid_chain_head(monkeypatch, head):
+    _install_registration_sdk(monkeypatch, [], head=head)
+
+    with pytest.raises(RuntimeError) as error:
+        _setup._registration_is_present(42, "owner", "default", "ws://chain")
+
+    _assert_fixed_registration_error(error)
+
+
+def test_registration_state_fails_closed_for_wallet_failure(monkeypatch):
+    class ExplodingWallet:
+        def __init__(self, *_args, **_kwargs):
+            raise RuntimeError("hostile wallet detail")
+
+    monkeypatch.setattr(_setup, "bt", SimpleNamespace(Wallet=ExplodingWallet))
+
+    with pytest.raises(RuntimeError) as error:
+        _setup._registration_is_present(42, "owner", "default", "ws://chain")
+
+    _assert_fixed_registration_error(error)
+
+
+def test_registration_state_fails_closed_for_sdk_failure(monkeypatch):
+    class FakeWallet:
+        hotkey = SimpleNamespace(ss58_address="5HOT")
+        coldkeypub = SimpleNamespace(ss58_address="5COLD")
+
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+    class ExplodingSubtensor:
+        def __init__(self, *_args, **_kwargs):
+            raise RuntimeError("hostile SDK detail")
+
+    monkeypatch.setattr(
+        _setup,
+        "bt",
+        SimpleNamespace(Wallet=FakeWallet, Subtensor=ExplodingSubtensor),
+    )
+
+    with pytest.raises(RuntimeError) as error:
+        _setup._registration_is_present(42, "owner", "default", "ws://chain")
+
+    _assert_fixed_registration_error(error)
+
+
+def test_register_neuron_skips_subprocess_for_exact_preexisting_identity(monkeypatch):
+    calls = _install_registration_sdk(
+        monkeypatch,
+        [_registration_metagraph([_RegistrationNeuron(3, "5HOT", "5COLD")])],
+    )
+
+    def subprocess_must_not_run(*_args, **_kwargs):
+        raise AssertionError("present identity must not register again")
+
+    monkeypatch.setattr(_setup.subprocess, "run", subprocess_must_not_run)
+
+    _setup.register_neuron(42, "owner", chain_endpoint="ws://chain")
+
+    assert calls["metagraph"] == [(42, 17)]
+
+
 @pytest.mark.parametrize("as_validator", [True, False])
-def test_register_neuron_uses_fail_closed_btcli_v11_command(monkeypatch, as_validator):
+def test_register_neuron_uses_exact_checked_btcli_v11_command_then_live_postcondition(
+    monkeypatch, as_validator
+):
+    _install_registration_sdk(
+        monkeypatch,
+        [
+            _registration_metagraph([]),
+            _registration_metagraph([_RegistrationNeuron(3, "5HOT", "5COLD")]),
+        ],
+    )
     calls = []
 
     def capture_run(args, **kwargs):
         calls.append((args, kwargs))
+        return _setup.subprocess.CompletedProcess(args, 0, stdout="ignored", stderr="ignored")
 
-    monkeypatch.setattr(_setup, "run", capture_run)
+    monkeypatch.setattr(_setup.subprocess, "run", capture_run)
 
     _setup.register_neuron(
         42,
-        "test-wallet",
-        "test-hotkey",
+        "owner",
+        "default",
         as_validator=as_validator,
         chain_endpoint="ws://chain.example:9944",
-        dry_run=True,
     )
 
     assert calls == [
@@ -175,16 +339,87 @@ def test_register_neuron_uses_fail_closed_btcli_v11_command(monkeypatch, as_vali
                 "--netuid",
                 "42",
                 "--wallet",
-                "test-wallet",
+                "owner",
                 "--wallet-hotkey",
-                "test-hotkey",
+                "default",
                 "--network",
                 "ws://chain.example:9944",
                 "--yes",
             ],
-            {"check": True, "dry_run": True},
+            {"check": True, "capture_output": True, "text": True, "shell": False},
         )
     ]
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        _setup.subprocess.CalledProcessError(1, ["btcli"], output="hostile", stderr="detail"),
+        RuntimeError("hostile command detail"),
+    ],
+)
+def test_register_neuron_normalizes_command_failure_without_output_or_chain(
+    monkeypatch, capsys, failure
+):
+    _install_registration_sdk(monkeypatch, [_registration_metagraph([])])
+
+    def failing_subprocess_run(*_args, **_kwargs):
+        raise failure
+
+    monkeypatch.setattr(_setup.subprocess, "run", failing_subprocess_run)
+
+    with pytest.raises(RuntimeError, match=r"^neuron registration failed$") as error:
+        _setup.register_neuron(42, "owner", chain_endpoint="ws://chain")
+
+    assert error.value.__cause__ is None
+    assert error.value.__context__ is None
+    output = capsys.readouterr()
+    assert "hostile" not in output.out
+    assert "hostile" not in output.err
+
+
+def test_register_neuron_requires_exact_live_postcondition(monkeypatch):
+    _install_registration_sdk(
+        monkeypatch,
+        [_registration_metagraph([]), _registration_metagraph([])],
+    )
+    monkeypatch.setattr(
+        _setup.subprocess,
+        "run",
+        lambda args, **_kwargs: _setup.subprocess.CompletedProcess(args, 0),
+    )
+
+    with pytest.raises(
+        RuntimeError, match=r"^neuron registration postcondition failed$"
+    ) as error:
+        _setup.register_neuron(42, "owner", chain_endpoint="ws://chain")
+
+    assert error.value.__cause__ is None
+    assert error.value.__context__ is None
+
+
+def test_register_neuron_dry_run_avoids_sdk_and_subprocess_and_identity_output(
+    monkeypatch, capsys
+):
+    monkeypatch.setattr(
+        _setup,
+        "bt",
+        SimpleNamespace(
+            Wallet=lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError()),
+            Subtensor=lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError()),
+        ),
+    )
+    monkeypatch.setattr(
+        _setup.subprocess,
+        "run",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError()),
+    )
+
+    _setup.register_neuron(
+        42, "identity-must-not-appear", "secret-hotkey", dry_run=True
+    )
+
+    assert capsys.readouterr().out == "[DRY-RUN] registration command would be executed\n"
 
 
 @pytest.mark.parametrize(
