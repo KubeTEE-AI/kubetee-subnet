@@ -428,8 +428,6 @@ def register_neuron(
         f"(network={chain_endpoint}) ..."
     )
     # Use burned register on local (faucet enabled).
-    # --unsafe bypasses safe/shield mode, which can produce "extrinsic"
-    # errors with this localnet and btcli combination.
     run(
         [
             "btcli",
@@ -444,9 +442,8 @@ def register_neuron(
             "--network",
             chain_endpoint,
             "--yes",
-            "--unsafe",
         ],
-        check=False,
+        check=True,
         dry_run=dry_run,
     )
 

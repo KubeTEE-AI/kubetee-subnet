@@ -147,6 +147,45 @@ def test_command_helpers_propagate_dry_run(monkeypatch):
     assert all(kwargs["dry_run"] is True for _, kwargs in calls)
 
 
+@pytest.mark.parametrize("as_validator", [True, False])
+def test_register_neuron_uses_fail_closed_btcli_v11_command(monkeypatch, as_validator):
+    calls = []
+
+    def capture_run(args, **kwargs):
+        calls.append((args, kwargs))
+
+    monkeypatch.setattr(_setup, "run", capture_run)
+
+    _setup.register_neuron(
+        42,
+        "test-wallet",
+        "test-hotkey",
+        as_validator=as_validator,
+        chain_endpoint="ws://chain.example:9944",
+        dry_run=True,
+    )
+
+    assert calls == [
+        (
+            [
+                "btcli",
+                "subnet",
+                "register",
+                "--netuid",
+                "42",
+                "--wallet",
+                "test-wallet",
+                "--wallet-hotkey",
+                "test-hotkey",
+                "--network",
+                "ws://chain.example:9944",
+                "--yes",
+            ],
+            {"check": True, "dry_run": True},
+        )
+    ]
+
+
 @pytest.mark.parametrize(
     ("key_kind", "subcommand", "key_kind_options"),
     [
