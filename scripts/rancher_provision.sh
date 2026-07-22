@@ -16,8 +16,8 @@
 #      ENROLLED binding for bob via the /k8s/clusters/local proxy PATCH
 #
 # The minted token is ephemeral (regenerated every `up`); it is written to a
-# shared volume and never printed. All operations were proven end-to-end
-# against rancher/rancher:v2.14.2 + rancher/k3s:v1.35.5-k3s1 on 2026-07-16.
+# shared volume and never printed. Local UAT parity is pinned to the
+# staging-verified rancher/rancher:v2.14.3 + rancher/k3s:v1.35.5-k3s1 pair.
 set -eu
 
 RANCHER="${RANCHER_URL:-https://rancher}"
