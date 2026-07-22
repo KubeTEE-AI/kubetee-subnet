@@ -38,6 +38,7 @@ from infrastructure_validation import (
     HOTKEY_LABEL,
     NETUID_LABEL,
     NETWORK_LABEL,
+    has_canonical_binding_metadata,
 )
 from rancher_client import ErrorCategory, RancherError, validate_cluster_id
 from validator_metrics import SuppressionReason, ValidatorMetrics
@@ -197,6 +198,8 @@ class ReconciliationEngine:
             cluster_uuid = cluster.get("uuid")
             if not isinstance(labels, dict):
                 continue
+            if not has_canonical_binding_metadata(cluster):
+                continue
             if (
                 labels.get(BINDING_STATUS_LABEL) != "ENROLLED"
                 or labels.get(NETUID_LABEL) != self._expected_netuid
@@ -250,6 +253,7 @@ class ReconciliationEngine:
                 current.get("id") != cluster_id
                 or current.get("uuid") != cluster.get("uuid")
                 or not _canonical_uuid(current.get("uuid"))
+                or not has_canonical_binding_metadata(current)
                 or not isinstance(current_labels, dict)
                 or current_labels.get(MINER_LABEL) != hotkey
                 or current_labels.get(BINDING_STATUS_LABEL) != "ENROLLED"

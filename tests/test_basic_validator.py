@@ -33,10 +33,16 @@ import pytest
 sys.path.insert(0, str(pathlib.Path(__file__).parent.parent / "scripts"))
 
 from infrastructure_validation import (
+    BINDING_ID_LABEL,
     BINDING_STATUS_LABEL,
+    COLDKEY_LABEL,
+    ENROLLMENT_UID_ANNOTATION,
+    GENERATION_LABEL,
     HOTKEY_LABEL,
     NETUID_LABEL,
     NETWORK_LABEL,
+    ORIGIN_FP_PREFIX_LABEL,
+    PROVIDER_ID_LABEL,
     ValidationProfile,
 )
 from rancher_client import ErrorCategory, RancherClient, RancherError
@@ -1115,11 +1121,17 @@ def test_reconciliation_suppression_log_is_redacted(caplog):
         "uuid": "00000000-0000-4000-8000-000000000099",
         "state": "active",
         "labels": {
+            BINDING_ID_LABEL: "binding-gone",
             HOTKEY_LABEL: gone,
+            COLDKEY_LABEL: "5GoneColdkeyFAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKEFA",
+            PROVIDER_ID_LABEL: "00000000-0000-4000-8000-000000000099",
             BINDING_STATUS_LABEL: "ENROLLED",
+            GENERATION_LABEL: "1",
             NETUID_LABEL: "1",
             NETWORK_LABEL: "finney",
+            ORIGIN_FP_PREFIX_LABEL: "a" * 63,
         },
+        "annotations": {ENROLLMENT_UID_ANNOTATION: "99"},
     }
     list_body = json.dumps(
         {"data": [cluster], "pagination": {"limit": -1, "total": 1}}

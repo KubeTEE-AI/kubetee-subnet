@@ -263,6 +263,11 @@ def _binding_metadata(cluster: dict) -> _BindingMetadata | None:
     )
 
 
+def has_canonical_binding_metadata(cluster: object) -> bool:
+    """Whether a Rancher object carries the complete canonical binding shape."""
+    return isinstance(cluster, dict) and _binding_metadata(cluster) is not None
+
+
 def _condition_status(conditions: object, name: str):
     if not isinstance(conditions, list):
         return None

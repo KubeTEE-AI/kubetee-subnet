@@ -18,9 +18,15 @@ import pytest
 sys.path.insert(0, str(pathlib.Path(__file__).parent.parent / "scripts"))
 
 from infrastructure_validation import (
+    BINDING_ID_LABEL,
     BINDING_STATUS_LABEL,
+    COLDKEY_LABEL,
+    ENROLLMENT_UID_ANNOTATION,
+    GENERATION_LABEL,
     NETUID_LABEL,
     NETWORK_LABEL,
+    ORIGIN_FP_PREFIX_LABEL,
+    PROVIDER_ID_LABEL,
 )
 from rancher_client import ErrorCategory, RancherError
 from reconciliation import ReconciliationEngine
@@ -74,15 +80,29 @@ def cluster(cid: str, hotkey: str | None = GONE, uuid: str = UUID_ONE) -> dict:
     labels = (
         {
             LABEL: hotkey,
+            BINDING_ID_LABEL: f"binding-{cid}",
+            COLDKEY_LABEL: "5CanonicalColdkeyFAKEFAKEFAKEFAKEFAKEFAKEFAKE",
+            PROVIDER_ID_LABEL: UUID_TWO,
             BINDING_STATUS_LABEL: "ENROLLED",
+            GENERATION_LABEL: "1",
             NETUID_LABEL: str(NETUID),
             NETWORK_LABEL: NETWORK,
+            ORIGIN_FP_PREFIX_LABEL: "a" * 63,
         }
         if hotkey is not None
         else {}
     )
-    return {"id": cid, "uuid": uuid, "state": "active",
-            "transitioning": "no", "labels": labels, "internal": False}
+    return {
+        "id": cid,
+        "uuid": uuid,
+        "state": "active",
+        "transitioning": "no",
+        "labels": labels,
+        "annotations": (
+            {ENROLLMENT_UID_ANNOTATION: "99"} if hotkey is not None else {}
+        ),
+        "internal": False,
+    }
 
 
 def make_engine(min_cycles: int = 3, min_seconds: float = 900.0):
@@ -425,6 +445,22 @@ def test_malformed_labels_are_not_reconciliation_candidates():
             refresh_registered=lambda _minimum_block: set(),
         )
         clock.advance(10)
+    assert client.deleted == []
+
+
+def test_incomplete_canonical_binding_is_never_deleted():
+    engine, client, _, _, _ = make_engine(min_cycles=1, min_seconds=0)
+    malformed = cluster("c-incomplete")
+    del malformed["labels"][BINDING_ID_LABEL]
+    client.clusters[malformed["id"]] = malformed
+
+    engine.run_cycle(
+        registered_hotkeys={BOB},
+        clusters=[malformed],
+        metagraph_block=BLOCK,
+        refresh_registered=lambda _minimum_block: set(),
+    )
+
     assert client.deleted == []
 
 
