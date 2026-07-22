@@ -34,10 +34,16 @@ import uuid as uuid_module
 from collections.abc import Callable, Iterable
 
 from infrastructure_validation import (
+    BINDING_ID_LABEL,
     BINDING_STATUS_LABEL,
+    COLDKEY_LABEL,
+    ENROLLMENT_UID_ANNOTATION,
+    GENERATION_LABEL,
     HOTKEY_LABEL,
     NETUID_LABEL,
     NETWORK_LABEL,
+    ORIGIN_FP_PREFIX_LABEL,
+    PROVIDER_ID_LABEL,
     has_canonical_binding_metadata,
 )
 from rancher_client import ErrorCategory, RancherError, validate_cluster_id
@@ -45,6 +51,17 @@ from validator_metrics import SuppressionReason, ValidatorMetrics
 
 MINER_LABEL = HOTKEY_LABEL
 PROTECTED_CLUSTER_IDS = frozenset({"local"})
+_BINDING_IDENTITY_LABELS = (
+    BINDING_ID_LABEL,
+    HOTKEY_LABEL,
+    COLDKEY_LABEL,
+    PROVIDER_ID_LABEL,
+    BINDING_STATUS_LABEL,
+    GENERATION_LABEL,
+    NETUID_LABEL,
+    NETWORK_LABEL,
+    ORIGIN_FP_PREFIX_LABEL,
+)
 
 
 def _canonical_uuid(value: object) -> bool:
@@ -55,6 +72,25 @@ def _canonical_uuid(value: object) -> bool:
         return str(uuid_module.UUID(value)) == value.lower()
     except (ValueError, AttributeError):
         return False
+
+
+def _same_binding_identity(expected: dict, current: dict) -> bool:
+    """Require every canonical binding field to survive the final GET."""
+    if not (
+        has_canonical_binding_metadata(expected)
+        and has_canonical_binding_metadata(current)
+    ):
+        return False
+    expected_labels = expected["labels"]
+    current_labels = current["labels"]
+    if any(
+        current_labels.get(label) != expected_labels.get(label)
+        for label in _BINDING_IDENTITY_LABELS
+    ):
+        return False
+    return current["annotations"].get(
+        ENROLLMENT_UID_ANNOTATION
+    ) == expected["annotations"].get(ENROLLMENT_UID_ANNOTATION)
 
 
 @dataclasses.dataclass
@@ -253,7 +289,7 @@ class ReconciliationEngine:
                 current.get("id") != cluster_id
                 or current.get("uuid") != cluster.get("uuid")
                 or not _canonical_uuid(current.get("uuid"))
-                or not has_canonical_binding_metadata(current)
+                or not _same_binding_identity(cluster, current)
                 or not isinstance(current_labels, dict)
                 or current_labels.get(MINER_LABEL) != hotkey
                 or current_labels.get(BINDING_STATUS_LABEL) != "ENROLLED"

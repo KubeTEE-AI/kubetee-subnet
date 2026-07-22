@@ -349,6 +349,23 @@ def test_reconciliation_scope_changed_midcycle_aborts(label, value):
     assert 'reason="recheck_mismatch"' in metrics.exposition().decode()
 
 
+def test_binding_generation_changed_midcycle_aborts():
+    engine, client, metrics, _, _, clusters = ready_engine()
+    current = cluster("c-gone")
+    current["labels"][GENERATION_LABEL] = "2"
+    client.clusters["c-gone"] = current
+
+    engine.run_cycle(
+        registered_hotkeys={BOB},
+        clusters=clusters,
+        metagraph_block=BLOCK + 1,
+        refresh_registered=lambda _minimum_block: set(),
+    )
+
+    assert client.deleted == []
+    assert 'reason="recheck_mismatch"' in metrics.exposition().decode()
+
+
 def test_uuid_changed_midcycle_aborts():
     engine, client, _, _, _, clusters = ready_engine()
     client.clusters["c-gone"] = cluster("c-gone", uuid=UUID_OTHER)
