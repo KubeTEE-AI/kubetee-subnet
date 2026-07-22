@@ -25,3 +25,16 @@ def test_operations_guide_never_uses_dev_keys_as_mainnet_values():
     assert "RANCHER_BEARER_TOKEN=<" not in text
     assert "token-" not in text
     assert "BEGIN PRIVATE KEY" not in text
+
+
+def test_operations_guide_keeps_external_environment_file_outside_checkout():
+    text = GUIDE.read_text(encoding="utf-8")
+    external_env_file = "/secure/path/validator.env"
+
+    assert f"chmod 600 {external_env_file}" in text
+    assert text.count(f"--env-file {external_env_file}") == 5
+    assert "--env-file validator.env" not in text
+
+    observation = text.split("Verify observable behavior without printing credentials:", 1)[1]
+    observation = observation.split("A startup error", 1)[0]
+    assert observation.count(f"--env-file {external_env_file}") == 2

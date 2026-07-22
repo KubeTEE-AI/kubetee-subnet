@@ -90,8 +90,8 @@ Run these commands from the root KubeTEE workspace, where the external compose
 files live:
 
 ```bash
-chmod 600 validator.env
-docker compose --env-file validator.env \
+chmod 600 /secure/path/validator.env
+docker compose --env-file /secure/path/validator.env \
   -f docker-compose.subnet.external.yml \
   -f docker-compose.rancher.external.yml config -q
 ```
@@ -99,7 +99,7 @@ docker compose --env-file validator.env \
 When the configuration review is complete, start only the external runtime:
 
 ```bash
-docker compose --env-file validator.env -p kubetee-subnet-ext \
+docker compose --env-file /secure/path/validator.env -p kubetee-subnet-ext \
   -f docker-compose.subnet.external.yml \
   -f docker-compose.rancher.external.yml up -d --wait
 ```
@@ -112,10 +112,10 @@ preflight review.
 Verify observable behavior without printing credentials:
 
 ```bash
-docker compose -p kubetee-subnet-ext \
+docker compose --env-file /secure/path/validator.env -p kubetee-subnet-ext \
   -f docker-compose.subnet.external.yml \
   -f docker-compose.rancher.external.yml logs --tail=200 validator
-docker compose -p kubetee-subnet-ext \
+docker compose --env-file /secure/path/validator.env -p kubetee-subnet-ext \
   -f docker-compose.subnet.external.yml \
   -f docker-compose.rancher.external.yml exec validator \
   curl --fail --silent http://127.0.0.1:9100/metrics
@@ -130,7 +130,7 @@ forcing weights, changing chain state, or widening Rancher access.
 Stop the external runtime without removing unrelated infrastructure:
 
 ```bash
-docker compose --env-file validator.env -p kubetee-subnet-ext \
+docker compose --env-file /secure/path/validator.env -p kubetee-subnet-ext \
   -f docker-compose.subnet.external.yml \
   -f docker-compose.rancher.external.yml down
 ```
