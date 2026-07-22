@@ -38,6 +38,36 @@ def test_operations_guide_records_the_public_mainnet_snapshot_defaults():
     assert "not DNS-resolvable" in text
 
 
+def test_operations_guide_sets_the_in_container_rancher_ca_file():
+    text = GUIDE.read_text(encoding="utf-8")
+
+    assert "RANCHER_CA_FILE=/shared/rancher-ca.crt" in text
+
+
+def test_operations_guide_pins_the_exact_published_image_digest():
+    text = GUIDE.read_text(encoding="utf-8")
+
+    assert (
+        "ghcr.io/kubetee-ai/kubetee-subnet@sha256:"
+        "6ee1381b131885cdc65256845fb264bd51d0fe14dd675b742c9d33998cf63008"
+    ) in text
+
+
+def test_operations_guide_calls_the_owner_hotkey_a_public_recycle_identity():
+    text = GUIDE.read_text(encoding="utf-8")
+
+    assert "The owner hotkey above is a public recycle identity, not a credential." in text
+
+
+def test_operations_guide_explicitly_replaces_the_provisional_rancher_origin():
+    text = GUIDE.read_text(encoding="utf-8")
+
+    assert (
+        "Replace `https://rancher.kubetee.ai` with the operator's active "
+        "Rancher HTTPS origin before starting the container."
+    ) in text
+
+
 def test_operations_guide_never_exposes_credentials_or_bootstraps_chain_state():
     text = GUIDE.read_text(encoding="utf-8")
 
@@ -59,6 +89,19 @@ def test_operations_guide_keeps_external_environment_file_outside_checkout():
     assert f"chmod 600 {external_env_file}" in text
     assert text.count(f"--env-file {external_env_file}") == 1
     assert "--env-file validator.env" not in text
+
+
+def test_operations_guide_names_required_private_operator_values_without_values():
+    text = GUIDE.read_text(encoding="utf-8")
+
+    assert "BT_NETWORK=finney" in text
+    for name in (
+        "BT_WALLET",
+        "BT_WALLET_HOTKEY",
+        "KUBETEE_VALIDATOR_HOTKEY",
+        "RANCHER_BEARER_TOKEN",
+    ):
+        assert name in text
 
 
 def test_operations_guide_requires_external_rancher_ca_bundle_path():

@@ -30,15 +30,27 @@ KUBETEE_CHAIN_NETWORK=finney
 RANCHER_URL=https://rancher.kubetee.ai
 ```
 
-`https://rancher.kubetee.ai` is provisional and not DNS-resolvable. Replace
-it with the operator's active Rancher HTTPS origin before starting the
-container. The owner hotkey above is a public recycle identity, not a
-credential.
+`https://rancher.kubetee.ai` is provisional and not DNS-resolvable. Replace `https://rancher.kubetee.ai` with the operator's active Rancher HTTPS origin before starting the container. The owner hotkey above is a public recycle identity, not a credential.
 
 Create a private environment file at `/secure/path/validator.env` outside the
-repository. Set its remaining values from operator-controlled systems; keep
-wallet names, credentials, CA details, and image selection private. Protect
-the file before use:
+repository. The public snapshot defaults above can be copied separately. Set
+the following required private file values from operator-controlled systems;
+the names-only rows deliberately do not disclose their values:
+
+```dotenv
+BT_NETWORK=finney
+RANCHER_CA_FILE=/shared/rancher-ca.crt
+
+# Required operator-supplied values; do not put their values in this manual.
+BT_WALLET
+BT_WALLET_HOTKEY
+KUBETEE_VALIDATOR_HOTKEY
+RANCHER_BEARER_TOKEN
+```
+
+`RANCHER_CA_FILE` is the in-container CA path that corresponds to the
+read-only host mount in the start command. Keep wallet names, credentials, CA
+details, and image selection private. Protect the file before use:
 
 ```bash
 chmod 600 /secure/path/validator.env
