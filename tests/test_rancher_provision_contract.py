@@ -6,6 +6,8 @@ import pathlib
 import shlex
 import subprocess
 
+import pytest
+
 ROOT = pathlib.Path(__file__).parent.parent
 
 
@@ -106,6 +108,15 @@ def test_local_provisioner_uses_millisecond_ttls_and_distinct_credentials():
     assert '[ "$PLATFORM_BEARER" != "$BEARER" ]' in text
 
 
+def _assert_no_norman_login_token_path(text: str) -> None:
+    assert "$RANCHER/v3/tokens" not in text
+
+
+def test_local_provisioner_rejects_unquoted_norman_login_token_path_fixture():
+    with pytest.raises(AssertionError):
+        _assert_no_norman_login_token_path("cr $RANCHER/v3/tokens/mutation")
+
+
 def test_local_provisioner_revokes_only_known_logins_via_management_tokens():
     text = (ROOT / "scripts" / "rancher_provision.sh").read_text()
 
@@ -123,7 +134,7 @@ def test_local_provisioner_revokes_only_known_logins_via_management_tokens():
     )
     assert 'delete_known_login "$LTOK" "$ADMIN_LOGIN_TOKEN_ID" "$LTOK"' in text
     assert '"$LOGIN_TOKEN_API/$login_id"' in text
-    assert '"$RANCHER/v3/tokens' not in text
+    _assert_no_norman_login_token_path(text)
 
 
 def _run_delete_known_login(
