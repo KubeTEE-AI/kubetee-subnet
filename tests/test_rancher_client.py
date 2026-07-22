@@ -13,10 +13,15 @@ per tests/fixtures/rancher/contract.json.
 
 from __future__ import annotations
 
+import http.client
+import io
 import json
 import pathlib
 import sys
+import threading
+import time
 import urllib.error
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 
@@ -33,6 +38,49 @@ from rancher_client import (
 FIXTURES = pathlib.Path(__file__).parent / "fixtures" / "rancher"
 ORIGIN = "https://rancher.example"
 TOKEN = "token-fake1:secretsecretsecret"
+
+
+class _SlowTrickleServer(ThreadingHTTPServer):
+    response_body: bytes
+    response_interval_seconds: float
+
+
+class _SlowTrickleHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        server = self.server
+        self.send_response(200)
+        self.send_header("Content-Length", str(len(server.response_body)))
+        self.end_headers()
+        for byte in server.response_body:
+            try:
+                self.wfile.write(bytes([byte]))
+                self.wfile.flush()
+            except (BrokenPipeError, ConnectionResetError):
+                break
+            time.sleep(server.response_interval_seconds)
+
+    def log_message(self, format, *args):  # pylint: disable=redefined-builtin
+        del format, args
+        return None
+
+
+@pytest.fixture(name="slow_trickle_url")
+def fixture_slow_trickle_url():
+    server = _SlowTrickleServer(("127.0.0.1", 0), _SlowTrickleHandler)
+    server.response_body = (
+        b'{"type":"collection","resourceType":"cluster","data":[],'
+        b'"pagination":{"total":0}}'
+    )
+    server.response_interval_seconds = 0.01
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    host, port = server.server_address
+    try:
+        yield f"http://{host}:{port}"
+    finally:
+        server.shutdown()
+        thread.join()
+        server.server_close()
 
 
 def load(name: str) -> str:
@@ -661,6 +709,52 @@ def test_non_utf8_response_fails_closed_without_reflection():
 
     assert excinfo.value.category is ErrorCategory.MALFORMED
     assert repr(body) not in str(excinfo.value)
+
+
+def test_urllib_transport_enforces_absolute_deadline_against_slow_trickle(
+    slow_trickle_url,
+):
+    timeout_seconds = 0.15
+    transport = rancher_client.UrllibTransport(max_response_bytes=1024)
+    client = RancherClient(
+        base_url=ORIGIN,
+        token=TOKEN,
+        transport=transport,
+        timeout=timeout_seconds,
+        max_response_bytes=1024,
+    )
+    client._origin = slow_trickle_url
+
+    started = time.monotonic()
+    with pytest.raises(RancherError) as excinfo:
+        client.list_clusters()
+    elapsed = time.monotonic() - started
+
+    assert excinfo.value.category is ErrorCategory.TRANSPORT
+    assert timeout_seconds * 0.5 <= elapsed < 0.55
+
+
+@pytest.mark.parametrize("status", [302, 401, 500])
+def test_urllib_transport_closes_every_http_error_response(status):
+    body = io.BytesIO(b"upstream body must not be read")
+    error = urllib.error.HTTPError(
+        ORIGIN,
+        status,
+        "synthetic",
+        http.client.HTTPMessage(),
+        body,
+    )
+
+    class _HTTPErrorOpener:
+        def open(self, _request, timeout):
+            raise error
+
+    transport = object.__new__(rancher_client.UrllibTransport)
+    transport._opener = _HTTPErrorOpener()
+    transport._max_response_bytes = 1024
+
+    assert transport.request("GET", ORIGIN, {}, 1) == (status, "")
+    assert body.closed is True
 
 
 @pytest.mark.parametrize("constant", ["NaN", "Infinity", "-Infinity"])

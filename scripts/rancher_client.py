@@ -15,6 +15,7 @@ Containment contract (spec AC4/AC5, pinned by tests/fixtures/rancher/contract.js
 from __future__ import annotations
 
 import enum
+import http.client
 import json
 import math
 import re
@@ -29,6 +30,7 @@ DEFAULT_MAX_RESPONSE_BYTES = 16 * 1024 * 1024
 DEFAULT_MAX_COLLECTION_ITEMS = 100_000
 DEFAULT_MAX_COLLECTION_BYTES = 256 * 1024 * 1024
 DEFAULT_COLLECTION_TIMEOUT = 30.0
+_HTTP_READ_CHUNK_BYTES = 64 * 1024
 _KNOWN_PAGINATION_FIELDS = {
     "first",
     "next",
@@ -155,10 +157,71 @@ class UrllibTransport:
         )
         self._max_response_bytes = max_response_bytes
 
+    @staticmethod
+    def _remaining_budget(deadline: float) -> float:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError
+        return remaining
+
+    @staticmethod
+    def _set_socket_timeout(response, timeout: float) -> None:
+        for path in (
+            ("fp", "raw", "_sock"),
+            ("fp", "fp", "raw", "_sock"),
+        ):
+            candidate = response
+            for attribute in path:
+                candidate = getattr(candidate, attribute, None)
+                if candidate is None:
+                    break
+            settimeout = getattr(candidate, "settimeout", None)
+            if callable(settimeout):
+                settimeout(timeout)
+                return
+        http_response = (
+            response
+            if isinstance(response, http.client.HTTPResponse)
+            else (
+                response.fp
+                if isinstance(response, urllib.error.HTTPError)
+                and isinstance(response.fp, http.client.HTTPResponse)
+                else None
+            )
+        )
+        if http_response is not None and not http_response.isclosed():
+            raise OSError
+
+    def _read_bounded(self, response, deadline: float) -> bytes:
+        read = getattr(response, "read1", None)
+        if not callable(read):
+            remaining = self._remaining_budget(deadline)
+            self._set_socket_timeout(response, remaining)
+            body = response.read(self._max_response_bytes + 1)
+            if time.monotonic() >= deadline:
+                raise TimeoutError
+            return body
+        body = bytearray()
+        limit = self._max_response_bytes + 1
+        while len(body) < limit:
+            remaining = self._remaining_budget(deadline)
+            self._set_socket_timeout(response, remaining)
+            chunk = read(min(_HTTP_READ_CHUNK_BYTES, limit - len(body)))
+            if time.monotonic() >= deadline:
+                raise TimeoutError
+            if not chunk:
+                break
+            body.extend(chunk)
+        return bytes(body)
+
     def request(self, method: str, url: str, headers: dict, timeout: float):
         req = urllib.request.Request(url, headers=headers, method=method)
+        deadline = time.monotonic() + timeout
         try:
-            with self._opener.open(req, timeout=timeout) as resp:
+            with self._opener.open(
+                req, timeout=self._remaining_budget(deadline)
+            ) as resp:
+                self._remaining_budget(deadline)
                 content_length = resp.headers.get("Content-Length")
                 if (
                     content_length is not None
@@ -168,7 +231,7 @@ class UrllibTransport:
                     raise _ResponseTooLarge(
                         "Rancher response exceeds byte limit"
                     )
-                body = resp.read(self._max_response_bytes + 1)
+                body = self._read_bounded(resp, deadline)
                 if len(body) > self._max_response_bytes:
                     raise _ResponseTooLarge(
                         "Rancher response exceeds byte limit"
@@ -179,7 +242,11 @@ class UrllibTransport:
                     raise _MalformedResponseBody from None
                 return resp.status, text
         except urllib.error.HTTPError as exc:
-            return exc.code, ""
+            try:
+                self._remaining_budget(deadline)
+                return exc.code, ""
+            finally:
+                exc.close()
         except urllib.error.URLError as exc:
             # Connection-level failures (DNS, refused, timeout) propagate as transport errors
             return 0, f"URLError: {exc.reason}"
