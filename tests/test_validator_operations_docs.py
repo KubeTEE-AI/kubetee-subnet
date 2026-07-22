@@ -42,3 +42,23 @@ def test_operations_guide_keeps_external_environment_file_outside_checkout():
     observation = text.split("Verify observable behavior without printing credentials:", 1)[1]
     observation = observation.split("A startup error", 1)[0]
     assert observation.count(f"--env-file {external_env_file}") == 2
+
+
+def test_operations_guide_covers_safe_dynamic_localnet_inspection():
+    text = GUIDE.read_text(encoding="utf-8")
+
+    assert "make subnet-clean" in text
+    assert "NETUID=$(cat /app/.kubetee_netuid)" in text
+    assert 'btcli subnets metagraph --netuid "$NETUID" --network ws://chain:9944' in text
+    assert "validator permit" in text
+    assert "stake" in text
+    assert "weights" in text
+    assert "http://127.0.0.1:9100/metrics" in text
+    assert "debug/synthetic" in text
+    assert "not production certification" in text
+
+
+def test_operations_guide_requires_external_rancher_ca_bundle_path():
+    text = GUIDE.read_text(encoding="utf-8")
+
+    assert "Required host path to the Rancher CA/bundle file." in text

@@ -47,15 +47,28 @@ It creates a local chain and a disposable Rancher environment. The seeded
 `owner / alice / bob` identities are disposable localnet identities only. You
 must never use those identities on Finney.
 
-Inspect the local subnet through the compose network and follow validator logs:
+Inspect the local subnet through the compose network and follow validator logs.
+The localnet is a debug/synthetic environment, not production certification or
+evidence of a real TEE attestation result:
 
 ```bash
 docker compose -p kubetee-subnet exec validator \
   btcli subnets list --network ws://chain:9944
+docker compose -p kubetee-subnet exec validator sh -lc '
+  NETUID=$(cat /app/.kubetee_netuid)
+  btcli subnets metagraph --netuid "$NETUID" --network ws://chain:9944
+  btcli stake list --network ws://chain:9944
+'
 docker compose -p kubetee-subnet logs -f validator
+docker compose -p kubetee-subnet exec validator \
+  curl --fail --silent http://127.0.0.1:9100/metrics
 ```
 
-`make clean` is a destructive local reset: it removes the local stack's
+The metagraph output is the dynamic localnet view of validator permit and
+weights; the stake command is read-only. Do not use these inspection results
+as production certification.
+
+`make subnet-clean` is a destructive local reset: it removes the local stack's
 volumes and returns the learning environment to a fresh state. It is not a
 Finney recovery procedure.
 
@@ -82,7 +95,7 @@ appropriate operator-controlled system.
 | `KUBETEE_VALIDATOR_HOTKEY` | Registered validator hotkey. |
 | `RANCHER_URL` | HTTPS origin of the operator-managed Rancher service. |
 | `RANCHER_BEARER_TOKEN` | Least-privilege Rancher credential. |
-| `RANCHER_CA_FILE` | Operator-controlled Rancher CA file path, if required. |
+| `RANCHER_CA_FILE` | Required host path to the Rancher CA/bundle file. |
 | `KUBETEE_CHAIN_NETWORK` | Exact network identity in the enrollment binding. |
 
 Before starting, protect the file and validate the rendered configuration.
