@@ -30,42 +30,172 @@ MINER_NETWORK="${MINER_NETWORK:?chain network required}"
 CLUSTER_NAME="${CLUSTER_NAME:-kubetee-uat}"
 SHARED="${SHARED_DIR:-/shared}"
 K3S_KUBECONFIG="${K3S_KUBECONFIG:-/k3s-out/kubeconfig.yaml}"
+EXT_TOKEN_API="$RANCHER/apis/ext.cattle.io/v1/tokens"
+EXT_TOKEN_LIMIT="100"
+EXT_TOKEN_USER_LABEL="authn.management.cattle.io/token-userId"
+VALIDATOR_TOKEN_TTL_MS="3600000"
+PLATFORM_TOKEN_TTL_MS="300000"
+RANCHER_ID_PATTERN='^[A-Za-z0-9][A-Za-z0-9._-]{0,253}$'
 
 log() { echo "[uat-init $(date -u +%H:%M:%SZ)] $*"; }
 cr()  { curl -sk --max-time 25 "$@"; }
 
+validate_login_document() {
+  jq -e --arg pattern "$RANCHER_ID_PATTERN" '
+    (.id | type == "string" and test($pattern))
+    and (.token | type == "string" and length > 0)
+  ' >/dev/null
+}
+
 login_to_rancher() {
-  # `/ping` can turn green before the management API can issue a login token.
-  # Gate provisioning on the credential-bearing operation it will use, with a
-  # bounded condition wait; the token is returned only to the caller.
   for _ in $(seq 1 120); do
-    LOGIN_TOKEN=$(cr -X POST "$RANCHER/v3-public/localProviders/local?action=login" \
+    login_document=$(cr -f -X POST \
+      "$RANCHER/v3-public/localProviders/local?action=login" \
       -H 'Content-Type: application/json' \
       -d "{\"username\":\"admin\",\"password\":\"$BOOT\"}" \
-      | jq -r .token 2>/dev/null || true)
-    if [ -n "$LOGIN_TOKEN" ] && [ "$LOGIN_TOKEN" != "null" ]; then
-      printf '%s' "$LOGIN_TOKEN"
+      2>/dev/null || true)
+    if printf '%s' "$login_document" | validate_login_document; then
+      printf '%s' "$login_document"
       return 0
     fi
     sleep 3
   done
-  log "Rancher v3 login did not become ready"
+  log "Rancher local login did not become ready"
   return 1
 }
 
-wait_for_admin_token_collection() {
-  # Rancher can finish role reconciliation before its token collection returns
-  # the API shape required for the validator-token cleanup below. Do not treat
-  # a transient response as an empty collection.
+validate_ext_token_list() {
+  user_id=$1
+  jq -e --arg user "$user_id" --arg limit "$EXT_TOKEN_LIMIT" \
+    --arg pattern "$RANCHER_ID_PATTERN" '
+    .apiVersion == "ext.cattle.io/v1"
+    and .kind == "TokenList"
+    and (.metadata | type == "object")
+    and (.metadata.resourceVersion | type == "string" and length > 0)
+    and ((.metadata.continue // "") == "")
+    and (.items | type == "array" and length <= ($limit | tonumber))
+    and all(.items[];
+      .apiVersion == "ext.cattle.io/v1"
+      and .kind == "Token"
+      and (.metadata.name | type == "string" and test($pattern))
+      and .spec.userID == $user
+      and ((.status.bearerToken // "") == "")
+      and ((.status.value // "") == ""))
+  ' >/dev/null
+}
+
+list_ext_tokens() {
+  auth_token=$1
+  user_id=$2
+  cr -fG "$EXT_TOKEN_API" \
+    -H "Authorization: Bearer $auth_token" \
+    --data-urlencode "limit=$EXT_TOKEN_LIMIT" \
+    --data-urlencode "labelSelector=authn.management.cattle.io/token-userId=$user_id"
+}
+
+delete_ext_tokens_except() {
+  auth_token=$1
+  user_id=$2
+  keep_id=${3:-}
+  ext_list=$(list_ext_tokens "$auth_token" "$user_id")
+  printf '%s' "$ext_list" | validate_ext_token_list "$user_id" \
+    || { log "extension token list validation failed"; return 1; }
+  for ext_token_id in $(printf '%s' "$ext_list" | jq -r '.items[].metadata.name'); do
+    if [ -n "$keep_id" ] && [ "$ext_token_id" = "$keep_id" ]; then
+      continue
+    fi
+    cr -f -X DELETE "$EXT_TOKEN_API/$ext_token_id" \
+      -H "Authorization: Bearer $auth_token" >/dev/null
+  done
+}
+
+assert_ext_tokens_exact() {
+  auth_token=$1
+  user_id=$2
+  keep_id=${3:-}
+  description=${4:-}
+  ttl_ms=${5:-0}
+  ext_list=$(list_ext_tokens "$auth_token" "$user_id")
+  printf '%s' "$ext_list" | validate_ext_token_list "$user_id" \
+    || { log "extension token audit validation failed"; return 1; }
+  if [ -z "$keep_id" ]; then
+    printf '%s' "$ext_list" | jq -e '.items | length == 0' >/dev/null
+    return
+  fi
+  printf '%s' "$ext_list" | jq -e --arg keep "$keep_id" \
+    --arg description "$description" --argjson ttl "$ttl_ms" '
+    .items | length == 1
+    and .[0].metadata.name == $keep
+    and .[0].spec.description == $description
+    and .[0].spec.ttl == $ttl
+  ' >/dev/null
+}
+
+mint_ext_token() {
+  owner_token=$1
+  description=$2
+  ttl_ms=$3
+  create_body=$(jq -nc --arg description "$description" \
+    --argjson ttl "$ttl_ms" '{
+      apiVersion: "ext.cattle.io/v1",
+      kind: "Token",
+      spec: {
+        description: $description,
+        ttl: $ttl
+      }
+    }')
+  cr -f -X POST "$EXT_TOKEN_API" \
+    -H "Authorization: Bearer $owner_token" \
+    -H 'Content-Type: application/json' -d "$create_body"
+}
+
+validate_ext_token_create() {
+  user_id=$1
+  description=$2
+  ttl_ms=$3
+  jq -e --arg user "$user_id" --arg description "$description" \
+    --argjson ttl "$ttl_ms" --arg pattern "$RANCHER_ID_PATTERN" '
+    .metadata.name as $name
+    | .apiVersion == "ext.cattle.io/v1"
+      and .kind == "Token"
+      and ($name | type == "string" and test($pattern))
+      and (.metadata.resourceVersion | type == "string" and length > 0)
+      and .spec.userID == $user
+      and .spec.userPrincipal.name == ("local://" + $user)
+      and .spec.description == $description
+      and .spec.ttl == $ttl
+      and (.status.value | type == "string" and length > 0)
+      and (.status.value as $value
+        | .status.bearerToken == ("ext/" + $name + ":" + $value))
+  ' >/dev/null
+}
+
+delete_known_login() {
+  admin_token=$1
+  login_id=$2
+  printf '%s' "$login_id" | jq -eR --arg pattern "$RANCHER_ID_PATTERN" \
+    'test($pattern)' >/dev/null \
+    || { log "login token id validation failed"; return 1; }
+  cr -f -X DELETE "$RANCHER/v3/tokens/$login_id" \
+    -H "Authorization: Bearer $admin_token" >/dev/null
+}
+
+wait_for_ext_token_api() {
   for _ in $(seq 1 120); do
-    if cr -f "$RANCHER/v3/tokens?limit=1" \
-      -H "Authorization: Bearer $LTOK" 2>/dev/null \
-      | jq -e '(.data | type == "array")' >/dev/null 2>&1; then
+    readiness_document=$(cr -fG "$EXT_TOKEN_API" \
+      -H "Authorization: Bearer $LTOK" \
+      --data-urlencode "limit=1" 2>/dev/null || true)
+    if printf '%s' "$readiness_document" | jq -e '
+      .apiVersion == "ext.cattle.io/v1"
+      and .kind == "TokenList"
+      and (.metadata.resourceVersion | type == "string" and length > 0)
+      and (.items | type == "array" and length <= 1)
+    ' >/dev/null 2>&1; then
       return 0
     fi
     sleep 3
   done
-  log "Rancher token collection did not become ready"
+  log "Rancher extension token API did not become ready"
   return 1
 }
 
@@ -85,7 +215,13 @@ rm -f "$SHARED/ready"
 log "waiting for Rancher API at $RANCHER ..."
 until [ "$(cr "$RANCHER/ping" 2>/dev/null)" = "pong" ]; do sleep 3; done
 log "Rancher up; logging in"
-LTOK=$(login_to_rancher)
+ADMIN_LOGIN_RESPONSE=$(login_to_rancher)
+printf '%s' "$ADMIN_LOGIN_RESPONSE" | validate_login_document \
+  || { log "admin login response malformed"; exit 1; }
+ADMIN_LOGIN_TOKEN_ID=$(printf '%s' "$ADMIN_LOGIN_RESPONSE" | jq -r .id)
+LTOK=$(printf '%s' "$ADMIN_LOGIN_RESPONSE" | jq -r .token)
+unset ADMIN_LOGIN_RESPONSE
+wait_for_ext_token_api
 
 # --- 2. server-url + SCOPED validator identity + token -----------------------
 # The validator must NOT hold admin: its designed authority is read (clusters,
@@ -215,59 +351,32 @@ printf '%s' "$VERIFIED_BINDS" | jq -e --arg user "$USER_ID" --arg scoped "$ROLE_
   || { log "validator role binding verification failed"; exit 1; }
 log "bindings verified exact (user-base + $VAL_ROLE_NAME)"
 
-# 2d. revoke tokens from earlier disposable runs before logging in and minting
-# this run's only long-lived validator token. The login token is created after
-# cleanup so it cannot be selected accidentally.
-wait_for_admin_token_collection
-OLD_TOKENS=$(cr "$RANCHER/v3/tokens?limit=-1&userId=$USER_ID" \
-               -H "Authorization: Bearer $LTOK")
-for TOKEN_ID in $(printf '%s' "$OLD_TOKENS" | jq -r \
-                    --arg user "$USER_ID" '
-  .data[]
-  | select(.userId == $user)
-  | .id // empty'); do
-  cr -X DELETE "$RANCHER/v3/tokens/$TOKEN_ID" \
-     -H "Authorization: Bearer $LTOK" >/dev/null
-done
-REMAINING_TOKENS=$(cr "$RANCHER/v3/tokens?limit=-1&userId=$USER_ID" \
-                     -H "Authorization: Bearer $LTOK")
-printf '%s' "$REMAINING_TOKENS" | jq -e --arg user "$USER_ID" '
-  [.data[] | select(.userId == $user)] | length == 0' >/dev/null \
-  || { log "prior validator token revocation verification failed"; exit 1; }
-
-# Log in AS the scoped user and mint the validator token from that session.
-VLTOK=$(cr -X POST "$RANCHER/v3-public/localProviders/local?action=login" \
-         -H 'Content-Type: application/json' \
-         -d "{\"username\":\"$VAL_USERNAME\",\"password\":\"$VAL_PASSWORD\"}" | jq -r .token)
-[ -n "$VLTOK" ] && [ "$VLTOK" != "null" ] || { log "validator login failed"; exit 1; }
-VALIDATOR_TOKEN_RESPONSE=$(cr -X POST "$RANCHER/v3/token" \
-  -H "Authorization: Bearer $VLTOK" -H 'Content-Type: application/json' \
-  -d '{"type":"token","description":"kubetee-validator-scoring","ttl":0}')
-VALIDATOR_TOKEN_ID=$(printf '%s' "$VALIDATOR_TOKEN_RESPONSE" | jq -r .id)
-BEARER=$(printf '%s' "$VALIDATOR_TOKEN_RESPONSE" | jq -r .token)
-[ -n "$VALIDATOR_TOKEN_ID" ] && [ "$VALIDATOR_TOKEN_ID" != "null" ] \
-  && [ -n "$BEARER" ] && [ "$BEARER" != "null" ] \
-  || { log "token mint failed"; exit 1; }
-
-# A local-provider login may itself create a token record. Retain exactly the
-# intended API token and revoke every other token for this dedicated user.
-VALIDATOR_POST_MINT_TOKENS=$(cr "$RANCHER/v3/tokens?limit=-1&userId=$USER_ID" \
-  -H "Authorization: Bearer $LTOK")
-for TOKEN_ID in $(printf '%s' "$VALIDATOR_POST_MINT_TOKENS" | jq -r \
-  --arg user "$USER_ID" --arg keep "$VALIDATOR_TOKEN_ID" '
-  .data[] | select(.userId == $user and .id != $keep) | .id // empty'); do
-  cr -X DELETE "$RANCHER/v3/tokens/$TOKEN_ID" \
-     -H "Authorization: Bearer $LTOK" >/dev/null
-done
-VALIDATOR_FINAL_TOKENS=$(cr "$RANCHER/v3/tokens?limit=-1&userId=$USER_ID" \
-  -H "Authorization: Bearer $LTOK")
-printf '%s' "$VALIDATOR_FINAL_TOKENS" | jq -e \
-  --arg user "$USER_ID" --arg keep "$VALIDATOR_TOKEN_ID" '
-  [.data[] | select(.userId == $user)] as $tokens
-  | ($tokens | length) == 1
-  and $tokens[0].id == $keep
-  and $tokens[0].description == "kubetee-validator-scoring"' >/dev/null \
-  || { log "validator token post-mint verification failed"; exit 1; }
+# 2d. Revoke extension tokens from earlier disposable runs before logging in
+# and minting this run's only long-lived validator credential.
+delete_ext_tokens_except "$LTOK" "$USER_ID"
+assert_ext_tokens_exact "$LTOK" "$USER_ID"
+VALIDATOR_LOGIN_RESPONSE=$(cr -f -X POST \
+  "$RANCHER/v3-public/localProviders/local?action=login" \
+  -H 'Content-Type: application/json' \
+  -d "{\"username\":\"$VAL_USERNAME\",\"password\":\"$VAL_PASSWORD\"}")
+printf '%s' "$VALIDATOR_LOGIN_RESPONSE" | validate_login_document \
+  || { log "validator login failed"; exit 1; }
+VALIDATOR_LOGIN_TOKEN_ID=$(printf '%s' "$VALIDATOR_LOGIN_RESPONSE" | jq -r .id)
+VLTOK=$(printf '%s' "$VALIDATOR_LOGIN_RESPONSE" | jq -r .token)
+unset VALIDATOR_LOGIN_RESPONSE
+VALIDATOR_TOKEN_DESCRIPTION="kubetee-validator-scoring"
+VALIDATOR_TOKEN_RESPONSE=$(mint_ext_token "$VLTOK" "$VALIDATOR_TOKEN_DESCRIPTION" "$VALIDATOR_TOKEN_TTL_MS")
+printf '%s' "$VALIDATOR_TOKEN_RESPONSE" | validate_ext_token_create "$USER_ID" \
+  "$VALIDATOR_TOKEN_DESCRIPTION" "$VALIDATOR_TOKEN_TTL_MS" \
+  || { log "validator extension token mint failed"; exit 1; }
+VALIDATOR_TOKEN_ID=$(printf '%s' "$VALIDATOR_TOKEN_RESPONSE" | jq -r .metadata.name)
+BEARER=$(printf '%s' "$VALIDATOR_TOKEN_RESPONSE" | jq -r .status.bearerToken)
+unset VALIDATOR_TOKEN_RESPONSE VLTOK
+delete_known_login "$LTOK" "$VALIDATOR_LOGIN_TOKEN_ID"
+delete_ext_tokens_except "$LTOK" "$USER_ID" "$VALIDATOR_TOKEN_ID"
+assert_ext_tokens_exact "$LTOK" "$USER_ID" "$VALIDATOR_TOKEN_ID" \
+  "$VALIDATOR_TOKEN_DESCRIPTION" "$VALIDATOR_TOKEN_TTL_MS" \
+  || { log "validator extension token post-mint audit failed"; exit 1; }
 ( umask 077; printf '%s' "$BEARER" > "$SHARED/rancher-token" )   # never echoed
 log "minted SCOPED validator API token -> $SHARED/rancher-token"
 
@@ -393,25 +502,6 @@ printf '%s' "$PLATFORM_VERIFIED_BINDS" | jq -e \
   || { log "platform role binding verification failed"; exit 1; }
 log "platform bindings verified exact (user-base + $PLATFORM_ROLE_NAME)"
 
-PLATFORM_OLD_TOKENS=$(cr \
-  "$RANCHER/v3/tokens?limit=-1&userId=$PLATFORM_USER_ID" \
-  -H "Authorization: Bearer $LTOK")
-for PLATFORM_TOKEN_ID in $(printf '%s' "$PLATFORM_OLD_TOKENS" | jq -r \
-  --arg user "$PLATFORM_USER_ID" '
-  .data[]
-  | select(.userId == $user)
-  | .id // empty'); do
-  cr -X DELETE "$RANCHER/v3/tokens/$PLATFORM_TOKEN_ID" \
-     -H "Authorization: Bearer $LTOK" >/dev/null
-done
-PLATFORM_REMAINING_TOKENS=$(cr \
-  "$RANCHER/v3/tokens?limit=-1&userId=$PLATFORM_USER_ID" \
-  -H "Authorization: Bearer $LTOK")
-printf '%s' "$PLATFORM_REMAINING_TOKENS" | jq -e \
-  --arg user "$PLATFORM_USER_ID" '
-  [.data[] | select(.userId == $user)] | length == 0' >/dev/null \
-  || { log "prior platform token revocation verification failed"; exit 1; }
-
 # --- 3. CA -> shared ---------------------------------------------------------
 cr "$RANCHER/v3/settings/cacerts" -H "Authorization: Bearer $LTOK" | jq -r .value > "$SHARED/rancher-ca.crt"
 log "wrote Rancher CA ($(wc -c < "$SHARED/rancher-ca.crt") bytes)"
@@ -535,22 +625,30 @@ PATCH_BODY=$(jq -n \
 # Mint the short-lived writer token only after the bounded downstream setup,
 # immediately before its first use. The user and exact role were reconciled
 # earlier, but no writer credential existed while registration was pending.
-PLATFORM_LOGIN_TOKEN=$(cr -X POST \
+delete_ext_tokens_except "$LTOK" "$PLATFORM_USER_ID"
+assert_ext_tokens_exact "$LTOK" "$PLATFORM_USER_ID"
+PLATFORM_LOGIN_RESPONSE=$(cr -f -X POST \
   "$RANCHER/v3-public/localProviders/local?action=login" \
   -H 'Content-Type: application/json' \
-  -d "{\"username\":\"$PLATFORM_USERNAME\",\"password\":\"$PLATFORM_PASSWORD\"}" \
-  | jq -r .token)
-[ -n "$PLATFORM_LOGIN_TOKEN" ] && [ "$PLATFORM_LOGIN_TOKEN" != "null" ] \
+  -d "{\"username\":\"$PLATFORM_USERNAME\",\"password\":\"$PLATFORM_PASSWORD\"}")
+printf '%s' "$PLATFORM_LOGIN_RESPONSE" | validate_login_document \
   || { log "platform login failed"; exit 1; }
-PLATFORM_TOKEN_RESPONSE=$(cr -X POST "$RANCHER/v3/token" \
-  -H "Authorization: Bearer $PLATFORM_LOGIN_TOKEN" \
-  -H 'Content-Type: application/json' \
-  -d '{"type":"token","description":"kubetee-platform-binding-store-contract","ttl":300}')
-PLATFORM_TOKEN_ID=$(printf '%s' "$PLATFORM_TOKEN_RESPONSE" | jq -r .id)
-PLATFORM_BEARER=$(printf '%s' "$PLATFORM_TOKEN_RESPONSE" | jq -r .token)
-[ -n "$PLATFORM_TOKEN_ID" ] && [ "$PLATFORM_TOKEN_ID" != "null" ] \
-  && [ -n "$PLATFORM_BEARER" ] && [ "$PLATFORM_BEARER" != "null" ] \
-  || { log "platform token mint failed"; exit 1; }
+PLATFORM_LOGIN_TOKEN_ID=$(printf '%s' "$PLATFORM_LOGIN_RESPONSE" | jq -r .id)
+PLATFORM_LOGIN_TOKEN=$(printf '%s' "$PLATFORM_LOGIN_RESPONSE" | jq -r .token)
+unset PLATFORM_LOGIN_RESPONSE
+PLATFORM_TOKEN_DESCRIPTION="kubetee-platform-binding-store-contract"
+PLATFORM_TOKEN_RESPONSE=$(mint_ext_token "$PLATFORM_LOGIN_TOKEN" "$PLATFORM_TOKEN_DESCRIPTION" "$PLATFORM_TOKEN_TTL_MS")
+printf '%s' "$PLATFORM_TOKEN_RESPONSE" | validate_ext_token_create \
+  "$PLATFORM_USER_ID" "$PLATFORM_TOKEN_DESCRIPTION" "$PLATFORM_TOKEN_TTL_MS" \
+  || { log "platform extension token mint failed"; exit 1; }
+PLATFORM_TOKEN_ID=$(printf '%s' "$PLATFORM_TOKEN_RESPONSE" | jq -r .metadata.name)
+PLATFORM_BEARER=$(printf '%s' "$PLATFORM_TOKEN_RESPONSE" | jq -r .status.bearerToken)
+unset PLATFORM_TOKEN_RESPONSE PLATFORM_LOGIN_TOKEN
+delete_known_login "$LTOK" "$PLATFORM_LOGIN_TOKEN_ID"
+delete_ext_tokens_except "$LTOK" "$PLATFORM_USER_ID" "$PLATFORM_TOKEN_ID"
+assert_ext_tokens_exact "$LTOK" "$PLATFORM_USER_ID" "$PLATFORM_TOKEN_ID" \
+  "$PLATFORM_TOKEN_DESCRIPTION" "$PLATFORM_TOKEN_TTL_MS" \
+  || { log "platform extension token post-mint audit failed"; exit 1; }
 [ "$PLATFORM_BEARER" != "$BEARER" ] \
   || { log "platform and validator credentials must be distinct"; exit 1; }
 log "minted temporary SCOPED platform contract token"
@@ -611,27 +709,16 @@ log "applied complete canonical synthetic ENROLLED binding"
 unset PLATFORM_CLUSTER PLATFORM_PATCH PLATFORM_RESOURCE_VERSION
 log "platform credential runtime contract verified (get/list/patch)"
 
-# The platform token exists only to prove this disposable contract. Revoke all
-# tokens for the temporary platform user before publishing the ready marker;
-# no mutation credential is shared with or persisted for the validator.
-PLATFORM_FINAL_TOKENS=$(cr \
-  "$RANCHER/v3/tokens?limit=-1&userId=$PLATFORM_USER_ID" \
-  -H "Authorization: Bearer $LTOK")
-for PLATFORM_TOKEN_ID in $(printf '%s' "$PLATFORM_FINAL_TOKENS" | jq -r \
-  --arg user "$PLATFORM_USER_ID" '
-  .data[] | select(.userId == $user) | .id // empty'); do
-  cr -X DELETE "$RANCHER/v3/tokens/$PLATFORM_TOKEN_ID" \
-     -H "Authorization: Bearer $LTOK" >/dev/null
-done
-PLATFORM_TOKEN_AUDIT=$(cr \
-  "$RANCHER/v3/tokens?limit=-1&userId=$PLATFORM_USER_ID" \
-  -H "Authorization: Bearer $LTOK")
-printf '%s' "$PLATFORM_TOKEN_AUDIT" | jq -e --arg user "$PLATFORM_USER_ID" '
-  [.data[] | select(.userId == $user)] | length == 0' >/dev/null \
-  || { log "temporary platform token revocation verification failed"; exit 1; }
-unset PLATFORM_BEARER PLATFORM_LOGIN_TOKEN PLATFORM_TOKEN_RESPONSE
+# The platform token exists only to prove this disposable contract. Revoke it
+# before publishing the ready marker; no mutation credential is persisted.
+delete_ext_tokens_except "$LTOK" "$PLATFORM_USER_ID"
+assert_ext_tokens_exact "$LTOK" "$PLATFORM_USER_ID" \
+  || { log "temporary platform extension token revocation failed"; exit 1; }
+unset PLATFORM_BEARER PLATFORM_TOKEN_ID PLATFORM_LOGIN_TOKEN_ID
 log "temporary platform credential revoked"
 
 echo "$CID" > "$SHARED/cluster-id"
+delete_known_login "$LTOK" "$ADMIN_LOGIN_TOKEN_ID"
+unset LTOK ADMIN_LOGIN_TOKEN_ID
 touch "$SHARED/ready"
 log "PROVISIONING COMPLETE"

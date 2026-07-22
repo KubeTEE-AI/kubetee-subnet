@@ -57,18 +57,57 @@ def test_local_provisioner_waits_for_successful_v3_login_before_provisioning():
         gate:login
     ]
     assert "for _ in $(seq 1 120)" in text[gate:login]
-    assert "Rancher v3 login did not become ready" in text[gate:login]
+    assert "Rancher local login did not become ready" in text[gate:login]
 
 
-def test_local_provisioner_waits_for_a_well_formed_admin_token_collection():
+def test_local_provisioner_uses_bounded_extension_token_api_only():
     text = (ROOT / "scripts" / "rancher_provision.sh").read_text()
 
-    gate = text.index('wait_for_admin_token_collection()')
-    cleanup = text.index("OLD_TOKENS=", gate)
-    assert '"$RANCHER/v3/tokens?limit=1"' in text[gate:cleanup]
-    assert "(.data | type == \"array\")" in text[gate:cleanup]
-    assert "Rancher token collection did not become ready" in text[gate:cleanup]
-    assert text.index("wait_for_admin_token_collection", gate + 1) < cleanup
+    assert 'EXT_TOKEN_API="$RANCHER/apis/ext.cattle.io/v1/tokens"' in text
+    assert 'EXT_TOKEN_LIMIT="100"' in text
+    assert 'authn.management.cattle.io/token-userId=$user_id' in text
+    assert '"$RANCHER/v3/token"' not in text
+    assert '"$RANCHER/v3/tokens?' not in text
+    assert "metadata.continue" in text
+    assert 'length <= ($limit | tonumber)' in text
+
+
+def test_local_provisioner_creates_owner_bound_one_shot_extension_tokens():
+    text = (ROOT / "scripts" / "rancher_provision.sh").read_text()
+
+    assert 'apiVersion: "ext.cattle.io/v1"' in text
+    assert 'kind: "Token"' in text
+    create_helper = text[
+        text.index("mint_ext_token()") : text.index("validate_ext_token_create()")
+    ]
+    assert "userID:" not in create_helper
+    assert "userPrincipal:" not in create_helper
+    assert ".status.bearerToken" in text
+    assert '.status.bearerToken == ("ext/" + $name + ":" + $value)' in text
+    list_validation = text[
+        text.index("validate_ext_token_list()") : text.index("mint_ext_token()")
+    ]
+    assert '((.status.bearerToken // "") == "")' in list_validation
+    assert '((.status.value // "") == "")' in list_validation
+
+
+def test_local_provisioner_uses_millisecond_ttls_and_distinct_credentials():
+    text = (ROOT / "scripts" / "rancher_provision.sh").read_text()
+
+    assert 'VALIDATOR_TOKEN_TTL_MS="3600000"' in text
+    assert 'PLATFORM_TOKEN_TTL_MS="300000"' in text
+    assert 'mint_ext_token "$VLTOK" "$VALIDATOR_TOKEN_DESCRIPTION"' in text
+    assert 'mint_ext_token "$PLATFORM_LOGIN_TOKEN" "$PLATFORM_TOKEN_DESCRIPTION"' in text
+    assert '[ "$PLATFORM_BEARER" != "$BEARER" ]' in text
+
+
+def test_local_provisioner_deletes_only_known_legacy_login_ids():
+    text = (ROOT / "scripts" / "rancher_provision.sh").read_text()
+
+    assert 'delete_known_login "$LTOK" "$VALIDATOR_LOGIN_TOKEN_ID"' in text
+    assert 'delete_known_login "$LTOK" "$PLATFORM_LOGIN_TOKEN_ID"' in text
+    assert 'delete_known_login "$LTOK" "$ADMIN_LOGIN_TOKEN_ID"' in text
+    assert '"$RANCHER/v3/tokens/$login_id"' in text
 
 
 def test_local_provisioner_reconciles_exact_validator_authority():
@@ -98,14 +137,13 @@ def test_local_provisioner_reconciles_exact_validator_authority():
 def test_local_provisioner_revokes_persisted_scoped_tokens_before_minting():
     text = (ROOT / "scripts" / "rancher_provision.sh").read_text()
 
-    assert '-X DELETE "$RANCHER/v3/tokens/$TOKEN_ID"' in text
-    assert '-X DELETE "$RANCHER/v3/tokens/$PLATFORM_TOKEN_ID"' in text
-    assert "prior validator token revocation verification failed" in text
-    assert "prior platform token revocation verification failed" in text
-    assert text.index("tokens?limit=-1&userId=$USER_ID") < text.index("VLTOK=")
-    assert text.index("tokens?limit=-1&userId=$PLATFORM_USER_ID") < text.index(
-        "PLATFORM_LOGIN_TOKEN="
+    assert text.index('delete_ext_tokens_except "$LTOK" "$USER_ID"') < text.index(
+        "VALIDATOR_LOGIN_RESPONSE="
     )
+    assert text.index(
+        'delete_ext_tokens_except "$LTOK" "$PLATFORM_USER_ID"'
+    ) < text.index("PLATFORM_LOGIN_RESPONSE=")
+    assert '"$RANCHER/v3/tokens?limit=-1' not in text
 
 
 def test_local_provisioner_uses_distinct_platform_writer_credential():
