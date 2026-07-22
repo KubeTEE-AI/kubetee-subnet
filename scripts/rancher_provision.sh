@@ -176,13 +176,13 @@ delete_known_login() {
   printf '%s' "$login_id" | jq -eR --arg pattern "$RANCHER_ID_PATTERN" \
     'test($pattern)' >/dev/null \
     || { log "login token id validation failed"; return 1; }
-  for _ in $(seq 1 20); do
+  for attempt in $(seq 1 20); do
     status=$(cr -o /dev/null -w '%{http_code}' -X DELETE \
       "$RANCHER/v3/tokens/$login_id" \
       -H "Authorization: Bearer $admin_token" || true)
     case "$status" in
       200|204) return 0 ;;
-      404) sleep 1 ;;
+      404) if [ "$attempt" -lt 20 ]; then sleep 1; fi ;;
       *) log "login token deletion failed"; return 1 ;;
     esac
   done

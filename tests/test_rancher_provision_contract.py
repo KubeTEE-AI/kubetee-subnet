@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import pathlib
+import shlex
+import subprocess
 
 ROOT = pathlib.Path(__file__).parent.parent
 
@@ -113,19 +115,176 @@ def test_local_provisioner_deletes_only_known_legacy_login_ids():
     assert '"$RANCHER/v3/tokens/$login_id"' in text
 
 
-def test_local_provisioner_retries_exact_login_deletion_only_after_404():
+def _run_delete_known_login(
+    tmp_path: pathlib.Path,
+    statuses: list[str],
+    *,
+    login_id: str = "login-1",
+    expected_log: str = "",
+) -> dict[str, int]:
     text = (ROOT / "scripts" / "rancher_provision.sh").read_text()
     deletion = text[
         text.index("delete_known_login()") : text.index("wait_for_ext_token_api()")
     ]
+    statuses_path = tmp_path / "statuses"
+    index_path = tmp_path / "index"
+    calls_path = tmp_path / "calls"
+    sleeps_path = tmp_path / "sleeps"
+    logs_path = tmp_path / "logs"
+    harness_path = tmp_path / "delete-known-login.sh"
+    statuses_path.write_text("\n".join(statuses) + "\n")
+    index_path.write_text("1\n")
 
-    assert "for _ in $(seq 1 20); do" in deletion
-    assert "status=$(cr -o /dev/null -w '%{http_code}' -X DELETE \\" in deletion
-    assert '"$RANCHER/v3/tokens/$login_id"' in deletion
-    assert "200|204) return 0 ;;" in deletion
-    assert "404) sleep 1 ;;" in deletion
-    assert '*) log "login token deletion failed"; return 1 ;;' in deletion
-    assert 'log "login token deletion did not become ready"' in deletion
+    harness_path.write_text(
+        f"""#!/usr/bin/env sh
+RANCHER=https://rancher.invalid
+RANCHER_ID_PATTERN='^[A-Za-z0-9][A-Za-z0-9._-]{{0,253}}$'
+STATUS_PATH={shlex.quote(str(statuses_path))}
+INDEX_PATH={shlex.quote(str(index_path))}
+CALLS_PATH={shlex.quote(str(calls_path))}
+SLEEPS_PATH={shlex.quote(str(sleeps_path))}
+LOGS_PATH={shlex.quote(str(logs_path))}
+EXPECTED_LOG={shlex.quote(expected_log)}
+EXPECTED_LOGIN_ID={shlex.quote(login_id)}
+
+count_lines() {{
+  if [ -f "$1" ]; then
+    wc -l < "$1"
+  else
+    printf '0\n'
+  fi
+}}
+
+cr() {{
+  [ "$#" -eq 9 ] \
+    && [ "$1" = "-o" ] \
+    && [ "$2" = "/dev/null" ] \
+    && [ "$3" = "-w" ] \
+    && [ "$4" = "%{{http_code}}" ] \
+    && [ "$5" = "-X" ] \
+    && [ "$6" = "DELETE" ] \
+    && [ "$7" = "$RANCHER/v3/tokens/$EXPECTED_LOGIN_ID" ] \
+    && [ "$8" = "-H" ] \
+    && [ "$9" = "Authorization: Bearer admin-token" ] \
+    || return 1
+  index=$(cat "$INDEX_PATH")
+  status=$(sed -n "${{index}}p" "$STATUS_PATH")
+  printf '%s\n' "$((index + 1))" > "$INDEX_PATH"
+  printf 'call\n' >> "$CALLS_PATH"
+  case "$status" in
+    transport) return 1 ;;
+    empty) return 0 ;;
+    *) printf '%s' "$status" ;;
+  esac
+}}
+
+sleep() {{ printf 'sleep\n' >> "$SLEEPS_PATH"; }}
+
+log() {{
+  [ "$#" -eq 1 ] && [ "$1" = "$EXPECTED_LOG" ] || exit 97
+  printf 'log\n' >> "$LOGS_PATH"
+}}
+
+{deletion}
+
+delete_known_login admin-token {shlex.quote(login_id)}
+result=$?
+printf 'result=%s\n' "$result"
+printf 'calls=%s\n' "$(count_lines "$CALLS_PATH")"
+printf 'sleeps=%s\n' "$(count_lines "$SLEEPS_PATH")"
+printf 'logs=%s\n' "$(count_lines "$LOGS_PATH")"
+"""
+    )
+    result = subprocess.run(
+        ["sh", str(harness_path)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    return {
+        key: int(value)
+        for key, value in (
+            line.split("=", maxsplit=1) for line in result.stdout.splitlines()
+        )
+    }
+
+
+def test_local_provisioner_retries_exact_login_deletion_after_404(
+    tmp_path: pathlib.Path,
+):
+    outcome = _run_delete_known_login(tmp_path, ["404", "204"])
+
+    assert outcome == {"result": 0, "calls": 2, "sleeps": 1, "logs": 0}
+
+
+def test_local_provisioner_accepts_immediate_204_login_deletion(
+    tmp_path: pathlib.Path,
+):
+    outcome = _run_delete_known_login(tmp_path, ["204"])
+
+    assert outcome == {"result": 0, "calls": 1, "sleeps": 0, "logs": 0}
+
+
+def test_local_provisioner_fails_immediately_for_non_retryable_login_deletion(
+    tmp_path: pathlib.Path,
+):
+    outcome = _run_delete_known_login(
+        tmp_path,
+        ["403"],
+        expected_log="login token deletion failed",
+    )
+
+    assert outcome == {"result": 1, "calls": 1, "sleeps": 0, "logs": 1}
+
+
+def test_local_provisioner_fails_immediately_for_transport_login_delete_failure(
+    tmp_path: pathlib.Path,
+):
+    outcome = _run_delete_known_login(
+        tmp_path,
+        ["transport"],
+        expected_log="login token deletion failed",
+    )
+
+    assert outcome == {"result": 1, "calls": 1, "sleeps": 0, "logs": 1}
+
+
+def test_local_provisioner_fails_immediately_for_empty_http_login_delete_status(
+    tmp_path: pathlib.Path,
+):
+    outcome = _run_delete_known_login(
+        tmp_path,
+        ["empty"],
+        expected_log="login token deletion failed",
+    )
+
+    assert outcome == {"result": 1, "calls": 1, "sleeps": 0, "logs": 1}
+
+
+def test_local_provisioner_bounds_login_delete_retries_without_final_sleep(
+    tmp_path: pathlib.Path,
+):
+    outcome = _run_delete_known_login(
+        tmp_path,
+        ["404"] * 20,
+        expected_log="login token deletion did not become ready",
+    )
+
+    assert outcome == {"result": 1, "calls": 20, "sleeps": 19, "logs": 1}
+
+
+def test_local_provisioner_rejects_invalid_login_id_without_http_call(
+    tmp_path: pathlib.Path,
+):
+    outcome = _run_delete_known_login(
+        tmp_path,
+        ["204"],
+        login_id="invalid/login-id",
+        expected_log="login token id validation failed",
+    )
+
+    assert outcome == {"result": 1, "calls": 0, "sleeps": 0, "logs": 1}
 
 
 def test_local_provisioner_reconciles_exact_validator_authority():
