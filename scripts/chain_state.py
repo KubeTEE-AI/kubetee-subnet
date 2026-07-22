@@ -38,20 +38,26 @@ def query_subnet_ownership(
         else bt.Subtensor(network=chain_endpoint)
     )
     try:
-        info = sub.subnets.subnet(netuid)
-        if info.neuron_count == 0:
+        head = sub.block()
+        metagraph = sub.subnets.metagraph(
+            netuid,
+            block=head,
+            commitments=False,
+        )
+        if metagraph is None:
             return {
                 "exists": False,
                 "owner_ss58": None,
                 "owned_by_us": False,
                 "error": None,
             }
-        # Find the subnet owner via delegates registered on this netuid
-        owner_ss58 = None
-        for delegate in sub.delegation.delegates():
-            if netuid in delegate.registrations:
-                owner_ss58 = delegate.owner
-                break
+        if metagraph.block != head:
+            raise ValueError(
+                "ownership snapshot is not pinned to the requested head"
+            )
+        owner_ss58 = metagraph.owner_coldkey
+        if not isinstance(owner_ss58, str) or not owner_ss58:
+            raise ValueError("ownership snapshot has no canonical owner")
         return {
             "exists": True,
             "owner_ss58": owner_ss58,
