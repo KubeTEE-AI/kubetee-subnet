@@ -293,9 +293,8 @@ def fund_from_alice(
             "--network",
             chain_endpoint,
             "--yes",
-            "--allow-death",
         ],
-        check=False,
+        check=True,
         dry_run=dry_run,
     )
 

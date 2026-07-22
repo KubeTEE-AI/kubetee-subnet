@@ -331,19 +331,36 @@ def test_ensure_dev_wallet_regenerates_coldkey_then_hotkey(monkeypatch):
 
 
 def test_fund_from_alice_reuses_fail_closed_coldkey_regeneration(monkeypatch):
+    events = []
     regenerated = []
     commands = []
 
     def fake_regenerate(key_kind, name, seed, hotkey="default", dry_run=False):
+        events.append(("regenerate", dry_run))
         regenerated.append((key_kind, name, seed, hotkey, dry_run))
 
+    def fake_get_wallet_coldkey_ss58(name, hotkey="default", dry_run=False):
+        events.append(("resolve-destination", dry_run))
+        return "5DEST"
+
+    def fake_run(args, **kwargs):
+        events.append(("transfer", kwargs["dry_run"]))
+        commands.append((args, kwargs))
+
     monkeypatch.setattr(_setup, "_regenerate_wallet_key", fake_regenerate)
-    monkeypatch.setattr(_setup, "get_wallet_coldkey_ss58", lambda *_args, **_kwargs: "5DEST")
-    monkeypatch.setattr(_setup, "run", lambda args, **kwargs: commands.append((args, kwargs)))
+    monkeypatch.setattr(_setup, "get_wallet_coldkey_ss58", fake_get_wallet_coldkey_ss58)
+    monkeypatch.setattr(_setup, "run", fake_run)
 
-    _setup.fund_from_alice("owner", amount=5000, chain_endpoint="ws://chain:9944")
+    _setup.fund_from_alice(
+        "owner", amount=5000, chain_endpoint="ws://chain:9944", dry_run=True
+    )
 
-    assert regenerated == [("coldkey", "alice", _setup.DEV_ALICE_SEED, "default", False)]
+    assert events == [
+        ("regenerate", True),
+        ("resolve-destination", True),
+        ("transfer", True),
+    ]
+    assert regenerated == [("coldkey", "alice", _setup.DEV_ALICE_SEED, "default", True)]
     assert commands == [
         (
             [
@@ -361,9 +378,8 @@ def test_fund_from_alice_reuses_fail_closed_coldkey_regeneration(monkeypatch):
                 "--network",
                 "ws://chain:9944",
                 "--yes",
-                "--allow-death",
             ],
-            {"check": False, "dry_run": False},
+            {"check": True, "dry_run": True},
         )
     ]
 
