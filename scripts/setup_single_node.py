@@ -414,10 +414,9 @@ def registration_plan(owner_wallet: str = "owner") -> list[dict]:
     by main() and asserted by tests.
 
     owner (the recycle target) registers first for a stable UID; alice is
-    the validator that signs set_weights (its stake attempt is best-effort:
-    the pinned localnet image can reject add_stake with SubtokenDisabled,
-    reported honestly by the btcli output); bob is the miner - a new pinned
-    dev seed replacing the retired legacy sample "miner" wallet.
+    the validator that signs set_weights; bob is the miner - a new pinned
+    dev seed replacing the retired legacy sample "miner" wallet. Validator
+    staking is a separate checked readiness action after owner verification.
     """
     return [
         {
@@ -425,21 +424,18 @@ def registration_plan(owner_wallet: str = "owner") -> list[dict]:
             "seed": DEV_OWNER_SEED,
             "role": "owner",
             "validator": True,
-            "stake": 200,
         },
         {
             "wallet": "alice",
             "seed": DEV_ALICE_SEED,
             "role": "validator",
             "validator": True,
-            "stake": 100,
         },
         {
             "wallet": "bob",
             "seed": DEV_BOB_SEED,
             "role": "miner",
             "validator": False,
-            "stake": 50,
         },
     ]
 
@@ -593,64 +589,82 @@ def start_emissions(
     chain_endpoint: str = "ws://127.0.0.1:9944",
     dry_run: bool = False,
 ):
-    print(
-        f"Starting emissions for netuid {netuid} (network={chain_endpoint}) ..."
-    )
-    # Correct command for current bittensor-cli in the image: `btcli subnets start`
-    # (older code used `btcli sudo start` which no longer exists)
-    run(
-        [
-            "btcli",
-            "subnets",
-            "start",
-            "--netuid",
-            str(netuid),
-            "--wallet",
-            owner_name,
-            "--wallet-hotkey",
-            "default",
-            "--network",
-            chain_endpoint,
-            "--yes",
-        ],
-        check=False,
-        dry_run=dry_run,
-    )
+    if dry_run:
+        print("[DRY-RUN] subnet activation would be executed")
+        return
+    activation_failed = False
+    try:
+        subprocess.run(
+            [
+                "btcli",
+                "sudo",
+                "start",
+                "--netuid",
+                str(netuid),
+                "--wallet",
+                owner_name,
+                "--wallet-hotkey",
+                "default",
+                "--network",
+                chain_endpoint,
+                "--yes",
+                "--no-mev-shield",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+            shell=False,
+        )
+    # Do not surface command output or implementation-specific errors.
+    # pylint: disable-next=broad-exception-caught
+    except Exception:
+        activation_failed = True
+    if activation_failed:
+        raise RuntimeError("subnet activation failed")
 
 
 def add_stake(
     netuid: int,
     wallet_name: str,
-    amount: int = 100,
+    amount: int = 1,
     chain_endpoint: str = "ws://127.0.0.1:9944",
     dry_run: bool = False,
 ):
-    """Stake on the subnet so the wallet is visible in the metagraph."""
-    print(
-        f"Adding stake {amount} TAO on netuid {netuid} for {wallet_name} ..."
-    )
-    # --unsafe to avoid shield/safe mode issues seen on this btcli + localnet combination.
-    run(
-        [
-            "btcli",
-            "stake",
-            "add",
-            "--netuid",
-            str(netuid),
-            "--wallet",
-            wallet_name,
-            "--wallet-hotkey",
-            "default",
-            "--amount",
-            str(amount),
-            "--network",
-            chain_endpoint,
-            "--yes",
-            "--unsafe",
-        ],
-        check=False,
-        dry_run=dry_run,
-    )
+    """Stake the local validator through the checked v11 CLI contract."""
+    if dry_run:
+        print("[DRY-RUN] validator stake would be executed")
+        return
+    stake_failed = False
+    try:
+        subprocess.run(
+            [
+                "btcli",
+                "stake",
+                "add",
+                "--netuid",
+                str(netuid),
+                "--wallet",
+                wallet_name,
+                "--wallet-hotkey",
+                "default",
+                "--amount-tao",
+                str(amount),
+                "--network",
+                chain_endpoint,
+                "--yes",
+                "--no-mev-shield",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+            shell=False,
+        )
+    # Do not surface command output or implementation-specific errors.
+    # pylint: disable-next=broad-exception-caught
+    except Exception:
+        stake_failed = True
+    if stake_failed:
+        raise RuntimeError("validator stake failed")
 
 
 def set_hyperparam(
@@ -738,11 +752,15 @@ def main():
     chain_endpoint = args.chain_endpoint
     dry_run = args.dry_run
 
+    if dry_run:
+        print("[DRY-RUN] local readiness setup would be executed")
+        print("[DRY-RUN] subnet activation would be executed")
+        print("[DRY-RUN] validator stake would be executed")
+        return
+
     print("=== KubeTEE Single-Node Pyramid Setup ===")
     print(f"Netuid: {netuid}, Owner wallet: {owner}")
     print(f"Chain endpoint: {chain_endpoint}")
-    if dry_run:
-        print("[DRY-RUN] Commands will be printed but not executed.")
 
     wait_for_chain(chain_endpoint, dry_run=dry_run)
 
@@ -770,10 +788,7 @@ def main():
         netuid, owner, chain_endpoint, dry_run=dry_run
     )
 
-    # Register + stake the triad in plan order. Stake attempts are
-    # best-effort and reported honestly: the pinned localnet image can
-    # reject add_stake with SubtokenDisabled (T3 lesson) - the btcli output
-    # below is the record; nothing here claims a stake that did not land.
+    # Register the exact Task-12 triad in its existing order.
     for entry in triad:
         register_neuron(
             netuid,
@@ -781,13 +796,6 @@ def main():
             "default",
             as_validator=entry["validator"],
             chain_endpoint=chain_endpoint,
-            dry_run=dry_run,
-        )
-        add_stake(
-            netuid,
-            entry["wallet"],
-            entry["stake"],
-            chain_endpoint,
             dry_run=dry_run,
         )
 
@@ -804,51 +812,32 @@ def main():
     )
     print(f"Decision: proceed={decision['proceed']} ({decision['reason']})")
 
-    if decision["proceed"]:
-        # Start emissions
-        start_emissions(netuid, owner, chain_endpoint, dry_run=dry_run)
-        # Set the key hypers for conviction + recycle
-        set_conviction_and_recycle(
-            netuid, owner, chain_endpoint, dry_run=dry_run
-        )
-    else:
-        print(
-            f"  SKIPPING start_emissions + conviction/recycle hypers: {decision['reason']}"
-        )
-        print(
-            "  (Retrying these against a netuid we don't own would fail "
-            "every time and just hammer the chain.)"
-        )
+    if not decision["proceed"]:
+        raise RuntimeError("subnet ownership verification failed") from None
+
+    start_emissions(netuid, owner, chain_endpoint, dry_run=dry_run)
+    add_stake(netuid, "alice", 1, chain_endpoint, dry_run=dry_run)
+    set_conviction_and_recycle(netuid, owner, chain_endpoint, dry_run=dry_run)
 
     # Record whether we actually own the netuid so other processes (compose's
     # conviction-setter loop, print_subnet_stats.py) can avoid repeating the
     # same doomed owner-only calls instead of retrying blindly forever.
     try:
         with open("/app/.kubetee_owned", "w", encoding="utf-8") as f:
-            f.write("true" if decision["proceed"] else "false")
+            f.write("true")
     # Status-file failure must not hide the on-chain setup outcome.
     # pylint: disable-next=broad-exception-caught
     except Exception as e:
         print(f"  Warning: could not write ownership status file: {e}")
 
     print("\n=== Setup complete ===")
-    if decision["proceed"]:
-        print("Owner emissions will now:")
-        print(
-            "  - Have owner cut auto-locked into CONVICTION (via owner_cut_auto_lock_enabled)"
-        )
-        print(
-            "  - Miner emissions directed to owner UID will be RECYCLED (not burned)"
-        )
-    else:
-        print(
-            "Owner does NOT control this netuid's sudo-only hyperparameters on this chain:"
-        )
-        print(f"  {decision['reason']}")
-        print(
-            "  Conviction/recycle hypers were NOT set. See ownership "
-            "check above for the real owner."
-        )
+    print("Owner emissions will now:")
+    print(
+        "  - Have owner cut auto-locked into CONVICTION (via owner_cut_auto_lock_enabled)"
+    )
+    print(
+        "  - Miner emissions directed to owner UID will be RECYCLED (not burned)"
+    )
     print(
         "\nUsing pinned dev seeds (owner SS58 ~5FLbZa... ) so the registered UID is stable."
     )

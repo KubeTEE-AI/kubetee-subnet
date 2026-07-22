@@ -33,6 +33,7 @@ import pathlib
 import sys
 
 import pytest
+from bittensor.result import ExtrinsicResult
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent.parent / "scripts"))
 
@@ -150,17 +151,6 @@ class FakeStakingNamespace:
         return _FakeBalance(0.0)
 
 
-class FakeResult:
-    """Mimics the result of subtensor.execute(intent) in v11."""
-
-    def __init__(self, success: bool, message: str = "ok"):
-        self.is_success = success
-        self._message = message
-
-    def __str__(self) -> str:
-        return self._message
-
-
 class FakeSubtensor:
     def __init__(
         self,
@@ -198,9 +188,11 @@ class FakeSubtensor:
             raw = self._set_weights_results.pop(0)
             if isinstance(raw, Exception):
                 raise raw
+            if isinstance(raw, ExtrinsicResult):
+                return raw
             success, message = raw
-            return FakeResult(success, message)
-        return FakeResult(True, "ok")
+            return ExtrinsicResult(success=success, message=message)
+        return ExtrinsicResult(success=True, message="ok")
 
 
 class FakeRancher:
@@ -1030,6 +1022,34 @@ def test_runtime_rancher_outage_skips_and_never_exits():
         args["registered"] == {OWNER, VALIDATOR, BOB}
         for args in reconciler.run_args
     )
+
+
+def test_typed_extrinsic_result_success_records_accepted_weight():
+    """The pinned SDK result's success field is the accepted-chain verdict."""
+    subtensor = FakeSubtensor(
+        neurons_triad(),
+        set_weights_results=[ExtrinsicResult(success=True, message="ok")],
+    )
+    validator, _, _, _, metrics, _ = build_validator(subtensor=subtensor)
+
+    assert validator.run_cycle() == "weights_set"
+    assert sample(metrics, "kubetee_set_weights_total", result="success") == 1
+    assert sample(metrics, "kubetee_set_weights_total", result="failure") == 0
+
+
+def test_typed_extrinsic_result_rejection_records_failed_weight():
+    """A typed rejected result is not confused with a raised submission."""
+    subtensor = FakeSubtensor(
+        neurons_triad(),
+        set_weights_results=[
+            ExtrinsicResult(success=False, message="rejected")
+        ],
+    )
+    validator, _, _, _, metrics, _ = build_validator(subtensor=subtensor)
+
+    assert validator.run_cycle() == "weights_rejected"
+    assert sample(metrics, "kubetee_set_weights_total", result="success") == 0
+    assert sample(metrics, "kubetee_set_weights_total", result="failure") == 1
 
 
 def test_rejected_set_weights_is_honest_and_loop_continues(caplog):

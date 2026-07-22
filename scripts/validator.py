@@ -554,7 +554,7 @@ class BasicValidator:
                 netuid=self._config.netuid, uids=uids, weights=weights
             )
             result = subtensor.execute(intent, wallet=self._wallet)
-            success = result.is_success
+            success = result.success
         # Bittensor can surface transport and submission failures from plugins.
         # pylint: disable-next=broad-exception-caught
         except Exception:

@@ -114,6 +114,11 @@ def test_legacy_miner_wallet_is_retired():
     int(_setup.DEV_BOB_SEED[2:], 16)  # must parse as hex
 
 
+def test_registration_plan_has_no_legacy_per_wallet_stake_amounts():
+    """Readiness stakes only alice after ownership verification, not the triad."""
+    assert all("stake" not in entry for entry in registration_plan())
+
+
 def test_decide_owner_actions_proceeds_when_owned():
     ownership = {
         "exists": True,
@@ -190,8 +195,58 @@ def test_command_helpers_propagate_dry_run(monkeypatch):
     _setup.add_stake(1, "alice", dry_run=True)
     _setup.set_conviction_and_recycle(1, "owner", dry_run=True)
 
-    assert len(calls) == 4
+    assert len(calls) == 2
     assert all(kwargs["dry_run"] is True for _, kwargs in calls)
+
+
+def test_main_dry_run_is_private_fixed_output_and_performs_no_operations(
+    monkeypatch, capsys
+):
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "setup_single_node.py",
+            "--dry-run",
+            "--netuid",
+            "42",
+            "--owner-wallet",
+            "owner-must-not-appear",
+            "--chain-endpoint",
+            "ws://chain.example:9944",
+        ],
+    )
+    def forbidden(*_args, **_kwargs):
+        raise AssertionError("dry-run must not execute setup work")
+
+    for name in (
+        "wait_for_chain",
+        "ensure_dev_wallet",
+        "fund_from_alice",
+        "create_subnet_if_needed",
+        "register_neuron",
+        "get_wallet_coldkey_ss58",
+        "start_emissions",
+        "add_stake",
+        "set_conviction_and_recycle",
+    ):
+        monkeypatch.setattr(_setup, name, forbidden)
+    monkeypatch.setattr(_setup.time, "sleep", forbidden)
+    monkeypatch.setattr(_setup.chain_state, "query_subnet_ownership", forbidden)
+    monkeypatch.setattr(_setup.subprocess, "run", forbidden)
+    monkeypatch.setattr(
+        _setup,
+        "bt",
+        SimpleNamespace(Subtensor=forbidden, Wallet=forbidden),
+    )
+
+    _setup.main()
+
+    assert capsys.readouterr().out == (
+        "[DRY-RUN] local readiness setup would be executed\n"
+        "[DRY-RUN] subnet activation would be executed\n"
+        "[DRY-RUN] validator stake would be executed\n"
+    )
 
 
 def test_registration_state_reads_one_head_pinned_metagraph_for_exact_identity(
@@ -806,3 +861,269 @@ def test_create_subnet_dry_run_skips_sdk_and_subprocess_and_returns_preview(
     output = capsys.readouterr()
     assert output.out == ""
     assert output.err == ""
+
+
+def test_start_emissions_uses_checked_direct_v11_activation_command(
+    monkeypatch, capsys
+):
+    calls = []
+
+    def capture_run(args, **kwargs):
+        calls.append((args, kwargs))
+        return _setup.subprocess.CompletedProcess(
+            args, 0, stdout="discarded stdout", stderr="discarded stderr"
+        )
+
+    monkeypatch.setattr(_setup.subprocess, "run", capture_run)
+
+    _setup.start_emissions(42, "owner", "ws://chain.example:9944")
+
+    assert calls == [
+        (
+            [
+                "btcli",
+                "sudo",
+                "start",
+                "--netuid",
+                "42",
+                "--wallet",
+                "owner",
+                "--wallet-hotkey",
+                "default",
+                "--network",
+                "ws://chain.example:9944",
+                "--yes",
+                "--no-mev-shield",
+            ],
+            {"check": True, "capture_output": True, "text": True, "shell": False},
+        )
+    ]
+    captured = capsys.readouterr()
+    assert "discarded stdout" not in captured.out
+    assert "discarded stderr" not in captured.out
+
+
+def test_add_stake_uses_checked_direct_alice_validator_command(monkeypatch, capsys):
+    calls = []
+
+    def capture_run(args, **kwargs):
+        calls.append((args, kwargs))
+        return _setup.subprocess.CompletedProcess(
+            args, 0, stdout="discarded stdout", stderr="discarded stderr"
+        )
+
+    monkeypatch.setattr(_setup.subprocess, "run", capture_run)
+
+    _setup.add_stake(42, "alice", 1, "ws://chain.example:9944")
+
+    assert calls == [
+        (
+            [
+                "btcli",
+                "stake",
+                "add",
+                "--netuid",
+                "42",
+                "--wallet",
+                "alice",
+                "--wallet-hotkey",
+                "default",
+                "--amount-tao",
+                "1",
+                "--network",
+                "ws://chain.example:9944",
+                "--yes",
+                "--no-mev-shield",
+            ],
+            {"check": True, "capture_output": True, "text": True, "shell": False},
+        )
+    ]
+    captured = capsys.readouterr()
+    assert "discarded stdout" not in captured.out
+    assert "discarded stderr" not in captured.out
+
+
+@pytest.mark.parametrize(
+    ("helper", "args", "error_message"),
+    [
+        (
+            _setup.start_emissions,
+            (42, "owner", "ws://chain.example:9944"),
+            "subnet activation failed",
+        ),
+        (
+            _setup.add_stake,
+            (42, "alice", 1, "ws://chain.example:9944"),
+            "validator stake failed",
+        ),
+    ],
+)
+def test_local_readiness_helpers_normalize_ordinary_command_failures(
+    monkeypatch, capsys, helper, args, error_message
+):
+    def fail(*_args, **_kwargs):
+        raise _setup.subprocess.CalledProcessError(
+            1, ["btcli"], output="hostile stdout", stderr="hostile stderr"
+        )
+
+    monkeypatch.setattr(_setup.subprocess, "run", fail)
+
+    with pytest.raises(RuntimeError, match=rf"^{error_message}$") as error:
+        helper(*args)
+
+    assert error.value.__cause__ is None
+    assert error.value.__context__ is None
+    output = capsys.readouterr()
+    assert "hostile" not in output.out
+    assert "hostile" not in output.err
+
+
+@pytest.mark.parametrize(
+    ("helper", "args", "preview"),
+    [
+        (
+            _setup.start_emissions,
+            (42, "owner-must-not-appear", "ws://chain.example:9944"),
+            "[DRY-RUN] subnet activation would be executed\n",
+        ),
+        (
+            _setup.add_stake,
+            (42, "alice-must-not-appear", 1, "ws://chain.example:9944"),
+            "[DRY-RUN] validator stake would be executed\n",
+        ),
+    ],
+)
+def test_local_readiness_helpers_dry_run_is_private_and_does_not_execute(
+    monkeypatch, capsys, helper, args, preview
+):
+    monkeypatch.setattr(
+        _setup.subprocess,
+        "run",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("dry-run must not execute subprocess")
+        ),
+    )
+    monkeypatch.setattr(
+        _setup,
+        "bt",
+        SimpleNamespace(
+            Subtensor=lambda *_args, **_kwargs: (_ for _ in ()).throw(
+                AssertionError("dry-run must not query SDK")
+            )
+        ),
+    )
+
+    helper(*args, dry_run=True)
+
+    assert capsys.readouterr().out == preview
+
+
+class _StatusFile:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args):
+        return False
+
+    def write(self, _value):
+        return None
+
+
+def _stub_setup_main(monkeypatch, ownership, events):
+    monkeypatch.setattr(sys, "argv", ["setup_single_node.py"])
+    monkeypatch.setattr(_setup, "wait_for_chain", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        _setup, "ensure_dev_wallet", lambda *_args, **_kwargs: None
+    )
+    monkeypatch.setattr(_setup, "fund_from_alice", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(_setup.time, "sleep", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        _setup, "create_subnet_if_needed", lambda *_args, **_kwargs: 42
+    )
+    monkeypatch.setattr(
+        _setup,
+        "register_neuron",
+        lambda _netuid, wallet, *_args, **_kwargs: events.append(
+            ("registration", wallet)
+        ),
+    )
+    monkeypatch.setattr(
+        _setup,
+        "add_stake",
+        lambda netuid, wallet, amount=1, chain_endpoint="", **_kwargs: events.append(
+            ("stake", netuid, wallet, amount, chain_endpoint)
+        ),
+    )
+    monkeypatch.setattr(
+        _setup,
+        "get_wallet_coldkey_ss58",
+        lambda *_args, **_kwargs: "5OWNER",
+    )
+    monkeypatch.setattr(
+        _setup.chain_state,
+        "query_subnet_ownership",
+        lambda *_args, **_kwargs: ownership,
+    )
+    monkeypatch.setattr(
+        _setup,
+        "start_emissions",
+        lambda netuid, owner, endpoint, **_kwargs: events.append(
+            ("activation", netuid, owner, endpoint)
+        ),
+    )
+    monkeypatch.setattr(
+        _setup,
+        "set_conviction_and_recycle",
+        lambda *_args, **_kwargs: events.append(("hyperparameters",)),
+    )
+    monkeypatch.setattr(_setup, "open", lambda *_args, **_kwargs: _StatusFile(), raising=False)
+
+
+def test_main_activates_then_stakes_only_alice_after_exact_triad_registration(
+    monkeypatch
+):
+    events = []
+    _stub_setup_main(
+        monkeypatch,
+        {"exists": True, "owner_ss58": "5OWNER", "owned_by_us": True, "error": None},
+        events,
+    )
+
+    _setup.main()
+
+    assert [event for event in events if event[0] == "registration"] == [
+        ("registration", "owner"),
+        ("registration", "alice"),
+        ("registration", "bob"),
+    ]
+    readiness = [
+        event for event in events if event[0] in {"activation", "stake"}
+    ]
+    assert readiness == [
+        ("activation", 42, "owner", "ws://127.0.0.1:9944"),
+        ("stake", 42, "alice", 1, "ws://127.0.0.1:9944"),
+    ]
+
+
+@pytest.mark.parametrize(
+    "ownership",
+    [
+        {"exists": None, "owner_ss58": None, "owned_by_us": False, "error": "rpc"},
+        {"exists": False, "owner_ss58": None, "owned_by_us": False, "error": None},
+        {"exists": True, "owner_ss58": "5OTHER", "owned_by_us": False, "error": None},
+    ],
+)
+def test_main_fails_closed_for_every_negative_ownership_decision(
+    monkeypatch, ownership
+):
+    events = []
+    _stub_setup_main(monkeypatch, ownership, events)
+
+    with pytest.raises(
+        RuntimeError, match=r"^subnet ownership verification failed$"
+    ) as error:
+        _setup.main()
+
+    assert error.value.__cause__ is None
+    assert error.value.__context__ is None
+    assert [event for event in events if event[0] in {"activation", "stake"}] == []

@@ -85,19 +85,22 @@ docs and owner decision D13. What the validator/UAT verifies is exactly:
 - the weights target the **proper owner-controlled key** (the owner UID's
   hotkey equals `KUBETEE_OWNER_HOTKEY`).
 
-### Localnet environment limitation (D1)
+### Localnet readiness sequence (D1)
 
-On the pinned `ghcr.io/opentensor/subtensor-localnet:latest` image, netuid 1
-is pre-owned by a bootstrap key and `btcli subnet create` fails with
-`SubtokenDisabled`. Owner-only hyperparameters (`recycle_or_burn`,
-`owner_cut_auto_lock_enabled`) therefore **cannot be set on-chain there**;
-the setup reports this honestly (ownership check, `/app/.kubetee_owned`)
-and skips the doomed sudo calls instead of hammering the chain. This is a
-documented **environment limitation, not a doubt about the recycle
-mechanism** — the weight split is demonstrated live on localnet and the
-on-chain recycle-hyperparameter proof is deferred to a future testnet
-slice. UAT reports the hyperparameter check as SKIPPED/LIMITED with this
-citation on the pinned image.
+The disposable local bootstrap creates one **new** subnet and uses the live
+post-create snapshot to resolve its unique netuid (the dedicated local proof
+uses netuid 2). It retains the owner/alice/bob registration triad, then
+requires a positive live ownership verdict before any owner-only action. The
+setup runs checked `btcli sudo start` activation, stakes **only alice** (the
+validator) by exactly **1 TAO**, and then attempts the conviction/recycle
+hyperparameters. Activation and the validator stake fail closed; their CLI
+output is deliberately discarded.
+
+Validator permits and weight-rate availability are transient local-chain
+conditions. A local UAT must therefore wait through the permit/rate window
+and require a typed accepted `ExtrinsicResult(success=True)` weight result;
+registration, eligibility, or a submitted weight alone is not a successful
+proof.
 
 ### Rancher access in the dev stack, and token debt (D6)
 
@@ -255,9 +258,10 @@ For standalone development without compose, see the [Local Development](#local-d
 Services (all using deterministic pinned dev accounts, see `keys/README.md`):
 
 - `chain`: subtensor-localnet (FAST_BLOCKS for fast testing)
-- `validator`: entrypoint does btcli (register subnet if not exists,
-  register the **owner/alice/bob** triad, add stake, start emissions,
-  attempt conviction/recycle hypers) then runs `validator.py`
+- `validator`: entrypoint creates a unique subnet, registers the
+  **owner/alice/bob** triad, checks ownership, activates emissions, stakes
+  **alice only** by 1 TAO, attempts conviction/recycle hypers, then runs
+  `validator.py`
   (alice signs `set_weights`)
 - background conviction-setter + subnet-stats loops inside the validator
   container (single chain connection each — HTTP 429 lesson)
@@ -278,7 +282,7 @@ The setup runs **inside the validator container** automatically. To run
 (or re-run) it manually from the **host**:
 
 ```bash
-python scripts/setup_single_node.py --netuid 1 --owner-wallet owner --chain-endpoint ws://127.0.0.1:9944
+python scripts/setup_single_node.py --owner-wallet owner --chain-endpoint ws://127.0.0.1:9944
 ```
 
 What it does:
@@ -287,11 +291,13 @@ What it does:
 - **Uses pinned deterministic dev seeds** for the triad (D7): `owner`
   (subnet owner / recycle target), `alice` (validator, also the funding
   source), `bob` (miner)
-- Creates the subnet if needed, registers and stakes all three wallets
-  (stake attempts are best-effort: the pinned image can reject them with
-  `SubtokenDisabled` — reported honestly, see the D1 limitation above)
-- Starts emissions and attempts the conviction/recycle hyperparameters
-  **only when a live ownership check passes** (never blind retries)
+- Creates one new subnet and resolves its unique created netuid from live
+  chain state, then registers all three wallets in owner/alice/bob order
+- Requires a live positive ownership check, then uses checked activation,
+  stakes **only alice by 1 TAO**, and attempts conviction/recycle
+  hyperparameters
+- Treats a local chain run as ready only after the transient permit/rate
+  window yields a typed accepted validator weight
 
 ### 4. Running the validator manually (host)
 
@@ -314,7 +320,7 @@ python scripts/validator.py
   `http://validator:9100/metrics` (deliberately not reachable from the
   host).
 - **subnet-stats** loop prints hypers (conviction, recycle_or_burn where
-  readable), stake, ownership, and wallet stake for owner + bob.
+  readable), stake, ownership, and the alice validator stake.
 
 ### 6. Testnet / Mainnet notes
 
@@ -326,14 +332,14 @@ python scripts/validator.py
 ### 7. Common commands (v11 / btcli)
 
 ```bash
-# View hypers (recycle_or_burn visible where the chain exposes it)
-btcli subnets hyperparameters --netuid 1 --network ws://127.0.0.1:9944
+# View hypers on the uniquely created local subnet (netuid 2 in the dedicated proof)
+btcli subnets hyperparameters --netuid 2 --network ws://127.0.0.1:9944
 
-# Set (owner only; fails on the pinned localnet image - D1)
-btcli sudo set --netuid 1 --param recycle_or_burn --value Recycle --network ws://127.0.0.1:9944
+# Set (owner only, after the live ownership gate)
+btcli sudo set --netuid 2 --param recycle_or_burn --value Recycle --network ws://127.0.0.1:9944
 
 # Metagraph (UIDs, stake, weights - the place to see the split)
-btcli subnets metagraph --netuid 1 --network ws://127.0.0.1:9944
+btcli subnets metagraph --netuid 2 --network ws://127.0.0.1:9944
 ```
 
 ---
