@@ -2,9 +2,8 @@ rich>=13
 pytest>=8
 numpy>=1
 setuptools>=68
-# Bittensor v11+ unified package (SDK + btcli)
-# Installs from PyPI: bittensor 11.0.0 stable
-bittensor>=11.0.0
+# Bittensor v11 unified package (SDK + btcli), pinned to the verified CLI contract.
+bittensor==11.0.0
 # For local dev / compose images
 docker>=7.0.0
 

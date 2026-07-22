@@ -122,7 +122,16 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push
-        run: docker buildx build -f Dockerfile.validator --push ${{ steps.tags.outputs.tags }} .
+        run: docker buildx build -f Dockerfile --push ${{ steps.tags.outputs.tags }} .
+
+      - name: Pull and import-smoke the published production image
+        if: inputs.release_type == 'production'
+        env:
+          IMAGE: ghcr.io/${{ github.repository }}
+        run: |
+          docker pull "${IMAGE}:latest"
+          docker run --rm --workdir /app/scripts --entrypoint python "${IMAGE}:latest" -c \
+            "import validator; import miner_scoring; import rancher_client; print(\"remote import smoke OK\")"
 
       - name: Make image public
         continue-on-error: true
