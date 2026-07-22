@@ -169,10 +169,10 @@ def _regenerate_wallet_key(
         base_wallet_path,
         "--seed",
         seed,
-        "--no-password",
-        "--overwrite",
-        "--quiet",
     ]
+    if key_kind == "coldkey":
+        command.append("--no-password")
+    command.extend(["--overwrite", "--quiet"])
     redacted_command = [
         "<redacted-seed>" if argument == seed else argument
         for argument in command

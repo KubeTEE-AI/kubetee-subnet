@@ -148,11 +148,14 @@ def test_command_helpers_propagate_dry_run(monkeypatch):
 
 
 @pytest.mark.parametrize(
-    ("key_kind", "subcommand"),
-    [("coldkey", "regen-coldkey"), ("hotkey", "regen-hotkey")],
+    ("key_kind", "subcommand", "key_kind_options"),
+    [
+        ("coldkey", "regen-coldkey", ["--no-password"]),
+        ("hotkey", "regen-hotkey", []),
+    ],
 )
 def test_regenerate_wallet_key_uses_direct_v11_arguments_and_redacts_output(
-    monkeypatch, capsys, key_kind, subcommand
+    monkeypatch, capsys, key_kind, subcommand, key_kind_options
 ):
     """Wallet regeneration must be a direct btcli v11 invocation, never a shell."""
     seed = "seed-must-not-be-logged"
@@ -182,7 +185,7 @@ def test_regenerate_wallet_key_uses_direct_v11_arguments_and_redacts_output(
                 str(Path.home() / ".bittensor" / "wallets"),
                 "--seed",
                 seed,
-                "--no-password",
+                *key_kind_options,
                 "--overwrite",
                 "--quiet",
             ],
