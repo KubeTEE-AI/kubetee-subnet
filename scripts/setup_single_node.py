@@ -299,50 +299,80 @@ def fund_from_alice(
     )
 
 
+def _snapshot_subnet_netuids(chain_endpoint: str) -> set[int]:
+    """Return one complete, validated live snapshot of subnet netuids."""
+    if bt is None:
+        raise RuntimeError("unable to snapshot subnet netuids")
+
+    try:
+        subnet_infos = bt.Subtensor(network=chain_endpoint).subnets.subnets()
+        netuids = [subnet.netuid for subnet in subnet_infos]
+    except Exception:
+        snapshot_failed = True
+    else:
+        snapshot_failed = False
+    if snapshot_failed:
+        raise RuntimeError("unable to snapshot subnet netuids")
+
+    if (
+        any(type(netuid) is not int or netuid < 0 for netuid in netuids)
+        or len(netuids) != len(set(netuids))
+    ):
+        raise RuntimeError("invalid subnet netuid snapshot")
+    return set(netuids)
+
+
 def create_subnet_if_needed(
     netuid: int,
     owner_name: str,
     chain_endpoint: str = "ws://127.0.0.1:9944",
     dry_run=False,
 ):
+    if dry_run:
+        return netuid
+
     print(
         "Creating/ensuring subnet "
         f"(target {netuid}, owner={owner_name}, network={chain_endpoint})..."
     )
-    # Always attempt create. This will allocate the *next* free netuid and make our key the owner.
-    # (If a specific netuid already exists we won't be its owner, so we force a fresh one.)
-    res = run(
-        [
-            "btcli",
-            "subnet",
-            "create",
-            "--wallet",
-            owner_name,
-            "--wallet-hotkey",
-            "default",
-            "--network",
-            chain_endpoint,
-            "--yes",
-        ],
-        check=False,
-        capture=True,
-        dry_run=dry_run,
-    )
-    out = (res.stdout or "") + (res.stderr or "")
-    # Try to parse the netuid we actually got (common patterns in btcli output)
-    import re
+    before = _snapshot_subnet_netuids(chain_endpoint)
+    command = [
+        "btcli",
+        "subnet",
+        "create",
+        "--wallet",
+        owner_name,
+        "--wallet-hotkey",
+        "default",
+        "--network",
+        chain_endpoint,
+        "--yes",
+        "--json",
+    ]
+    try:
+        subprocess.run(
+            command,
+            check=True,
+            capture_output=True,
+            text=True,
+            shell=False,
+        )
+    except Exception:
+        creation_failed = True
+    else:
+        creation_failed = False
+    if creation_failed:
+        raise RuntimeError("subnet creation failed")
 
-    m = re.search(r"netuid[:\s]+(\d+)", out, re.IGNORECASE)
-    if not m:
-        m = re.search(r"Registered on netuid[:\s]+(\d+)", out, re.IGNORECASE)
-    if m:
-        actual = int(m.group(1))
-        print(f"  Create gave us netuid {actual} (we are now the owner).")
-        return actual
-    print(
-        "  Create attempt done. Falling back to requested netuid (may not own it)."
-    )
-    return netuid
+    after = _snapshot_subnet_netuids(chain_endpoint)
+    created = after - before
+    if len(created) != 1:
+        raise RuntimeError(
+            "subnet creation did not yield exactly one new netuid"
+        )
+    actual = created.pop()
+    print(f"  Live chain postcondition resolved netuid {actual}.")
+    return actual
 
 
 def decide_owner_actions(ownership: dict) -> dict:

@@ -19,6 +19,7 @@ Run:
 import importlib.util
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -396,3 +397,177 @@ def test_dockerfile_healthcheck_curls_metrics_with_a_timeout():
     assert "curl --fail --silent --show-error --max-time" in dockerfile
     assert "http://127.0.0.1:9100/metrics" in dockerfile
     assert 'python -c "import bittensor' not in dockerfile
+
+
+class _SnapshotSubnet:
+    def __init__(self, netuid):
+        self.netuid = netuid
+
+
+def _install_snapshot_subtensor(monkeypatch, snapshots):
+    calls = []
+
+    class FakeSubtensor:
+        def __init__(self, network):
+            calls.append(network)
+            self.subnets = SimpleNamespace(subnets=lambda: snapshots.pop(0))
+
+    monkeypatch.setattr(_setup, "bt", SimpleNamespace(Subtensor=FakeSubtensor))
+    return calls
+
+
+def test_create_subnet_resolves_exact_new_live_netuid_not_cli_text(
+    monkeypatch, capsys
+):
+    snapshots = [
+        [_SnapshotSubnet(0), _SnapshotSubnet(1)],
+        [_SnapshotSubnet(0), _SnapshotSubnet(1), _SnapshotSubnet(2)],
+    ]
+    sdk_calls = _install_snapshot_subtensor(monkeypatch, snapshots)
+    calls = []
+
+    def fake_subprocess_run(args, **kwargs):
+        calls.append((args, kwargs))
+        return _setup.subprocess.CompletedProcess(
+            args, 0, stdout="success: netuid 999", stderr="netuid 999"
+        )
+
+    monkeypatch.setattr(_setup.subprocess, "run", fake_subprocess_run)
+
+    assert _setup.create_subnet_if_needed(
+        1, "owner", "ws://chain.example:9944"
+    ) == 2
+    assert sdk_calls == ["ws://chain.example:9944", "ws://chain.example:9944"]
+    assert calls == [
+        (
+            [
+                "btcli",
+                "subnet",
+                "create",
+                "--wallet",
+                "owner",
+                "--wallet-hotkey",
+                "default",
+                "--network",
+                "ws://chain.example:9944",
+                "--yes",
+                "--json",
+            ],
+            {
+                "check": True,
+                "capture_output": True,
+                "text": True,
+                "shell": False,
+            },
+        )
+    ]
+    output = capsys.readouterr()
+    assert "999" not in output.out
+    assert "999" not in output.err
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        _setup.subprocess.CalledProcessError(
+            1, ["btcli"], output="hostile stdout", stderr="hostile stderr"
+        ),
+        RuntimeError("hostile upstream error"),
+    ],
+)
+def test_create_subnet_normalizes_cli_failure_without_output_or_chain(
+    monkeypatch, capsys, failure
+):
+    _install_snapshot_subtensor(monkeypatch, [[_SnapshotSubnet(0), _SnapshotSubnet(1)]])
+
+    def failing_subprocess_run(*_args, **_kwargs):
+        raise failure
+
+    monkeypatch.setattr(_setup.subprocess, "run", failing_subprocess_run)
+
+    with pytest.raises(RuntimeError, match=r"^subnet creation failed$") as error:
+        _setup.create_subnet_if_needed(1, "owner")
+
+    assert error.value.__cause__ is None
+    assert error.value.__context__ is None
+    output = capsys.readouterr()
+    assert "hostile" not in output.out
+    assert "hostile" not in output.err
+    assert "hostile" not in str(error.value)
+
+
+@pytest.mark.parametrize(
+    "snapshots, error_message",
+    [
+        (
+            [
+                [_SnapshotSubnet(0), _SnapshotSubnet(1)],
+                [_SnapshotSubnet(0), _SnapshotSubnet(1)],
+            ],
+            "subnet creation did not yield exactly one new netuid",
+        ),
+        (
+            [
+                [_SnapshotSubnet(0), _SnapshotSubnet(1)],
+                [_SnapshotSubnet(0), _SnapshotSubnet(1), _SnapshotSubnet(2), _SnapshotSubnet(3)],
+            ],
+            "subnet creation did not yield exactly one new netuid",
+        ),
+        ([[_SnapshotSubnet(0), _SnapshotSubnet(True)]], "invalid subnet netuid snapshot"),
+        ([[_SnapshotSubnet(0), _SnapshotSubnet(-1)]], "invalid subnet netuid snapshot"),
+        ([[_SnapshotSubnet(0), _SnapshotSubnet("2")]], "invalid subnet netuid snapshot"),
+        ([[_SnapshotSubnet(0), _SnapshotSubnet(0)]], "invalid subnet netuid snapshot"),
+    ],
+)
+def test_create_subnet_fails_closed_for_invalid_or_ambiguous_live_postconditions(
+    monkeypatch, snapshots, error_message
+):
+    _install_snapshot_subtensor(monkeypatch, snapshots)
+
+    def successful_subprocess_run(args, **_kwargs):
+        return _setup.subprocess.CompletedProcess(args, 0, stdout="success")
+
+    monkeypatch.setattr(_setup.subprocess, "run", successful_subprocess_run)
+
+    with pytest.raises(RuntimeError, match=rf"^{error_message}$") as error:
+        _setup.create_subnet_if_needed(1, "owner")
+
+    assert error.value.__cause__ is None
+    assert error.value.__context__ is None
+
+
+def test_snapshot_subnet_netuids_normalizes_sdk_failure_without_chain(monkeypatch):
+    class FakeSubtensor:
+        def __init__(self, network):
+            self.subnets = SimpleNamespace(
+                subnets=lambda: (_ for _ in ()).throw(RuntimeError("hostile sdk error"))
+            )
+
+    monkeypatch.setattr(_setup, "bt", SimpleNamespace(Subtensor=FakeSubtensor))
+
+    with pytest.raises(RuntimeError, match=r"^unable to snapshot subnet netuids$") as error:
+        _setup._snapshot_subnet_netuids("ws://chain.example:9944")
+
+    assert error.value.__cause__ is None
+    assert error.value.__context__ is None
+    assert "hostile" not in str(error.value)
+
+
+def test_create_subnet_dry_run_skips_sdk_and_subprocess_and_returns_preview(
+    monkeypatch, capsys
+):
+    def must_not_construct_subtensor(*_args, **_kwargs):
+        raise AssertionError("dry-run must not query the chain")
+
+    def must_not_run_subprocess(*_args, **_kwargs):
+        raise AssertionError("dry-run must not create a subnet")
+
+    monkeypatch.setattr(
+        _setup, "bt", SimpleNamespace(Subtensor=must_not_construct_subtensor)
+    )
+    monkeypatch.setattr(_setup.subprocess, "run", must_not_run_subprocess)
+
+    assert _setup.create_subnet_if_needed(41, "owner", dry_run=True) == 41
+    output = capsys.readouterr()
+    assert output.out == ""
+    assert output.err == ""
