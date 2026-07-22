@@ -253,7 +253,9 @@ docker compose up -d --build
 
 The `kubetee-subnet` repo provides the validator container image (`Dockerfile`); the compose file wires it together with Rancher, localnet chain, and Dozzle.
 
-For standalone development without compose, see the [Local Development](#local-development) section below.
+For standalone development without compose, see
+[Running the validator manually (host)](#4-running-the-validator-manually-host)
+below.
 
 Services (all using deterministic pinned dev accounts, see `keys/README.md`):
 
