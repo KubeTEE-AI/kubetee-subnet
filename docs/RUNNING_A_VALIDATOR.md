@@ -66,9 +66,9 @@ validator hotkey, operator-managed Rancher, and explicit production inputs.
 KubeTEE documents no public KubeTEE testnet. Do not carry localnet values,
 wallets, or assumptions into this environment.
 
-Create a private `validator.env` outside the repository. The file contains
-these names only; source each value from the appropriate operator-controlled
-system.
+Create a private environment file at `/secure/path/validator.env` outside the
+repository. The file contains these names only; source each value from the
+appropriate operator-controlled system.
 
 | Variable | Purpose |
 | --- | --- |

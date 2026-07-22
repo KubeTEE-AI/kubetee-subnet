@@ -31,6 +31,10 @@ def test_operations_guide_keeps_external_environment_file_outside_checkout():
     text = GUIDE.read_text(encoding="utf-8")
     external_env_file = "/secure/path/validator.env"
 
+    assert (
+        "Create a private environment file at "
+        f"`{external_env_file}` outside the\nrepository."
+    ) in text
     assert f"chmod 600 {external_env_file}" in text
     assert text.count(f"--env-file {external_env_file}") == 5
     assert "--env-file validator.env" not in text
