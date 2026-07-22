@@ -34,18 +34,22 @@ K3S_KUBECONFIG="${K3S_KUBECONFIG:-/k3s-out/kubeconfig.yaml}"
 log() { echo "[uat-init $(date -u +%H:%M:%SZ)] $*"; }
 cr()  { curl -sk --max-time 25 "$@"; }
 
-wait_for_rancher_auth_endpoint() {
-  # `/ping` turns green before the management API has finished publishing the
-  # local auth provider. Gate the first credential-bearing request on the
-  # endpoint it actually uses, with a bounded condition wait.
+login_to_rancher() {
+  # `/ping` can turn green before the management API can issue a login token.
+  # Gate provisioning on the credential-bearing operation it will use, with a
+  # bounded condition wait; the token is returned only to the caller.
   for _ in $(seq 1 120); do
-    if cr "$RANCHER/v3-public/localProviders/local" 2>/dev/null \
-      | jq -e '.type == "localProvider"' >/dev/null 2>&1; then
+    LOGIN_TOKEN=$(cr -X POST "$RANCHER/v3-public/localProviders/local?action=login" \
+      -H 'Content-Type: application/json' \
+      -d "{\"username\":\"admin\",\"password\":\"$BOOT\"}" \
+      | jq -r .token 2>/dev/null || true)
+    if [ -n "$LOGIN_TOKEN" ] && [ "$LOGIN_TOKEN" != "null" ]; then
+      printf '%s' "$LOGIN_TOKEN"
       return 0
     fi
     sleep 3
   done
-  log "Rancher v3 auth endpoint did not become ready"
+  log "Rancher v3 login did not become ready"
   return 1
 }
 
@@ -65,11 +69,7 @@ rm -f "$SHARED/ready"
 log "waiting for Rancher API at $RANCHER ..."
 until [ "$(cr "$RANCHER/ping" 2>/dev/null)" = "pong" ]; do sleep 3; done
 log "Rancher up; logging in"
-wait_for_rancher_auth_endpoint
-LTOK=$(cr -X POST "$RANCHER/v3-public/localProviders/local?action=login" \
-        -H 'Content-Type: application/json' \
-        -d "{\"username\":\"admin\",\"password\":\"$BOOT\"}" | jq -r .token)
-[ -n "$LTOK" ] && [ "$LTOK" != "null" ] || { log "login failed"; exit 1; }
+LTOK=$(login_to_rancher)
 
 # --- 2. server-url + SCOPED validator identity + token -----------------------
 # The validator must NOT hold admin: its designed authority is read (clusters,
