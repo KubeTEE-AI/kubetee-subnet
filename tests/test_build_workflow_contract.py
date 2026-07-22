@@ -24,6 +24,17 @@ def test_production_publish_has_traceable_tags_and_remote_smoke():
     assert '"visibility":"public"' in text
 
 
+def test_production_publish_normalizes_the_ghcr_repository_name():
+    text = WORKFLOW.read_text(encoding="utf-8")
+
+    normalized_image = (
+        'IMAGE=ghcr.io/$(echo "${{ github.repository }}" | '
+        "tr '[:upper:]' '[:lower:]')"
+    )
+    assert text.count(normalized_image) == 2
+    assert 'IMAGE: ghcr.io/${{ github.repository }}' not in text
+
+
 def test_production_publish_makes_image_public_before_anonymous_smoke():
     text = WORKFLOW.read_text(encoding="utf-8")
     visibility_step = text.index("- name: Make image public")

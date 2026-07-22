@@ -104,9 +104,9 @@ jobs:
       - name: Set tags
         id: tags
         env:
-          IMAGE: ghcr.io/${{ github.repository }}
           VERSION: ${{ steps.version.outputs.version }}
         run: |
+          IMAGE=ghcr.io/$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
           if [ "${{ inputs.release_type }}" = "production" ]; then
             echo "tags=-t ${IMAGE}:latest -t ${IMAGE}:v${VERSION} -t ${IMAGE}:$(date +%Y-%m-%d-%H%M)" >> "$GITHUB_OUTPUT"
           else
@@ -135,9 +135,8 @@ jobs:
 
       - name: Pull and import-smoke the published production image
         if: inputs.release_type == 'production'
-        env:
-          IMAGE: ghcr.io/${{ github.repository }}
         run: |
+          IMAGE=ghcr.io/$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
           docker logout ghcr.io
           docker image rm "${IMAGE}:latest" || true
           docker pull "${IMAGE}:latest"
