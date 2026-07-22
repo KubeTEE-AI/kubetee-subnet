@@ -540,6 +540,9 @@ The validator is the subnet's referee. In Early Access it scores each miner (one
 > Armada, and KeyLease serving gates remain future work (see
 > [SUBNET.md](SUBNET.md)).
 
+For operator-facing localnet and Finney runtime steps, see
+[Running a KubeTEE Validator](docs/RUNNING_A_VALIDATOR.md).
+
 ### Validator Runtime (TEE)
 
 The validator is the subnet's referee — so the referee itself must be trustworthy. The validator process runs **inside a confidential TEE pod** (`kata-qemu-nvidia-gpu-tdx` or `kata-qemu-tdx`) on the subnet-owner control plane, with CoCo remote attestation proving the validator code and configuration are unmodified. Scoring, weight-setting, and credentials (Rancher token, Bittensor wallet) stay confidential and tamper-resistant — the validator cannot be silently altered by the host or hypervisor.
