@@ -191,7 +191,9 @@ def test_query_subnet_ownership_rejects_missing_canonical_owner():
 
 
 def test_query_subnet_ownership_rejects_non_string_canonical_owner():
-    fake = FakeSubtensor(metagraph=_FakeMetagraph(block=41, owner_coldkey=None))
+    fake = FakeSubtensor(
+        metagraph=_FakeMetagraph(block=41, owner_coldkey=None)
+    )
     result = query_subnet_ownership(
         netuid=2,
         our_coldkey_ss58="5OWNER",

@@ -54,12 +54,13 @@ def test_local_provisioner_never_logs_bootstrap_url_or_binding_identity():
 def test_local_provisioner_waits_for_successful_v3_login_before_provisioning():
     text = (ROOT / "scripts" / "rancher_provision.sh").read_text()
 
-    gate = text.index('login_to_rancher()')
+    gate = text.index("login_to_rancher()")
     login = text.index("LTOK=", gate)
     assert gate < login
-    assert '"$RANCHER/v3-public/localProviders/local?action=login"' in text[
-        gate:login
-    ]
+    assert (
+        '"$RANCHER/v3-public/localProviders/local?action=login"'
+        in text[gate:login]
+    )
     assert "for _ in $(seq 1 120)" in text[gate:login]
     assert "Rancher local login did not become ready" in text[gate:login]
 
@@ -71,12 +72,19 @@ def test_local_provisioner_uses_bounded_extension_token_api_only():
     assert 'EXT_TOKEN_LIMIT="100"' in text
     assert 'EXT_TOKEN_USER_LABEL="cattle.io/user-id"' in text
     assert "authn.management.cattle.io/token-userId" not in text
-    list_helper = text[text.index("list_ext_tokens()") : text.index("delete_ext_tokens_except()")]
-    assert '--data-urlencode "labelSelector=$EXT_TOKEN_USER_LABEL=$user_id"' in list_helper
+    list_helper = text[
+        text.index("list_ext_tokens()") : text.index(
+            "delete_ext_tokens_except()"
+        )
+    ]
+    assert (
+        '--data-urlencode "labelSelector=$EXT_TOKEN_USER_LABEL=$user_id"'
+        in list_helper
+    )
     assert '"$RANCHER/v3/token"' not in text
     assert '"$RANCHER/v3/tokens?' not in text
     assert "metadata.continue" in text
-    assert 'length <= ($limit | tonumber)' in text
+    assert "length <= ($limit | tonumber)" in text
 
 
 def test_local_provisioner_creates_owner_bound_one_shot_extension_tokens():
@@ -85,14 +93,18 @@ def test_local_provisioner_creates_owner_bound_one_shot_extension_tokens():
     assert 'apiVersion: "ext.cattle.io/v1"' in text
     assert 'kind: "Token"' in text
     create_helper = text[
-        text.index("mint_ext_token()") : text.index("validate_ext_token_create()")
+        text.index("mint_ext_token()") : text.index(
+            "validate_ext_token_create()"
+        )
     ]
     assert "userID:" not in create_helper
     assert "userPrincipal:" not in create_helper
     assert ".status.bearerToken" in text
     assert '.status.bearerToken == ("ext/" + $name + ":" + $value)' in text
     list_validation = text[
-        text.index("validate_ext_token_list()") : text.index("mint_ext_token()")
+        text.index("validate_ext_token_list()") : text.index(
+            "mint_ext_token()"
+        )
     ]
     assert '((.status.bearerToken // "") == "")' in list_validation
     assert '((.status.value // "") == "")' in list_validation
@@ -104,7 +116,10 @@ def test_local_provisioner_uses_millisecond_ttls_and_distinct_credentials():
     assert 'VALIDATOR_TOKEN_TTL_MS="3600000"' in text
     assert 'PLATFORM_TOKEN_TTL_MS="300000"' in text
     assert 'mint_ext_token "$VLTOK" "$VALIDATOR_TOKEN_DESCRIPTION"' in text
-    assert 'mint_ext_token "$PLATFORM_LOGIN_TOKEN" "$PLATFORM_TOKEN_DESCRIPTION"' in text
+    assert (
+        'mint_ext_token "$PLATFORM_LOGIN_TOKEN" "$PLATFORM_TOKEN_DESCRIPTION"'
+        in text
+    )
     assert '[ "$PLATFORM_BEARER" != "$BEARER" ]' in text
 
 
@@ -147,7 +162,9 @@ def _run_delete_known_login(
 ) -> dict[str, int]:
     text = (ROOT / "scripts" / "rancher_provision.sh").read_text()
     deletion = text[
-        text.index("delete_known_login()") : text.index("wait_for_ext_token_api()")
+        text.index("delete_known_login()") : text.index(
+            "wait_for_ext_token_api()"
+        )
     ]
     delete_status_path = tmp_path / "delete-status"
     revoked_bearer_status_path = tmp_path / "revoked-bearer-status"
@@ -158,8 +175,7 @@ def _run_delete_known_login(
     delete_status_path.write_text(delete_status)
     revoked_bearer_status_path.write_text(revoked_bearer_status)
 
-    harness_path.write_text(
-        f"""#!/usr/bin/env sh
+    harness_path.write_text(f"""#!/usr/bin/env sh
 RANCHER=https://rancher.invalid
 RANCHER_ID_PATTERN='^[A-Za-z0-9][A-Za-z0-9._-]{{0,253}}$'
 LOGIN_TOKEN_API="$RANCHER/k8s/clusters/local/apis/management.cattle.io/v3/tokens"
@@ -241,8 +257,7 @@ printf 'delete_calls=%s\n' "$(count_calls delete)"
 printf 'list_calls=%s\n' "$(count_calls list)"
 printf 'sleeps=%s\n' "$(count_lines "$SLEEPS_PATH")"
 printf 'logs=%s\n' "$(count_lines "$LOGS_PATH")"
-"""
-    )
+""")
     result = subprocess.run(
         ["sh", str(harness_path)],
         check=False,
@@ -324,7 +339,10 @@ def test_local_provisioner_fails_safely_when_deleted_bearer_remains_authorized(
     tmp_path: pathlib.Path,
 ):
     outcome = _run_delete_known_login(
-        tmp_path, "200", "200", expected_log="login token revocation verification failed"
+        tmp_path,
+        "200",
+        "200",
+        expected_log="login token revocation verification failed",
     )
 
     assert outcome == {
@@ -340,7 +358,10 @@ def test_local_provisioner_fails_safely_for_transport_login_delete_failure(
     tmp_path: pathlib.Path,
 ):
     outcome = _run_delete_known_login(
-        tmp_path, "transport", "401", expected_log="login token deletion failed"
+        tmp_path,
+        "transport",
+        "401",
+        expected_log="login token deletion failed",
     )
 
     assert outcome == {
@@ -399,9 +420,9 @@ def test_local_provisioner_reconciles_exact_validator_authority():
 def test_local_provisioner_revokes_persisted_scoped_tokens_before_minting():
     text = (ROOT / "scripts" / "rancher_provision.sh").read_text()
 
-    assert text.index('delete_ext_tokens_except "$LTOK" "$USER_ID"') < text.index(
-        "VALIDATOR_LOGIN_RESPONSE="
-    )
+    assert text.index(
+        'delete_ext_tokens_except "$LTOK" "$USER_ID"'
+    ) < text.index("VALIDATOR_LOGIN_RESPONSE=")
     assert text.index(
         'delete_ext_tokens_except "$LTOK" "$PLATFORM_USER_ID"'
     ) < text.index("PLATFORM_LOGIN_RESPONSE=")

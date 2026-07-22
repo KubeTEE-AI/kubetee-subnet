@@ -16,6 +16,10 @@ Run:
   python -m pytest tests/test_setup_single_node.py -q --tb=line
 """
 
+# These white-box tests intentionally exercise private fail-closed helpers, and
+# their fakes preserve production signatures even when an argument is unused.
+# pylint: disable=protected-access,unused-argument
+
 import importlib.util
 import sys
 from pathlib import Path
@@ -76,7 +80,9 @@ def _install_registration_sdk(monkeypatch, metagraphs, *, head=17):
             return metagraphs.pop(0)
 
     monkeypatch.setattr(
-        _setup, "bt", SimpleNamespace(Wallet=FakeWallet, Subtensor=FakeSubtensor)
+        _setup,
+        "bt",
+        SimpleNamespace(Wallet=FakeWallet, Subtensor=FakeSubtensor),
     )
     return calls
 
@@ -216,6 +222,7 @@ def test_main_dry_run_is_private_fixed_output_and_performs_no_operations(
             "ws://chain.example:9944",
         ],
     )
+
     def forbidden(*_args, **_kwargs):
         raise AssertionError("dry-run must not execute setup work")
 
@@ -232,7 +239,9 @@ def test_main_dry_run_is_private_fixed_output_and_performs_no_operations(
     ):
         monkeypatch.setattr(_setup, name, forbidden)
     monkeypatch.setattr(_setup.time, "sleep", forbidden)
-    monkeypatch.setattr(_setup.chain_state, "query_subnet_ownership", forbidden)
+    monkeypatch.setattr(
+        _setup.chain_state, "query_subnet_ownership", forbidden
+    )
     monkeypatch.setattr(_setup.subprocess, "run", forbidden)
     monkeypatch.setattr(
         _setup,
@@ -257,7 +266,9 @@ def test_registration_state_reads_one_head_pinned_metagraph_for_exact_identity(
         [_registration_metagraph([_RegistrationNeuron(3, "5HOT", "5COLD")])],
     )
 
-    assert _setup._registration_is_present(42, "owner", "default", "ws://chain")
+    assert _setup._registration_is_present(
+        42, "owner", "default", "ws://chain"
+    )
     assert calls == {
         "wallet": [("owner", "default")],
         "subtensor": ["ws://chain"],
@@ -281,7 +292,9 @@ def test_registration_state_reads_one_head_pinned_metagraph_for_exact_identity(
         ),
         _registration_metagraph([SimpleNamespace(uid=3, hotkey="5HOT")]),
         _registration_metagraph("not-neurons"),
-        _registration_metagraph([_RegistrationNeuron(3, "5HOT", "5COLD")], block=18),
+        _registration_metagraph(
+            [_RegistrationNeuron(3, "5HOT", "5COLD")], block=18
+        ),
     ],
 )
 def test_registration_state_fails_closed_for_malformed_or_ambiguous_identity(
@@ -296,7 +309,9 @@ def test_registration_state_fails_closed_for_malformed_or_ambiguous_identity(
 
 
 @pytest.mark.parametrize("head", [True, -1, "17"])
-def test_registration_state_fails_closed_for_invalid_chain_head(monkeypatch, head):
+def test_registration_state_fails_closed_for_invalid_chain_head(
+    monkeypatch, head
+):
     _install_registration_sdk(monkeypatch, [], head=head)
 
     with pytest.raises(RuntimeError) as error:
@@ -342,7 +357,9 @@ def test_registration_state_fails_closed_for_sdk_failure(monkeypatch):
     _assert_fixed_registration_error(error)
 
 
-def test_register_neuron_skips_subprocess_for_exact_preexisting_identity(monkeypatch):
+def test_register_neuron_skips_subprocess_for_exact_preexisting_identity(
+    monkeypatch,
+):
     calls = _install_registration_sdk(
         monkeypatch,
         [_registration_metagraph([_RegistrationNeuron(3, "5HOT", "5COLD")])],
@@ -373,7 +390,9 @@ def test_register_neuron_uses_exact_checked_btcli_v11_command_then_live_postcond
 
     def capture_run(args, **kwargs):
         calls.append((args, kwargs))
-        return _setup.subprocess.CompletedProcess(args, 0, stdout="ignored", stderr="ignored")
+        return _setup.subprocess.CompletedProcess(
+            args, 0, stdout="ignored", stderr="ignored"
+        )
 
     monkeypatch.setattr(_setup.subprocess, "run", capture_run)
 
@@ -401,7 +420,12 @@ def test_register_neuron_uses_exact_checked_btcli_v11_command_then_live_postcond
                 "ws://chain.example:9944",
                 "--yes",
             ],
-            {"check": True, "capture_output": True, "text": True, "shell": False},
+            {
+                "check": True,
+                "capture_output": True,
+                "text": True,
+                "shell": False,
+            },
         )
     ]
 
@@ -409,7 +433,9 @@ def test_register_neuron_uses_exact_checked_btcli_v11_command_then_live_postcond
 @pytest.mark.parametrize(
     "failure",
     [
-        _setup.subprocess.CalledProcessError(1, ["btcli"], output="hostile", stderr="detail"),
+        _setup.subprocess.CalledProcessError(
+            1, ["btcli"], output="hostile", stderr="detail"
+        ),
         RuntimeError("hostile command detail"),
     ],
 )
@@ -423,7 +449,9 @@ def test_register_neuron_normalizes_command_failure_without_output_or_chain(
 
     monkeypatch.setattr(_setup.subprocess, "run", failing_subprocess_run)
 
-    with pytest.raises(RuntimeError, match=r"^neuron registration failed$") as error:
+    with pytest.raises(
+        RuntimeError, match=r"^neuron registration failed$"
+    ) as error:
         _setup.register_neuron(42, "owner", chain_endpoint="ws://chain")
 
     assert error.value.__cause__ is None
@@ -460,8 +488,12 @@ def test_register_neuron_dry_run_avoids_sdk_and_subprocess_and_identity_output(
         _setup,
         "bt",
         SimpleNamespace(
-            Wallet=lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError()),
-            Subtensor=lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError()),
+            Wallet=lambda *_args, **_kwargs: (_ for _ in ()).throw(
+                AssertionError()
+            ),
+            Subtensor=lambda *_args, **_kwargs: (_ for _ in ()).throw(
+                AssertionError()
+            ),
         ),
     )
     monkeypatch.setattr(
@@ -474,7 +506,10 @@ def test_register_neuron_dry_run_avoids_sdk_and_subprocess_and_identity_output(
         42, "identity-must-not-appear", "secret-hotkey", dry_run=True
     )
 
-    assert capsys.readouterr().out == "[DRY-RUN] registration command would be executed\n"
+    assert (
+        capsys.readouterr().out
+        == "[DRY-RUN] registration command would be executed\n"
+    )
 
 
 @pytest.mark.parametrize(
@@ -519,7 +554,12 @@ def test_regenerate_wallet_key_uses_direct_v11_arguments_and_redacts_output(
                 "--overwrite",
                 "--quiet",
             ],
-            {"capture_output": True, "text": True, "shell": False},
+            {
+                "check": False,
+                "capture_output": True,
+                "text": True,
+                "shell": False,
+            },
         )
     ]
     captured = capsys.readouterr()
@@ -527,7 +567,9 @@ def test_regenerate_wallet_key_uses_direct_v11_arguments_and_redacts_output(
     assert seed not in captured.err
 
 
-def test_regenerate_wallet_key_dry_run_never_executes_or_prints_seed(monkeypatch, capsys):
+def test_regenerate_wallet_key_dry_run_never_executes_or_prints_seed(
+    monkeypatch, capsys
+):
     seed = "seed-must-not-be-logged"
 
     def subprocess_must_not_run(*_args, **_kwargs):
@@ -542,7 +584,9 @@ def test_regenerate_wallet_key_dry_run_never_executes_or_prints_seed(monkeypatch
     assert seed not in output
 
 
-def test_regenerate_wallet_key_fails_closed_without_leaking_captured_seed(monkeypatch, capsys):
+def test_regenerate_wallet_key_fails_closed_without_leaking_captured_seed(
+    monkeypatch, capsys
+):
     seed = "seed-must-not-be-logged"
 
     def failing_subprocess_run(args, **_kwargs):
@@ -552,7 +596,9 @@ def test_regenerate_wallet_key_fails_closed_without_leaking_captured_seed(monkey
 
     monkeypatch.setattr(_setup.subprocess, "run", failing_subprocess_run)
 
-    with pytest.raises(RuntimeError, match=r"^coldkey regeneration failed$") as error:
+    with pytest.raises(
+        RuntimeError, match=r"^coldkey regeneration failed$"
+    ) as error:
         _setup._regenerate_wallet_key("coldkey", "owner", seed)
 
     assert error.value.__cause__ is None
@@ -573,7 +619,9 @@ def test_regenerate_wallet_key_normalizes_subprocess_errors_without_leaking_seed
 
     monkeypatch.setattr(_setup.subprocess, "run", exploding_subprocess_run)
 
-    with pytest.raises(RuntimeError, match=r"^hotkey regeneration failed$") as error:
+    with pytest.raises(
+        RuntimeError, match=r"^hotkey regeneration failed$"
+    ) as error:
         _setup._regenerate_wallet_key("hotkey", "owner", seed)
 
     assert error.value.__cause__ is None
@@ -594,7 +642,9 @@ def test_regenerate_wallet_key_normalizes_ordinary_errors_without_leaking_seed(
 
     monkeypatch.setattr(_setup.subprocess, "run", exploding_subprocess_run)
 
-    with pytest.raises(RuntimeError, match=r"^hotkey regeneration failed$") as error:
+    with pytest.raises(
+        RuntimeError, match=r"^hotkey regeneration failed$"
+    ) as error:
         _setup._regenerate_wallet_key("hotkey", "owner", seed)
 
     assert error.value.__cause__ is None
@@ -639,7 +689,9 @@ def test_fund_from_alice_reuses_fail_closed_coldkey_regeneration(monkeypatch):
         commands.append((args, kwargs))
 
     monkeypatch.setattr(_setup, "_regenerate_wallet_key", fake_regenerate)
-    monkeypatch.setattr(_setup, "get_wallet_coldkey_ss58", fake_get_wallet_coldkey_ss58)
+    monkeypatch.setattr(
+        _setup, "get_wallet_coldkey_ss58", fake_get_wallet_coldkey_ss58
+    )
     monkeypatch.setattr(_setup, "run", fake_run)
 
     _setup.fund_from_alice(
@@ -651,7 +703,9 @@ def test_fund_from_alice_reuses_fail_closed_coldkey_regeneration(monkeypatch):
         ("resolve-destination", True),
         ("transfer", True),
     ]
-    assert regenerated == [("coldkey", "alice", _setup.DEV_ALICE_SEED, "default", True)]
+    assert regenerated == [
+        ("coldkey", "alice", _setup.DEV_ALICE_SEED, "default", True)
+    ]
     assert commands == [
         (
             [
@@ -724,9 +778,10 @@ def test_create_subnet_resolves_exact_new_live_netuid_not_cli_text(
 
     monkeypatch.setattr(_setup.subprocess, "run", fake_subprocess_run)
 
-    assert _setup.create_subnet_if_needed(
-        1, "owner", "ws://chain.example:9944"
-    ) == 2
+    assert (
+        _setup.create_subnet_if_needed(1, "owner", "ws://chain.example:9944")
+        == 2
+    )
     assert sdk_calls == ["ws://chain.example:9944", "ws://chain.example:9944"]
     assert calls == [
         (
@@ -768,14 +823,18 @@ def test_create_subnet_resolves_exact_new_live_netuid_not_cli_text(
 def test_create_subnet_normalizes_cli_failure_without_output_or_chain(
     monkeypatch, capsys, failure
 ):
-    _install_snapshot_subtensor(monkeypatch, [[_SnapshotSubnet(0), _SnapshotSubnet(1)]])
+    _install_snapshot_subtensor(
+        monkeypatch, [[_SnapshotSubnet(0), _SnapshotSubnet(1)]]
+    )
 
     def failing_subprocess_run(*_args, **_kwargs):
         raise failure
 
     monkeypatch.setattr(_setup.subprocess, "run", failing_subprocess_run)
 
-    with pytest.raises(RuntimeError, match=r"^subnet creation failed$") as error:
+    with pytest.raises(
+        RuntimeError, match=r"^subnet creation failed$"
+    ) as error:
         _setup.create_subnet_if_needed(1, "owner")
 
     assert error.value.__cause__ is None
@@ -799,14 +858,31 @@ def test_create_subnet_normalizes_cli_failure_without_output_or_chain(
         (
             [
                 [_SnapshotSubnet(0), _SnapshotSubnet(1)],
-                [_SnapshotSubnet(0), _SnapshotSubnet(1), _SnapshotSubnet(2), _SnapshotSubnet(3)],
+                [
+                    _SnapshotSubnet(0),
+                    _SnapshotSubnet(1),
+                    _SnapshotSubnet(2),
+                    _SnapshotSubnet(3),
+                ],
             ],
             "subnet creation did not yield exactly one new netuid",
         ),
-        ([[_SnapshotSubnet(0), _SnapshotSubnet(True)]], "invalid subnet netuid snapshot"),
-        ([[_SnapshotSubnet(0), _SnapshotSubnet(-1)]], "invalid subnet netuid snapshot"),
-        ([[_SnapshotSubnet(0), _SnapshotSubnet("2")]], "invalid subnet netuid snapshot"),
-        ([[_SnapshotSubnet(0), _SnapshotSubnet(0)]], "invalid subnet netuid snapshot"),
+        (
+            [[_SnapshotSubnet(0), _SnapshotSubnet(True)]],
+            "invalid subnet netuid snapshot",
+        ),
+        (
+            [[_SnapshotSubnet(0), _SnapshotSubnet(-1)]],
+            "invalid subnet netuid snapshot",
+        ),
+        (
+            [[_SnapshotSubnet(0), _SnapshotSubnet("2")]],
+            "invalid subnet netuid snapshot",
+        ),
+        (
+            [[_SnapshotSubnet(0), _SnapshotSubnet(0)]],
+            "invalid subnet netuid snapshot",
+        ),
     ],
 )
 def test_create_subnet_fails_closed_for_invalid_or_ambiguous_live_postconditions(
@@ -826,16 +902,22 @@ def test_create_subnet_fails_closed_for_invalid_or_ambiguous_live_postconditions
     assert error.value.__context__ is None
 
 
-def test_snapshot_subnet_netuids_normalizes_sdk_failure_without_chain(monkeypatch):
+def test_snapshot_subnet_netuids_normalizes_sdk_failure_without_chain(
+    monkeypatch,
+):
     class FakeSubtensor:
         def __init__(self, network):
             self.subnets = SimpleNamespace(
-                subnets=lambda: (_ for _ in ()).throw(RuntimeError("hostile sdk error"))
+                subnets=lambda: (_ for _ in ()).throw(
+                    RuntimeError("hostile sdk error")
+                )
             )
 
     monkeypatch.setattr(_setup, "bt", SimpleNamespace(Subtensor=FakeSubtensor))
 
-    with pytest.raises(RuntimeError, match=r"^unable to snapshot subnet netuids$") as error:
+    with pytest.raises(
+        RuntimeError, match=r"^unable to snapshot subnet netuids$"
+    ) as error:
         _setup._snapshot_subnet_netuids("ws://chain.example:9944")
 
     assert error.value.__cause__ is None
@@ -895,7 +977,12 @@ def test_start_emissions_uses_checked_direct_v11_activation_command(
                 "--yes",
                 "--no-mev-shield",
             ],
-            {"check": True, "capture_output": True, "text": True, "shell": False},
+            {
+                "check": True,
+                "capture_output": True,
+                "text": True,
+                "shell": False,
+            },
         )
     ]
     captured = capsys.readouterr()
@@ -903,7 +990,9 @@ def test_start_emissions_uses_checked_direct_v11_activation_command(
     assert "discarded stderr" not in captured.out
 
 
-def test_add_stake_uses_checked_direct_alice_validator_command(monkeypatch, capsys):
+def test_add_stake_uses_checked_direct_alice_validator_command(
+    monkeypatch, capsys
+):
     calls = []
 
     def capture_run(args, **kwargs):
@@ -935,7 +1024,12 @@ def test_add_stake_uses_checked_direct_alice_validator_command(monkeypatch, caps
                 "--yes",
                 "--no-mev-shield",
             ],
-            {"check": True, "capture_output": True, "text": True, "shell": False},
+            {
+                "check": True,
+                "capture_output": True,
+                "text": True,
+                "shell": False,
+            },
         )
     ]
     captured = capsys.readouterr()
@@ -1031,11 +1125,15 @@ class _StatusFile:
 
 def _stub_setup_main(monkeypatch, ownership, events):
     monkeypatch.setattr(sys, "argv", ["setup_single_node.py"])
-    monkeypatch.setattr(_setup, "wait_for_chain", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        _setup, "wait_for_chain", lambda *_args, **_kwargs: None
+    )
     monkeypatch.setattr(
         _setup, "ensure_dev_wallet", lambda *_args, **_kwargs: None
     )
-    monkeypatch.setattr(_setup, "fund_from_alice", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        _setup, "fund_from_alice", lambda *_args, **_kwargs: None
+    )
     monkeypatch.setattr(_setup.time, "sleep", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(
         _setup, "create_subnet_if_needed", lambda *_args, **_kwargs: 42
@@ -1076,16 +1174,23 @@ def _stub_setup_main(monkeypatch, ownership, events):
         "set_conviction_and_recycle",
         lambda *_args, **_kwargs: events.append(("hyperparameters",)),
     )
-    monkeypatch.setattr(_setup, "open", lambda *_args, **_kwargs: _StatusFile(), raising=False)
+    monkeypatch.setattr(
+        _setup, "open", lambda *_args, **_kwargs: _StatusFile(), raising=False
+    )
 
 
 def test_main_activates_then_stakes_only_alice_after_exact_triad_registration(
-    monkeypatch
+    monkeypatch,
 ):
     events = []
     _stub_setup_main(
         monkeypatch,
-        {"exists": True, "owner_ss58": "5OWNER", "owned_by_us": True, "error": None},
+        {
+            "exists": True,
+            "owner_ss58": "5OWNER",
+            "owned_by_us": True,
+            "error": None,
+        },
         events,
     )
 
@@ -1108,9 +1213,24 @@ def test_main_activates_then_stakes_only_alice_after_exact_triad_registration(
 @pytest.mark.parametrize(
     "ownership",
     [
-        {"exists": None, "owner_ss58": None, "owned_by_us": False, "error": "rpc"},
-        {"exists": False, "owner_ss58": None, "owned_by_us": False, "error": None},
-        {"exists": True, "owner_ss58": "5OTHER", "owned_by_us": False, "error": None},
+        {
+            "exists": None,
+            "owner_ss58": None,
+            "owned_by_us": False,
+            "error": "rpc",
+        },
+        {
+            "exists": False,
+            "owner_ss58": None,
+            "owned_by_us": False,
+            "error": None,
+        },
+        {
+            "exists": True,
+            "owner_ss58": "5OTHER",
+            "owned_by_us": False,
+            "error": None,
+        },
     ],
 )
 def test_main_fails_closed_for_every_negative_ownership_decision(
@@ -1126,4 +1246,6 @@ def test_main_fails_closed_for_every_negative_ownership_decision(
 
     assert error.value.__cause__ is None
     assert error.value.__context__ is None
-    assert [event for event in events if event[0] in {"activation", "stake"}] == []
+    assert [
+        event for event in events if event[0] in {"activation", "stake"}
+    ] == []

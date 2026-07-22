@@ -185,9 +185,14 @@ def _regenerate_wallet_key(
     execution_failed = False
     try:
         result = subprocess.run(
-            command, capture_output=True, text=True, shell=False
+            command,
+            check=False,
+            capture_output=True,
+            text=True,
+            shell=False,
         )
-    except Exception:
+    # Normalize every launch-layer failure without exposing seed-bearing data.
+    except Exception:  # pylint: disable=broad-exception-caught
         execution_failed = True
     if execution_failed or result.returncode != 0:
         raise RuntimeError(f"{key_kind} regeneration failed")
@@ -308,17 +313,17 @@ def _snapshot_subnet_netuids(chain_endpoint: str) -> set[int]:
     try:
         subnet_infos = bt.Subtensor(network=chain_endpoint).subnets.subnets()
         netuids = [subnet.netuid for subnet in subnet_infos]
-    except Exception:
+    # SDK failures share the same fixed fail-closed public error.
+    except Exception:  # pylint: disable=broad-exception-caught
         snapshot_failed = True
     else:
         snapshot_failed = False
     if snapshot_failed:
         raise RuntimeError("unable to snapshot subnet netuids")
 
-    if (
-        any(type(netuid) is not int or netuid < 0 for netuid in netuids)
-        or len(netuids) != len(set(netuids))
-    ):
+    if any(type(netuid) is not int or netuid < 0 for netuid in netuids) or len(
+        netuids
+    ) != len(set(netuids)):
         raise RuntimeError("invalid subnet netuid snapshot")
     return set(netuids)
 
@@ -358,7 +363,8 @@ def create_subnet_if_needed(
             text=True,
             shell=False,
         )
-    except Exception:
+    # Launch and command-status failures share one fixed public error.
+    except Exception:  # pylint: disable=broad-exception-caught
         creation_failed = True
     else:
         creation_failed = False
@@ -579,7 +585,9 @@ def register_neuron(
         registration_failed = True
     if registration_failed:
         raise RuntimeError("neuron registration failed")
-    if not _registration_is_present(netuid, wallet_name, hotkey, chain_endpoint):
+    if not _registration_is_present(
+        netuid, wallet_name, hotkey, chain_endpoint
+    ):
         raise RuntimeError("neuron registration postcondition failed")
 
 
