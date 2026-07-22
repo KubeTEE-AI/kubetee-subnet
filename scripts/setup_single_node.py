@@ -145,6 +145,53 @@ def wait_for_chain(
     )
 
 
+def _regenerate_wallet_key(
+    key_kind: str,
+    name: str,
+    seed: str,
+    hotkey: str = "default",
+    dry_run: bool = False,
+):
+    """Regenerate one pinned local wallet key without exposing its seed."""
+    if key_kind not in {"coldkey", "hotkey"}:
+        raise ValueError("key_kind must be coldkey or hotkey")
+
+    base_wallet_path = str(Path.home() / ".bittensor" / "wallets")
+    command = [
+        "btcli",
+        "wallet",
+        f"regen-{key_kind}",
+        "--wallet",
+        name,
+        "--wallet-hotkey",
+        hotkey,
+        "--wallet-path",
+        base_wallet_path,
+        "--seed",
+        seed,
+        "--no-password",
+        "--overwrite",
+        "--quiet",
+    ]
+    redacted_command = [
+        "<redacted-seed>" if argument == seed else argument
+        for argument in command
+    ]
+    print(f"$ {' '.join(redacted_command)}")
+    if dry_run:
+        return
+
+    execution_failed = False
+    try:
+        result = subprocess.run(
+            command, capture_output=True, text=True, shell=False
+        )
+    except Exception:
+        execution_failed = True
+    if execution_failed or result.returncode != 0:
+        raise RuntimeError(f"{key_kind} regeneration failed")
+
+
 def ensure_dev_wallet(
     name: str, seed: str, hotkey: str = "default", dry_run=False
 ):
@@ -154,39 +201,11 @@ def ensure_dev_wallet(
     so that owner addresses / UIDs are stable for the single-node pyramid.
     We regen BOTH coldkey (for sudo/ownership) and hotkey (for registration + signing weights).
     """
-    base_wallet_path = str(Path.home() / ".bittensor" / "wallets")
     print(
         f"Ensuring dev wallet {name} (pinned seed for cold+hot, hotkey={hotkey}) ..."
     )
-    # Coldkey (owner/sudo privileges, funding)
-    # Pipe 'y' to handle any "overwrite?" prompts that --quiet/--overwrite
-    # do not fully suppress in all btcli versions.
-    run(
-        [
-            "sh",
-            "-c",
-            "yes y | btcli wallet regen-coldkey "
-            f"--wallet {name} --wallet-hotkey {hotkey} "
-            f"--wallet-path {base_wallet_path} --seed {seed} "
-            "--no-use-password --overwrite --quiet",
-        ],
-        check=False,
-        dry_run=dry_run,
-    )
-
-    # Hotkey
-    run(
-        [
-            "sh",
-            "-c",
-            "yes y | btcli wallet regen-hotkey "
-            f"--wallet {name} --wallet-hotkey {hotkey} "
-            f"--wallet-path {base_wallet_path} --seed {seed} "
-            "--no-use-password --overwrite --quiet",
-        ],
-        check=False,
-        dry_run=dry_run,
-    )
+    _regenerate_wallet_key("coldkey", name, seed, hotkey, dry_run=dry_run)
+    _regenerate_wallet_key("hotkey", name, seed, hotkey, dry_run=dry_run)
 
     print(f"  dev wallet {name} ready (cold+hot seed-pinned).")
 
@@ -253,18 +272,7 @@ def fund_from_alice(
     print(
         f"Funding {dest_name} from Alice dev account (endpoint={chain_endpoint})..."
     )
-    base_wallet_path = str(Path.home() / ".bittensor" / "wallets")
-    run(
-        [
-            "sh",
-            "-c",
-            "yes y | btcli wallet regen-coldkey --wallet alice "
-            f"--wallet-path {base_wallet_path} --seed {DEV_ALICE_SEED} "
-            "--no-use-password --quiet",
-        ],
-        check=False,
-        dry_run=dry_run,
-    )
+    _regenerate_wallet_key("coldkey", "alice", DEV_ALICE_SEED, dry_run=dry_run)
 
     # Resolve the *actual* address for dest_name so we fund the wallet later
     # used for create/sudo.

@@ -45,4 +45,4 @@ CMD ["python", "scripts/validator_entrypoint.py"]
 
 # Health for compose
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-  CMD python -c "import bittensor as bt; print('ok')" || exit 1
+  CMD curl --fail --silent --show-error --max-time 5 http://127.0.0.1:9100/metrics || exit 1

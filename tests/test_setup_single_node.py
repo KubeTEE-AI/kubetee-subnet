@@ -20,6 +20,8 @@ import importlib.util
 import sys
 from pathlib import Path
 
+import pytest
+
 _this_dir = Path(__file__).parent
 _root = _this_dir.parent
 _scripts_dir = _root / "scripts"
@@ -143,3 +145,196 @@ def test_command_helpers_propagate_dry_run(monkeypatch):
 
     assert len(calls) == 5
     assert all(kwargs["dry_run"] is True for _, kwargs in calls)
+
+
+@pytest.mark.parametrize(
+    ("key_kind", "subcommand"),
+    [("coldkey", "regen-coldkey"), ("hotkey", "regen-hotkey")],
+)
+def test_regenerate_wallet_key_uses_direct_v11_arguments_and_redacts_output(
+    monkeypatch, capsys, key_kind, subcommand
+):
+    """Wallet regeneration must be a direct btcli v11 invocation, never a shell."""
+    seed = "seed-must-not-be-logged"
+    calls = []
+
+    def fake_subprocess_run(args, **kwargs):
+        calls.append((args, kwargs))
+        return _setup.subprocess.CompletedProcess(
+            args, 0, stdout=f"stdout: {seed}", stderr=f"stderr: {seed}"
+        )
+
+    monkeypatch.setattr(_setup.subprocess, "run", fake_subprocess_run)
+
+    _setup._regenerate_wallet_key(key_kind, "owner", seed)
+
+    assert calls == [
+        (
+            [
+                "btcli",
+                "wallet",
+                subcommand,
+                "--wallet",
+                "owner",
+                "--wallet-hotkey",
+                "default",
+                "--wallet-path",
+                str(Path.home() / ".bittensor" / "wallets"),
+                "--seed",
+                seed,
+                "--no-password",
+                "--overwrite",
+                "--quiet",
+            ],
+            {"capture_output": True, "text": True, "shell": False},
+        )
+    ]
+    captured = capsys.readouterr()
+    assert seed not in captured.out
+    assert seed not in captured.err
+
+
+def test_regenerate_wallet_key_dry_run_never_executes_or_prints_seed(monkeypatch, capsys):
+    seed = "seed-must-not-be-logged"
+
+    def subprocess_must_not_run(*_args, **_kwargs):
+        raise AssertionError("dry-run must not invoke subprocess.run")
+
+    monkeypatch.setattr(_setup.subprocess, "run", subprocess_must_not_run)
+
+    _setup._regenerate_wallet_key("coldkey", "owner", seed, dry_run=True)
+
+    output = capsys.readouterr().out
+    assert "<redacted-seed>" in output
+    assert seed not in output
+
+
+def test_regenerate_wallet_key_fails_closed_without_leaking_captured_seed(monkeypatch, capsys):
+    seed = "seed-must-not-be-logged"
+
+    def failing_subprocess_run(args, **_kwargs):
+        return _setup.subprocess.CompletedProcess(
+            args, 1, stdout=f"stdout: {seed}", stderr=f"stderr: {seed}"
+        )
+
+    monkeypatch.setattr(_setup.subprocess, "run", failing_subprocess_run)
+
+    with pytest.raises(RuntimeError, match=r"^coldkey regeneration failed$") as error:
+        _setup._regenerate_wallet_key("coldkey", "owner", seed)
+
+    assert error.value.__cause__ is None
+    assert error.value.__context__ is None
+    captured = capsys.readouterr()
+    assert seed not in captured.out
+    assert seed not in captured.err
+    assert seed not in str(error.value)
+
+
+def test_regenerate_wallet_key_normalizes_subprocess_errors_without_leaking_seed(
+    monkeypatch, capsys
+):
+    seed = "seed-must-not-be-logged"
+
+    def exploding_subprocess_run(*_args, **_kwargs):
+        raise _setup.subprocess.SubprocessError(f"subprocess detail: {seed}")
+
+    monkeypatch.setattr(_setup.subprocess, "run", exploding_subprocess_run)
+
+    with pytest.raises(RuntimeError, match=r"^hotkey regeneration failed$") as error:
+        _setup._regenerate_wallet_key("hotkey", "owner", seed)
+
+    assert error.value.__cause__ is None
+    assert error.value.__context__ is None
+    captured = capsys.readouterr()
+    assert seed not in captured.out
+    assert seed not in captured.err
+    assert seed not in str(error.value)
+
+
+def test_regenerate_wallet_key_normalizes_ordinary_errors_without_leaking_seed(
+    monkeypatch, capsys
+):
+    seed = "seed-must-not-be-logged"
+
+    def exploding_subprocess_run(*_args, **_kwargs):
+        raise RuntimeError(f"hostile upstream marker: {seed}")
+
+    monkeypatch.setattr(_setup.subprocess, "run", exploding_subprocess_run)
+
+    with pytest.raises(RuntimeError, match=r"^hotkey regeneration failed$") as error:
+        _setup._regenerate_wallet_key("hotkey", "owner", seed)
+
+    assert error.value.__cause__ is None
+    assert error.value.__context__ is None
+    captured = capsys.readouterr()
+    assert seed not in captured.out
+    assert seed not in captured.err
+    assert seed not in str(error.value)
+
+
+def test_ensure_dev_wallet_regenerates_coldkey_then_hotkey(monkeypatch):
+    regenerated = []
+
+    def fake_regenerate(key_kind, name, seed, hotkey="default", dry_run=False):
+        regenerated.append((key_kind, name, seed, hotkey, dry_run))
+
+    monkeypatch.setattr(_setup, "_regenerate_wallet_key", fake_regenerate)
+
+    _setup.ensure_dev_wallet("owner", _setup.DEV_OWNER_SEED, dry_run=True)
+
+    assert regenerated == [
+        ("coldkey", "owner", _setup.DEV_OWNER_SEED, "default", True),
+        ("hotkey", "owner", _setup.DEV_OWNER_SEED, "default", True),
+    ]
+
+
+def test_fund_from_alice_reuses_fail_closed_coldkey_regeneration(monkeypatch):
+    regenerated = []
+    commands = []
+
+    def fake_regenerate(key_kind, name, seed, hotkey="default", dry_run=False):
+        regenerated.append((key_kind, name, seed, hotkey, dry_run))
+
+    monkeypatch.setattr(_setup, "_regenerate_wallet_key", fake_regenerate)
+    monkeypatch.setattr(_setup, "get_wallet_coldkey_ss58", lambda *_args, **_kwargs: "5DEST")
+    monkeypatch.setattr(_setup, "run", lambda args, **kwargs: commands.append((args, kwargs)))
+
+    _setup.fund_from_alice("owner", amount=5000, chain_endpoint="ws://chain:9944")
+
+    assert regenerated == [("coldkey", "alice", _setup.DEV_ALICE_SEED, "default", False)]
+    assert commands == [
+        (
+            [
+                "btcli",
+                "wallet",
+                "transfer",
+                "--dest",
+                "5DEST",
+                "--amount",
+                "5000",
+                "--wallet",
+                "alice",
+                "--wallet-hotkey",
+                "default",
+                "--network",
+                "ws://chain:9944",
+                "--yes",
+                "--allow-death",
+            ],
+            {"check": False, "dry_run": False},
+        )
+    ]
+
+
+def test_wallet_regeneration_source_has_no_obsolete_flag_or_shell_pipeline():
+    source = _script_path.read_text(encoding="utf-8")
+    assert "--no-use-password" not in source
+    assert "yes y | btcli wallet regen" not in source
+    assert '"sh", "-c"' not in source
+
+
+def test_dockerfile_healthcheck_curls_metrics_with_a_timeout():
+    dockerfile = (_root / "Dockerfile").read_text(encoding="utf-8")
+    assert "curl --fail --silent --show-error --max-time" in dockerfile
+    assert "http://127.0.0.1:9100/metrics" in dockerfile
+    assert 'python -c "import bittensor' not in dockerfile
