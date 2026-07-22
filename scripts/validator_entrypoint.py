@@ -22,6 +22,7 @@ signing* wallet; the subnet-owner wallet used for setup/sudo stays owner
 (KUBETEE_OWNER_WALLET). The basic validator fails fast at startup on any
 missing/invalid static configuration, including RANCHER_* (D14).
 """
+
 from __future__ import annotations
 
 import os
@@ -49,21 +50,32 @@ def main() -> None:
     print(f"  netuid={netuid}")
     print(f"  owner_wallet={owner_wallet} (setup/sudo + recycle target)")
     print(f"  validator_wallet={validator_wallet} (signs set_weights)")
-    print("  Phase 1: (deterministic accounts) register subnet if not exists + owner/alice/bob triad + stake + start emissions + set conviction/recycle hypers (btcli)")
-    print("  Phase 2: basic validator (Rancher-scored miner share + owner recycle split)")
+    print(
+        "  Phase 1: (deterministic accounts) register subnet if not exists "
+        "+ owner/alice/bob triad + stake + start emissions + set "
+        "conviction/recycle hypers (btcli)"
+    )
+    print(
+        "  Phase 2: basic validator (Rancher-scored miner share + owner recycle split)"
+    )
 
     # Run the setup script (it is idempotent-ish and uses check=False on most steps)
     setup_cmd = [
-        sys.executable, "-u",
+        sys.executable,
+        "-u",
         "scripts/setup_single_node.py",
-        "--netuid", str(netuid),
-        "--owner-wallet", owner_wallet,
-        "--chain-endpoint", chain_endpoint,
+        "--netuid",
+        str(netuid),
+        "--owner-wallet",
+        owner_wallet,
+        "--chain-endpoint",
+        chain_endpoint,
     ]
 
     print(f"\n$ {' '.join(setup_cmd)}")
     setup_proc = subprocess.run(
         setup_cmd,
+        check=False,
         env=os.environ.copy(),
         capture_output=True,
         text=True,
@@ -72,7 +84,9 @@ def main() -> None:
     if setup_proc.returncode == 0:
         print("\n=== Setup script exited successfully ===\n")
     else:
-        print(f"\n=== Setup script exited with code {setup_proc.returncode} ===\n")
+        print(
+            f"\n=== Setup script exited with code {setup_proc.returncode} ===\n"
+        )
         if setup_proc.stderr:
             stderr_lines = setup_proc.stderr.strip().split("\n")
             tail = stderr_lines[-30:]
@@ -85,7 +99,10 @@ def main() -> None:
             print("Setup stdout (last 20 lines):")
             for line in tail:
                 print(f"  | {line}")
-        print("Continuing to validator anyway (setup steps are best-effort with --yes; inspect dozzle logs).")
+        print(
+            "Continuing to validator anyway (setup steps are best-effort "
+            "with --yes; inspect dozzle logs)."
+        )
 
     # The basic validator reads /app/.kubetee_netuid itself (load_config), so
     # no env override is needed here.

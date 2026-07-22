@@ -40,6 +40,7 @@ UID = 42
         ("-1", None),
         ("nan", None),
         ("8x", None),
+        ("9" * 64, None),
         ("9" * 5000, None),
         (True, None),
     ],
@@ -60,6 +61,7 @@ def test_parse_cpu_cores(raw, expected):
         ("-1Gi", None),
         ("NaN", None),
         ("16watts", None),
+        ("9" * 62 + "Gi", None),
         ("9" * 5000 + "Gi", None),
         (False, None),
     ],
@@ -224,6 +226,8 @@ def _apply_mutation(
         nodes[0]["clusterId"] = "c-other"
     elif mutation == "duplicate_node_id":
         nodes.append(copy.deepcopy(nodes[0]))
+    elif mutation == "malformed_node_id":
+        nodes[0]["id"] = "c-miner:../node"
     elif mutation == "node_pressure":
         nodes[0]["conditions"][1]["status"] = "True"
     elif mutation == "two_etcd_nodes":
@@ -274,6 +278,7 @@ def _apply_mutation(
         ("node_inactive", ValidationReason.NODE_NOT_READY),
         ("node_wrong_cluster", ValidationReason.NODE_NOT_READY),
         ("duplicate_node_id", ValidationReason.NODE_NOT_READY),
+        ("malformed_node_id", ValidationReason.NODE_NOT_READY),
         ("node_pressure", ValidationReason.NODE_NOT_READY),
         ("two_etcd_nodes", ValidationReason.TOPOLOGY_INSUFFICIENT),
         ("all_workers_cordoned", ValidationReason.TOPOLOGY_INSUFFICIENT),

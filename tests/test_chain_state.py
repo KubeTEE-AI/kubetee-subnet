@@ -11,6 +11,10 @@ Run:
   python -m pytest tests/test_chain_state.py -q --tb=line
 """
 
+# Protocol fakes retain SDK call signatures even when a case ignores an
+# argument.
+# pylint: disable=unused-argument
+
 import importlib.util
 import sys
 from pathlib import Path
@@ -19,7 +23,9 @@ _this_dir = Path(__file__).parent
 _root = _this_dir.parent
 _script_path = _root / "scripts" / "chain_state.py"
 
-_spec = importlib.util.spec_from_file_location("chain_state_under_test", _script_path)
+_spec = importlib.util.spec_from_file_location(
+    "chain_state_under_test", _script_path
+)
 _chain_state = importlib.util.module_from_spec(_spec)
 sys.modules[_spec.name] = _chain_state
 _spec.loader.exec_module(_chain_state)
@@ -83,8 +89,14 @@ class FakeStakingNamespace:
 
 
 class FakeSubtensor:
-    def __init__(self, exists=True, owner_ss58=None, stake_tao=0.0,
-                 raise_on_stake=None, raise_on_info=None):
+    def __init__(
+        self,
+        exists=True,
+        owner_ss58=None,
+        stake_tao=0.0,
+        raise_on_stake=None,
+        raise_on_info=None,
+    ):
         self.subnets = FakeSubnetsNamespace(
             exists=exists, owner_ss58=owner_ss58, raise_on_info=raise_on_info
         )
@@ -99,15 +111,26 @@ class FakeSubtensor:
 def test_query_subnet_ownership_owned():
     fake = FakeSubtensor(exists=True, owner_ss58="5OWNER")
     result = query_subnet_ownership(
-        netuid=1, our_coldkey_ss58="5OWNER", chain_endpoint="ws://ignored", subtensor=fake
+        netuid=1,
+        our_coldkey_ss58="5OWNER",
+        chain_endpoint="ws://ignored",
+        subtensor=fake,
     )
-    assert result == {"exists": True, "owner_ss58": "5OWNER", "owned_by_us": True, "error": None}
+    assert result == {
+        "exists": True,
+        "owner_ss58": "5OWNER",
+        "owned_by_us": True,
+        "error": None,
+    }
 
 
 def test_query_subnet_ownership_not_owned():
     fake = FakeSubtensor(exists=True, owner_ss58="5SOMEONEELSE")
     result = query_subnet_ownership(
-        netuid=1, our_coldkey_ss58="5OWNER", chain_endpoint="ws://ignored", subtensor=fake
+        netuid=1,
+        our_coldkey_ss58="5OWNER",
+        chain_endpoint="ws://ignored",
+        subtensor=fake,
     )
     assert result["exists"] is True
     assert result["owner_ss58"] == "5SOMEONEELSE"
@@ -118,15 +141,26 @@ def test_query_subnet_ownership_not_owned():
 def test_query_subnet_ownership_missing_subnet():
     fake = FakeSubtensor(exists=False)
     result = query_subnet_ownership(
-        netuid=99, our_coldkey_ss58="5OWNER", chain_endpoint="ws://ignored", subtensor=fake
+        netuid=99,
+        our_coldkey_ss58="5OWNER",
+        chain_endpoint="ws://ignored",
+        subtensor=fake,
     )
-    assert result == {"exists": False, "owner_ss58": None, "owned_by_us": False, "error": None}
+    assert result == {
+        "exists": False,
+        "owner_ss58": None,
+        "owned_by_us": False,
+        "error": None,
+    }
 
 
 def test_query_subnet_ownership_query_error_is_reported_not_swallowed():
     fake = FakeSubtensor(exists=True, raise_on_info=RuntimeError("HTTP 429"))
     result = query_subnet_ownership(
-        netuid=1, our_coldkey_ss58="5OWNER", chain_endpoint="ws://ignored", subtensor=fake
+        netuid=1,
+        our_coldkey_ss58="5OWNER",
+        chain_endpoint="ws://ignored",
+        subtensor=fake,
     )
     assert result["owned_by_us"] is False
     assert result["error"] == "HTTP 429"
@@ -135,7 +169,11 @@ def test_query_subnet_ownership_query_error_is_reported_not_swallowed():
 def test_query_wallet_stake_success():
     fake = FakeSubtensor(stake_tao=12.5)
     result = query_wallet_stake(
-        netuid=1, coldkey_ss58="5A", hotkey_ss58="5A", chain_endpoint="ws://ignored", subtensor=fake
+        netuid=1,
+        coldkey_ss58="5A",
+        hotkey_ss58="5A",
+        chain_endpoint="ws://ignored",
+        subtensor=fake,
     )
     assert result == {"stake_tao": 12.5, "error": None}
 
@@ -143,7 +181,11 @@ def test_query_wallet_stake_success():
 def test_query_wallet_stake_error_is_reported_not_swallowed():
     fake = FakeSubtensor(raise_on_stake=RuntimeError("HTTP 429"))
     result = query_wallet_stake(
-        netuid=1, coldkey_ss58="5A", hotkey_ss58="5A", chain_endpoint="ws://ignored", subtensor=fake
+        netuid=1,
+        coldkey_ss58="5A",
+        hotkey_ss58="5A",
+        chain_endpoint="ws://ignored",
+        subtensor=fake,
     )
     assert result["stake_tao"] is None
     assert result["error"] == "HTTP 429"

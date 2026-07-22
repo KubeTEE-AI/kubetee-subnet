@@ -172,6 +172,8 @@ class ValidatorMetrics:
 
     @property
     def last_successful_scoring(self) -> float:
+        # prometheus_client exposes gauge reads only through this value handle.
+        # pylint: disable-next=protected-access
         return self._last_success._value.get()
 
     # -- recording (enum-validated) -------------------------------------------

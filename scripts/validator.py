@@ -35,6 +35,7 @@ import os
 import pathlib
 import time
 from collections.abc import Callable, Mapping
+from numbers import Integral
 from urllib.parse import urlsplit
 
 from infrastructure_validation import (
@@ -51,7 +52,12 @@ from miner_scoring import (
     validate_share,
 )
 from prometheus_client import start_http_server
-from rancher_client import RancherClient, RancherError, normalize_https_origin
+from rancher_client import (
+    ErrorCategory,
+    RancherClient,
+    RancherError,
+    normalize_https_origin,
+)
 from reconciliation import ReconciliationEngine
 from validator_metrics import ValidatorMetrics
 
@@ -61,6 +67,20 @@ DEFAULT_NETWORK = "ws://chain:9944"
 DEFAULT_WALLET = "alice"  # the validator signing identity (D7)
 DEFAULT_NETUID_FILE = "/app/.kubetee_netuid"
 MIN_POLL_SECONDS = 60.0
+
+_SKIP_DETAILS = {
+    SkipReason.METAGRAPH_UNAVAILABLE: "metagraph_read_failed",
+    SkipReason.METAGRAPH_STALE: "metagraph_block_not_advanced",
+    SkipReason.OWNER_UNRESOLVED: "owner_hotkey_unresolved",
+    SkipReason.IDENTITY_VIOLATION: "metagraph_identity_violation",
+    SkipReason.UNEXPECTED_RUNTIME: "unexpected_runtime_error",
+}
+_RANCHER_SKIP_DETAILS = {
+    ErrorCategory.TRANSPORT: "rancher_transport_failure",
+    ErrorCategory.AUTH: "rancher_auth_failure",
+    ErrorCategory.MALFORMED: "rancher_malformed_response",
+    ErrorCategory.INCOMPLETE: "rancher_incomplete_enumeration",
+}
 
 
 def _log_reconciliation_evidence(event: dict) -> None:
@@ -295,14 +315,6 @@ class BasicValidator:
             config.validation_profile
         )
 
-    # -- redaction (AC5) ------------------------------------------------------
-
-    def _redact(self, text: str) -> str:
-        return text.replace(self._config.rancher_token, "<redacted-token>")
-
-    def _render(self, error: BaseException) -> str:
-        return self._redact(f"{type(error).__name__}: {error}")
-
     # -- chain session (AC6: one connection, recreated only after failure) -----
 
     def _ensure_subtensor(self):
@@ -327,13 +339,12 @@ class BasicValidator:
             neurons = []
             for neuron in meta.neurons:
                 raw_uid = getattr(neuron, "uid", None)
-                if raw_uid is None or isinstance(raw_uid, bool):
+                if isinstance(raw_uid, bool) or not isinstance(
+                    raw_uid, Integral
+                ):
                     uid = raw_uid
                 else:
-                    try:
-                        uid = int(raw_uid)
-                    except (TypeError, ValueError, OverflowError):
-                        uid = raw_uid
+                    uid = int(raw_uid)
                 neurons.append(
                     {
                         "uid": uid,
@@ -351,9 +362,9 @@ class BasicValidator:
             return neurons, block
         # The injected chain SDK does not expose one stable transport exception.
         # pylint: disable-next=broad-exception-caught
-        except Exception as error:  # fail closed; recreate only after failure
+        except Exception:  # fail closed; never reflect remote exception text
             self._chain_dirty = True
-            self._log.warning("metagraph read failed: %s", self._render(error))
+            self._log.warning("metagraph read failed")
             return None, None
 
     def _refresh_registered(
@@ -404,13 +415,24 @@ class BasicValidator:
 
     # -- one cycle (spec 4.2 order) --------------------------------------------
 
-    def _record_skip(self, reason: SkipReason, detail: str) -> None:
+    def _record_skip(
+        self,
+        reason: SkipReason,
+        rancher_category: ErrorCategory | None = None,
+    ) -> None:
+        if reason is SkipReason.RANCHER_UNAVAILABLE:
+            detail = _RANCHER_SKIP_DETAILS.get(
+                rancher_category,
+                "rancher_unknown_failure",
+            )
+        else:
+            detail = _SKIP_DETAILS.get(reason, "unspecified_skip")
         entered_degraded = self._metrics.record_skip(reason)
         self._metrics.record_cycle_outcome("skip")
         self._log.warning(
             "cycle skipped set_weights: reason=%s detail=%s consecutive=%d",
             reason.value,
-            self._redact(detail),
+            detail,
             self._metrics.consecutive_skips,
         )
         if entered_degraded:
@@ -433,9 +455,7 @@ class BasicValidator:
             self._reconciler.run_cycle(
                 None, None, None, self._refresh_registered
             )
-            self._record_skip(
-                SkipReason.METAGRAPH_UNAVAILABLE, "metagraph read failed"
-            )
+            self._record_skip(SkipReason.METAGRAPH_UNAVAILABLE)
             return "skip"
         identity_check = decide_cycle(neurons, {}, self._cycle_config)
         if isinstance(identity_check, SkipCycle):
@@ -445,7 +465,7 @@ class BasicValidator:
                 block,
                 self._refresh_registered,
             )
-            self._record_skip(identity_check.reason, identity_check.detail)
+            self._record_skip(identity_check.reason)
             return "skip"
         if block is None or (
             self._last_metagraph_block is not None
@@ -457,10 +477,7 @@ class BasicValidator:
                 block,
                 self._refresh_registered,
             )
-            self._record_skip(
-                SkipReason.METAGRAPH_STALE,
-                "metagraph block did not advance",
-            )
+            self._record_skip(SkipReason.METAGRAPH_STALE)
             return "skip"
         self._last_metagraph_block = block
         registered = {n["hotkey"] for n in neurons}
@@ -480,7 +497,7 @@ class BasicValidator:
             self._reconciler.run_cycle(
                 registered, None, block, self._refresh_registered
             )
-            self._record_skip(SkipReason.RANCHER_UNAVAILABLE, str(error))
+            self._record_skip(SkipReason.RANCHER_UNAVAILABLE, error.category)
             return "skip"
 
         # 3. reconciliation (spec 4.2a; requires fresh metagraph + complete
@@ -507,7 +524,7 @@ class BasicValidator:
         }
         decision = decide_cycle(neurons, scores, self._cycle_config)
         if isinstance(decision, SkipCycle):
-            self._record_skip(decision.reason, decision.detail)
+            self._record_skip(decision.reason)
             return "skip"
 
         self._metrics.record_validation_results(tuple(verdicts.values()))
@@ -530,16 +547,12 @@ class BasicValidator:
             )
             result = subtensor.execute(intent, wallet=self._wallet)
             success = result.is_success
-            message = str(result)
         # Bittensor can surface transport and submission failures from plugins.
         # pylint: disable-next=broad-exception-caught
-        except Exception as error:
+        except Exception:
             self._chain_dirty = True
             self._metrics.record_set_weights(False)
-            self._log.warning(
-                "set_weights raised, will back off and retry: %s",
-                self._render(error),
-            )
+            self._log.warning("set_weights raised; will back off and retry")
             self._metrics.record_cycle_outcome("weights_rejected")
             return "weights_rejected"
 
@@ -558,10 +571,7 @@ class BasicValidator:
             )
             self._metrics.record_cycle_outcome("weights_set")
             return "weights_set"
-        self._log.warning(
-            "set_weights rejected by chain (no success claimed): %s",
-            self._redact(str(message)),
-        )
+        self._log.warning("set_weights rejected by chain; no success claimed")
         self._metrics.record_cycle_outcome("weights_rejected")
         return "weights_rejected"
 
@@ -584,15 +594,9 @@ class BasicValidator:
                 self.run_cycle()
             # The process liveness contract intentionally guards every cycle.
             # pylint: disable-next=broad-exception-caught
-            except Exception as error:  # never exit on a runtime error (D14)
-                self._log.error(
-                    "unexpected cycle error (loop continues): %s",
-                    self._render(error),
-                )
-                self._record_skip(
-                    SkipReason.UNEXPECTED_RUNTIME,
-                    self._render(error),
-                )
+            except Exception:  # never exit on a runtime error (D14)
+                self._log.error("unexpected cycle error; loop continues")
+                self._record_skip(SkipReason.UNEXPECTED_RUNTIME)
             self._sleep(self._config.poll_seconds)
 
 

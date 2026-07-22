@@ -20,6 +20,10 @@ No test here imports real bittensor: the module defers that import to
 main(), and every chain seam is injected.
 """
 
+# Protocol fakes intentionally accept unused arguments, and these tests probe
+# private cycle boundaries to verify fail-closed ordering.
+# pylint: disable=unused-argument,protected-access
+
 from __future__ import annotations
 
 import copy
@@ -655,6 +659,24 @@ def test_missing_raw_metagraph_identity_is_not_stringified_into_valid_data():
     assert reconciler.run_args[0]["registered"] is None
 
 
+@pytest.mark.parametrize("raw_uid", ["2", 2.9])
+def test_non_integral_raw_metagraph_uid_skips_before_rancher(raw_uid):
+    snapshot = neurons_triad()
+    snapshot[2]["uid"] = raw_uid
+    rancher = FakeRancher()
+    reconciler = FakeReconciler()
+    validator, subtensor, *_ = build_validator(
+        subtensor=FakeSubtensor(snapshot),
+        rancher=rancher,
+        reconciler=reconciler,
+    )
+
+    assert validator.run_cycle() == "skip"
+    assert subtensor.set_weights_calls == []
+    assert rancher.calls == []
+    assert reconciler.run_args[0]["registered"] is None
+
+
 def test_reconciliation_refresh_rejects_invalid_metagraph_identity():
     duplicate = [
         *neurons_triad(),
@@ -975,7 +997,8 @@ def test_unexpected_in_cycle_exception_never_exits(caplog):
     config = ValidatorConfig.from_env(
         make_env(KUBETEE_MAX_CONSECUTIVE_SKIPS="2")
     )
-    reconciler = FakeReconciler(error=RuntimeError("unexpected bug"))
+    hostile_marker = "ATTACKER-CONTROLLED-UNEXPECTED-ERROR"
+    reconciler = FakeReconciler(error=RuntimeError(hostile_marker))
     sleep, sleep_calls = stop_after(3)
     validator, _subtensor, _, _, metrics, _ = build_validator(
         config=config,
@@ -991,7 +1014,7 @@ def test_unexpected_in_cycle_exception_never_exits(caplog):
 
     assert len(sleep_calls) == 3
     assert "unexpected cycle error" in caplog.text
-    assert "RuntimeError" in caplog.text
+    assert hostile_marker not in caplog.text
     assert (
         sample(
             metrics,
@@ -1096,19 +1119,36 @@ def test_rancher_error_path_logs_no_token_or_body(caplog):
     assert "RAWBODY" not in caplog.text
 
 
+def test_rancher_error_detail_is_fixed_field_not_remote_text(caplog):
+    hostile_marker = "ATTACKER-CONTROLLED-RANCHER-ERROR"
+    rancher = FakeRancher(
+        list_error=RancherError(ErrorCategory.TRANSPORT, hostile_marker)
+    )
+    validator, *_ = build_validator(rancher=rancher)
+
+    with caplog.at_level(logging.DEBUG, logger="basic_validator"):
+        assert validator.run_cycle() == "skip"
+
+    assert "reason=rancher_unavailable" in caplog.text
+    assert "detail=rancher_transport_failure" in caplog.text
+    assert hostile_marker not in caplog.text
+
+
 def test_set_weights_rejection_log_is_redacted(caplog):
     """AC5: even if a rendered chain error somehow embeds the credential, the
     process boundary strips it before logging."""
+    hostile_marker = f"ATTACKER-CONTROLLED-REJECTION-{TOKEN}"
     subtensor = FakeSubtensor(
         neurons_triad(),
-        set_weights_results=[(False, f"rejected; ctx={TOKEN}")],
+        set_weights_results=[(False, hostile_marker)],
     )
     validator, *_ = build_validator(subtensor=subtensor)
 
     with caplog.at_level(logging.DEBUG, logger="basic_validator"):
         assert validator.run_cycle() == "weights_rejected"
 
-    assert "rejected" in caplog.text
+    assert "set_weights rejected by chain" in caplog.text
+    assert hostile_marker not in caplog.text
     assert TOKEN not in caplog.text
 
 
@@ -1118,6 +1158,7 @@ def test_reconciliation_suppression_log_is_redacted(caplog):
     gone = "5GoneHotkeyFAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKEa"
     cluster = {
         "id": "c-gone",
+        "type": "cluster",
         "uuid": "00000000-0000-4000-8000-000000000099",
         "state": "active",
         "labels": {
@@ -1134,7 +1175,12 @@ def test_reconciliation_suppression_log_is_redacted(caplog):
         "annotations": {ENROLLMENT_UID_ANNOTATION: "99"},
     }
     list_body = json.dumps(
-        {"data": [cluster], "pagination": {"limit": -1, "total": 1}}
+        {
+            "type": "collection",
+            "resourceType": "cluster",
+            "data": [cluster],
+            "pagination": {"limit": -1, "total": 1},
+        }
     )
     get_body = json.dumps(cluster)
     client = RancherClient(
@@ -1145,7 +1191,14 @@ def test_reconciliation_suppression_log_is_redacted(caplog):
                 ("GET", "/v3/clusters?limit=-1"): (200, list_body),
                 ("GET", "/v3/nodes"): (
                     200,
-                    json.dumps({"data": [], "pagination": {"limit": -1}}),
+                    json.dumps(
+                        {
+                            "type": "collection",
+                            "resourceType": "node",
+                            "data": [],
+                            "pagination": {"limit": -1, "total": 0},
+                        }
+                    ),
                 ),
                 ("GET", "/v3/clusters/c-gone"): (200, get_body),
                 ("DELETE", "/v3/clusters/c-gone"): (

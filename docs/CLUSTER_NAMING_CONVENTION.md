@@ -51,7 +51,10 @@ Use the full city name in lowercase with no spaces:
 
 The current UID of the miner on the Bittensor subnet.
 
-**Note**: UID can change if a miner deregisters and re-registers. For permanent identification, always use the `miner-hotkey` and `miner-coldkey` labels.
+**Note**: UID can change if a miner deregisters and re-registers. Machine
+identity comes from the complete canonical binding below, especially
+`kubetee.ai/hotkey`, `kubetee.ai/coldkey`, and the immutable binding ID; never
+infer identity from the human-readable cluster name alone.
 
 ## Examples
 

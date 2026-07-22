@@ -16,7 +16,8 @@ This script:
    - recycle_or_burn = Recycle            (recycle instead of burn for owner-directed emissions)
 
 This enables:
-- Owner emissions (cut + trick-weighted miner emissions) go into conviction (locked, builds conviction over time).
+- Owner emissions (cut + trick-weighted miner emissions) go into conviction
+  (locked, builds conviction over time).
 - Recycle instead of burn for the directed emissions.
 - Full emissions flow for testing (no burn waste).
 
@@ -29,8 +30,9 @@ Manual usage (from host, with bittensor installed):
 
 Then view everything in dozzle: http://localhost:8080
 
-Requires: bittensor + bittensor-cli (btcli) in PATH. Inside the validator image this is guaranteed.
-For pure local dev it uses *pinned dev seeds* (owner/alice/bob) exactly like fdn-subnet pins Alith etc.
+Requires: bittensor + bittensor-cli (btcli) in PATH. Inside the validator image
+this is guaranteed. For pure local dev it uses *pinned dev seeds*
+(owner/alice/bob) exactly like fdn-subnet pins Alith etc.
   for reproducible registration, hypers, and UID targeting in the single-node test pyramid.
 
 Note: On localnet with FAST_BLOCKS, tempos are fast.
@@ -50,7 +52,6 @@ except ImportError:
 
 import chain_state
 
-
 # =====================================================================================
 # PINNED DEV KEYS (inspired by fdn-subnet's approach with Alith/Baltathar etc.)
 #
@@ -69,12 +70,16 @@ import chain_state
 # These seeds control nothing on real chains. Never use against testnet or mainnet.
 # =====================================================================================
 
-DEV_ALICE_SEED = "0xe5be9a5092b81bca64be81d212e7f2f9eba183bb7a90954f7b76361f6edb5c0a"
+DEV_ALICE_SEED = (
+    "0xe5be9a5092b81bca64be81d212e7f2f9eba183bb7a90954f7b76361f6edb5c0a"
+)
 
 # Pinned dev seed for the subnet *owner* wallet (the one that creates the subnet,
 # registers its hotkey, sets hypers via sudo, and the validator weights to).
 # Derived SS58 (cold+hot for dev simplicity): 5FLbZav21bAsjH5SAdmJZwTP5C4b3bcaaWqC6GSmGmsbzUJ9
-DEV_OWNER_SEED = "0x398f0c28f98885e046333d4a41c19cee4c37368a9832c749be0086a2a9b4e8c0"
+DEV_OWNER_SEED = (
+    "0x398f0c28f98885e046333d4a41c19cee4c37368a9832c749be0086a2a9b4e8c0"
+)
 DEV_OWNER_COLD_SS58 = "5FLbZav21bAsjH5SAdmJZwTP5C4b3bcaaWqC6GSmGmsbzUJ9"
 
 # Pinned dev seed for the "bob" miner wallet (g004 D7): the miner whose
@@ -85,33 +90,64 @@ DEV_OWNER_COLD_SS58 = "5FLbZav21bAsjH5SAdmJZwTP5C4b3bcaaWqC6GSmGmsbzUJ9"
 # previous all-0x0b value was serialised as raw bytes into the keyfile's
 # secretSeed, producing a wallet bittensor could not read back (bob could
 # never sign or register). ss58: 5FsfgiqMdQzgqtJQLb15ox6MzcZLvFG55vtAsy4TYuDCEEFs
-DEV_BOB_SEED = "0x907fd5b32015c612b7badd5c4ab60de2fbb641333989e5eeabcd226a240a4689"
+DEV_BOB_SEED = (
+    "0x907fd5b32015c612b7badd5c4ab60de2fbb641333989e5eeabcd226a240a4689"
+)
+
 
 def run(cmd: list[str], check=True, capture=False, env=None, dry_run=False):
     if dry_run:
         print(f"[DRY-RUN] $ {' '.join(cmd)}")
         return subprocess.CompletedProcess(cmd, returncode=0)
     print(f"$ {' '.join(cmd)}")
-    res = subprocess.run(cmd, check=check, capture_output=capture, text=True, env=env or os.environ)
+    res = subprocess.run(
+        cmd,
+        check=check,
+        capture_output=capture,
+        text=True,
+        env=env or os.environ,
+    )
     if capture:
         print(res.stdout)
     return res
 
-def wait_for_chain(chain_endpoint: str = "ws://127.0.0.1:9944", timeout=120, dry_run=False):
+
+def wait_for_chain(
+    chain_endpoint: str = "ws://127.0.0.1:9944", timeout=120, dry_run=False
+):
     print(f"Waiting for chain RPC at {chain_endpoint} ...")
     start = time.time()
     while time.time() - start < timeout:
         try:
             # btcli accepts --network as ws://... or "local"
-            run(["btcli", "query", "block", "--network", chain_endpoint, "--yes"], check=False, capture=True, dry_run=dry_run)
+            run(
+                [
+                    "btcli",
+                    "query",
+                    "block",
+                    "--network",
+                    chain_endpoint,
+                    "--yes",
+                ],
+                check=False,
+                capture=True,
+                dry_run=dry_run,
+            )
             print("Chain is up!")
             return True
+        # The CLI/SDK boundary can raise subprocess, transport, or SDK errors.
+        # pylint: disable-next=broad-exception-caught
         except Exception as e:
             print(f"  ... not ready yet: {e}")
             time.sleep(5)
-    raise TimeoutError("Chain did not become ready in time. Check docker logs.")
+    raise TimeoutError(
+        "Chain did not become ready in time. Check docker logs."
+    )
 
-def ensure_dev_wallet(name: str, seed: str, hotkey: str = "default", dry_run=False):
+
+def ensure_dev_wallet(
+    name: str, seed: str, hotkey: str = "default", dry_run=False
+):
     """Ensure a wallet exists using a *pinned dev seed* (regen, not random new_coldkey).
 
     This follows the fdn-subnet pattern of using well-known dev keys (Alith etc.)
@@ -119,91 +155,176 @@ def ensure_dev_wallet(name: str, seed: str, hotkey: str = "default", dry_run=Fal
     We regen BOTH coldkey (for sudo/ownership) and hotkey (for registration + signing weights).
     """
     base_wallet_path = str(Path.home() / ".bittensor" / "wallets")
-    print(f"Ensuring dev wallet {name} (pinned seed for cold+hot, hotkey={hotkey}) ...")
+    print(
+        f"Ensuring dev wallet {name} (pinned seed for cold+hot, hotkey={hotkey}) ..."
+    )
     # Coldkey (owner/sudo privileges, funding)
-    # Pipe 'y' to handle any "overwrite?" prompts that --quiet/--overwrite don't fully suppress in all btcli versions.
-    run([
-        "sh", "-c",
-        f"yes y | btcli wallet regen-coldkey --wallet {name} --wallet-hotkey {hotkey} --wallet-path {base_wallet_path} --seed {seed} --no-use-password --overwrite --quiet"
-    ], check=False, dry_run=dry_run)
+    # Pipe 'y' to handle any "overwrite?" prompts that --quiet/--overwrite
+    # do not fully suppress in all btcli versions.
+    run(
+        [
+            "sh",
+            "-c",
+            "yes y | btcli wallet regen-coldkey "
+            f"--wallet {name} --wallet-hotkey {hotkey} "
+            f"--wallet-path {base_wallet_path} --seed {seed} "
+            "--no-use-password --overwrite --quiet",
+        ],
+        check=False,
+        dry_run=dry_run,
+    )
 
-    # Hotkey 
-    run([
-        "sh", "-c",
-        f"yes y | btcli wallet regen-hotkey --wallet {name} --wallet-hotkey {hotkey} --wallet-path {base_wallet_path} --seed {seed} --no-use-password --overwrite --quiet"
-    ], check=False, dry_run=dry_run)
+    # Hotkey
+    run(
+        [
+            "sh",
+            "-c",
+            "yes y | btcli wallet regen-hotkey "
+            f"--wallet {name} --wallet-hotkey {hotkey} "
+            f"--wallet-path {base_wallet_path} --seed {seed} "
+            "--no-use-password --overwrite --quiet",
+        ],
+        check=False,
+        dry_run=dry_run,
+    )
 
     print(f"  dev wallet {name} ready (cold+hot seed-pinned).")
 
-def get_wallet_coldkey_ss58(name: str, hotkey: str = "default", dry_run=False) -> str:
-    """Return the coldkey ss58 address for a wallet name. Prefers SDK, falls back to btcli inspect parsing."""
+
+def get_wallet_coldkey_ss58(
+    name: str, hotkey: str = "default", dry_run=False
+) -> str:
+    """Resolve a wallet coldkey SS58 through the SDK or btcli."""
     if bt is not None:
         try:
             w = bt.Wallet(name=name, hotkey=hotkey)
             addr = w.coldkeypub.ss58_address
             print(f"  resolved {name} coldkey ss58 via SDK: {addr}")
             return addr
+        # Fall back to btcli for any SDK-specific wallet failure.
+        # pylint: disable-next=broad-exception-caught
         except Exception as e:
-            print(f"  bt.Wallet resolve for {name} failed: {e}, will try btcli")
+            print(
+                f"  bt.Wallet resolve for {name} failed: {e}, will try btcli"
+            )
 
     # Fallback: use btcli wallet inspect and parse ss58 (best effort)
     base_wallet_path = str(Path.home() / ".bittensor" / "wallets")
-    res = run([
-        "btcli", "wallet", "inspect",
-        "--wallet", name,
-        "--wallet-hotkey", hotkey,
-        "--wallet-path", base_wallet_path,
-        "--quiet"
-    ], check=False, capture=True, dry_run=dry_run)
+    res = run(
+        [
+            "btcli",
+            "wallet",
+            "inspect",
+            "--wallet",
+            name,
+            "--wallet-hotkey",
+            hotkey,
+            "--wallet-path",
+            base_wallet_path,
+            "--quiet",
+        ],
+        check=False,
+        capture=True,
+        dry_run=dry_run,
+    )
     out = (res.stdout or "") + (res.stderr or "")
     # crude parse for ss58 in output
     import re
+
     m = re.search(r"(5[0-9a-zA-Z]{46,48})", out)
     if m:
         addr = m.group(1)
         print(f"  resolved {name} coldkey ss58 via btcli inspect: {addr}")
         return addr
     # last resort
-    print(f"  WARNING: could not resolve ss58 for {name}, using placeholder (funding may fail)")
+    print(
+        f"  WARNING: could not resolve ss58 for {name}, using placeholder (funding may fail)"
+    )
     return "5GT5Ycu59s7xiGj4VkRRZsEkypEFbECeMBCeQ14t8G7H8h8F"
 
 
-def fund_from_alice(dest_name: str, amount: int = 10000, chain_endpoint: str = "ws://127.0.0.1:9944", dry_run=False):
+def fund_from_alice(
+    dest_name: str,
+    amount: int = 10000,
+    chain_endpoint: str = "ws://127.0.0.1:9944",
+    dry_run=False,
+):
     """Fund using local Alice dev key (standard for localnet)."""
-    print(f"Funding {dest_name} from Alice dev account (endpoint={chain_endpoint})...")
+    print(
+        f"Funding {dest_name} from Alice dev account (endpoint={chain_endpoint})..."
+    )
     base_wallet_path = str(Path.home() / ".bittensor" / "wallets")
-    run([
-        "sh", "-c",
-        f"yes y | btcli wallet regen-coldkey --wallet alice --wallet-path {base_wallet_path} --seed {DEV_ALICE_SEED} --no-use-password --quiet"
-    ], check=False, dry_run=dry_run)
+    run(
+        [
+            "sh",
+            "-c",
+            "yes y | btcli wallet regen-coldkey --wallet alice "
+            f"--wallet-path {base_wallet_path} --seed {DEV_ALICE_SEED} "
+            "--no-use-password --quiet",
+        ],
+        check=False,
+        dry_run=dry_run,
+    )
 
-    # Resolve the *actual* address for dest_name (critical so we fund the wallet we later use for create/sudo)
+    # Resolve the *actual* address for dest_name so we fund the wallet later
+    # used for create/sudo.
     dest_ss58 = get_wallet_coldkey_ss58(dest_name, dry_run=dry_run)
-    run([
-        "btcli", "wallet", "transfer",
-        "--dest", dest_ss58,
-        "--amount", str(amount),
-        "--wallet", "alice",
-        "--wallet-hotkey", "default",
-        "--network", chain_endpoint,
-        "--yes",
-        "--allow-death"
-    ], check=False, dry_run=dry_run)
+    run(
+        [
+            "btcli",
+            "wallet",
+            "transfer",
+            "--dest",
+            dest_ss58,
+            "--amount",
+            str(amount),
+            "--wallet",
+            "alice",
+            "--wallet-hotkey",
+            "default",
+            "--network",
+            chain_endpoint,
+            "--yes",
+            "--allow-death",
+        ],
+        check=False,
+        dry_run=dry_run,
+    )
 
-def create_subnet_if_needed(netuid: int, owner_name: str, chain_endpoint: str = "ws://127.0.0.1:9944", dry_run=False):
-    print(f"Creating/ensuring subnet (target {netuid}, owner={owner_name}, network={chain_endpoint})...")
+
+def create_subnet_if_needed(
+    netuid: int,
+    owner_name: str,
+    chain_endpoint: str = "ws://127.0.0.1:9944",
+    dry_run=False,
+):
+    print(
+        "Creating/ensuring subnet "
+        f"(target {netuid}, owner={owner_name}, network={chain_endpoint})..."
+    )
     # Always attempt create. This will allocate the *next* free netuid and make our key the owner.
     # (If a specific netuid already exists we won't be its owner, so we force a fresh one.)
-    res = run([
-        "btcli", "subnet", "create",
-        "--wallet", owner_name,
-        "--wallet-hotkey", "default",
-        "--network", chain_endpoint,
-        "--yes"
-    ], check=False, capture=True, dry_run=dry_run)
+    res = run(
+        [
+            "btcli",
+            "subnet",
+            "create",
+            "--wallet",
+            owner_name,
+            "--wallet-hotkey",
+            "default",
+            "--network",
+            chain_endpoint,
+            "--yes",
+        ],
+        check=False,
+        capture=True,
+        dry_run=dry_run,
+    )
     out = (res.stdout or "") + (res.stderr or "")
     # Try to parse the netuid we actually got (common patterns in btcli output)
     import re
+
     m = re.search(r"netuid[:\s]+(\d+)", out, re.IGNORECASE)
     if not m:
         m = re.search(r"Registered on netuid[:\s]+(\d+)", out, re.IGNORECASE)
@@ -211,8 +332,11 @@ def create_subnet_if_needed(netuid: int, owner_name: str, chain_endpoint: str = 
         actual = int(m.group(1))
         print(f"  Create gave us netuid {actual} (we are now the owner).")
         return actual
-    print("  Create attempt done. Falling back to requested netuid (may not own it).")
+    print(
+        "  Create attempt done. Falling back to requested netuid (may not own it)."
+    )
     return netuid
+
 
 def decide_owner_actions(ownership: dict) -> dict:
     """Pure decision: given a chain_state.query_subnet_ownership() result, decide
@@ -229,10 +353,16 @@ def decide_owner_actions(ownership: dict) -> dict:
     if ownership.get("error"):
         return {
             "proceed": False,
-            "reason": f"ownership query failed ({ownership['error']}); failing closed, not retrying blindly",
+            "reason": (
+                f"ownership query failed ({ownership['error']}); "
+                "failing closed, not retrying blindly"
+            ),
         }
     if not ownership.get("exists"):
-        return {"proceed": False, "reason": "target netuid does not exist on chain"}
+        return {
+            "proceed": False,
+            "reason": "target netuid does not exist on chain",
+        }
     if not ownership.get("owned_by_us"):
         return {
             "proceed": False,
@@ -252,87 +382,211 @@ def registration_plan(owner_wallet: str = "owner") -> list[dict]:
     dev seed replacing the retired legacy sample "miner" wallet.
     """
     return [
-        {"wallet": owner_wallet, "seed": DEV_OWNER_SEED, "role": "owner",
-         "validator": True, "stake": 200},
-        {"wallet": "alice", "seed": DEV_ALICE_SEED, "role": "validator",
-         "validator": True, "stake": 100},
-        {"wallet": "bob", "seed": DEV_BOB_SEED, "role": "miner",
-         "validator": False, "stake": 50},
+        {
+            "wallet": owner_wallet,
+            "seed": DEV_OWNER_SEED,
+            "role": "owner",
+            "validator": True,
+            "stake": 200,
+        },
+        {
+            "wallet": "alice",
+            "seed": DEV_ALICE_SEED,
+            "role": "validator",
+            "validator": True,
+            "stake": 100,
+        },
+        {
+            "wallet": "bob",
+            "seed": DEV_BOB_SEED,
+            "role": "miner",
+            "validator": False,
+            "stake": 50,
+        },
     ]
 
 
-def register_neuron(netuid: int, wallet_name: str, hotkey: str = "default", as_validator: bool = True, chain_endpoint: str = "ws://127.0.0.1:9944"):
-    print(f"Registering {wallet_name} on netuid {netuid} (network={chain_endpoint}) ...")
+def register_neuron(
+    netuid: int,
+    wallet_name: str,
+    hotkey: str = "default",
+    as_validator: bool = True,
+    chain_endpoint: str = "ws://127.0.0.1:9944",
+    dry_run: bool = False,
+):
+    role = "validator" if as_validator else "miner"
+    print(
+        f"Registering {wallet_name} as {role} on netuid {netuid} "
+        f"(network={chain_endpoint}) ..."
+    )
     # Use burned register on local (faucet enabled).
-    # --unsafe to bypass safe/ shield mode that can cause "extrinsic" errors on this localnet + btcli combo.
-    run([
-        "btcli", "subnet", "register",
-        "--netuid", str(netuid),
-        "--wallet", wallet_name,
-        "--wallet-hotkey", hotkey,
-        "--network", chain_endpoint,
-        "--yes",
-        "--unsafe"
-    ], check=False)
+    # --unsafe bypasses safe/shield mode, which can produce "extrinsic"
+    # errors with this localnet and btcli combination.
+    run(
+        [
+            "btcli",
+            "subnet",
+            "register",
+            "--netuid",
+            str(netuid),
+            "--wallet",
+            wallet_name,
+            "--wallet-hotkey",
+            hotkey,
+            "--network",
+            chain_endpoint,
+            "--yes",
+            "--unsafe",
+        ],
+        check=False,
+        dry_run=dry_run,
+    )
 
-def start_emissions(netuid: int, owner_name: str, chain_endpoint: str = "ws://127.0.0.1:9944"):
-    print(f"Starting emissions for netuid {netuid} (network={chain_endpoint}) ...")
+
+def start_emissions(
+    netuid: int,
+    owner_name: str,
+    chain_endpoint: str = "ws://127.0.0.1:9944",
+    dry_run: bool = False,
+):
+    print(
+        f"Starting emissions for netuid {netuid} (network={chain_endpoint}) ..."
+    )
     # Correct command for current bittensor-cli in the image: `btcli subnets start`
     # (older code used `btcli sudo start` which no longer exists)
-    run([
-        "btcli", "subnets", "start",
-        "--netuid", str(netuid),
-        "--wallet", owner_name,
-        "--wallet-hotkey", "default",
-        "--network", chain_endpoint,
-        "--yes"
-    ], check=False)
+    run(
+        [
+            "btcli",
+            "subnets",
+            "start",
+            "--netuid",
+            str(netuid),
+            "--wallet",
+            owner_name,
+            "--wallet-hotkey",
+            "default",
+            "--network",
+            chain_endpoint,
+            "--yes",
+        ],
+        check=False,
+        dry_run=dry_run,
+    )
 
 
-def add_stake(netuid: int, wallet_name: str, amount: int = 100, chain_endpoint: str = "ws://127.0.0.1:9944"):
-    """Put some stake on the subnet for the wallet (makes the neuron have skin in the game / visible in metagraph)."""
-    print(f"Adding stake {amount} TAO on netuid {netuid} for {wallet_name} ...")
+def add_stake(
+    netuid: int,
+    wallet_name: str,
+    amount: int = 100,
+    chain_endpoint: str = "ws://127.0.0.1:9944",
+    dry_run: bool = False,
+):
+    """Stake on the subnet so the wallet is visible in the metagraph."""
+    print(
+        f"Adding stake {amount} TAO on netuid {netuid} for {wallet_name} ..."
+    )
     # --unsafe to avoid shield/safe mode issues seen on this btcli + localnet combination.
-    run([
-        "btcli", "stake", "add",
-        "--netuid", str(netuid),
-        "--wallet", wallet_name,
-        "--wallet-hotkey", "default",
-        "--amount", str(amount),
-        "--network", chain_endpoint,
-        "--yes",
-        "--unsafe"
-    ], check=False)
+    run(
+        [
+            "btcli",
+            "stake",
+            "add",
+            "--netuid",
+            str(netuid),
+            "--wallet",
+            wallet_name,
+            "--wallet-hotkey",
+            "default",
+            "--amount",
+            str(amount),
+            "--network",
+            chain_endpoint,
+            "--yes",
+            "--unsafe",
+        ],
+        check=False,
+        dry_run=dry_run,
+    )
 
-def set_hyperparam(netuid: int, owner_name: str, param: str, value: str, chain_endpoint: str = "ws://127.0.0.1:9944"):
-    print(f"Setting {param}={value} on netuid {netuid} (network={chain_endpoint}) ...")
+
+def set_hyperparam(
+    netuid: int,
+    owner_name: str,
+    param: str,
+    value: str,
+    chain_endpoint: str = "ws://127.0.0.1:9944",
+    dry_run: bool = False,
+):
+    print(
+        f"Setting {param}={value} on netuid {netuid} (network={chain_endpoint}) ..."
+    )
     # v11 uses btcli sudo set or tx set-hyperparameter
-    run([
-        "btcli", "sudo", "set",
-        "--netuid", str(netuid),
-        "--param", param,
-        "--value", value,
-        "--wallet", owner_name,
-        "--wallet-hotkey", "default",
-        "--network", chain_endpoint,
-        "--yes"
-    ], check=False)
+    run(
+        [
+            "btcli",
+            "sudo",
+            "set",
+            "--netuid",
+            str(netuid),
+            "--param",
+            param,
+            "--value",
+            value,
+            "--wallet",
+            owner_name,
+            "--wallet-hotkey",
+            "default",
+            "--network",
+            chain_endpoint,
+            "--yes",
+        ],
+        check=False,
+        dry_run=dry_run,
+    )
 
-def set_conviction_and_recycle(netuid: int, owner_name: str, chain_endpoint: str = "ws://127.0.0.1:9944"):
+
+def set_conviction_and_recycle(
+    netuid: int,
+    owner_name: str,
+    chain_endpoint: str = "ws://127.0.0.1:9944",
+    dry_run: bool = False,
+):
     """Set owner emissions into conviction + recycle instead of burn."""
     # 1. Auto lock owner cut into conviction
-    set_hyperparam(netuid, owner_name, "owner_cut_auto_lock_enabled", "true", chain_endpoint)
+    set_hyperparam(
+        netuid,
+        owner_name,
+        "owner_cut_auto_lock_enabled",
+        "true",
+        chain_endpoint,
+        dry_run=dry_run,
+    )
     # 2. Recycle instead of burn for owner-directed (burn UID) emissions
-    set_hyperparam(netuid, owner_name, "recycle_or_burn", "Recycle", chain_endpoint)
+    set_hyperparam(
+        netuid,
+        owner_name,
+        "recycle_or_burn",
+        "Recycle",
+        chain_endpoint,
+        dry_run=dry_run,
+    )
     print("Conviction auto-lock + Recycle mode enabled for owner emissions.")
+
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--netuid", type=int, default=1)
     parser.add_argument("--owner-wallet", default="owner")
-    parser.add_argument("--chain-endpoint", default=os.getenv("BT_NETWORK", "ws://127.0.0.1:9944"),
-                        help="ws://... endpoint or 'local'. Inside docker compose use ws://chain:9944")
-    parser.add_argument("--dry-run", action="store_true", help="Print commands instead of executing them")
+    parser.add_argument(
+        "--chain-endpoint",
+        default=os.getenv("BT_NETWORK", "ws://127.0.0.1:9944"),
+        help="ws://... endpoint or 'local'. Inside docker compose use ws://chain:9944",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print commands instead of executing them",
+    )
     args = parser.parse_args()
 
     netuid = args.netuid
@@ -358,7 +612,9 @@ def main():
     # Fund the actual addresses of the wallets we will use.
     fund_from_alice(owner, 5000, chain_endpoint, dry_run=dry_run)
     fund_from_alice("bob", 2000, chain_endpoint, dry_run=dry_run)
-    fund_from_alice("alice", 1000, chain_endpoint, dry_run=dry_run)  # top up alice faucet
+    fund_from_alice(
+        "alice", 1000, chain_endpoint, dry_run=dry_run
+    )  # top up alice faucet
 
     # Wait for transfers to land (localnet is fast but extrinsic finality + balance query can lag)
     print("Waiting briefly for balances to settle after funding...")
@@ -366,66 +622,116 @@ def main():
 
     # Subnet + neuron setup (owner registers to have a UID for weighting)
     # create_subnet_if_needed now forces a create (to get ownership) and returns the actual netuid.
-    netuid = create_subnet_if_needed(netuid, owner, chain_endpoint, dry_run=dry_run)
+    netuid = create_subnet_if_needed(
+        netuid, owner, chain_endpoint, dry_run=dry_run
+    )
 
     # Register + stake the triad in plan order. Stake attempts are
     # best-effort and reported honestly: the pinned localnet image can
     # reject add_stake with SubtokenDisabled (T3 lesson) - the btcli output
     # below is the record; nothing here claims a stake that did not land.
     for entry in triad:
-        register_neuron(netuid, entry["wallet"], "default",
-                        as_validator=entry["validator"],
-                        chain_endpoint=chain_endpoint, dry_run=dry_run)
-        add_stake(netuid, entry["wallet"], entry["stake"], chain_endpoint, dry_run=dry_run)
+        register_neuron(
+            netuid,
+            entry["wallet"],
+            "default",
+            as_validator=entry["validator"],
+            chain_endpoint=chain_endpoint,
+            dry_run=dry_run,
+        )
+        add_stake(
+            netuid,
+            entry["wallet"],
+            entry["stake"],
+            chain_endpoint,
+            dry_run=dry_run,
+        )
 
     # Verify real on-chain ownership before attempting owner-only sudo calls.
     # create_subnet_if_needed's regex-parsed btcli stdout is NOT proof of ownership
     # (e.g. it silently falls back to the requested netuid when `btcli subnet create`
     # fails, such as with a SubtokenDisabled chain error) - only a live query is.
     our_owner_ss58 = get_wallet_coldkey_ss58(owner, dry_run=dry_run)
-    ownership = chain_state.query_subnet_ownership(netuid, our_owner_ss58, chain_endpoint)
+    ownership = chain_state.query_subnet_ownership(
+        netuid, our_owner_ss58, chain_endpoint
+    )
     decision = decide_owner_actions(ownership)
-    print(f"\nOwnership check: netuid={netuid} our_wallet={our_owner_ss58} -> {ownership}")
+    print(
+        f"\nOwnership check: netuid={netuid} our_wallet={our_owner_ss58} -> {ownership}"
+    )
     print(f"Decision: proceed={decision['proceed']} ({decision['reason']})")
 
     if decision["proceed"]:
         # Start emissions
         start_emissions(netuid, owner, chain_endpoint, dry_run=dry_run)
         # Set the key hypers for conviction + recycle
-        set_conviction_and_recycle(netuid, owner, chain_endpoint, dry_run=dry_run)
+        set_conviction_and_recycle(
+            netuid, owner, chain_endpoint, dry_run=dry_run
+        )
     else:
-        print(f"  SKIPPING start_emissions + conviction/recycle hypers: {decision['reason']}")
-        print("  (Retrying these against a netuid we don't own would fail every time and just hammer the chain.)")
+        print(
+            f"  SKIPPING start_emissions + conviction/recycle hypers: {decision['reason']}"
+        )
+        print(
+            "  (Retrying these against a netuid we don't own would fail "
+            "every time and just hammer the chain.)"
+        )
 
     # Record whether we actually own the netuid so other processes (compose's
     # conviction-setter loop, print_subnet_stats.py) can avoid repeating the
     # same doomed owner-only calls instead of retrying blindly forever.
     try:
-        with open("/app/.kubetee_owned", "w") as f:
+        with open("/app/.kubetee_owned", "w", encoding="utf-8") as f:
             f.write("true" if decision["proceed"] else "false")
+    # Status-file failure must not hide the on-chain setup outcome.
+    # pylint: disable-next=broad-exception-caught
     except Exception as e:
         print(f"  Warning: could not write ownership status file: {e}")
 
     print("\n=== Setup complete ===")
     if decision["proceed"]:
         print("Owner emissions will now:")
-        print("  - Have owner cut auto-locked into CONVICTION (via owner_cut_auto_lock_enabled)")
-        print("  - Miner emissions directed to owner UID will be RECYCLED (not burned)")
+        print(
+            "  - Have owner cut auto-locked into CONVICTION (via owner_cut_auto_lock_enabled)"
+        )
+        print(
+            "  - Miner emissions directed to owner UID will be RECYCLED (not burned)"
+        )
     else:
-        print("Owner does NOT control this netuid's sudo-only hyperparameters on this chain:")
+        print(
+            "Owner does NOT control this netuid's sudo-only hyperparameters on this chain:"
+        )
         print(f"  {decision['reason']}")
-        print("  Conviction/recycle hypers were NOT set. See ownership check above for the real owner.")
-    print("\nUsing pinned dev seeds (owner SS58 ~5FLbZa... ) so the registered UID is stable.")
-    print("Next: The basic validator (alice) discovers miners from the metagraph, scores them via Rancher, and splits weights (default 10% miners / 90% owner recycle UID).")
-    print("When used inside the validator container, this script runs first then the validator starts automatically.")
+        print(
+            "  Conviction/recycle hypers were NOT set. See ownership "
+            "check above for the real owner."
+        )
+    print(
+        "\nUsing pinned dev seeds (owner SS58 ~5FLbZa... ) so the registered UID is stable."
+    )
+    print(
+        "Next: The basic validator (alice) discovers miners from the "
+        "metagraph, scores them via Rancher, and splits weights "
+        "(default 10% miners / 90% owner recycle UID)."
+    )
+    print(
+        "When used inside the validator container, this script runs first "
+        "then the validator starts automatically."
+    )
 
-    # Write the actual netuid we own so the subsequent validator (and other containers) can use the correct one.
+    # Write the actual netuid we own so the validator and other containers
+    # can use the correct one.
     try:
-        with open("/app/.kubetee_netuid", "w") as f:
+        with open("/app/.kubetee_netuid", "w", encoding="utf-8") as f:
             f.write(str(netuid))
-        print(f"  Wrote actual netuid={netuid} to /app/.kubetee_netuid for the validator phase.")
+        print(
+            f"  Wrote actual netuid={netuid} to /app/.kubetee_netuid for the validator phase."
+        )
+    # Status-file failure must not hide the on-chain setup outcome.
+    # pylint: disable-next=broad-exception-caught
     except Exception as e:
         print(f"  Warning: could not write netuid file: {e}")
+
 
 if __name__ == "__main__":
     main()

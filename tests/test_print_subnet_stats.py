@@ -12,6 +12,10 @@ Run:
   python -m pytest tests/test_print_subnet_stats.py -q --tb=line
 """
 
+# Protocol fakes retain SDK call signatures even when a case ignores an
+# argument.
+# pylint: disable=unused-argument
+
 import importlib.util
 import sys
 from pathlib import Path
@@ -24,7 +28,9 @@ _script_path = _scripts_dir / "print_subnet_stats.py"
 if str(_scripts_dir) not in sys.path:
     sys.path.insert(0, str(_scripts_dir))
 
-_spec = importlib.util.spec_from_file_location("print_subnet_stats_under_test", _script_path)
+_spec = importlib.util.spec_from_file_location(
+    "print_subnet_stats_under_test", _script_path
+)
 _stats = importlib.util.module_from_spec(_spec)
 sys.modules[_spec.name] = _stats
 _spec.loader.exec_module(_stats)
@@ -43,9 +49,12 @@ def test_default_wallets_are_bob_and_owner_not_signing_wallet(monkeypatch):
     assert parser.get_default("miner_wallet") == "bob"
     assert parser.get_default("owner_wallet") == "owner"
 
+
 # Old hardcoded strings the buggy version printed unconditionally - must never
 # appear again once the real state contradicts them.
-_OLD_HARDCODED_STAKE_TEXT = "no stake found (or setup stake failed due to ownership)"
+_OLD_HARDCODED_STAKE_TEXT = (
+    "no stake found (or setup stake failed due to ownership)"
+)
 _OLD_HARDCODED_OVERVIEW_TEXT = "owner is bootstrap key (not our owner wallet)"
 _OLD_HARDCODED_CONVICTION_TEXT = "sudo failed - not owner"
 
@@ -108,23 +117,31 @@ class FakeStakingNamespace:
 
 class FakeHyperparamsNamespace:
     def __init__(self, hyperparams=None):
-        self._hyperparams = hyperparams if hyperparams is not None else _FakeHyperparams()
+        self._hyperparams = (
+            hyperparams if hyperparams is not None else _FakeHyperparams()
+        )
 
     def __getattr__(self, name):
         if name.startswith("_"):
             raise AttributeError(name)
+
         # Return a callable that returns the hyperparameter value
         def _read(netuid=None):
             return getattr(self._hyperparams, name, "?")
+
         return _read
 
 
 class FakeSubtensor:
-    def __init__(self, owner_ss58="5OWNER", stake_by_coldkey=None, hyperparams=None):
+    def __init__(
+        self, owner_ss58="5OWNER", stake_by_coldkey=None, hyperparams=None
+    ):
         self.subnets = FakeSubnetsNamespace(owner_ss58=owner_ss58)
         self.delegation = FakeDelegationNamespace(owner_ss58=owner_ss58)
         self.staking = FakeStakingNamespace(stake_by_coldkey=stake_by_coldkey)
-        self.hyperparameters = FakeHyperparamsNamespace(hyperparams=hyperparams)
+        self.hyperparameters = FakeHyperparamsNamespace(
+            hyperparams=hyperparams
+        )
 
 
 def _wallets(owner_ss58="5OWNER", miner_ss58="5MINER"):
@@ -135,8 +152,15 @@ def _wallets(owner_ss58="5OWNER", miner_ss58="5MINER"):
 
 
 def test_build_report_reflects_real_owned_state_with_stake():
-    fake = FakeSubtensor(owner_ss58="5OWNER", stake_by_coldkey={"5OWNER": 200.0, "5MINER": 50.0})
-    report = build_report(netuid=1, chain_endpoint="ws://ignored", wallets=_wallets(), subtensor=fake)
+    fake = FakeSubtensor(
+        owner_ss58="5OWNER", stake_by_coldkey={"5OWNER": 200.0, "5MINER": 50.0}
+    )
+    report = build_report(
+        netuid=1,
+        chain_endpoint="ws://ignored",
+        wallets=_wallets(),
+        subtensor=fake,
+    )
 
     assert report["ownership"]["owned_by_us"] is True
     assert report["ownership"]["owner_ss58"] == "5OWNER"
@@ -148,7 +172,12 @@ def test_build_report_reflects_real_owned_state_with_stake():
 
 def test_build_report_reflects_real_not_owned_state():
     fake = FakeSubtensor(owner_ss58="5BOOTSTRAPKEY", stake_by_coldkey={})
-    report = build_report(netuid=1, chain_endpoint="ws://ignored", wallets=_wallets(), subtensor=fake)
+    report = build_report(
+        netuid=1,
+        chain_endpoint="ws://ignored",
+        wallets=_wallets(),
+        subtensor=fake,
+    )
 
     assert report["ownership"]["owned_by_us"] is False
     assert report["ownership"]["owner_ss58"] == "5BOOTSTRAPKEY"
@@ -157,16 +186,31 @@ def test_build_report_reflects_real_not_owned_state():
 
 def test_build_report_reports_unresolved_wallet_honestly():
     fake = FakeSubtensor()
-    wallets = {"owner": None, "miner": {"coldkey_ss58": "5MINER", "hotkey_ss58": "5MINER"}}
-    report = build_report(netuid=1, chain_endpoint="ws://ignored", wallets=wallets, subtensor=fake)
+    wallets = {
+        "owner": None,
+        "miner": {"coldkey_ss58": "5MINER", "hotkey_ss58": "5MINER"},
+    }
+    report = build_report(
+        netuid=1,
+        chain_endpoint="ws://ignored",
+        wallets=wallets,
+        subtensor=fake,
+    )
 
     assert report["ownership"]["error"]
     assert report["stake"]["owner"]["error"]
 
 
 def test_format_report_omits_old_hardcoded_text_when_state_is_actually_good():
-    fake = FakeSubtensor(owner_ss58="5OWNER", stake_by_coldkey={"5OWNER": 200.0, "5MINER": 50.0})
-    report = build_report(netuid=1, chain_endpoint="ws://ignored", wallets=_wallets(), subtensor=fake)
+    fake = FakeSubtensor(
+        owner_ss58="5OWNER", stake_by_coldkey={"5OWNER": 200.0, "5MINER": 50.0}
+    )
+    report = build_report(
+        netuid=1,
+        chain_endpoint="ws://ignored",
+        wallets=_wallets(),
+        subtensor=fake,
+    )
     text = format_report(report)
 
     assert _OLD_HARDCODED_STAKE_TEXT not in text
@@ -179,7 +223,12 @@ def test_format_report_omits_old_hardcoded_text_when_state_is_actually_good():
 
 def test_format_report_shows_real_failure_when_actually_not_owned():
     fake = FakeSubtensor(owner_ss58="5BOOTSTRAPKEY", stake_by_coldkey={})
-    report = build_report(netuid=1, chain_endpoint="ws://ignored", wallets=_wallets(), subtensor=fake)
+    report = build_report(
+        netuid=1,
+        chain_endpoint="ws://ignored",
+        wallets=_wallets(),
+        subtensor=fake,
+    )
     text = format_report(report)
 
     assert "5BOOTSTRAPKEY" in text

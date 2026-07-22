@@ -62,6 +62,7 @@ _BINDING_IDENTITY_LABELS = (
     NETWORK_LABEL,
     ORIGIN_FP_PREFIX_LABEL,
 )
+_MAX_EVIDENCE_BLOCKS = 32
 
 
 def _canonical_uuid(value: object) -> bool:
@@ -69,7 +70,7 @@ def _canonical_uuid(value: object) -> bool:
     if not isinstance(value, str) or len(value) != 36:
         return False
     try:
-        return str(uuid_module.UUID(value)) == value.lower()
+        return str(uuid_module.UUID(value)) == value
     except (ValueError, AttributeError):
         return False
 
@@ -88,9 +89,9 @@ def _same_binding_identity(expected: dict, current: dict) -> bool:
         for label in _BINDING_IDENTITY_LABELS
     ):
         return False
-    return current["annotations"].get(
-        ENROLLMENT_UID_ANNOTATION
-    ) == expected["annotations"].get(ENROLLMENT_UID_ANNOTATION)
+    return current["annotations"].get(ENROLLMENT_UID_ANNOTATION) == expected[
+        "annotations"
+    ].get(ENROLLMENT_UID_ANNOTATION)
 
 
 @dataclasses.dataclass
@@ -201,10 +202,14 @@ class ReconciliationEngine:
                 continue
             record = self._absences.get(hotkey)
             if record is None:
-                record = _Absence(cycles=0, first_missing_at=now, metagraph_blocks=[])
+                record = _Absence(
+                    cycles=0, first_missing_at=now, metagraph_blocks=[]
+                )
                 self._absences[hotkey] = record
             record.cycles += 1
             record.metagraph_blocks.append(metagraph_block)
+            if len(record.metagraph_blocks) > _MAX_EVIDENCE_BLOCKS:
+                del record.metagraph_blocks[:-_MAX_EVIDENCE_BLOCKS]
 
             elapsed = now - record.first_missing_at
             if record.cycles < self._min_cycles or elapsed < self._min_seconds:
@@ -222,14 +227,18 @@ class ReconciliationEngine:
 
     # -- internals ------------------------------------------------------------------
 
-    def _candidates(self, clusters: Iterable[dict]) -> list[tuple[str, list[dict]]]:
+    def _candidates(
+        self, clusters: Iterable[dict]
+    ) -> list[tuple[str, list[dict]]]:
         """Group deletable-in-principle clusters by labeled hotkey."""
         grouped: dict[str, list[dict]] = {}
         for cluster in clusters:
             if not isinstance(cluster, dict):
                 continue
             labels = cluster.get("labels")
-            hotkey = labels.get(MINER_LABEL) if isinstance(labels, dict) else None
+            hotkey = (
+                labels.get(MINER_LABEL) if isinstance(labels, dict) else None
+            )
             cluster_id = cluster.get("id")
             cluster_uuid = cluster.get("uuid")
             if not isinstance(labels, dict):
@@ -274,6 +283,7 @@ class ReconciliationEngine:
             del self._absences[hotkey]  # re-registered: reset, never delete
             return
 
+        handled = 0
         for cluster in hotkey_clusters:
             cluster_id = cluster.get("id")
             # Pre-delete recheck 2: final GET re-validating identity + label.
@@ -311,13 +321,15 @@ class ReconciliationEngine:
                     self._metrics.record_reconciliation_suppressed(
                         SuppressionReason.UNAUTHORIZED
                     )
-                    self._sink({
-                        "event": "reconciliation_unauthorized",
-                        "hotkey": hotkey,
-                        "cluster_id": cluster_id,
-                        "detail": "operator action required",
-                        "correlation_id": correlation_id,
-                    })
+                    self._sink(
+                        {
+                            "event": "reconciliation_unauthorized",
+                            "hotkey": hotkey,
+                            "cluster_id": cluster_id,
+                            "detail": "operator action required",
+                            "correlation_id": correlation_id,
+                        }
+                    )
                 else:
                     self._metrics.record_reconciliation_suppressed(
                         SuppressionReason.RANCHER_DOWN
@@ -330,18 +342,25 @@ class ReconciliationEngine:
             else:
                 self._metrics.record_reconciliation_deletion()
                 response_class = f"deleted-{status}"
-            self._sink({
-                "event": "reconciliation_deletion",
-                "hotkey": hotkey,
-                "cluster_id": cluster_id,
-                "cluster_uuid": cluster.get("uuid"),
-                "absence_cycles": record.cycles,
-                "first_missing_at": record.first_missing_at,
-                "metagraph_blocks": list(record.metagraph_blocks),
-                "recheck": "identity+label+uuid verified; fresh metagraph absent",
-                "response_class": response_class,
-                "correlation_id": correlation_id,
-            })
+            handled += 1
+            self._sink(
+                {
+                    "event": "reconciliation_deletion",
+                    "hotkey": hotkey,
+                    "cluster_id": cluster_id,
+                    "cluster_uuid": cluster.get("uuid"),
+                    "absence_cycles": record.cycles,
+                    "first_missing_at": record.first_missing_at,
+                    "metagraph_blocks": list(record.metagraph_blocks),
+                    "recheck": "identity+label+uuid verified; fresh metagraph absent",
+                    "response_class": response_class,
+                    "correlation_id": correlation_id,
+                }
+            )
 
-        # Deletion (or idempotent resolution) handled: clear the record.
-        self._absences.pop(hotkey, None)
+        # Preserve threshold evidence while any candidate remains unresolved
+        # so a later healthy cycle retries it immediately. The hotkey-level
+        # window resolves only after every candidate reached a successful
+        # deletion or idempotent 404/409 outcome.
+        if handled == len(hotkey_clusters):
+            self._absences.pop(hotkey, None)

@@ -16,8 +16,10 @@ from __future__ import annotations
 
 import enum
 import json
+import math
 import re
 import ssl
+import time
 import urllib.error
 import urllib.request
 from urllib.parse import parse_qs, urlsplit
@@ -25,9 +27,21 @@ from urllib.parse import parse_qs, urlsplit
 USER_AGENT = "kubetee-validator/0.1"
 DEFAULT_MAX_RESPONSE_BYTES = 16 * 1024 * 1024
 DEFAULT_MAX_COLLECTION_ITEMS = 100_000
-_KNOWN_PAGINATION_FIELDS = {"first", "next", "last", "limit", "total", "partial"}
+DEFAULT_MAX_COLLECTION_BYTES = 256 * 1024 * 1024
+DEFAULT_COLLECTION_TIMEOUT = 30.0
+_KNOWN_PAGINATION_FIELDS = {
+    "first",
+    "next",
+    "last",
+    "limit",
+    "total",
+    "partial",
+}
 _PAGINATION_QUERY_FIELDS = {"limit", "marker", "page"}
-_CLUSTER_ID = re.compile(r"^[a-z0-9][a-z0-9-]{0,62}$")
+_CLUSTER_ID_PART = r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?"
+_NODE_ID_PART = r"[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?"
+_CLUSTER_ID = re.compile(rf"^{_CLUSTER_ID_PART}$")
+_NODE_ID = re.compile(rf"^{_CLUSTER_ID_PART}:{_NODE_ID_PART}$")
 
 
 def normalize_https_origin(value: str) -> str:
@@ -57,6 +71,13 @@ def validate_cluster_id(value: object) -> str:
     """Return a canonical allowlisted Rancher cluster ID or raise."""
     if not isinstance(value, str) or not _CLUSTER_ID.fullmatch(value):
         raise ValueError("invalid cluster id")
+    return value
+
+
+def validate_node_id(value: object) -> str:
+    """Return a canonical Rancher node ID or raise."""
+    if not isinstance(value, str) or not _NODE_ID.fullmatch(value):
+        raise ValueError("invalid node id")
     return value
 
 
@@ -91,6 +112,27 @@ class _ResponseTooLarge(Exception):
     pass
 
 
+class _MalformedResponseBody(Exception):
+    pass
+
+
+class _DuplicateJSONKey(ValueError):
+    pass
+
+
+def _strict_json_object(pairs: list[tuple[str, object]]) -> dict:
+    obj = {}
+    for key, value in pairs:
+        if key in obj:
+            raise _DuplicateJSONKey
+        obj[key] = value
+    return obj
+
+
+def _reject_json_constant(_value: str):
+    raise ValueError
+
+
 class UrllibTransport:
     """Default stdlib transport. Returns (status, body_text); never redirects."""
 
@@ -123,11 +165,19 @@ class UrllibTransport:
                     and content_length.isdigit()
                     and int(content_length) > self._max_response_bytes
                 ):
-                    raise _ResponseTooLarge("Rancher response exceeds byte limit")
+                    raise _ResponseTooLarge(
+                        "Rancher response exceeds byte limit"
+                    )
                 body = resp.read(self._max_response_bytes + 1)
                 if len(body) > self._max_response_bytes:
-                    raise _ResponseTooLarge("Rancher response exceeds byte limit")
-                return resp.status, body.decode("utf-8", errors="replace")
+                    raise _ResponseTooLarge(
+                        "Rancher response exceeds byte limit"
+                    )
+                try:
+                    text = body.decode("utf-8")
+                except UnicodeDecodeError:
+                    raise _MalformedResponseBody from None
+                return resp.status, text
         except urllib.error.HTTPError as exc:
             return exc.code, ""
         except urllib.error.URLError as exc:
@@ -148,7 +198,10 @@ class RancherClient:
         max_pages: int = 1000,
         max_response_bytes: int = DEFAULT_MAX_RESPONSE_BYTES,
         max_collection_items: int = DEFAULT_MAX_COLLECTION_ITEMS,
+        max_collection_bytes: int = DEFAULT_MAX_COLLECTION_BYTES,
+        collection_timeout: float = DEFAULT_COLLECTION_TIMEOUT,
         ca_file: str | None = None,
+        monotonic=time.monotonic,
     ) -> None:
         origin = normalize_https_origin(base_url)
         if not token or not token.strip():
@@ -157,9 +210,25 @@ class RancherClient:
             ("max_pages", max_pages),
             ("max_response_bytes", max_response_bytes),
             ("max_collection_items", max_collection_items),
+            ("max_collection_bytes", max_collection_bytes),
         ):
-            if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, int)
+                or value < 1
+            ):
                 raise ValueError(f"{name} must be a positive integer")
+        if (
+            isinstance(collection_timeout, bool)
+            or not isinstance(collection_timeout, (int, float))
+            or not math.isfinite(collection_timeout)
+            or collection_timeout <= 0
+        ):
+            raise ValueError(
+                "collection_timeout must be a positive finite number"
+            )
+        if not callable(monotonic):
+            raise ValueError("monotonic must be callable")
         self._origin = origin
         self._token = token.strip()
         self._transport = (
@@ -175,6 +244,9 @@ class RancherClient:
         self._max_pages = max_pages
         self._max_response_bytes = max_response_bytes
         self._max_collection_items = max_collection_items
+        self._max_collection_bytes = max_collection_bytes
+        self._collection_timeout = float(collection_timeout)
+        self._monotonic = monotonic
 
     def __repr__(self) -> str:  # never include the token
         return f"RancherClient(origin={self._origin!r})"
@@ -188,7 +260,9 @@ class RancherClient:
 
     def list_nodes(self, cluster_id: str) -> list[dict]:
         cid = self._validate_id(cluster_id)
-        return self._collect(f"{self._origin}/v3/nodes?clusterId={cid}&limit=-1")
+        return self._collect(
+            f"{self._origin}/v3/nodes?clusterId={cid}&limit=-1"
+        )
 
     def get_cluster(self, cluster_id: str) -> dict:
         cid = self._validate_id(cluster_id)
@@ -208,13 +282,15 @@ class RancherClient:
     def _validate_id(cluster_id: str) -> str:
         return validate_cluster_id(cluster_id)
 
-    def _scrub(self, text: str) -> str:
-        return text.replace(self._token, "<redacted-token>")
-
-    def _raw(self, method: str, url: str) -> tuple[int, str]:
+    def _raw(
+        self,
+        method: str,
+        url: str,
+        timeout: float | None = None,
+    ) -> tuple[int, str]:
         if not url.startswith(self._origin + "/"):
             raise IncompleteEnumeration(
-                f"refusing non-origin URL host={urlsplit(url).netloc!r}"
+                "request URL escapes the configured origin"
             )
         headers = {
             "Authorization": f"Bearer {self._token}",
@@ -223,12 +299,20 @@ class RancherClient:
         }
         try:
             status, body = self._transport.request(
-                method, url, headers, self._timeout
+                method,
+                url,
+                headers,
+                self._timeout if timeout is None else timeout,
             )
-        except Exception as exc:  # transport failures wrap, token scrubbed
+        except _MalformedResponseBody:
+            raise RancherError(
+                ErrorCategory.MALFORMED,
+                "Rancher response body is not valid UTF-8",
+            ) from None
+        except Exception:  # transport failures are reduced to a fixed reason
             raise RancherError(
                 ErrorCategory.TRANSPORT,
-                self._scrub(f"transport failure: {type(exc).__name__}: {exc}"),
+                "Rancher transport failure",
             ) from None
         if not isinstance(body, str):
             raise RancherError(
@@ -241,13 +325,17 @@ class RancherClient:
                 "Rancher response exceeds byte limit",
             )
         if status in (401, 403):
-            raise RancherError(ErrorCategory.AUTH, f"HTTP {status} from Rancher")
+            raise RancherError(
+                ErrorCategory.AUTH, f"HTTP {status} from Rancher"
+            )
         if 300 <= status < 400:
             raise RancherError(
                 ErrorCategory.TRANSPORT, f"redirect HTTP {status} refused"
             )
         if method == "GET" and status != 200:
-            raise RancherError(ErrorCategory.TRANSPORT, f"HTTP {status} from Rancher")
+            raise RancherError(
+                ErrorCategory.TRANSPORT, f"HTTP {status} from Rancher"
+            )
         if method == "DELETE" and status not in (200, 202, 204, 404, 409):
             raise RancherError(
                 ErrorCategory.TRANSPORT,
@@ -255,19 +343,30 @@ class RancherClient:
             )
         return status, body
 
-    def _request(self, method: str, url: str) -> str:
-        _, body = self._raw(method, url)
+    def _request(
+        self,
+        method: str,
+        url: str,
+        timeout: float | None = None,
+    ) -> str:
+        _, body = self._raw(method, url, timeout)
         return body
 
     def _parse_json(self, body: str) -> dict:
         try:
-            parsed = json.loads(body)
+            parsed = json.loads(
+                body,
+                object_pairs_hook=_strict_json_object,
+                parse_constant=_reject_json_constant,
+            )
         except ValueError:
             raise RancherError(
                 ErrorCategory.MALFORMED, "response body is not valid JSON"
             ) from None
         if not isinstance(parsed, dict):
-            raise RancherError(ErrorCategory.MALFORMED, "unexpected JSON shape")
+            raise RancherError(
+                ErrorCategory.MALFORMED, "unexpected JSON shape"
+            )
         return parsed
 
     def _collect(self, first_url: str) -> list[dict]:
@@ -277,6 +376,16 @@ class RancherClient:
         visited_urls = {first_url}
         url = first_url
         first_parts = urlsplit(first_url)
+        if first_parts.path == "/v3/clusters":
+            validate_item_id = validate_cluster_id
+            expected_resource_type = "cluster"
+        elif first_parts.path == "/v3/nodes":
+            validate_item_id = validate_node_id
+            expected_resource_type = "node"
+        else:
+            raise IncompleteEnumeration(
+                "collection resource is not allowlisted"
+            )
         first_query = parse_qs(first_parts.query, keep_blank_values=True)
         expected_filters = {
             key: values
@@ -284,12 +393,33 @@ class RancherClient:
             if key not in _PAGINATION_QUERY_FIELDS
         }
         expected_total: int | None = None
+        cumulative_bytes = 0
+        deadline = self._monotonic() + self._collection_timeout
         for _ in range(self._max_pages):
-            doc = self._parse_json(self._request("GET", url))
+            remaining = deadline - self._monotonic()
+            if remaining <= 0:
+                raise IncompleteEnumeration("collection deadline exceeded")
+            body = self._request("GET", url, min(self._timeout, remaining))
+            cumulative_bytes += len(body.encode("utf-8"))
+            if cumulative_bytes > self._max_collection_bytes:
+                raise IncompleteEnumeration("collection byte budget exceeded")
+            if self._monotonic() > deadline:
+                raise IncompleteEnumeration("collection deadline exceeded")
+            doc = self._parse_json(body)
             data = doc.get("data")
             pagination = doc.get("pagination")
+            if (
+                doc.get("type") != "collection"
+                or doc.get("resourceType") != expected_resource_type
+            ):
+                raise RancherError(
+                    ErrorCategory.MALFORMED,
+                    "collection envelope has an unexpected resource type",
+                )
             if not isinstance(data, list):
-                raise RancherError(ErrorCategory.MALFORMED, "collection lacks data list")
+                raise RancherError(
+                    ErrorCategory.MALFORMED, "collection lacks data list"
+                )
             if len(items) + len(data) > self._max_collection_items:
                 raise IncompleteEnumeration(
                     "collection exceeds the item limit"
@@ -299,26 +429,42 @@ class RancherClient:
                     ErrorCategory.MALFORMED,
                     "collection contains a non-object item",
                 )
-            page_ids = [item.get("id") for item in data]
-            if not all(isinstance(item_id, str) and item_id for item_id in page_ids):
+            if not all(
+                item.get("type") == expected_resource_type for item in data
+            ):
+                raise RancherError(
+                    ErrorCategory.MALFORMED,
+                    "collection item has an unexpected resource type",
+                )
+            try:
+                page_ids = [validate_item_id(item.get("id")) for item in data]
+            except ValueError:
                 raise RancherError(
                     ErrorCategory.MALFORMED,
                     "collection item lacks a valid id",
-                )
+                ) from None
             if len(page_ids) != len(set(page_ids)) or seen_ids.intersection(
                 page_ids
             ):
-                raise IncompleteEnumeration("collection contains duplicate ids")
+                raise IncompleteEnumeration(
+                    "collection contains duplicate ids"
+                )
             seen_ids.update(page_ids)
             if not isinstance(pagination, dict):
-                raise IncompleteEnumeration("collection lacks pagination metadata")
+                raise IncompleteEnumeration(
+                    "collection lacks pagination metadata"
+                )
             unknown = set(pagination) - _KNOWN_PAGINATION_FIELDS
             if unknown:
                 raise IncompleteEnumeration(
-                    f"unrecognized pagination fields: {sorted(unknown)}"
+                    "pagination has unrecognized fields"
                 )
             total = pagination.get("total")
-            if isinstance(total, bool) or not isinstance(total, int) or total < 0:
+            if (
+                isinstance(total, bool)
+                or not isinstance(total, int)
+                or total < 0
+            ):
                 raise IncompleteEnumeration("pagination.total is invalid")
             if total > self._max_collection_items:
                 raise IncompleteEnumeration(
@@ -327,10 +473,14 @@ class RancherClient:
             if expected_total is None:
                 expected_total = total
             elif total != expected_total:
-                raise IncompleteEnumeration("pagination.total changed between pages")
+                raise IncompleteEnumeration(
+                    "pagination.total changed between pages"
+                )
             items.extend(data)
             if len(items) > expected_total:
-                raise IncompleteEnumeration("collection exceeds pagination.total")
+                raise IncompleteEnumeration(
+                    "collection exceeds pagination.total"
+                )
             next_url = pagination.get("next")
             if next_url is not None and not isinstance(next_url, str):
                 raise IncompleteEnumeration("pagination.next is not a URL")
@@ -346,7 +496,8 @@ class RancherClient:
                     if key not in _PAGINATION_QUERY_FIELDS
                 }
                 if (
-                    f"{next_parts.scheme}://{next_parts.netloc}" != self._origin
+                    f"{next_parts.scheme}://{next_parts.netloc}"
+                    != self._origin
                     or next_parts.path != first_parts.path
                     or next_parts.fragment
                     or next_filters != expected_filters
@@ -355,7 +506,9 @@ class RancherClient:
                         "pagination.next escapes the allowlisted collection"
                     )
                 if next_url in visited_urls:
-                    raise IncompleteEnumeration("pagination.next repeats a page")
+                    raise IncompleteEnumeration(
+                        "pagination.next repeats a page"
+                    )
                 visited_urls.add(next_url)
                 url = next_url
                 continue

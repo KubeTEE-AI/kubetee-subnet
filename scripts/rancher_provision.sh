@@ -6,7 +6,9 @@
 # disposable downstream cluster the validator can score" with no manual steps:
 #
 #   1. wait for Rancher, log in with the hardcoded dev bootstrap password
-#   2. mint a validator API token via /v3  -> /shared/rancher-token
+#   2. mint a least-privilege validator token -> /shared/rancher-token;
+#      mint a distinct short-lived platform token only for a scoped contract
+#      check, then revoke it before declaring readiness
 #   3. read the Rancher CA via /v3         -> /shared/rancher-ca.crt
 #   4. create an imported cluster, fetch its registration manifest
 #   5. apply the manifest into the rancher/k3s `miner-cluster` downstream
@@ -65,23 +67,62 @@ cr -X PUT "$RANCHER/v3/settings/server-url" -H "Authorization: Bearer $LTOK" \
 VAL_USERNAME="kubetee-validator"
 VAL_ROLE_NAME="kubetee-validator-scoring"
 
-# 2a. custom global role: clusters get/list/delete, nodes get/list
-ROLE_ID=$(cr "$RANCHER/v3/globalroles?name=$VAL_ROLE_NAME" -H "Authorization: Bearer $LTOK" \
-           | jq -r '.data[0].id // empty')
+# 2a. custom global role: reconcile the complete authorization-bearing shape,
+# including persisted Rancher volumes created by an older, broader script.
+ROLE_SPEC=$(jq -nc --arg name "$VAL_ROLE_NAME" '{
+  type: "globalRole",
+  name: $name,
+  description: "KubeTEE validator: cluster read + guarded delete, node read",
+  builtin: false,
+  newUserDefault: false,
+  inheritedClusterRoles: [],
+  inheritedFleetWorkspacePermissions: null,
+  namespacedRules: {},
+  rules: [
+    {apiGroups: ["management.cattle.io"], resources: ["clusters"],
+     verbs: ["get", "list", "delete"], resourceNames: [], nonResourceURLs: []},
+    {apiGroups: ["management.cattle.io"], resources: ["nodes"],
+     verbs: ["get", "list"], resourceNames: [], nonResourceURLs: []}
+  ]
+}')
+ROLE_MATCHES=$(cr "$RANCHER/v3/globalroles?limit=-1&name=$VAL_ROLE_NAME" \
+                 -H "Authorization: Bearer $LTOK")
+ROLE_COUNT=$(printf '%s' "$ROLE_MATCHES" | jq '[.data[] | select(.name == $name)] | length' \
+               --arg name "$VAL_ROLE_NAME")
+[ "$ROLE_COUNT" -le 1 ] || { log "scoped global role is ambiguous"; exit 1; }
+ROLE_ID=$(printf '%s' "$ROLE_MATCHES" | jq -r --arg name "$VAL_ROLE_NAME" \
+            '.data[] | select(.name == $name) | .id' | head -1)
 if [ -z "$ROLE_ID" ]; then
   ROLE_ID=$(cr -X POST "$RANCHER/v3/globalrole" -H "Authorization: Bearer $LTOK" \
-             -H 'Content-Type: application/json' -d "{
-    \"type\": \"globalRole\",
-    \"name\": \"$VAL_ROLE_NAME\",
-    \"description\": \"KubeTEE validator: cluster read + guarded delete, node read\",
-    \"rules\": [
-      {\"apiGroups\": [\"management.cattle.io\"], \"resources\": [\"clusters\"],
-       \"verbs\": [\"get\", \"list\", \"delete\"]},
-      {\"apiGroups\": [\"management.cattle.io\"], \"resources\": [\"nodes\"],
-       \"verbs\": [\"get\", \"list\"]}
-    ]}" | jq -r .id)
+             -H 'Content-Type: application/json' -d "$ROLE_SPEC" | jq -r .id)
+else
+  ROLE_SPEC=$(printf '%s' "$ROLE_SPEC" | jq -c --arg id "$ROLE_ID" '. + {id: $id}')
+  cr -X PUT "$RANCHER/v3/globalroles/$ROLE_ID" \
+     -H "Authorization: Bearer $LTOK" -H 'Content-Type: application/json' \
+     -d "$ROLE_SPEC" >/dev/null
 fi
 [ -n "$ROLE_ID" ] && [ "$ROLE_ID" != "null" ] || { log "global role create failed"; exit 1; }
+ROLE_ACTUAL=$(cr "$RANCHER/v3/globalroles/$ROLE_ID" -H "Authorization: Bearer $LTOK")
+printf '%s' "$ROLE_ACTUAL" | jq -e --arg name "$VAL_ROLE_NAME" '
+  def normalized_rules:
+    [.[] | {
+      apiGroups: (.apiGroups // []), resources: (.resources // []),
+      verbs: (.verbs // []), resourceNames: (.resourceNames // []),
+      nonResourceURLs: (.nonResourceURLs // [])
+    }] | sort_by(.resources[0]);
+  .name == $name
+  and (.builtin // false) == false
+  and (.newUserDefault // false) == false
+  and (.inheritedClusterRoles // []) == []
+  and (.inheritedFleetWorkspacePermissions // null) == null
+  and (.namespacedRules // {}) == {}
+  and ((.rules | normalized_rules) == ([
+    {apiGroups: ["management.cattle.io"], resources: ["clusters"],
+     verbs: ["get", "list", "delete"], resourceNames: [], nonResourceURLs: []},
+    {apiGroups: ["management.cattle.io"], resources: ["nodes"],
+     verbs: ["get", "list"], resourceNames: [], nonResourceURLs: []}
+  ] | normalized_rules))' >/dev/null || { log "scoped global role verification failed"; exit 1; }
+log "role rules verified exact"
 log "scoped global role: $ROLE_ID"
 
 # 2b. dedicated user with a per-`up` random password (never persisted/echoed)
@@ -103,28 +144,240 @@ fi
 [ -n "$USER_ID" ] && [ "$USER_ID" != "null" ] || { log "user create failed"; exit 1; }
 log "validator user: $USER_ID"
 
-# 2c. bindings: login basics (user-base) + the scoped role (idempotent)
-EXISTING_BINDS=$(cr "$RANCHER/v3/globalrolebindings?userId=$USER_ID" \
-                  -H "Authorization: Bearer $LTOK" | jq -r '[.data[].globalRoleId] | join(",")')
-for ROLE in "user-base" "$ROLE_ID"; do
-  case ",$EXISTING_BINDS," in *",$ROLE,"*) continue;; esac
-  cr -X POST "$RANCHER/v3/globalrolebinding" -H "Authorization: Bearer $LTOK" \
-     -H 'Content-Type: application/json' \
-     -d "{\"type\":\"globalRoleBinding\",\"globalRoleId\":\"$ROLE\",\"userId\":\"$USER_ID\"}" >/dev/null
+# 2c. bindings: reconcile exactly login basics (user-base) + the scoped role.
+# Remove stale/extra roles and duplicate desired bindings before minting a token.
+EXISTING_BINDS=$(cr "$RANCHER/v3/globalrolebindings?limit=-1&userId=$USER_ID" \
+                  -H "Authorization: Bearer $LTOK")
+for BIND_ID in $(printf '%s' "$EXISTING_BINDS" | jq -r \
+                   --arg user "$USER_ID" --arg scoped "$ROLE_ID" '
+  .data[]
+  | select(.userId == $user)
+  | select(.globalRoleId != "user-base" and .globalRoleId != $scoped)
+  | .id // empty'); do
+  cr -X DELETE "$RANCHER/v3/globalrolebindings/$BIND_ID" \
+     -H "Authorization: Bearer $LTOK" >/dev/null
 done
-log "bindings ensured (user-base + $VAL_ROLE_NAME)"
+for ROLE in "user-base" "$ROLE_ID"; do
+  KEEP_BIND=""
+  for BIND_ID in $(printf '%s' "$EXISTING_BINDS" | jq -r \
+                     --arg user "$USER_ID" --arg role "$ROLE" '
+    .data[] | select(.userId == $user and .globalRoleId == $role) | .id // empty'); do
+    if [ -z "$KEEP_BIND" ]; then
+      KEEP_BIND="$BIND_ID"
+    else
+      cr -X DELETE "$RANCHER/v3/globalrolebindings/$BIND_ID" \
+         -H "Authorization: Bearer $LTOK" >/dev/null
+    fi
+  done
+  if [ -z "$KEEP_BIND" ]; then
+    cr -X POST "$RANCHER/v3/globalrolebinding" -H "Authorization: Bearer $LTOK" \
+       -H 'Content-Type: application/json' \
+       -d "{\"type\":\"globalRoleBinding\",\"globalRoleId\":\"$ROLE\",\"userId\":\"$USER_ID\"}" >/dev/null
+  fi
+done
+VERIFIED_BINDS=$(cr "$RANCHER/v3/globalrolebindings?limit=-1&userId=$USER_ID" \
+                  -H "Authorization: Bearer $LTOK")
+printf '%s' "$VERIFIED_BINDS" | jq -e --arg user "$USER_ID" --arg scoped "$ROLE_ID" '
+  ([.data[] | select(.userId == $user) | .globalRoleId] | sort)
+  == (["user-base", $scoped] | sort)' >/dev/null \
+  || { log "validator role binding verification failed"; exit 1; }
+log "bindings verified exact (user-base + $VAL_ROLE_NAME)"
 
-# 2d. log in AS the scoped user and mint the validator token from that session
+# 2d. revoke tokens from earlier disposable runs before logging in and minting
+# this run's only long-lived validator token. The login token is created after
+# cleanup so it cannot be selected accidentally.
+OLD_TOKENS=$(cr "$RANCHER/v3/tokens?limit=-1&userId=$USER_ID" \
+               -H "Authorization: Bearer $LTOK")
+for TOKEN_ID in $(printf '%s' "$OLD_TOKENS" | jq -r \
+                    --arg user "$USER_ID" '
+  .data[]
+  | select(.userId == $user)
+  | .id // empty'); do
+  cr -X DELETE "$RANCHER/v3/tokens/$TOKEN_ID" \
+     -H "Authorization: Bearer $LTOK" >/dev/null
+done
+REMAINING_TOKENS=$(cr "$RANCHER/v3/tokens?limit=-1&userId=$USER_ID" \
+                     -H "Authorization: Bearer $LTOK")
+printf '%s' "$REMAINING_TOKENS" | jq -e --arg user "$USER_ID" '
+  [.data[] | select(.userId == $user)] | length == 0' >/dev/null \
+  || { log "prior validator token revocation verification failed"; exit 1; }
+
+# Log in AS the scoped user and mint the validator token from that session.
 VLTOK=$(cr -X POST "$RANCHER/v3-public/localProviders/local?action=login" \
          -H 'Content-Type: application/json' \
          -d "{\"username\":\"$VAL_USERNAME\",\"password\":\"$VAL_PASSWORD\"}" | jq -r .token)
 [ -n "$VLTOK" ] && [ "$VLTOK" != "null" ] || { log "validator login failed"; exit 1; }
-BEARER=$(cr -X POST "$RANCHER/v3/token" -H "Authorization: Bearer $VLTOK" \
-          -H 'Content-Type: application/json' \
-          -d '{"type":"token","description":"kubetee-validator-scoring","ttl":0}' | jq -r .token)
-[ -n "$BEARER" ] && [ "$BEARER" != "null" ] || { log "token mint failed"; exit 1; }
+VALIDATOR_TOKEN_RESPONSE=$(cr -X POST "$RANCHER/v3/token" \
+  -H "Authorization: Bearer $VLTOK" -H 'Content-Type: application/json' \
+  -d '{"type":"token","description":"kubetee-validator-scoring","ttl":0}')
+VALIDATOR_TOKEN_ID=$(printf '%s' "$VALIDATOR_TOKEN_RESPONSE" | jq -r .id)
+BEARER=$(printf '%s' "$VALIDATOR_TOKEN_RESPONSE" | jq -r .token)
+[ -n "$VALIDATOR_TOKEN_ID" ] && [ "$VALIDATOR_TOKEN_ID" != "null" ] \
+  && [ -n "$BEARER" ] && [ "$BEARER" != "null" ] \
+  || { log "token mint failed"; exit 1; }
+
+# A local-provider login may itself create a token record. Retain exactly the
+# intended API token and revoke every other token for this dedicated user.
+VALIDATOR_POST_MINT_TOKENS=$(cr "$RANCHER/v3/tokens?limit=-1&userId=$USER_ID" \
+  -H "Authorization: Bearer $LTOK")
+for TOKEN_ID in $(printf '%s' "$VALIDATOR_POST_MINT_TOKENS" | jq -r \
+  --arg user "$USER_ID" --arg keep "$VALIDATOR_TOKEN_ID" '
+  .data[] | select(.userId == $user and .id != $keep) | .id // empty'); do
+  cr -X DELETE "$RANCHER/v3/tokens/$TOKEN_ID" \
+     -H "Authorization: Bearer $LTOK" >/dev/null
+done
+VALIDATOR_FINAL_TOKENS=$(cr "$RANCHER/v3/tokens?limit=-1&userId=$USER_ID" \
+  -H "Authorization: Bearer $LTOK")
+printf '%s' "$VALIDATOR_FINAL_TOKENS" | jq -e \
+  --arg user "$USER_ID" --arg keep "$VALIDATOR_TOKEN_ID" '
+  [.data[] | select(.userId == $user)] as $tokens
+  | ($tokens | length) == 1
+  and $tokens[0].id == $keep
+  and $tokens[0].description == "kubetee-validator-scoring"' >/dev/null \
+  || { log "validator token post-mint verification failed"; exit 1; }
 ( umask 077; printf '%s' "$BEARER" > "$SHARED/rancher-token" )   # never echoed
 log "minted SCOPED validator API token -> $SHARED/rancher-token"
+
+# 2e. The platform binding store is a different trust domain. It needs
+# get/list/PATCH on management.cattle.io Cluster objects for resourceVersion-
+# guarded label updates, but no node reads and no DELETE. Never reuse or widen
+# the validator identity for this writer.
+PLATFORM_USERNAME="kubetee-platform"
+PLATFORM_ROLE_NAME="kubetee-platform-binding-store"
+
+PLATFORM_ROLE_SPEC=$(jq -nc --arg name "$PLATFORM_ROLE_NAME" '{
+  type: "globalRole",
+  name: $name,
+  description: "KubeTEE platform: resourceVersion-guarded cluster binding store",
+  builtin: false,
+  newUserDefault: false,
+  inheritedClusterRoles: [],
+  inheritedFleetWorkspacePermissions: null,
+  namespacedRules: {},
+  rules: [
+    {apiGroups: ["management.cattle.io"], resources: ["clusters"],
+     verbs: ["get", "list", "patch"], resourceNames: [], nonResourceURLs: []}
+  ]
+}')
+PLATFORM_ROLE_MATCHES=$(cr "$RANCHER/v3/globalroles?limit=-1&name=$PLATFORM_ROLE_NAME" \
+                          -H "Authorization: Bearer $LTOK")
+PLATFORM_ROLE_COUNT=$(printf '%s' "$PLATFORM_ROLE_MATCHES" | jq \
+  '[.data[] | select(.name == $name)] | length' --arg name "$PLATFORM_ROLE_NAME")
+[ "$PLATFORM_ROLE_COUNT" -le 1 ] || { log "platform global role is ambiguous"; exit 1; }
+PLATFORM_ROLE_ID=$(printf '%s' "$PLATFORM_ROLE_MATCHES" | jq -r \
+  --arg name "$PLATFORM_ROLE_NAME" \
+  '.data[] | select(.name == $name) | .id' | head -1)
+if [ -z "$PLATFORM_ROLE_ID" ]; then
+  PLATFORM_ROLE_ID=$(cr -X POST "$RANCHER/v3/globalrole" \
+    -H "Authorization: Bearer $LTOK" -H 'Content-Type: application/json' \
+    -d "$PLATFORM_ROLE_SPEC" | jq -r .id)
+else
+  PLATFORM_ROLE_SPEC=$(printf '%s' "$PLATFORM_ROLE_SPEC" | jq -c \
+    --arg id "$PLATFORM_ROLE_ID" '. + {id: $id}')
+  cr -X PUT "$RANCHER/v3/globalroles/$PLATFORM_ROLE_ID" \
+     -H "Authorization: Bearer $LTOK" -H 'Content-Type: application/json' \
+     -d "$PLATFORM_ROLE_SPEC" >/dev/null
+fi
+[ -n "$PLATFORM_ROLE_ID" ] && [ "$PLATFORM_ROLE_ID" != "null" ] \
+  || { log "platform global role create failed"; exit 1; }
+PLATFORM_ROLE_ACTUAL=$(cr "$RANCHER/v3/globalroles/$PLATFORM_ROLE_ID" \
+                         -H "Authorization: Bearer $LTOK")
+printf '%s' "$PLATFORM_ROLE_ACTUAL" | jq -e --arg name "$PLATFORM_ROLE_NAME" '
+  def normalized_rules:
+    [.[] | {
+      apiGroups: (.apiGroups // []), resources: (.resources // []),
+      verbs: (.verbs // []), resourceNames: (.resourceNames // []),
+      nonResourceURLs: (.nonResourceURLs // [])
+    }] | sort_by(.resources[0]);
+  .name == $name
+  and (.builtin // false) == false
+  and (.newUserDefault // false) == false
+  and (.inheritedClusterRoles // []) == []
+  and (.inheritedFleetWorkspacePermissions // null) == null
+  and (.namespacedRules // {}) == {}
+  and ((.rules | normalized_rules) == ([
+    {apiGroups: ["management.cattle.io"], resources: ["clusters"],
+     verbs: ["get", "list", "patch"], resourceNames: [], nonResourceURLs: []}
+  ] | normalized_rules))' >/dev/null \
+  || { log "platform global role verification failed"; exit 1; }
+log "platform role rules verified exact"
+
+PLATFORM_PASSWORD=$(head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')
+PLATFORM_USER_ID=$(cr "$RANCHER/v3/users?username=$PLATFORM_USERNAME" \
+                     -H "Authorization: Bearer $LTOK" \
+                   | jq -r '.data[0].id // empty')
+if [ -z "$PLATFORM_USER_ID" ]; then
+  PLATFORM_USER_ID=$(cr -X POST "$RANCHER/v3/user" \
+    -H "Authorization: Bearer $LTOK" -H 'Content-Type: application/json' \
+    -d "{\"type\":\"user\",\"username\":\"$PLATFORM_USERNAME\",
+         \"password\":\"$PLATFORM_PASSWORD\",\"mustChangePassword\":false,
+         \"enabled\":true}" | jq -r .id)
+else
+  cr -X POST "$RANCHER/v3/users/$PLATFORM_USER_ID?action=setpassword" \
+     -H "Authorization: Bearer $LTOK" -H 'Content-Type: application/json' \
+     -d "{\"newPassword\":\"$PLATFORM_PASSWORD\"}" >/dev/null
+fi
+[ -n "$PLATFORM_USER_ID" ] && [ "$PLATFORM_USER_ID" != "null" ] \
+  || { log "platform user create failed"; exit 1; }
+
+PLATFORM_EXISTING_BINDS=$(cr \
+  "$RANCHER/v3/globalrolebindings?limit=-1&userId=$PLATFORM_USER_ID" \
+  -H "Authorization: Bearer $LTOK")
+for PLATFORM_BIND_ID in $(printf '%s' "$PLATFORM_EXISTING_BINDS" | jq -r \
+  --arg user "$PLATFORM_USER_ID" --arg scoped "$PLATFORM_ROLE_ID" '
+  .data[]
+  | select(.userId == $user)
+  | select(.globalRoleId != "user-base" and .globalRoleId != $scoped)
+  | .id // empty'); do
+  cr -X DELETE "$RANCHER/v3/globalrolebindings/$PLATFORM_BIND_ID" \
+     -H "Authorization: Bearer $LTOK" >/dev/null
+done
+for PLATFORM_ROLE in "user-base" "$PLATFORM_ROLE_ID"; do
+  PLATFORM_KEEP_BIND=""
+  for PLATFORM_BIND_ID in $(printf '%s' "$PLATFORM_EXISTING_BINDS" | jq -r \
+    --arg user "$PLATFORM_USER_ID" --arg role "$PLATFORM_ROLE" '
+    .data[] | select(.userId == $user and .globalRoleId == $role) | .id // empty'); do
+    if [ -z "$PLATFORM_KEEP_BIND" ]; then
+      PLATFORM_KEEP_BIND="$PLATFORM_BIND_ID"
+    else
+      cr -X DELETE "$RANCHER/v3/globalrolebindings/$PLATFORM_BIND_ID" \
+         -H "Authorization: Bearer $LTOK" >/dev/null
+    fi
+  done
+  if [ -z "$PLATFORM_KEEP_BIND" ]; then
+    cr -X POST "$RANCHER/v3/globalrolebinding" \
+       -H "Authorization: Bearer $LTOK" -H 'Content-Type: application/json' \
+       -d "{\"type\":\"globalRoleBinding\",\"globalRoleId\":\"$PLATFORM_ROLE\",\"userId\":\"$PLATFORM_USER_ID\"}" >/dev/null
+  fi
+done
+PLATFORM_VERIFIED_BINDS=$(cr \
+  "$RANCHER/v3/globalrolebindings?limit=-1&userId=$PLATFORM_USER_ID" \
+  -H "Authorization: Bearer $LTOK")
+printf '%s' "$PLATFORM_VERIFIED_BINDS" | jq -e \
+  --arg user "$PLATFORM_USER_ID" --arg scoped "$PLATFORM_ROLE_ID" '
+  ([.data[] | select(.userId == $user) | .globalRoleId] | sort)
+  == (["user-base", $scoped] | sort)' >/dev/null \
+  || { log "platform role binding verification failed"; exit 1; }
+log "platform bindings verified exact (user-base + $PLATFORM_ROLE_NAME)"
+
+PLATFORM_OLD_TOKENS=$(cr \
+  "$RANCHER/v3/tokens?limit=-1&userId=$PLATFORM_USER_ID" \
+  -H "Authorization: Bearer $LTOK")
+for PLATFORM_TOKEN_ID in $(printf '%s' "$PLATFORM_OLD_TOKENS" | jq -r \
+  --arg user "$PLATFORM_USER_ID" '
+  .data[]
+  | select(.userId == $user)
+  | .id // empty'); do
+  cr -X DELETE "$RANCHER/v3/tokens/$PLATFORM_TOKEN_ID" \
+     -H "Authorization: Bearer $LTOK" >/dev/null
+done
+PLATFORM_REMAINING_TOKENS=$(cr \
+  "$RANCHER/v3/tokens?limit=-1&userId=$PLATFORM_USER_ID" \
+  -H "Authorization: Bearer $LTOK")
+printf '%s' "$PLATFORM_REMAINING_TOKENS" | jq -e \
+  --arg user "$PLATFORM_USER_ID" '
+  [.data[] | select(.userId == $user)] | length == 0' >/dev/null \
+  || { log "prior platform token revocation verification failed"; exit 1; }
 
 # --- 3. CA -> shared ---------------------------------------------------------
 cr "$RANCHER/v3/settings/cacerts" -H "Authorization: Bearer $LTOK" | jq -r .value > "$SHARED/rancher-ca.crt"
@@ -183,8 +436,16 @@ for _ in $(seq 1 60); do
   [ "$ST" = "active" ] && [ "$N" -ge 1 ] && break
   sleep 6
 done
+[ "$ST" = "active" ] && [ "$N" -ge 1 ] \
+  || { log "downstream did not become active with a node"; exit 1; }
 ORIGIN_FP=$(printf '%s' "local-rancher-binding:$CID" | sha256sum | awk '{print $1}')
 ORIGIN_FP_PREFIX=${ORIGIN_FP%?}
+KUBE_SYSTEM_UID=$(kubectl get namespace kube-system -o jsonpath='{.metadata.uid}')
+[ -n "$KUBE_SYSTEM_UID" ] || { log "kube-system uid unavailable"; exit 1; }
+SYNTHETIC_EVIDENCE=$(printf '%s' "local-rancher-evidence:$CID" | sha256sum | awk '{print $1}')
+CREATED_AT_UNIX_MS="$(date +%s)000"
+FINGERPRINT_ALIASES=$(jq -nc --arg fp "$ORIGIN_FP" --argjson at "$CREATED_AT_UNIX_MS" \
+  '[{fingerprint: $fp, added_at_unix_ms: $at}]')
 PATCH_BODY=$(jq -n \
   --arg hotkey "$MINER_HOTKEY" \
   --arg coldkey "$MINER_COLDKEY" \
@@ -192,6 +453,11 @@ PATCH_BODY=$(jq -n \
   --arg netuid "$MINER_NETUID" \
   --arg network "$MINER_NETWORK" \
   --arg prefix "$ORIGIN_FP_PREFIX" \
+  --arg origin "$ORIGIN_FP" \
+  --arg cluster_uid "$KUBE_SYSTEM_UID" \
+  --arg evidence "$SYNTHETIC_EVIDENCE" \
+  --arg created_at "$CREATED_AT_UNIX_MS" \
+  --arg aliases "$FINGERPRINT_ALIASES" \
   '{
     metadata: {
       labels: {
@@ -206,14 +472,132 @@ PATCH_BODY=$(jq -n \
         "kubetee.ai/origin-fp-prefix": $prefix
       },
       annotations: {
-        "kubetee.ai/enrollment-uid": $uid
+        "kubetee.ai/origin-fingerprint": $origin,
+        "kubetee.ai/cluster-id": $cluster_uid,
+        "kubetee.ai/chain-genesis-hash": $evidence,
+        "kubetee.ai/enrollment-uid": $uid,
+        "kubetee.ai/metagraph-block-hash": $evidence,
+        "kubetee.ai/observed-at-unix-ms": $created_at,
+        "kubetee.ai/challenge-id": "local-synthetic-challenge",
+        "kubetee.ai/challenge-sha256": $evidence,
+        "kubetee.ai/hotkey-signature": $evidence,
+        "kubetee.ai/signer-ss58": $hotkey,
+        "kubetee.ai/session-public-key": $evidence,
+        "kubetee.ai/provisioning-request-sha256": $evidence,
+        "kubetee.ai/cluster-api-ca-sha256": $evidence,
+        "kubetee.ai/kube-system-uid": $cluster_uid,
+        "kubetee.ai/cluster-api-url": "https://miner-cluster:6443",
+        "kubetee.ai/tls-server-name": "miner-cluster",
+        "kubetee.ai/fleet-identity": "local-synthetic-fleet",
+        "kubetee.ai/baseline-release-sha256": $evidence,
+        "kubetee.ai/created-at-unix-ms": $created_at,
+        "kubetee.ai/revocation-generation": "0",
+        "kubetee.ai/cleanup-evidence": "",
+        "kubetee.ai/audit-event-ids": "",
+        "kubetee.ai/fingerprint-aliases": $aliases
       }
     }
   }')
-cr -X PATCH "$RANCHER/k8s/clusters/local/apis/management.cattle.io/v3/clusters/$CID" \
-   -H "Authorization: Bearer $LTOK" -H 'Content-Type: application/merge-patch+json' \
-   -d "$PATCH_BODY" >/dev/null
-log "applied canonical synthetic ENROLLED binding"
+
+# Mint the short-lived writer token only after the bounded downstream setup,
+# immediately before its first use. The user and exact role were reconciled
+# earlier, but no writer credential existed while registration was pending.
+PLATFORM_LOGIN_TOKEN=$(cr -X POST \
+  "$RANCHER/v3-public/localProviders/local?action=login" \
+  -H 'Content-Type: application/json' \
+  -d "{\"username\":\"$PLATFORM_USERNAME\",\"password\":\"$PLATFORM_PASSWORD\"}" \
+  | jq -r .token)
+[ -n "$PLATFORM_LOGIN_TOKEN" ] && [ "$PLATFORM_LOGIN_TOKEN" != "null" ] \
+  || { log "platform login failed"; exit 1; }
+PLATFORM_TOKEN_RESPONSE=$(cr -X POST "$RANCHER/v3/token" \
+  -H "Authorization: Bearer $PLATFORM_LOGIN_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"type":"token","description":"kubetee-platform-binding-store-contract","ttl":300}')
+PLATFORM_TOKEN_ID=$(printf '%s' "$PLATFORM_TOKEN_RESPONSE" | jq -r .id)
+PLATFORM_BEARER=$(printf '%s' "$PLATFORM_TOKEN_RESPONSE" | jq -r .token)
+[ -n "$PLATFORM_TOKEN_ID" ] && [ "$PLATFORM_TOKEN_ID" != "null" ] \
+  && [ -n "$PLATFORM_BEARER" ] && [ "$PLATFORM_BEARER" != "null" ] \
+  || { log "platform token mint failed"; exit 1; }
+[ "$PLATFORM_BEARER" != "$BEARER" ] \
+  || { log "platform and validator credentials must be distinct"; exit 1; }
+log "minted temporary SCOPED platform contract token"
+
+# Exercise the distinct platform credential against the same API contract used
+# by rancherbinding.HTTPClusterAPI. This scoped identity, not admin, applies the
+# complete synthetic durable binding through resourceVersion-guarded JSON Patch.
+PLATFORM_CLUSTER_API="$RANCHER/k8s/clusters/local/apis/management.cattle.io/v3/clusters"
+PLATFORM_LIST_OK=false
+for _ in $(seq 1 20); do
+  if cr -f "$PLATFORM_CLUSTER_API?limit=1" \
+       -H "Authorization: Bearer $PLATFORM_BEARER" \
+       | jq -e --arg api "management.cattle.io/v3" '
+           .apiVersion == $api
+           and .kind == "ClusterList"
+           and (.metadata.resourceVersion | type == "string" and length > 0)
+           and (.items | type == "array")' >/dev/null; then
+    PLATFORM_LIST_OK=true
+    break
+  fi
+  sleep 2
+done
+[ "$PLATFORM_LIST_OK" = true ] \
+  || { log "platform credential list contract failed"; exit 1; }
+
+PLATFORM_CLUSTER=$(cr -f "$PLATFORM_CLUSTER_API/$CID" \
+  -H "Authorization: Bearer $PLATFORM_BEARER")
+PLATFORM_RESOURCE_VERSION=$(printf '%s' "$PLATFORM_CLUSTER" | jq -er \
+  --arg cid "$CID" --arg api "management.cattle.io/v3" '
+  select(.apiVersion == $api and .kind == "Cluster" and .metadata.name == $cid)
+  | .metadata.resourceVersion
+  | select(type == "string" and length > 0)')
+PLATFORM_PATCH=$(printf '%s' "$PLATFORM_CLUSTER" | jq -c \
+  --arg cid "$CID" --arg rv "$PLATFORM_RESOURCE_VERSION" \
+  --argjson binding "$PATCH_BODY" '[
+    {op: "test", path: "/metadata/name", value: $cid},
+    {op: "test", path: "/metadata/resourceVersion", value: $rv},
+    {op: "add", path: "/metadata/labels",
+     value: ((.metadata.labels // {}) + $binding.metadata.labels)},
+    {op: "add", path: "/metadata/annotations",
+     value: ((.metadata.annotations // {}) + $binding.metadata.annotations)}
+  ]')
+cr -f -X PATCH "$PLATFORM_CLUSTER_API/$CID" \
+  -H "Authorization: Bearer $PLATFORM_BEARER" \
+  -H 'Content-Type: application/json-patch+json' \
+  -d "$PLATFORM_PATCH" \
+  | jq -e --arg cid "$CID" --arg api "management.cattle.io/v3" \
+      --arg old_rv "$PLATFORM_RESOURCE_VERSION" \
+      --argjson patch "$PLATFORM_PATCH" '
+      .apiVersion == $api
+        and .kind == "Cluster"
+        and .metadata.name == $cid
+        and (.metadata.resourceVersion
+             | type == "string" and length > 0 and . != $old_rv)
+        and (.metadata.labels == $patch[2].value)
+        and (.metadata.annotations == $patch[3].value)' >/dev/null
+log "applied complete canonical synthetic ENROLLED binding"
+unset PLATFORM_CLUSTER PLATFORM_PATCH PLATFORM_RESOURCE_VERSION
+log "platform credential runtime contract verified (get/list/patch)"
+
+# The platform token exists only to prove this disposable contract. Revoke all
+# tokens for the temporary platform user before publishing the ready marker;
+# no mutation credential is shared with or persisted for the validator.
+PLATFORM_FINAL_TOKENS=$(cr \
+  "$RANCHER/v3/tokens?limit=-1&userId=$PLATFORM_USER_ID" \
+  -H "Authorization: Bearer $LTOK")
+for PLATFORM_TOKEN_ID in $(printf '%s' "$PLATFORM_FINAL_TOKENS" | jq -r \
+  --arg user "$PLATFORM_USER_ID" '
+  .data[] | select(.userId == $user) | .id // empty'); do
+  cr -X DELETE "$RANCHER/v3/tokens/$PLATFORM_TOKEN_ID" \
+     -H "Authorization: Bearer $LTOK" >/dev/null
+done
+PLATFORM_TOKEN_AUDIT=$(cr \
+  "$RANCHER/v3/tokens?limit=-1&userId=$PLATFORM_USER_ID" \
+  -H "Authorization: Bearer $LTOK")
+printf '%s' "$PLATFORM_TOKEN_AUDIT" | jq -e --arg user "$PLATFORM_USER_ID" '
+  [.data[] | select(.userId == $user)] | length == 0' >/dev/null \
+  || { log "temporary platform token revocation verification failed"; exit 1; }
+unset PLATFORM_BEARER PLATFORM_LOGIN_TOKEN PLATFORM_TOKEN_RESPONSE
+log "temporary platform credential revoked"
 
 echo "$CID" > "$SHARED/cluster-id"
 touch "$SHARED/ready"

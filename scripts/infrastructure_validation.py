@@ -46,6 +46,11 @@ _SUPPORTED_GPU = re.compile(r"(?<![A-Z0-9])(H100|H200|B200|B300)(?![A-Z0-9])")
 _BASE_TEN_INTEGER = re.compile(r"^(?:0|[1-9][0-9]*)$")
 _MAX_INT64 = 2**63 - 1
 _MAX_QUANTITY_TEXT = 64
+_RANCHER_CLUSTER_ID_PART = r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?"
+_RANCHER_NODE_ID_PART = r"[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?"
+_RANCHER_NODE_ID = re.compile(
+    rf"^{_RANCHER_CLUSTER_ID_PART}:{_RANCHER_NODE_ID_PART}$"
+)
 _REQUIRED_BINDING_LABELS = (
     BINDING_ID_LABEL,
     HOTKEY_LABEL,
@@ -174,7 +179,8 @@ def parse_cpu_cores(value: object) -> Decimal | None:
     if match is None:
         return None
     cores = Decimal(match.group(1))
-    return cores / 1000 if match.group(2) == "m" else cores
+    cores = cores / 1000 if match.group(2) == "m" else cores
+    return cores if cores <= _MAX_INT64 else None
 
 
 def parse_memory_bytes(value: object) -> int | None:
@@ -191,7 +197,7 @@ def parse_memory_bytes(value: object) -> int | None:
     if match is None:
         return None
     scaled = Decimal(match.group(1)) * _MEMORY_FACTORS[match.group(2)]
-    if scaled != scaled.to_integral_value():
+    if scaled > _MAX_INT64 or scaled != scaled.to_integral_value():
         return None
     return int(scaled)
 
@@ -325,7 +331,12 @@ def _node_ready(
 ) -> bool:
     if not _active(node):
         return False
-    if not isinstance(node.get("id"), str) or not node["id"]:
+    node_id = node.get("id")
+    if (
+        not isinstance(node_id, str)
+        or not _RANCHER_NODE_ID.fullmatch(node_id)
+        or node_id.partition(":")[0] != cluster_id
+    ):
         return False
     if node.get("clusterId") != cluster_id:
         return False

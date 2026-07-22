@@ -7,6 +7,10 @@ never appears in errors or repr), plus exhaustive fail-closed pagination
 per tests/fixtures/rancher/contract.json.
 """
 
+# Transport fakes preserve keyword-compatible protocol signatures, and one
+# boundary test intentionally calls the private raw-request guard.
+# pylint: disable=unused-argument,protected-access,unnecessary-lambda
+
 from __future__ import annotations
 
 import json
@@ -51,7 +55,9 @@ class FakeTransport:
         return self.routes[url]
 
 
-def make_client(routes: dict[str, tuple[int, str]]) -> tuple[RancherClient, FakeTransport]:
+def make_client(
+    routes: dict[str, tuple[int, str]],
+) -> tuple[RancherClient, FakeTransport]:
     transport = FakeTransport(routes)
     client = RancherClient(base_url=ORIGIN, token=TOKEN, transport=transport)
     return client, transport
@@ -98,7 +104,9 @@ def test_custom_ca_is_scoped_to_the_rancher_transport(monkeypatch):
         observed.append(cafile)
         return object()
 
-    monkeypatch.setattr(rancher_client.ssl, "create_default_context", fake_context)
+    monkeypatch.setattr(
+        rancher_client.ssl, "create_default_context", fake_context
+    )
     monkeypatch.setattr(
         rancher_client.urllib.request,
         "HTTPSHandler",
@@ -122,9 +130,14 @@ def test_custom_ca_is_scoped_to_the_rancher_transport(monkeypatch):
 def test_every_request_is_get_except_the_single_delete():
     routes = {
         f"{ORIGIN}/v3/clusters?limit=-1": (200, load("clusters.json")),
-        f"{ORIGIN}/v3/clusters/cluster-aaa": (200, json.dumps(
-            json.loads(load("clusters.json"))["data"][0])),
-        f"{ORIGIN}/v3/nodes?clusterId=cluster-aaa&limit=-1": (200, load("nodes.json")),
+        f"{ORIGIN}/v3/clusters/cluster-aaa": (
+            200,
+            json.dumps(json.loads(load("clusters.json"))["data"][0]),
+        ),
+        f"{ORIGIN}/v3/nodes?clusterId=cluster-aaa&limit=-1": (
+            200,
+            load("nodes.json"),
+        ),
         f"{ORIGIN}/v3/clusters/cluster-bbb": (200, "{}"),
     }
     client, transport = make_client(routes)
@@ -187,7 +200,10 @@ def test_cluster_id_is_validated_before_url_interpolation():
 def test_pagination_followed_to_exhaustion():
     routes = {
         f"{ORIGIN}/v3/clusters?limit=-1": (200, load("clusters-page1.json")),
-        f"{ORIGIN}/v3/clusters?limit=1&marker=cluster-bbb": (200, load("clusters-page2.json")),
+        f"{ORIGIN}/v3/clusters?limit=1&marker=cluster-bbb": (
+            200,
+            load("clusters-page2.json"),
+        ),
     }
     client, transport = make_client(routes)
     clusters = client.list_clusters()
@@ -198,23 +214,87 @@ def test_pagination_followed_to_exhaustion():
 def test_partial_without_next_fails_closed():
     page = json.loads(load("clusters-page1.json"))
     del page["pagination"]["next"]
-    client, _ = make_client({f"{ORIGIN}/v3/clusters?limit=-1": (200, json.dumps(page))})
+    client, _ = make_client(
+        {f"{ORIGIN}/v3/clusters?limit=-1": (200, json.dumps(page))}
+    )
     with pytest.raises(IncompleteEnumeration):
         client.list_clusters()
 
 
 def test_unknown_pagination_field_fails_closed():
     page = json.loads(load("clusters.json"))
-    page["pagination"]["continuationToken"] = "opaque"
-    client, _ = make_client({f"{ORIGIN}/v3/clusters?limit=-1": (200, json.dumps(page))})
-    with pytest.raises(IncompleteEnumeration):
+    hostile_field = "attacker-controlled-pagination-field"
+    page["pagination"][hostile_field] = "opaque"
+    client, _ = make_client(
+        {f"{ORIGIN}/v3/clusters?limit=-1": (200, json.dumps(page))}
+    )
+    with pytest.raises(IncompleteEnumeration) as excinfo:
         client.list_clusters()
+
+    assert hostile_field not in str(excinfo.value)
+
+
+@pytest.mark.parametrize(
+    ("resource", "field", "wrong_value"),
+    [
+        ("clusters", "type", "not-a-collection"),
+        ("clusters", "resourceType", "node"),
+        ("nodes", "type", "not-a-collection"),
+        ("nodes", "resourceType", "cluster"),
+    ],
+)
+def test_collection_envelope_must_match_the_allowlisted_resource(
+    resource, field, wrong_value
+):
+    if resource == "clusters":
+        page = json.loads(load("clusters.json"))
+        first_url = f"{ORIGIN}/v3/clusters?limit=-1"
+    else:
+        page = json.loads(load("nodes.json"))
+        first_url = f"{ORIGIN}/v3/nodes?clusterId=cluster-aaa&limit=-1"
+    page[field] = wrong_value
+    client, _ = make_client({first_url: (200, json.dumps(page))})
+
+    with pytest.raises(RancherError) as excinfo:
+        if resource == "clusters":
+            client.list_clusters()
+        else:
+            client.list_nodes("cluster-aaa")
+
+    assert excinfo.value.category is ErrorCategory.MALFORMED
+
+
+@pytest.mark.parametrize(
+    ("resource", "wrong_type"),
+    [("clusters", "node"), ("nodes", "cluster")],
+)
+def test_collection_item_type_must_match_the_allowlisted_resource(
+    resource, wrong_type
+):
+    if resource == "clusters":
+        page = json.loads(load("clusters.json"))
+        first_url = f"{ORIGIN}/v3/clusters?limit=-1"
+    else:
+        page = json.loads(load("nodes.json"))
+        first_url = f"{ORIGIN}/v3/nodes?clusterId=cluster-aaa&limit=-1"
+    page["data"][0]["type"] = wrong_type
+    client, _ = make_client({first_url: (200, json.dumps(page))})
+
+    with pytest.raises(RancherError) as excinfo:
+        if resource == "clusters":
+            client.list_clusters()
+        else:
+            client.list_nodes("cluster-aaa")
+
+    assert excinfo.value.category is ErrorCategory.MALFORMED
 
 
 def test_missing_pagination_object_fails_closed():
     page = json.loads(load("clusters.json"))
     del page["pagination"]
-    client, _ = make_client({f"{ORIGIN}/v3/clusters?limit=-1": (200, json.dumps(page))})
+    client, _ = make_client(
+        {f"{ORIGIN}/v3/clusters?limit=-1": (200, json.dumps(page))}
+    )
     with pytest.raises(IncompleteEnumeration):
         client.list_clusters()
 
@@ -298,9 +378,9 @@ def test_node_pagination_cannot_drop_the_cluster_filter():
 
 def test_cluster_pagination_cannot_add_a_narrowing_filter():
     page = json.loads(load("clusters-page1.json"))
-    page["pagination"]["next"] = (
-        f"{ORIGIN}/v3/clusters?limit=1&marker=cluster-bbb&name=one-cluster"
-    )
+    page["pagination"][
+        "next"
+    ] = f"{ORIGIN}/v3/clusters?limit=1&marker=cluster-bbb&name=one-cluster"
     client, transport = make_client(
         {f"{ORIGIN}/v3/clusters?limit=-1": (200, json.dumps(page))}
     )
@@ -321,6 +401,34 @@ def test_non_object_collection_item_is_malformed_not_silently_dropped():
 
     with pytest.raises(RancherError) as excinfo:
         client.list_clusters()
+
+    assert excinfo.value.category is ErrorCategory.MALFORMED
+
+
+@pytest.mark.parametrize(
+    ("resource", "bad_id"),
+    [
+        ("clusters", "../local"),
+        ("clusters", "Cluster-AAA"),
+        ("nodes", "node-without-cluster-prefix"),
+        ("nodes", "cluster-aaa:../node"),
+    ],
+)
+def test_collection_item_ids_must_be_canonical(resource, bad_id):
+    if resource == "clusters":
+        page = json.loads(load("clusters.json"))
+        first_url = f"{ORIGIN}/v3/clusters?limit=-1"
+    else:
+        page = json.loads(load("nodes.json"))
+        first_url = f"{ORIGIN}/v3/nodes?clusterId=cluster-aaa&limit=-1"
+    page["data"][0]["id"] = bad_id
+    client, _ = make_client({first_url: (200, json.dumps(page))})
+
+    with pytest.raises(RancherError) as excinfo:
+        if resource == "clusters":
+            client.list_clusters()
+        else:
+            client.list_nodes("cluster-aaa")
 
     assert excinfo.value.category is ErrorCategory.MALFORMED
 
@@ -349,9 +457,7 @@ def test_final_page_count_mismatch_is_incomplete_even_without_partial_flag():
 
 def test_max_pages_limit_raises_incomplete():
     """A client with max_pages=1 raises IncompleteEnumeration."""
-    import json
-
-    ORIGIN_HERE = "https://valid.example.com"
+    origin_here = "https://valid.example.com"
 
     class _PaginatedTransport:
         def __init__(self):
@@ -361,37 +467,110 @@ def test_max_pages_limit_raises_incomplete():
             self.count += 1
             body = json.dumps(
                 {
-                        "data": [{"id": "c-1"}],
-                        "pagination": {
-                            "total": 2,
-                            "partial": True,
-                            "next": f"{ORIGIN_HERE}/v3/clusters?page={self.count + 1}"
-                        },
+                    "type": "collection",
+                    "resourceType": "cluster",
+                    "data": [{"id": "c-1", "type": "cluster"}],
+                    "pagination": {
+                        "total": 2,
+                        "partial": True,
+                        "next": f"{origin_here}/v3/clusters?page={self.count + 1}",
+                    },
                 }
             )
             return 200, body
 
     client = RancherClient(
-        ORIGIN_HERE,
+        origin_here,
         "token-abc",
         transport=_PaginatedTransport(),
         max_pages=1,
     )
-    with pytest.raises(IncompleteEnumeration, match="did not terminate after 1 pages"):
+    with pytest.raises(
+        IncompleteEnumeration, match="did not terminate after 1 pages"
+    ):
         client.list_clusters()
+
+
+def test_multipage_collection_has_a_cumulative_byte_budget():
+    first = load("clusters-page1.json")
+    second = load("clusters-page2.json")
+    routes = {
+        f"{ORIGIN}/v3/clusters?limit=-1": (200, first),
+        f"{ORIGIN}/v3/clusters?limit=1&marker=cluster-bbb": (200, second),
+    }
+    transport = FakeTransport(routes)
+    client = RancherClient(
+        base_url=ORIGIN,
+        token=TOKEN,
+        transport=transport,
+        max_collection_bytes=len(first.encode("utf-8"))
+        + len(second.encode("utf-8"))
+        - 1,
+    )
+
+    with pytest.raises(IncompleteEnumeration, match="byte budget"):
+        client.list_clusters()
+
+    assert len(transport.requests) == 2
+
+
+def test_multipage_collection_has_a_whole_enumeration_deadline():
+    class _Clock:
+        def __init__(self):
+            self.now = 0.0
+
+        def __call__(self):
+            return self.now
+
+    class _AdvancingTransport(FakeTransport):
+        def request(self, method, url, headers, timeout):
+            result = super().request(method, url, headers, timeout)
+            clock.now += 0.6
+            return result
+
+    clock = _Clock()
+    transport = _AdvancingTransport(
+        {
+            f"{ORIGIN}/v3/clusters?limit=-1": (
+                200,
+                load("clusters-page1.json"),
+            ),
+            f"{ORIGIN}/v3/clusters?limit=1&marker=cluster-bbb": (
+                200,
+                load("clusters-page2.json"),
+            ),
+        }
+    )
+    client = RancherClient(
+        base_url=ORIGIN,
+        token=TOKEN,
+        transport=transport,
+        collection_timeout=1.0,
+        monotonic=clock,
+    )
+
+    with pytest.raises(IncompleteEnumeration, match="deadline"):
+        client.list_clusters()
+
+    assert len(transport.requests) == 2
 
 
 # --- error categories -------------------------------------------------------
 
 
-@pytest.mark.parametrize("status,category", [
-    (401, ErrorCategory.AUTH),
-    (403, ErrorCategory.AUTH),
-    (500, ErrorCategory.TRANSPORT),
-    (503, ErrorCategory.TRANSPORT),
-])
+@pytest.mark.parametrize(
+    "status,category",
+    [
+        (401, ErrorCategory.AUTH),
+        (403, ErrorCategory.AUTH),
+        (500, ErrorCategory.TRANSPORT),
+        (503, ErrorCategory.TRANSPORT),
+    ],
+)
 def test_http_status_maps_to_fixed_enum(status, category):
-    client, _ = make_client({f"{ORIGIN}/v3/clusters?limit=-1": (status, "denied")})
+    client, _ = make_client(
+        {f"{ORIGIN}/v3/clusters?limit=-1": (status, "denied")}
+    )
     with pytest.raises(RancherError) as excinfo:
         client.list_clusters()
     assert excinfo.value.category is category
@@ -408,10 +587,95 @@ def test_redirect_is_refused_not_followed():
 
 
 def test_malformed_json_fails_closed():
-    client, _ = make_client({f"{ORIGIN}/v3/clusters?limit=-1": (200, "not-json{")})
+    client, _ = make_client(
+        {f"{ORIGIN}/v3/clusters?limit=-1": (200, "not-json{")}
+    )
     with pytest.raises(RancherError) as excinfo:
         client.list_clusters()
     assert excinfo.value.category is ErrorCategory.MALFORMED
+
+
+@pytest.mark.parametrize(
+    ("body", "hostile_marker"),
+    [
+        (
+            '{"type":"collection","resourceType":"cluster","data":[],'
+            '"pagination":{"total":0},'
+            '"pagination":{"total":0,"attacker-pagination":"secret"}}',
+            "attacker-pagination",
+        ),
+        (
+            '{"type":"collection","resourceType":"cluster","data":['
+            '{"id":"cluster-aaa","type":"cluster","labels":{'
+            '"kubetee.ai/hotkey":"first",'
+            '"kubetee.ai/hotkey":"attacker-hotkey"}}],'
+            '"pagination":{"total":1}}',
+            "attacker-hotkey",
+        ),
+    ],
+)
+def test_duplicate_json_keys_fail_closed_without_reflection(
+    body, hostile_marker
+):
+    client, _ = make_client({f"{ORIGIN}/v3/clusters?limit=-1": (200, body)})
+
+    with pytest.raises(RancherError) as excinfo:
+        client.list_clusters()
+
+    assert excinfo.value.category is ErrorCategory.MALFORMED
+    assert hostile_marker not in str(excinfo.value)
+
+
+def test_non_utf8_response_fails_closed_without_reflection():
+    body = (
+        b'{"type":"collection","resourceType":"cluster","data":[],'
+        b'"unused":"\xff","pagination":{"total":0}}'
+    )
+
+    class _Response:
+        status = 200
+
+        def __init__(self):
+            self.headers = {}
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self, _limit):
+            return body
+
+    class _Opener:
+        def open(self, _request, timeout):
+            return _Response()
+
+    transport = object.__new__(rancher_client.UrllibTransport)
+    transport._opener = _Opener()
+    transport._max_response_bytes = 1024
+    client = RancherClient(base_url=ORIGIN, token=TOKEN, transport=transport)
+
+    with pytest.raises(RancherError) as excinfo:
+        client.list_clusters()
+
+    assert excinfo.value.category is ErrorCategory.MALFORMED
+    assert repr(body) not in str(excinfo.value)
+
+
+@pytest.mark.parametrize("constant", ["NaN", "Infinity", "-Infinity"])
+def test_nonstandard_json_constants_fail_closed_without_reflection(constant):
+    body = (
+        '{"type":"collection","resourceType":"cluster","data":[],'
+        f'"unused":{constant},"pagination":{{"total":0}}}}'
+    )
+    client, _ = make_client({f"{ORIGIN}/v3/clusters?limit=-1": (200, body)})
+
+    with pytest.raises(RancherError) as excinfo:
+        client.list_clusters()
+
+    assert excinfo.value.category is ErrorCategory.MALFORMED
+    assert constant not in str(excinfo.value)
 
 
 class ExplodingTransport:
@@ -420,7 +684,9 @@ class ExplodingTransport:
 
 
 def test_transport_exception_wrapped_and_token_scrubbed():
-    client = RancherClient(base_url=ORIGIN, token=TOKEN, transport=ExplodingTransport())
+    client = RancherClient(
+        base_url=ORIGIN, token=TOKEN, transport=ExplodingTransport()
+    )
     with pytest.raises(RancherError) as excinfo:
         client.list_clusters()
     assert excinfo.value.category is ErrorCategory.TRANSPORT
@@ -428,9 +694,38 @@ def test_transport_exception_wrapped_and_token_scrubbed():
     assert TOKEN not in repr(excinfo.value)
 
 
+def test_transport_exception_message_does_not_reflect_remote_text():
+    hostile_marker = "REMOTE-ATTACKER-CONTROLLED-MARKER"
+
+    class _HostileTransport:
+        def request(self, method, url, headers, timeout):
+            raise ConnectionError(hostile_marker)
+
+    client = RancherClient(
+        base_url=ORIGIN, token=TOKEN, transport=_HostileTransport()
+    )
+
+    with pytest.raises(RancherError) as excinfo:
+        client.list_clusters()
+
+    assert hostile_marker not in str(excinfo.value)
+
+
+def test_non_origin_refusal_does_not_reflect_supplied_host():
+    hostile_host = "attacker-controlled.example"
+    client, _ = make_client({})
+
+    with pytest.raises(IncompleteEnumeration) as excinfo:
+        client._raw("GET", f"https://{hostile_host}/v3/clusters")
+
+    assert hostile_host not in str(excinfo.value)
+
+
 def test_error_bodies_are_not_reproduced_in_messages():
     secret_body = json.dumps({"message": "denied", "leak": TOKEN})
-    client, _ = make_client({f"{ORIGIN}/v3/clusters?limit=-1": (401, secret_body)})
+    client, _ = make_client(
+        {f"{ORIGIN}/v3/clusters?limit=-1": (401, secret_body)}
+    )
     with pytest.raises(RancherError) as excinfo:
         client.list_clusters()
     assert TOKEN not in str(excinfo.value)
@@ -468,11 +763,16 @@ def test_collection_total_over_item_ceiling_is_incomplete():
 
 def test_transport_url_error_is_wrapped_cleanly():
     """URLError from transport is wrapped as TRANSPORT, not raw."""
+
     class _URLErrorTransport:
         def request(self, method, url, headers, timeout):
             raise urllib.error.URLError("name or service not known")
 
-    client = RancherClient("https://valid.example.com", "token-abc", transport=_URLErrorTransport())
+    client = RancherClient(
+        "https://valid.example.com",
+        "token-abc",
+        transport=_URLErrorTransport(),
+    )
     with pytest.raises(RancherError) as exc:
         client.list_clusters()
     assert exc.value.category == ErrorCategory.TRANSPORT

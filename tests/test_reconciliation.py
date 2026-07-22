@@ -123,10 +123,16 @@ def make_engine(min_cycles: int = 3, min_seconds: float = 900.0):
     return engine, client, metrics, clock, logs
 
 
-def run_until_threshold(engine, clock, clusters, registered, cycles: int,
-                        step_seconds: float = 400.0,
-                        refresh=lambda _minimum_block: set(),
-                        start_block: int = BLOCK):
+def run_until_threshold(
+    engine,
+    clock,
+    clusters,
+    registered,
+    cycles: int,
+    step_seconds: float = 400.0,
+    refresh=lambda _minimum_block: set(),
+    start_block: int = BLOCK,
+):
     outcome = None
     for offset in range(cycles):
         outcome = engine.run_cycle(
@@ -146,8 +152,12 @@ def test_metagraph_failure_never_deletes_and_freezes_counter():
     engine, client, metrics, clock, _ = make_engine()
     clusters = [cluster("c-gone")]
     run_until_threshold(engine, clock, clusters, {BOB}, 2)
-    engine.run_cycle(registered_hotkeys=None, clusters=clusters,
-                     metagraph_block=None, refresh_registered=lambda _minimum_block: set())
+    engine.run_cycle(
+        registered_hotkeys=None,
+        clusters=clusters,
+        metagraph_block=None,
+        refresh_registered=lambda _minimum_block: set(),
+    )
     assert client.deleted == []
     assert engine.absence_cycles(GONE) == 2  # frozen, not incremented or reset
     text = metrics.exposition().decode()
@@ -198,8 +208,12 @@ def test_rancher_outage_never_deletes_and_freezes_counter():
     engine, client, _metrics, clock, _ = make_engine()
     clusters = [cluster("c-gone")]
     run_until_threshold(engine, clock, clusters, {BOB}, 2)
-    engine.run_cycle(registered_hotkeys={BOB}, clusters=None,
-                     metagraph_block=BLOCK, refresh_registered=lambda _minimum_block: set())
+    engine.run_cycle(
+        registered_hotkeys={BOB},
+        clusters=None,
+        metagraph_block=BLOCK,
+        refresh_registered=lambda _minimum_block: set(),
+    )
     assert client.deleted == []
     assert engine.absence_cycles(GONE) == 2
 
@@ -216,24 +230,43 @@ def test_wall_clock_not_met_suppresses_even_with_cycles():
     engine, client, _, clock, _ = make_engine(min_cycles=3, min_seconds=900)
     clusters = [cluster("c-gone")]
     # 3 cycles but only 2 x 100s elapsed since first sighting
-    run_until_threshold(engine, clock, clusters, {BOB}, 3, step_seconds=100,
-                        refresh=lambda _minimum_block: set())
+    run_until_threshold(
+        engine,
+        clock,
+        clusters,
+        {BOB},
+        3,
+        step_seconds=100,
+        refresh=lambda _minimum_block: set(),
+    )
     assert client.deleted == []
 
 
 def test_boundary_899_vs_900_seconds():
     engine, client, _, clock, _ = make_engine(min_cycles=2, min_seconds=900)
     clusters = [cluster("c-gone")]
-    engine.run_cycle(registered_hotkeys={BOB}, clusters=clusters,
-                     metagraph_block=BLOCK, refresh_registered=lambda _minimum_block: set())
+    engine.run_cycle(
+        registered_hotkeys={BOB},
+        clusters=clusters,
+        metagraph_block=BLOCK,
+        refresh_registered=lambda _minimum_block: set(),
+    )
     clock.advance(899)
-    engine.run_cycle(registered_hotkeys={BOB}, clusters=clusters,
-                     metagraph_block=BLOCK + 1, refresh_registered=lambda _minimum_block: set())
+    engine.run_cycle(
+        registered_hotkeys={BOB},
+        clusters=clusters,
+        metagraph_block=BLOCK + 1,
+        refresh_registered=lambda _minimum_block: set(),
+    )
     assert client.deleted == []  # 899s < 900s
     clock.advance(1)
     client.clusters["c-gone"] = cluster("c-gone")
-    engine.run_cycle(registered_hotkeys={BOB}, clusters=clusters,
-                     metagraph_block=BLOCK + 2, refresh_registered=lambda _minimum_block: set())
+    engine.run_cycle(
+        registered_hotkeys={BOB},
+        clusters=clusters,
+        metagraph_block=BLOCK + 2,
+        refresh_registered=lambda _minimum_block: set(),
+    )
     assert client.deleted == ["c-gone"]  # 900s reached
 
 
@@ -241,8 +274,12 @@ def test_reappearance_resets_counter():
     engine, client, _, clock, _ = make_engine()
     clusters = [cluster("c-gone")]
     run_until_threshold(engine, clock, clusters, {BOB}, 2)
-    engine.run_cycle(registered_hotkeys={BOB, GONE}, clusters=clusters,
-                     metagraph_block=BLOCK + 2, refresh_registered=lambda _minimum_block: set())
+    engine.run_cycle(
+        registered_hotkeys={BOB, GONE},
+        clusters=clusters,
+        metagraph_block=BLOCK + 2,
+        refresh_registered=lambda _minimum_block: set(),
+    )
     assert engine.absence_cycles(GONE) == 0
     run_until_threshold(
         engine,
@@ -253,7 +290,9 @@ def test_reappearance_resets_counter():
         step_seconds=1000,
         start_block=BLOCK + 3,
     )
-    assert client.deleted == []  # counter restarted; threshold not yet met again
+    assert (
+        client.deleted == []
+    )  # counter restarted; threshold not yet met again
 
 
 # --- pre-delete recheck --------------------------------------------------------
@@ -261,10 +300,16 @@ def test_reappearance_resets_counter():
 
 def ready_engine():
     """Engine one healthy cycle away from deletion of c-gone."""
-    engine, client, metrics, clock, logs = make_engine(min_cycles=2, min_seconds=100)
+    engine, client, metrics, clock, logs = make_engine(
+        min_cycles=2, min_seconds=100
+    )
     clusters = [cluster("c-gone")]
-    engine.run_cycle(registered_hotkeys={BOB}, clusters=clusters,
-                     metagraph_block=BLOCK, refresh_registered=lambda _minimum_block: set())
+    engine.run_cycle(
+        registered_hotkeys={BOB},
+        clusters=clusters,
+        metagraph_block=BLOCK,
+        refresh_registered=lambda _minimum_block: set(),
+    )
     clock.advance(200)
     client.clusters["c-gone"] = cluster("c-gone")
     return engine, client, metrics, clock, logs, clusters
@@ -272,18 +317,24 @@ def ready_engine():
 
 def test_refresh_shows_reappearance_aborts_and_resets():
     engine, client, _, _clock, _, clusters = ready_engine()
-    engine.run_cycle(registered_hotkeys={BOB}, clusters=clusters,
-                     metagraph_block=BLOCK + 1,
-                     refresh_registered=lambda _minimum_block: {GONE})
+    engine.run_cycle(
+        registered_hotkeys={BOB},
+        clusters=clusters,
+        metagraph_block=BLOCK + 1,
+        refresh_registered=lambda _minimum_block: {GONE},
+    )
     assert client.deleted == []
     assert engine.absence_cycles(GONE) == 0
 
 
 def test_refresh_failure_suppresses_no_delete():
     engine, client, metrics, _clock, _, clusters = ready_engine()
-    engine.run_cycle(registered_hotkeys={BOB}, clusters=clusters,
-                     metagraph_block=BLOCK + 1,
-                     refresh_registered=lambda _minimum_block: None)
+    engine.run_cycle(
+        registered_hotkeys={BOB},
+        clusters=clusters,
+        metagraph_block=BLOCK + 1,
+        refresh_registered=lambda _minimum_block: None,
+    )
     assert client.deleted == []
     assert 'reason="metagraph_failed"' in metrics.exposition().decode()
 
@@ -309,8 +360,12 @@ def test_final_refresh_is_required_at_the_cycle_block_or_newer():
 def test_label_changed_midcycle_aborts():
     engine, client, metrics, _, _, clusters = ready_engine()
     client.clusters["c-gone"] = cluster("c-gone", hotkey=BOB)  # relabeled
-    engine.run_cycle(registered_hotkeys={BOB}, clusters=clusters,
-                     metagraph_block=BLOCK + 1, refresh_registered=lambda _minimum_block: set())
+    engine.run_cycle(
+        registered_hotkeys={BOB},
+        clusters=clusters,
+        metagraph_block=BLOCK + 1,
+        refresh_registered=lambda _minimum_block: set(),
+    )
     assert client.deleted == []
     assert 'reason="recheck_mismatch"' in metrics.exposition().decode()
 
@@ -321,8 +376,12 @@ def test_malformed_labels_during_recheck_abort():
     current["labels"] = "not-a-mapping"
     client.clusters["c-gone"] = current
 
-    engine.run_cycle(registered_hotkeys={BOB}, clusters=clusters,
-                     metagraph_block=BLOCK + 1, refresh_registered=lambda _minimum_block: set())
+    engine.run_cycle(
+        registered_hotkeys={BOB},
+        clusters=clusters,
+        metagraph_block=BLOCK + 1,
+        refresh_registered=lambda _minimum_block: set(),
+    )
 
     assert client.deleted == []
     assert 'reason="recheck_mismatch"' in metrics.exposition().decode()
@@ -369,17 +428,38 @@ def test_binding_generation_changed_midcycle_aborts():
 def test_uuid_changed_midcycle_aborts():
     engine, client, _, _, _, clusters = ready_engine()
     client.clusters["c-gone"] = cluster("c-gone", uuid=UUID_OTHER)
-    engine.run_cycle(registered_hotkeys={BOB}, clusters=clusters,
-                     metagraph_block=BLOCK + 1, refresh_registered=lambda _minimum_block: set())
+    engine.run_cycle(
+        registered_hotkeys={BOB},
+        clusters=clusters,
+        metagraph_block=BLOCK + 1,
+        refresh_registered=lambda _minimum_block: set(),
+    )
     assert client.deleted == []
 
 
 def test_recheck_get_error_aborts():
     engine, client, _, _, _, clusters = ready_engine()
     client.get_errors["c-gone"] = RancherError(ErrorCategory.TRANSPORT, "down")
-    engine.run_cycle(registered_hotkeys={BOB}, clusters=clusters,
-                     metagraph_block=BLOCK + 1, refresh_registered=lambda _minimum_block: set())
+    engine.run_cycle(
+        registered_hotkeys={BOB},
+        clusters=clusters,
+        metagraph_block=BLOCK + 1,
+        refresh_registered=lambda _minimum_block: set(),
+    )
     assert client.deleted == []
+    assert engine.absence_cycles(GONE) == 2
+
+    # The threshold evidence survives the transient GET failure, so the next
+    # healthy cycle retries immediately instead of restarting the window.
+    del client.get_errors["c-gone"]
+    engine.run_cycle(
+        registered_hotkeys={BOB},
+        clusters=clusters,
+        metagraph_block=BLOCK + 2,
+        refresh_registered=lambda _minimum_block: set(),
+    )
+    assert client.deleted == ["c-gone"]
+    assert engine.absence_cycles(GONE) == 0
 
 
 # --- protected / unlabeled targets ---------------------------------------------
@@ -390,11 +470,19 @@ def test_unlabeled_and_internal_clusters_never_considered():
     mgmt = cluster("local", hotkey=None)
     internal = cluster("c-int", hotkey=GONE)
     internal["internal"] = True
-    engine.run_cycle(registered_hotkeys={BOB}, clusters=[mgmt, internal],
-                     metagraph_block=BLOCK, refresh_registered=lambda _minimum_block: set())
+    engine.run_cycle(
+        registered_hotkeys={BOB},
+        clusters=[mgmt, internal],
+        metagraph_block=BLOCK,
+        refresh_registered=lambda _minimum_block: set(),
+    )
     clock.advance(10)
-    engine.run_cycle(registered_hotkeys={BOB}, clusters=[mgmt, internal],
-                     metagraph_block=BLOCK + 1, refresh_registered=lambda _minimum_block: set())
+    engine.run_cycle(
+        registered_hotkeys={BOB},
+        clusters=[mgmt, internal],
+        metagraph_block=BLOCK + 1,
+        refresh_registered=lambda _minimum_block: set(),
+    )
     assert client.deleted == []
 
 
@@ -486,6 +574,7 @@ def test_incomplete_canonical_binding_is_never_deleted():
     [
         "missing_uuid",
         "malformed_uuid",
+        "uppercase_uuid",
         "invalid_id",
         "unsafe_id",
         "invalid_hotkey",
@@ -498,6 +587,8 @@ def test_malformed_candidate_identity_is_never_deleted(mutation):
         malformed.pop("uuid")
     elif mutation == "malformed_uuid":
         malformed["uuid"] = "not-a-rancher-uuid"
+    elif mutation == "uppercase_uuid":
+        malformed["uuid"] = "abcdefab-cdef-4abc-8def-abcdefabcdef".upper()
     elif mutation == "invalid_id":
         malformed["id"] = 123
     elif mutation == "unsafe_id":
@@ -535,14 +626,31 @@ def test_protected_id_never_deleted_even_if_labeled():
 
 def test_successful_delete_counts_and_logs_evidence_bundle():
     engine, client, metrics, _clock, logs, clusters = ready_engine()
-    engine.run_cycle(registered_hotkeys={BOB}, clusters=clusters,
-                     metagraph_block=BLOCK + 1, refresh_registered=lambda _minimum_block: set())
+    engine.run_cycle(
+        registered_hotkeys={BOB},
+        clusters=clusters,
+        metagraph_block=BLOCK + 1,
+        refresh_registered=lambda _minimum_block: set(),
+    )
     assert client.deleted == ["c-gone"]
-    assert "kubetee_reconciliation_deletions_total 1.0" in metrics.exposition().decode()
-    bundle = [e for e in logs if e.get("event") == "reconciliation_deletion"][-1]
-    for field in ("hotkey", "cluster_id", "cluster_uuid", "absence_cycles",
-                  "first_missing_at", "metagraph_blocks", "recheck",
-                  "response_class", "correlation_id"):
+    assert (
+        "kubetee_reconciliation_deletions_total 1.0"
+        in metrics.exposition().decode()
+    )
+    bundle = [e for e in logs if e.get("event") == "reconciliation_deletion"][
+        -1
+    ]
+    for field in (
+        "hotkey",
+        "cluster_id",
+        "cluster_uuid",
+        "absence_cycles",
+        "first_missing_at",
+        "metagraph_blocks",
+        "recheck",
+        "response_class",
+        "correlation_id",
+    ):
         assert field in bundle, field
     assert engine.absence_cycles(GONE) == 0  # record cleared
 
@@ -551,21 +659,137 @@ def test_successful_delete_counts_and_logs_evidence_bundle():
 def test_conflict_statuses_are_idempotent_not_retried(status):
     engine, client, metrics, _, _, clusters = ready_engine()
     client.delete_results["c-gone"] = status
-    engine.run_cycle(registered_hotkeys={BOB}, clusters=clusters,
-                     metagraph_block=BLOCK + 1, refresh_registered=lambda _minimum_block: set())
+    engine.run_cycle(
+        registered_hotkeys={BOB},
+        clusters=clusters,
+        metagraph_block=BLOCK + 1,
+        refresh_registered=lambda _minimum_block: set(),
+    )
     assert client.deleted == ["c-gone"]
-    assert "kubetee_reconciliation_conflicts_total 1.0" in metrics.exposition().decode()
+    assert (
+        "kubetee_reconciliation_conflicts_total 1.0"
+        in metrics.exposition().decode()
+    )
     assert engine.absence_cycles(GONE) == 0  # resolved, no aggressive retry
 
 
 def test_unauthorized_delete_fails_closed_with_operator_signal():
     engine, client, metrics, _, logs, clusters = ready_engine()
-    client.delete_results["c-gone"] = RancherError(ErrorCategory.AUTH, "denied")
-    engine.run_cycle(registered_hotkeys={BOB}, clusters=clusters,
-                     metagraph_block=BLOCK + 1, refresh_registered=lambda _minimum_block: set())
+    client.delete_results["c-gone"] = RancherError(
+        ErrorCategory.AUTH, "denied"
+    )
+    engine.run_cycle(
+        registered_hotkeys={BOB},
+        clusters=clusters,
+        metagraph_block=BLOCK + 1,
+        refresh_registered=lambda _minimum_block: set(),
+    )
     text = metrics.exposition().decode()
     assert 'reason="unauthorized_operator_action_required"' in text
     assert any(e.get("event") == "reconciliation_unauthorized" for e in logs)
+    assert engine.absence_cycles(GONE) == 2
+
+
+def test_failed_delete_retains_absence_window_for_retry():
+    engine, client, metrics, _, _, clusters = ready_engine()
+    client.delete_results["c-gone"] = RancherError(
+        ErrorCategory.TRANSPORT, "temporary outage"
+    )
+    engine.run_cycle(
+        registered_hotkeys={BOB},
+        clusters=clusters,
+        metagraph_block=BLOCK + 1,
+        refresh_registered=lambda _minimum_block: set(),
+    )
+    assert engine.absence_cycles(GONE) == 2
+    assert 'reason="rancher_down"' in metrics.exposition().decode()
+
+    client.delete_results["c-gone"] = 204
+    engine.run_cycle(
+        registered_hotkeys={BOB},
+        clusters=clusters,
+        metagraph_block=BLOCK + 2,
+        refresh_registered=lambda _minimum_block: set(),
+    )
+    assert client.deleted == ["c-gone", "c-gone"]
+    assert engine.absence_cycles(GONE) == 0
+
+
+def test_retained_absence_evidence_has_bounded_block_history():
+    engine, client, _, _, logs = make_engine(min_cycles=1, min_seconds=0)
+    candidate = cluster("c-gone")
+    client.clusters["c-gone"] = candidate
+    client.get_errors["c-gone"] = RancherError(
+        ErrorCategory.TRANSPORT, "persistent outage"
+    )
+
+    for offset in range(40):
+        engine.run_cycle(
+            registered_hotkeys={BOB},
+            clusters=[candidate],
+            metagraph_block=BLOCK + offset,
+            refresh_registered=lambda _minimum_block: set(),
+        )
+    assert engine.absence_cycles(GONE) == 40
+
+    del client.get_errors["c-gone"]
+    engine.run_cycle(
+        registered_hotkeys={BOB},
+        clusters=[candidate],
+        metagraph_block=BLOCK + 40,
+        refresh_registered=lambda _minimum_block: set(),
+    )
+
+    bundle = [e for e in logs if e.get("event") == "reconciliation_deletion"][
+        -1
+    ]
+    assert bundle["absence_cycles"] == 41
+    assert bundle["metagraph_blocks"] == list(range(BLOCK + 9, BLOCK + 41))
+
+
+def test_duplicate_hotkey_record_waits_for_every_candidate():
+    (
+        engine,
+        client,
+        _,
+        clock,
+        _,
+    ) = make_engine(min_cycles=2, min_seconds=100)
+    first = cluster("c-one", uuid=UUID_ONE)
+    second = cluster("c-two", uuid=UUID_TWO)
+    clusters = [first, second]
+    engine.run_cycle(
+        registered_hotkeys={BOB},
+        clusters=clusters,
+        metagraph_block=BLOCK,
+        refresh_registered=lambda _minimum_block: set(),
+    )
+    clock.advance(200)
+    client.clusters["c-one"] = first
+    client.clusters["c-two"] = second
+    client.get_errors["c-two"] = RancherError(
+        ErrorCategory.TRANSPORT, "second cluster unavailable"
+    )
+
+    engine.run_cycle(
+        registered_hotkeys={BOB},
+        clusters=clusters,
+        metagraph_block=BLOCK + 1,
+        refresh_registered=lambda _minimum_block: set(),
+    )
+    assert client.deleted == ["c-one"]
+    assert engine.absence_cycles(GONE) == 2
+
+    # A complete next enumeration contains only the unresolved candidate.
+    del client.get_errors["c-two"]
+    engine.run_cycle(
+        registered_hotkeys={BOB},
+        clusters=[second],
+        metagraph_block=BLOCK + 2,
+        refresh_registered=lambda _minimum_block: set(),
+    )
+    assert client.deleted == ["c-one", "c-two"]
+    assert engine.absence_cycles(GONE) == 0
 
 
 def test_duplicate_labeled_clusters_each_handled():
@@ -574,22 +798,38 @@ def test_duplicate_labeled_clusters_each_handled():
         cluster("c-one", uuid=UUID_ONE),
         cluster("c-two", uuid=UUID_TWO),
     ]
-    engine.run_cycle(registered_hotkeys={BOB}, clusters=clusters,
-                     metagraph_block=BLOCK, refresh_registered=lambda _minimum_block: set())
+    engine.run_cycle(
+        registered_hotkeys={BOB},
+        clusters=clusters,
+        metagraph_block=BLOCK,
+        refresh_registered=lambda _minimum_block: set(),
+    )
     clock.advance(200)
     client.clusters["c-one"] = cluster("c-one", uuid=UUID_ONE)
     client.clusters["c-two"] = cluster("c-two", uuid=UUID_TWO)
-    engine.run_cycle(registered_hotkeys={BOB}, clusters=clusters,
-                     metagraph_block=BLOCK + 1, refresh_registered=lambda _minimum_block: set())
+    engine.run_cycle(
+        registered_hotkeys={BOB},
+        clusters=clusters,
+        metagraph_block=BLOCK + 1,
+        refresh_registered=lambda _minimum_block: set(),
+    )
     assert sorted(client.deleted) == ["c-one", "c-two"]
-    deletions = [e for e in logs if e.get("event") == "reconciliation_deletion"]
+    deletions = [
+        e for e in logs if e.get("event") == "reconciliation_deletion"
+    ]
     assert {d["cluster_id"] for d in deletions} == {"c-one", "c-two"}
 
 
 def test_evidence_bundle_never_contains_raw_labels_dump_or_state_payload():
     engine, _client, _, _clock, logs, clusters = ready_engine()
-    engine.run_cycle(registered_hotkeys={BOB}, clusters=clusters,
-                     metagraph_block=BLOCK + 1, refresh_registered=lambda _minimum_block: set())
-    bundle = [e for e in logs if e.get("event") == "reconciliation_deletion"][-1]
+    engine.run_cycle(
+        registered_hotkeys={BOB},
+        clusters=clusters,
+        metagraph_block=BLOCK + 1,
+        refresh_registered=lambda _minimum_block: set(),
+    )
+    bundle = [e for e in logs if e.get("event") == "reconciliation_deletion"][
+        -1
+    ]
     assert "labels" not in bundle
     assert "state" not in bundle

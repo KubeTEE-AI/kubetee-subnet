@@ -21,7 +21,6 @@ import os
 import time
 
 import bittensor as bt
-
 import chain_state
 
 HYPER_FIELDS = [
@@ -45,13 +44,19 @@ _V11_HYPER_READS = {
 }
 
 
-def build_report(netuid: int, chain_endpoint: str, wallets: dict, subtensor=None) -> dict:
+def build_report(
+    netuid: int, chain_endpoint: str, wallets: dict, subtensor=None
+) -> dict:
     """Query real chain state for netuid + the given wallets.
 
     wallets: {"<name>": {"coldkey_ss58": str, "hotkey_ss58": str} | None, ...}
     The first entry is treated as the "owner" wallet for the ownership check.
     """
-    sub = subtensor if subtensor is not None else bt.Subtensor(network=chain_endpoint)
+    sub = (
+        subtensor
+        if subtensor is not None
+        else bt.Subtensor(network=chain_endpoint)
+    )
     report = {"netuid": netuid, "network": chain_endpoint}
 
     try:
@@ -60,16 +65,26 @@ def build_report(netuid: int, chain_endpoint: str, wallets: dict, subtensor=None
         hypers = {"tempo": tempo}
         for name, read_name in _V11_HYPER_READS.items():
             try:
-                hypers[name] = getattr(sub.hyperparameters, read_name)(netuid=netuid)
+                hypers[name] = getattr(sub.hyperparameters, read_name)(
+                    netuid=netuid
+                )
+            # Individual SDK hyperparameter readers vary across versions.
+            # pylint: disable-next=broad-exception-caught
             except Exception:
                 hypers[name] = "?"
         try:
-            enabled = sub.hyperparameters.subnet_emission_enabled(netuid=netuid)
+            enabled = sub.hyperparameters.subnet_emission_enabled(
+                netuid=netuid
+            )
             hypers["recycle_or_burn"] = "Recycle" if enabled else "Burn"
+        # Treat an unavailable optional hyperparameter as unknown.
+        # pylint: disable-next=broad-exception-caught
         except Exception:
             hypers["recycle_or_burn"] = "?"
         report["hyperparameters"] = hypers
         report["hyperparameters_error"] = None
+    # A report must represent arbitrary SDK/transport failures explicitly.
+    # pylint: disable-next=broad-exception-caught
     except Exception as e:
         report["hyperparameters"] = None
         report["hyperparameters_error"] = str(e)
@@ -86,15 +101,28 @@ def build_report(netuid: int, chain_endpoint: str, wallets: dict, subtensor=None
             "owned_by_us": False,
             "error": "owner wallet ss58 could not be resolved",
         }
-    report["our_owner_ss58"] = owner_info.get("coldkey_ss58") if owner_info else None
+    report["our_owner_ss58"] = (
+        owner_info.get("coldkey_ss58") if owner_info else None
+    )
 
     report["stake"] = {}
     for name, info in wallets.items():
-        if not info or not info.get("coldkey_ss58") or not info.get("hotkey_ss58"):
-            report["stake"][name] = {"stake_tao": None, "error": f"{name} wallet ss58 could not be resolved"}
+        if (
+            not info
+            or not info.get("coldkey_ss58")
+            or not info.get("hotkey_ss58")
+        ):
+            report["stake"][name] = {
+                "stake_tao": None,
+                "error": f"{name} wallet ss58 could not be resolved",
+            }
         else:
             report["stake"][name] = chain_state.query_wallet_stake(
-                netuid, info["coldkey_ss58"], info["hotkey_ss58"], chain_endpoint, subtensor=sub
+                netuid,
+                info["coldkey_ss58"],
+                info["hotkey_ss58"],
+                chain_endpoint,
+                subtensor=sub,
             )
 
     return report
@@ -103,7 +131,9 @@ def build_report(netuid: int, chain_endpoint: str, wallets: dict, subtensor=None
 def format_report(report: dict) -> str:
     lines = []
     lines.append("========================================================")
-    lines.append(f"=== KubeTEE Subnet Stats @ {time.strftime('%c')} netuid={report['netuid']} ===")
+    lines.append(
+        f"=== KubeTEE Subnet Stats @ {time.strftime('%c')} netuid={report['netuid']} ==="
+    )
     lines.append("")
     lines.append(f"NETUID: {report['netuid']}")
     lines.append(f"Network: {report['network']}")
@@ -127,11 +157,17 @@ def format_report(report: dict) -> str:
     lines.append("Subnet overview (short):")
     ownership = report["ownership"]
     if ownership["error"]:
-        lines.append(f"  Subnet {report['netuid']} ownership query failed: {ownership['error']}")
+        lines.append(
+            f"  Subnet {report['netuid']} ownership query failed: {ownership['error']}"
+        )
     elif not ownership["exists"]:
-        lines.append(f"  Subnet {report['netuid']} does not exist on this chain")
+        lines.append(
+            f"  Subnet {report['netuid']} does not exist on this chain"
+        )
     elif ownership["owned_by_us"]:
-        lines.append(f"  Subnet {report['netuid']} is owned by our owner wallet ({ownership['owner_ss58']})")
+        lines.append(
+            f"  Subnet {report['netuid']} is owned by our owner wallet ({ownership['owner_ss58']})"
+        )
     else:
         lines.append(
             f"  Subnet {report['netuid']} owner is {ownership['owner_ss58']} "
@@ -141,13 +177,20 @@ def format_report(report: dict) -> str:
     lines.append("")
     lines.append("Conviction:")
     if report["hyperparameters_error"]:
-        lines.append(f"  unknown (hypers query failed: {report['hyperparameters_error']})")
+        lines.append(
+            f"  unknown (hypers query failed: {report['hyperparameters_error']})"
+        )
     else:
-        lock_enabled = report["hyperparameters"].get("owner_cut_auto_lock_enabled")
+        lock_enabled = report["hyperparameters"].get(
+            "owner_cut_auto_lock_enabled"
+        )
         if ownership["owned_by_us"]:
             lines.append(f"  owner_cut_auto_lock_enabled: {lock_enabled}")
         else:
-            lines.append(f"  owner_cut_auto_lock_enabled: {lock_enabled} (we are not the subnet owner, cannot sudo set this)")
+            lines.append(
+                f"  owner_cut_auto_lock_enabled: {lock_enabled} "
+                "(we are not the subnet owner, cannot sudo set this)"
+            )
 
     return "\n".join(lines)
 
@@ -157,12 +200,30 @@ def build_arg_parser() -> argparse.ArgumentParser:
     (KUBETEE_OWNER_WALLET, NOT BT_WALLET - that is alice, the validator
     signing wallet) and the default miner wallet is bob."""
     parser = argparse.ArgumentParser()
-    parser.add_argument("--netuid", type=int, default=int(os.environ.get("KUBETEE_SUBNET_NETUID", "1")))
-    parser.add_argument("--network", default=os.environ.get("BT_NETWORK", "ws://chain:9944"))
-    parser.add_argument("--owner-wallet", default=os.environ.get("KUBETEE_OWNER_WALLET", "owner"))
+    parser.add_argument(
+        "--netuid",
+        type=int,
+        default=int(os.environ.get("KUBETEE_SUBNET_NETUID", "1")),
+    )
+    parser.add_argument(
+        "--network", default=os.environ.get("BT_NETWORK", "ws://chain:9944")
+    )
+    parser.add_argument(
+        "--owner-wallet",
+        default=os.environ.get("KUBETEE_OWNER_WALLET", "owner"),
+    )
     parser.add_argument("--miner-wallet", default="bob")
-    parser.add_argument("--loop", action="store_true", help="Loop forever, reusing a single chain connection.")
-    parser.add_argument("--interval", type=float, default=25.0, help="Seconds between reports when --loop is set.")
+    parser.add_argument(
+        "--loop",
+        action="store_true",
+        help="Loop forever, reusing a single chain connection.",
+    )
+    parser.add_argument(
+        "--interval",
+        type=float,
+        default=25.0,
+        help="Seconds between reports when --loop is set.",
+    )
     return parser
 
 
@@ -171,11 +232,15 @@ def main():
 
     wallets = {
         "owner": {
-            "coldkey_ss58": chain_state.resolve_coldkey_ss58(args.owner_wallet),
+            "coldkey_ss58": chain_state.resolve_coldkey_ss58(
+                args.owner_wallet
+            ),
             "hotkey_ss58": chain_state.resolve_hotkey_ss58(args.owner_wallet),
         },
         "miner": {
-            "coldkey_ss58": chain_state.resolve_coldkey_ss58(args.miner_wallet),
+            "coldkey_ss58": chain_state.resolve_coldkey_ss58(
+                args.miner_wallet
+            ),
             "hotkey_ss58": chain_state.resolve_hotkey_ss58(args.miner_wallet),
         },
     }
@@ -183,7 +248,9 @@ def main():
     subtensor = bt.Subtensor(network=args.network)
 
     while True:
-        report = build_report(args.netuid, args.network, wallets, subtensor=subtensor)
+        report = build_report(
+            args.netuid, args.network, wallets, subtensor=subtensor
+        )
         print(format_report(report))
         if not args.loop:
             break
