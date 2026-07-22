@@ -15,6 +15,7 @@ Containment contract (spec AC4/AC5, pinned by tests/fixtures/rancher/contract.js
 from __future__ import annotations
 
 import enum
+import functools
 import http.client
 import json
 import math
@@ -31,6 +32,7 @@ DEFAULT_MAX_COLLECTION_ITEMS = 100_000
 DEFAULT_MAX_COLLECTION_BYTES = 256 * 1024 * 1024
 DEFAULT_COLLECTION_TIMEOUT = 30.0
 _HTTP_READ_CHUNK_BYTES = 64 * 1024
+_REQUEST_DEADLINE_ATTRIBUTE = "_kubetee_absolute_deadline"
 _KNOWN_PAGINATION_FIELDS = {
     "first",
     "next",
@@ -135,6 +137,158 @@ def _reject_json_constant(_value: str):
     raise ValueError
 
 
+class _DeadlineSocketFile:
+    def __init__(self, reader, sock, deadline: float) -> None:
+        self._reader = reader
+        self._socket = sock
+        self._deadline = deadline
+        self._buffer = bytearray()
+
+    @property
+    def raw(self):
+        return self._reader.raw
+
+    @property
+    def closed(self) -> bool:
+        return bool(self._reader.closed)
+
+    def close(self) -> None:
+        self._reader.close()
+
+    def flush(self) -> None:
+        self._reader.flush()
+
+    def _read_underlying(self, amount: int) -> bytes:
+        remaining = self._deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError
+        self._socket.settimeout(remaining)
+        read = getattr(self._reader, "read1", None)
+        data = read(amount) if callable(read) else self._reader.read(amount)
+        if time.monotonic() >= self._deadline:
+            raise TimeoutError
+        if not isinstance(data, bytes):
+            raise OSError
+        return data
+
+    def _take_buffer(self, amount: int) -> bytes:
+        taken = bytes(self._buffer[:amount])
+        del self._buffer[:amount]
+        return taken
+
+    def read1(self, amount: int = -1) -> bytes:
+        if amount == 0:
+            return b""
+        if amount < 0:
+            amount = _HTTP_READ_CHUNK_BYTES
+        if self._buffer:
+            return self._take_buffer(min(amount, len(self._buffer)))
+        return self._read_underlying(amount)
+
+    def read(self, amount: int = -1) -> bytes:
+        if amount == 0:
+            return b""
+        chunks = []
+        if self._buffer:
+            buffered_amount = (
+                len(self._buffer)
+                if amount < 0
+                else min(amount, len(self._buffer))
+            )
+            chunks.append(self._take_buffer(buffered_amount))
+        while amount < 0 or sum(map(len, chunks)) < amount:
+            remaining_amount = (
+                _HTTP_READ_CHUNK_BYTES
+                if amount < 0
+                else min(
+                    _HTTP_READ_CHUNK_BYTES,
+                    amount - sum(map(len, chunks)),
+                )
+            )
+            chunk = self._read_underlying(remaining_amount)
+            if not chunk:
+                break
+            chunks.append(chunk)
+        return b"".join(chunks)
+
+    def readinto(self, buffer) -> int:
+        data = self.read1(len(buffer))
+        buffer[: len(data)] = data
+        return len(data)
+
+    def readline(self, limit: int = -1) -> bytes:
+        if limit == 0:
+            return b""
+        line = bytearray()
+        while limit < 0 or len(line) < limit:
+            if self._buffer:
+                available = (
+                    len(self._buffer)
+                    if limit < 0
+                    else min(len(self._buffer), limit - len(line))
+                )
+                newline = self._buffer.find(b"\n", 0, available)
+                taken = newline + 1 if newline >= 0 else available
+                line.extend(self._take_buffer(taken))
+                if newline >= 0 or (limit >= 0 and len(line) == limit):
+                    break
+            chunk = self._read_underlying(_HTTP_READ_CHUNK_BYTES)
+            if not chunk:
+                break
+            self._buffer.extend(chunk)
+        return bytes(line)
+
+
+class _DeadlineHTTPResponse(http.client.HTTPResponse):
+    def __init__(self, sock, *args, deadline: float, **kwargs) -> None:
+        super().__init__(sock, *args, **kwargs)
+        if self.fp is None:
+            raise OSError
+        self.fp = _DeadlineSocketFile(self.fp, sock, deadline)
+
+
+class _DeadlineHTTPConnection(http.client.HTTPConnection):
+    def __init__(self, *args, deadline: float, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.response_class = functools.partial(
+            _DeadlineHTTPResponse, deadline=deadline
+        )
+
+
+class _DeadlineHTTPSConnection(http.client.HTTPSConnection):
+    def __init__(self, *args, deadline: float, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.response_class = functools.partial(
+            _DeadlineHTTPResponse, deadline=deadline
+        )
+
+
+def _request_deadline(request: urllib.request.Request) -> float:
+    deadline = getattr(request, _REQUEST_DEADLINE_ATTRIBUTE, None)
+    if not isinstance(deadline, float) or not math.isfinite(deadline):
+        raise urllib.error.URLError("request deadline unavailable")
+    return deadline
+
+
+class _DeadlineHTTPHandler(urllib.request.HTTPHandler):
+    def http_open(self, req):
+        return self.do_open(
+            _DeadlineHTTPConnection,
+            req,
+            deadline=_request_deadline(req),
+        )
+
+
+class _DeadlineHTTPSHandler(urllib.request.HTTPSHandler):
+    def https_open(self, req):
+        return self.do_open(
+            _DeadlineHTTPSConnection,
+            req,
+            context=self._context,
+            deadline=_request_deadline(req),
+        )
+
+
 class UrllibTransport:
     """Default stdlib transport. Returns (status, body_text); never redirects."""
 
@@ -153,7 +307,8 @@ class UrllibTransport:
             raise ValueError("RANCHER_CA_FILE could not be loaded") from None
         self._opener = urllib.request.build_opener(
             _NoRedirect(),
-            urllib.request.HTTPSHandler(context=context),
+            _DeadlineHTTPSHandler(context=context),
+            _DeadlineHTTPHandler(),
         )
         self._max_response_bytes = max_response_bytes
 
@@ -215,8 +370,9 @@ class UrllibTransport:
         return bytes(body)
 
     def request(self, method: str, url: str, headers: dict, timeout: float):
-        req = urllib.request.Request(url, headers=headers, method=method)
         deadline = time.monotonic() + timeout
+        req = urllib.request.Request(url, headers=headers, method=method)
+        setattr(req, _REQUEST_DEADLINE_ATTRIBUTE, deadline)
         try:
             with self._opener.open(
                 req, timeout=self._remaining_budget(deadline)

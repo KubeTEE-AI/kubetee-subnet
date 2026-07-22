@@ -17,6 +17,7 @@ import http.client
 import io
 import json
 import pathlib
+import socketserver
 import sys
 import threading
 import time
@@ -43,6 +44,34 @@ TOKEN = "token-fake1:secretsecretsecret"
 class _SlowTrickleServer(ThreadingHTTPServer):
     response_body: bytes
     response_interval_seconds: float
+
+
+class _HeaderTrickleServer(socketserver.ThreadingTCPServer):
+    response_prefix: bytes
+    trickle_bytes: bytes
+    response_suffix: bytes
+    response_interval_seconds: float
+
+
+class _HeaderTrickleHandler(socketserver.BaseRequestHandler):
+    def handle(self):
+        server = self.server
+        connection = self.request
+        connection.settimeout(1)
+        request = bytearray()
+        while b"\r\n\r\n" not in request and len(request) <= 8192:
+            chunk = connection.recv(1024)
+            if not chunk:
+                return
+            request.extend(chunk)
+        try:
+            connection.sendall(server.response_prefix)
+            for byte in server.trickle_bytes:
+                connection.sendall(bytes([byte]))
+                time.sleep(server.response_interval_seconds)
+            connection.sendall(server.response_suffix)
+        except OSError:
+            return
 
 
 class _SlowTrickleHandler(BaseHTTPRequestHandler):
@@ -77,6 +106,23 @@ def fixture_slow_trickle_url():
     host, port = server.server_address
     try:
         yield f"http://{host}:{port}"
+    finally:
+        server.shutdown()
+        thread.join()
+        server.server_close()
+
+
+@pytest.fixture(name="header_trickle_server")
+def fixture_header_trickle_server():
+    server = _HeaderTrickleServer(("127.0.0.1", 0), _HeaderTrickleHandler)
+    server.response_prefix = b""
+    server.trickle_bytes = b""
+    server.response_suffix = b""
+    server.response_interval_seconds = 0.01
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield server
     finally:
         server.shutdown()
         thread.join()
@@ -732,6 +778,76 @@ def test_urllib_transport_enforces_absolute_deadline_against_slow_trickle(
 
     assert excinfo.value.category is ErrorCategory.TRANSPORT
     assert timeout_seconds * 0.5 <= elapsed < 0.55
+
+
+@pytest.mark.parametrize("trickle_part", ["status", "headers"])
+def test_urllib_transport_enforces_deadline_while_open_parses_response(
+    header_trickle_server, trickle_part
+):
+    terminal = b"Content-Length: 2\r\nContent-Type: application/json\r\n\r\n{}"
+    if trickle_part == "status":
+        header_trickle_server.response_prefix = b""
+        header_trickle_server.trickle_bytes = (
+            b"HTTP/1.1 200 " + (b"x" * 48) + b"\r\n"
+        )
+        header_trickle_server.response_suffix = terminal
+    else:
+        header_trickle_server.response_prefix = b"HTTP/1.1 200 OK\r\n"
+        header_trickle_server.trickle_bytes = (
+            b"X-Slow: " + (b"x" * 48) + b"\r\n"
+        )
+        header_trickle_server.response_suffix = terminal
+
+    timeout_seconds = 0.15
+    host, port = header_trickle_server.server_address
+    client = RancherClient(
+        base_url=ORIGIN,
+        token=TOKEN,
+        transport=rancher_client.UrllibTransport(max_response_bytes=1024),
+        timeout=timeout_seconds,
+        max_response_bytes=1024,
+    )
+    client._origin = f"http://{host}:{port}"
+
+    started = time.monotonic()
+    with pytest.raises(RancherError) as excinfo:
+        client.list_clusters()
+    elapsed = time.monotonic() - started
+
+    assert excinfo.value.category is ErrorCategory.TRANSPORT
+    assert timeout_seconds * 0.5 <= elapsed < 0.5
+
+
+def test_deadline_https_handler_dispatches_only_context_and_deadline(
+    monkeypatch,
+):
+    context = object()
+    handler = rancher_client._DeadlineHTTPSHandler(context=context)
+    request = rancher_client.urllib.request.Request(
+        "https://rancher.invalid/synthetic"
+    )
+    deadline = time.monotonic() + 1
+    setattr(request, rancher_client._REQUEST_DEADLINE_ATTRIBUTE, deadline)
+    observed = {}
+
+    def fake_do_open(connection, dispatched_request, **kwargs):
+        observed.update(
+            connection=connection,
+            request=dispatched_request,
+            kwargs=kwargs,
+        )
+        return object()
+
+    monkeypatch.setattr(handler, "do_open", fake_do_open)
+
+    result = handler.https_open(request)
+
+    assert result is not None
+    assert observed == {
+        "connection": rancher_client._DeadlineHTTPSConnection,
+        "request": request,
+        "kwargs": {"context": context, "deadline": deadline},
+    }
 
 
 @pytest.mark.parametrize("status", [302, 401, 500])
