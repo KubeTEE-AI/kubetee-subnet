@@ -408,11 +408,76 @@ def test_empty_tunables_fall_back_to_pinned_defaults():
     assert config.max_consecutive_skips == 10
 
 
-@pytest.mark.parametrize("poll", ["59", "0", "-5", "junk"])
-def test_poll_interval_below_minimum_refuses_to_start(poll):
+def test_debug_profile_allows_five_second_poll_interval():
+    """Debug UAT may use the approved five-second cadence."""
+    config = ValidatorConfig.from_env(make_env(KUBETEE_POLL_SECONDS="5"))
+    assert config.poll_seconds == 5.0
+
+
+def test_debug_profile_keeps_sixty_second_default_poll_interval():
+    """An unset cadence keeps the fixed production-safe default."""
+    config = ValidatorConfig.from_env(make_env(KUBETEE_POLL_SECONDS=None))
+    assert config.poll_seconds == 60.0
+
+
+@pytest.mark.parametrize(
+    "poll", ["4.999", "0", "-5", "junk", "nan", "inf", "-inf"]
+)
+def test_debug_profile_rejects_invalid_poll_intervals(poll):
+    """Debug may lower the floor, but never bypass numeric validation."""
     with pytest.raises(ConfigError) as excinfo:
         ValidatorConfig.from_env(make_env(KUBETEE_POLL_SECONDS=poll))
     assert "KUBETEE_POLL_SECONDS" in str(excinfo.value)
+    assert TOKEN not in str(excinfo.value)
+
+
+@pytest.mark.parametrize("poll", ["59.999", "5", "0", "-5"])
+def test_production_profile_rejects_poll_intervals_below_sixty_seconds(poll):
+    """Production retains the original sixty-second lower bound."""
+    with pytest.raises(ConfigError) as excinfo:
+        ValidatorConfig.from_env(
+            make_env(
+                KUBETEE_VALIDATION_PROFILE="production",
+                KUBETEE_POLL_SECONDS=poll,
+                BT_NETWORK="finney",
+                BT_WALLET="validator",
+                BT_WALLET_HOTKEY="default",
+                KUBETEE_SUBNET_NETUID="90",
+            )
+        )
+    assert "KUBETEE_POLL_SECONDS" in str(excinfo.value)
+    assert TOKEN not in str(excinfo.value)
+
+
+def test_production_profile_allows_sixty_second_poll_interval():
+    """The production boundary value remains valid."""
+    config = ValidatorConfig.from_env(
+        make_env(
+            KUBETEE_VALIDATION_PROFILE="production",
+            KUBETEE_POLL_SECONDS="60",
+            BT_NETWORK="finney",
+            BT_WALLET="validator",
+            BT_WALLET_HOTKEY="default",
+            KUBETEE_SUBNET_NETUID="90",
+        )
+    )
+    assert config.poll_seconds == 60.0
+
+
+@pytest.mark.parametrize("profile", [None, "", "staging"])
+def test_invalid_or_missing_profile_never_unlocks_debug_poll_interval(profile):
+    """Only a parsed debug enum may unlock the UAT cadence."""
+    with pytest.raises(ConfigError) as excinfo:
+        ValidatorConfig.from_env(
+            make_env(
+                KUBETEE_VALIDATION_PROFILE=profile,
+                KUBETEE_POLL_SECONDS="5",
+            )
+        )
+    error = str(excinfo.value)
+    assert "KUBETEE_VALIDATION_PROFILE" in error
+    assert "KUBETEE_POLL_SECONDS" in error
+    assert TOKEN not in error
 
 
 @pytest.mark.parametrize(

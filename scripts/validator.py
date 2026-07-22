@@ -67,6 +67,7 @@ DEFAULT_NETWORK = "ws://chain:9944"
 DEFAULT_WALLET = "alice"  # the validator signing identity (D7)
 DEFAULT_NETUID_FILE = "/app/.kubetee_netuid"
 MIN_POLL_SECONDS = 60.0
+DEBUG_MIN_POLL_SECONDS = 5.0
 
 _SKIP_DETAILS = {
     SkipReason.METAGRAPH_UNAVAILABLE: "metagraph_read_failed",
@@ -176,6 +177,17 @@ class ValidatorConfig:
                 return default
             return value
 
+        profile_raw = require("KUBETEE_VALIDATION_PROFILE")
+        validation_profile = ValidationProfile.PRODUCTION
+        if profile_raw:
+            try:
+                validation_profile = ValidationProfile(profile_raw)
+            except ValueError:
+                fail(
+                    "KUBETEE_VALIDATION_PROFILE",
+                    "must be production or debug",
+                )
+
         raw_share = str(env.get("KUBETEE_MINER_SHARE") or "0.10").strip()
         miner_share = 0.10
         try:
@@ -184,7 +196,13 @@ class ValidatorConfig:
             fail("KUBETEE_MINER_SHARE", "must be finite and within [0, 1]")
 
         poll_seconds = parse_float(
-            "KUBETEE_POLL_SECONDS", MIN_POLL_SECONDS, MIN_POLL_SECONDS
+            "KUBETEE_POLL_SECONDS",
+            MIN_POLL_SECONDS,
+            (
+                DEBUG_MIN_POLL_SECONDS
+                if validation_profile is ValidationProfile.DEBUG
+                else MIN_POLL_SECONDS
+            ),
         )
         max_skips = parse_int("KUBETEE_MAX_CONSECUTIVE_SKIPS", 10, 1)
         reconcile_cycles = parse_int("KUBETEE_RECONCILE_MIN_CYCLES", 3, 1)
@@ -207,16 +225,6 @@ class ValidatorConfig:
             )
 
         chain_network = require("KUBETEE_CHAIN_NETWORK")
-        profile_raw = require("KUBETEE_VALIDATION_PROFILE")
-        validation_profile = ValidationProfile.PRODUCTION
-        if profile_raw:
-            try:
-                validation_profile = ValidationProfile(profile_raw)
-            except ValueError:
-                fail(
-                    "KUBETEE_VALIDATION_PROFILE",
-                    "must be production or debug",
-                )
 
         network = (env.get("BT_NETWORK") or DEFAULT_NETWORK).strip()
         wallet_name = (env.get("BT_WALLET") or DEFAULT_WALLET).strip()
