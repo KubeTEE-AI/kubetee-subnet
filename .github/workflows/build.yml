@@ -124,15 +124,6 @@ jobs:
       - name: Build and push
         run: docker buildx build -f Dockerfile --push ${{ steps.tags.outputs.tags }} .
 
-      - name: Make image public
-        run: |
-          PACKAGE_NAME=$(echo "${{ github.repository }}" | cut -d'/' -f2)
-          curl -sf -X PATCH \
-            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-            -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/orgs/${{ github.repository_owner }}/packages/container/${PACKAGE_NAME}/visibility" \
-            -d '{"visibility":"public"}'
-
       - name: Pull and import-smoke the published production image
         if: inputs.release_type == 'production'
         run: |
