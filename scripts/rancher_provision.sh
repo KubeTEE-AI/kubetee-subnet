@@ -33,6 +33,7 @@ K3S_KUBECONFIG="${K3S_KUBECONFIG:-/k3s-out/kubeconfig.yaml}"
 EXT_TOKEN_API="$RANCHER/apis/ext.cattle.io/v1/tokens"
 EXT_TOKEN_LIMIT="100"
 EXT_TOKEN_USER_LABEL="cattle.io/user-id"
+LOGIN_TOKEN_API="$RANCHER/k8s/clusters/local/apis/management.cattle.io/v3/tokens"
 VALIDATOR_TOKEN_TTL_MS="3600000"
 PLATFORM_TOKEN_TTL_MS="300000"
 RANCHER_ID_PATTERN='^[A-Za-z0-9][A-Za-z0-9._-]{0,253}$'
@@ -173,21 +174,20 @@ validate_ext_token_create() {
 delete_known_login() {
   admin_token=$1
   login_id=$2
+  login_token=$3
   printf '%s' "$login_id" | jq -eR --arg pattern "$RANCHER_ID_PATTERN" \
     'test($pattern)' >/dev/null \
     || { log "login token id validation failed"; return 1; }
-  for attempt in $(seq 1 20); do
-    status=$(cr -o /dev/null -w '%{http_code}' -X DELETE \
-      "$RANCHER/v3/tokens/$login_id" \
-      -H "Authorization: Bearer $admin_token" || true)
-    case "$status" in
-      200|204) return 0 ;;
-      404) if [ "$attempt" -lt 20 ]; then sleep 1; fi ;;
-      *) log "login token deletion failed"; return 1 ;;
-    esac
-  done
-  log "login token deletion did not become ready"
-  return 1
+  status=$(cr -o /dev/null -w '%{http_code}' -X DELETE \
+    "$LOGIN_TOKEN_API/$login_id" \
+    -H "Authorization: Bearer $admin_token" || true)
+  [ "$status" = "200" ] \
+    || { log "login token deletion failed"; return 1; }
+  revoked_status=$(cr -o /dev/null -w '%{http_code}' -G "$EXT_TOKEN_API" \
+    -H "Authorization: Bearer $login_token" \
+    --data-urlencode "limit=$EXT_TOKEN_LIMIT" || true)
+  [ "$revoked_status" = "401" ] \
+    || { log "login token revocation verification failed"; return 1; }
 }
 
 wait_for_ext_token_api() {
@@ -381,8 +381,9 @@ printf '%s' "$VALIDATOR_TOKEN_RESPONSE" | validate_ext_token_create "$USER_ID" \
   || { log "validator extension token mint failed"; exit 1; }
 VALIDATOR_TOKEN_ID=$(printf '%s' "$VALIDATOR_TOKEN_RESPONSE" | jq -r .metadata.name)
 BEARER=$(printf '%s' "$VALIDATOR_TOKEN_RESPONSE" | jq -r .status.bearerToken)
-unset VALIDATOR_TOKEN_RESPONSE VLTOK
-delete_known_login "$LTOK" "$VALIDATOR_LOGIN_TOKEN_ID"
+unset VALIDATOR_TOKEN_RESPONSE
+delete_known_login "$LTOK" "$VALIDATOR_LOGIN_TOKEN_ID" "$VLTOK"
+unset VLTOK
 delete_ext_tokens_except "$LTOK" "$USER_ID" "$VALIDATOR_TOKEN_ID"
 assert_ext_tokens_exact "$LTOK" "$USER_ID" "$VALIDATOR_TOKEN_ID" \
   "$VALIDATOR_TOKEN_DESCRIPTION" "$VALIDATOR_TOKEN_TTL_MS" \
@@ -653,8 +654,9 @@ printf '%s' "$PLATFORM_TOKEN_RESPONSE" | validate_ext_token_create \
   || { log "platform extension token mint failed"; exit 1; }
 PLATFORM_TOKEN_ID=$(printf '%s' "$PLATFORM_TOKEN_RESPONSE" | jq -r .metadata.name)
 PLATFORM_BEARER=$(printf '%s' "$PLATFORM_TOKEN_RESPONSE" | jq -r .status.bearerToken)
-unset PLATFORM_TOKEN_RESPONSE PLATFORM_LOGIN_TOKEN
-delete_known_login "$LTOK" "$PLATFORM_LOGIN_TOKEN_ID"
+unset PLATFORM_TOKEN_RESPONSE
+delete_known_login "$LTOK" "$PLATFORM_LOGIN_TOKEN_ID" "$PLATFORM_LOGIN_TOKEN"
+unset PLATFORM_LOGIN_TOKEN
 delete_ext_tokens_except "$LTOK" "$PLATFORM_USER_ID" "$PLATFORM_TOKEN_ID"
 assert_ext_tokens_exact "$LTOK" "$PLATFORM_USER_ID" "$PLATFORM_TOKEN_ID" \
   "$PLATFORM_TOKEN_DESCRIPTION" "$PLATFORM_TOKEN_TTL_MS" \
@@ -728,7 +730,7 @@ unset PLATFORM_BEARER PLATFORM_TOKEN_ID PLATFORM_LOGIN_TOKEN_ID
 log "temporary platform credential revoked"
 
 echo "$CID" > "$SHARED/cluster-id"
-delete_known_login "$LTOK" "$ADMIN_LOGIN_TOKEN_ID"
+delete_known_login "$LTOK" "$ADMIN_LOGIN_TOKEN_ID" "$LTOK"
 unset LTOK ADMIN_LOGIN_TOKEN_ID
 touch "$SHARED/ready"
 log "PROVISIONING COMPLETE"

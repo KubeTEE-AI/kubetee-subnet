@@ -106,18 +106,30 @@ def test_local_provisioner_uses_millisecond_ttls_and_distinct_credentials():
     assert '[ "$PLATFORM_BEARER" != "$BEARER" ]' in text
 
 
-def test_local_provisioner_deletes_only_known_legacy_login_ids():
+def test_local_provisioner_revokes_only_known_logins_via_management_tokens():
     text = (ROOT / "scripts" / "rancher_provision.sh").read_text()
 
-    assert 'delete_known_login "$LTOK" "$VALIDATOR_LOGIN_TOKEN_ID"' in text
-    assert 'delete_known_login "$LTOK" "$PLATFORM_LOGIN_TOKEN_ID"' in text
-    assert 'delete_known_login "$LTOK" "$ADMIN_LOGIN_TOKEN_ID"' in text
-    assert '"$RANCHER/v3/tokens/$login_id"' in text
+    assert (
+        'LOGIN_TOKEN_API="$RANCHER/k8s/clusters/local/apis/management.cattle.io/v3/tokens"'
+        in text
+    )
+    assert (
+        'delete_known_login "$LTOK" "$VALIDATOR_LOGIN_TOKEN_ID" "$VLTOK"'
+        in text
+    )
+    assert (
+        'delete_known_login "$LTOK" "$PLATFORM_LOGIN_TOKEN_ID" "$PLATFORM_LOGIN_TOKEN"'
+        in text
+    )
+    assert 'delete_known_login "$LTOK" "$ADMIN_LOGIN_TOKEN_ID" "$LTOK"' in text
+    assert '"$LOGIN_TOKEN_API/$login_id"' in text
+    assert '"$RANCHER/v3/tokens' not in text
 
 
 def _run_delete_known_login(
     tmp_path: pathlib.Path,
-    statuses: list[str],
+    delete_status: str,
+    revoked_bearer_status: str,
     *,
     login_id: str = "login-1",
     expected_log: str = "",
@@ -126,21 +138,24 @@ def _run_delete_known_login(
     deletion = text[
         text.index("delete_known_login()") : text.index("wait_for_ext_token_api()")
     ]
-    statuses_path = tmp_path / "statuses"
-    index_path = tmp_path / "index"
+    delete_status_path = tmp_path / "delete-status"
+    revoked_bearer_status_path = tmp_path / "revoked-bearer-status"
     calls_path = tmp_path / "calls"
     sleeps_path = tmp_path / "sleeps"
     logs_path = tmp_path / "logs"
     harness_path = tmp_path / "delete-known-login.sh"
-    statuses_path.write_text("\n".join(statuses) + "\n")
-    index_path.write_text("1\n")
+    delete_status_path.write_text(delete_status)
+    revoked_bearer_status_path.write_text(revoked_bearer_status)
 
     harness_path.write_text(
         f"""#!/usr/bin/env sh
 RANCHER=https://rancher.invalid
 RANCHER_ID_PATTERN='^[A-Za-z0-9][A-Za-z0-9._-]{{0,253}}$'
-STATUS_PATH={shlex.quote(str(statuses_path))}
-INDEX_PATH={shlex.quote(str(index_path))}
+LOGIN_TOKEN_API="$RANCHER/k8s/clusters/local/apis/management.cattle.io/v3/tokens"
+EXT_TOKEN_API="$RANCHER/apis/ext.cattle.io/v1/tokens"
+EXT_TOKEN_LIMIT="100"
+DELETE_STATUS_PATH={shlex.quote(str(delete_status_path))}
+REVOKED_BEARER_STATUS_PATH={shlex.quote(str(revoked_bearer_status_path))}
 CALLS_PATH={shlex.quote(str(calls_path))}
 SLEEPS_PATH={shlex.quote(str(sleeps_path))}
 LOGS_PATH={shlex.quote(str(logs_path))}
@@ -155,22 +170,43 @@ count_lines() {{
   fi
 }}
 
+count_calls() {{
+  if [ -f "$CALLS_PATH" ]; then
+    grep -c "^$1$" "$CALLS_PATH" || true
+  else
+    printf '0\n'
+  fi
+}}
+
 cr() {{
-  [ "$#" -eq 9 ] \
+  if [ "$#" -eq 9 ] \
     && [ "$1" = "-o" ] \
     && [ "$2" = "/dev/null" ] \
     && [ "$3" = "-w" ] \
     && [ "$4" = "%{{http_code}}" ] \
     && [ "$5" = "-X" ] \
     && [ "$6" = "DELETE" ] \
-    && [ "$7" = "$RANCHER/v3/tokens/$EXPECTED_LOGIN_ID" ] \
+    && [ "$7" = "$LOGIN_TOKEN_API/$EXPECTED_LOGIN_ID" ] \
     && [ "$8" = "-H" ] \
-    && [ "$9" = "Authorization: Bearer admin-token" ] \
-    || return 1
-  index=$(cat "$INDEX_PATH")
-  status=$(sed -n "${{index}}p" "$STATUS_PATH")
-  printf '%s\n' "$((index + 1))" > "$INDEX_PATH"
-  printf 'call\n' >> "$CALLS_PATH"
+    && [ "$9" = "Authorization: Bearer admin-token" ]; then
+    status=$(cat "$DELETE_STATUS_PATH")
+    printf 'delete\n' >> "$CALLS_PATH"
+  elif [ "$#" -eq 10 ] \
+    && [ "$1" = "-o" ] \
+    && [ "$2" = "/dev/null" ] \
+    && [ "$3" = "-w" ] \
+    && [ "$4" = "%{{http_code}}" ] \
+    && [ "$5" = "-G" ] \
+    && [ "$6" = "$EXT_TOKEN_API" ] \
+    && [ "$7" = "-H" ] \
+    && [ "$8" = "Authorization: Bearer login-token" ] \
+    && [ "$9" = "--data-urlencode" ] \
+    && [ "${{10}}" = "limit=$EXT_TOKEN_LIMIT" ]; then
+    status=$(cat "$REVOKED_BEARER_STATUS_PATH")
+    printf 'list\n' >> "$CALLS_PATH"
+  else
+    return 1
+  fi
   case "$status" in
     transport) return 1 ;;
     empty) return 0 ;;
@@ -187,10 +223,11 @@ log() {{
 
 {deletion}
 
-delete_known_login admin-token {shlex.quote(login_id)}
+delete_known_login admin-token {shlex.quote(login_id)} login-token
 result=$?
 printf 'result=%s\n' "$result"
-printf 'calls=%s\n' "$(count_lines "$CALLS_PATH")"
+printf 'delete_calls=%s\n' "$(count_calls delete)"
+printf 'list_calls=%s\n' "$(count_calls list)"
 printf 'sleeps=%s\n' "$(count_lines "$SLEEPS_PATH")"
 printf 'logs=%s\n' "$(count_lines "$LOGS_PATH")"
 """
@@ -210,68 +247,98 @@ printf 'logs=%s\n' "$(count_lines "$LOGS_PATH")"
     }
 
 
-def test_local_provisioner_retries_exact_login_deletion_after_404(
+def test_local_provisioner_accepts_exact_delete_then_revoked_bearer_401(
     tmp_path: pathlib.Path,
 ):
-    outcome = _run_delete_known_login(tmp_path, ["404", "204"])
+    outcome = _run_delete_known_login(tmp_path, "200", "401")
 
-    assert outcome == {"result": 0, "calls": 2, "sleeps": 1, "logs": 0}
-
-
-def test_local_provisioner_accepts_immediate_204_login_deletion(
-    tmp_path: pathlib.Path,
-):
-    outcome = _run_delete_known_login(tmp_path, ["204"])
-
-    assert outcome == {"result": 0, "calls": 1, "sleeps": 0, "logs": 0}
+    assert outcome == {
+        "result": 0,
+        "delete_calls": 1,
+        "list_calls": 1,
+        "sleeps": 0,
+        "logs": 0,
+    }
 
 
-def test_local_provisioner_fails_immediately_for_non_retryable_login_deletion(
-    tmp_path: pathlib.Path,
-):
-    outcome = _run_delete_known_login(
-        tmp_path,
-        ["403"],
-        expected_log="login token deletion failed",
-    )
-
-    assert outcome == {"result": 1, "calls": 1, "sleeps": 0, "logs": 1}
-
-
-def test_local_provisioner_fails_immediately_for_transport_login_delete_failure(
+def test_local_provisioner_fails_safely_for_404_login_delete(
     tmp_path: pathlib.Path,
 ):
     outcome = _run_delete_known_login(
-        tmp_path,
-        ["transport"],
-        expected_log="login token deletion failed",
+        tmp_path, "404", "401", expected_log="login token deletion failed"
     )
 
-    assert outcome == {"result": 1, "calls": 1, "sleeps": 0, "logs": 1}
+    assert outcome == {
+        "result": 1,
+        "delete_calls": 1,
+        "list_calls": 0,
+        "sleeps": 0,
+        "logs": 1,
+    }
 
 
-def test_local_provisioner_fails_immediately_for_empty_http_login_delete_status(
+def test_local_provisioner_fails_safely_for_204_login_delete(
     tmp_path: pathlib.Path,
 ):
     outcome = _run_delete_known_login(
-        tmp_path,
-        ["empty"],
-        expected_log="login token deletion failed",
+        tmp_path, "204", "401", expected_log="login token deletion failed"
     )
 
-    assert outcome == {"result": 1, "calls": 1, "sleeps": 0, "logs": 1}
+    assert outcome == {
+        "result": 1,
+        "delete_calls": 1,
+        "list_calls": 0,
+        "sleeps": 0,
+        "logs": 1,
+    }
 
 
-def test_local_provisioner_bounds_login_delete_retries_without_final_sleep(
+def test_local_provisioner_fails_safely_for_500_login_delete(
     tmp_path: pathlib.Path,
 ):
     outcome = _run_delete_known_login(
-        tmp_path,
-        ["404"] * 20,
-        expected_log="login token deletion did not become ready",
+        tmp_path, "500", "401", expected_log="login token deletion failed"
     )
 
-    assert outcome == {"result": 1, "calls": 20, "sleeps": 19, "logs": 1}
+    assert outcome == {
+        "result": 1,
+        "delete_calls": 1,
+        "list_calls": 0,
+        "sleeps": 0,
+        "logs": 1,
+    }
+
+
+def test_local_provisioner_fails_safely_when_deleted_bearer_remains_authorized(
+    tmp_path: pathlib.Path,
+):
+    outcome = _run_delete_known_login(
+        tmp_path, "200", "200", expected_log="login token revocation verification failed"
+    )
+
+    assert outcome == {
+        "result": 1,
+        "delete_calls": 1,
+        "list_calls": 1,
+        "sleeps": 0,
+        "logs": 1,
+    }
+
+
+def test_local_provisioner_fails_safely_for_transport_login_delete_failure(
+    tmp_path: pathlib.Path,
+):
+    outcome = _run_delete_known_login(
+        tmp_path, "transport", "401", expected_log="login token deletion failed"
+    )
+
+    assert outcome == {
+        "result": 1,
+        "delete_calls": 1,
+        "list_calls": 0,
+        "sleeps": 0,
+        "logs": 1,
+    }
 
 
 def test_local_provisioner_rejects_invalid_login_id_without_http_call(
@@ -279,12 +346,19 @@ def test_local_provisioner_rejects_invalid_login_id_without_http_call(
 ):
     outcome = _run_delete_known_login(
         tmp_path,
-        ["204"],
+        "200",
+        "401",
         login_id="invalid/login-id",
         expected_log="login token id validation failed",
     )
 
-    assert outcome == {"result": 1, "calls": 0, "sleeps": 0, "logs": 1}
+    assert outcome == {
+        "result": 1,
+        "delete_calls": 0,
+        "list_calls": 0,
+        "sleeps": 0,
+        "logs": 1,
+    }
 
 
 def test_local_provisioner_reconciles_exact_validator_authority():
