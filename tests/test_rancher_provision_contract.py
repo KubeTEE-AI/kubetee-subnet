@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import pathlib
 import shlex
 import subprocess
@@ -54,15 +55,215 @@ def test_local_provisioner_never_logs_bootstrap_url_or_binding_identity():
 def test_local_provisioner_waits_for_successful_v3_login_before_provisioning():
     text = (ROOT / "scripts" / "rancher_provision.sh").read_text()
 
+    helper = text.index("create_local_login()")
     gate = text.index("login_to_rancher()")
     login = text.index("LTOK=", gate)
-    assert gate < login
+    assert helper < gate < login
     assert (
         '"$RANCHER/v3-public/localProviders/local?action=login"'
-        in text[gate:login]
+        in text[helper:gate]
     )
+    assert "-w '%{http_code}'" in text[helper:gate]
+    assert '[ "$login_status" = "201" ]' in text[helper:gate]
+    assert "umask 077" in text[helper:gate]
+    assert "trap 'rm -f \"$login_response_file\"' EXIT" in text[helper:gate]
+    assert "trap 'exit 1' HUP INT TERM" in text[helper:gate]
+    assert 'create_local_login "admin" "$BOOT"' in text[gate:login]
     assert "for _ in $(seq 1 120)" in text[gate:login]
     assert "Rancher local login did not become ready" in text[gate:login]
+
+
+def test_local_provisioner_routes_every_login_through_exact_status_helper():
+    text = (ROOT / "scripts" / "rancher_provision.sh").read_text()
+    endpoint = '"$RANCHER/v3-public/localProviders/local?action=login"'
+
+    assert text.count(endpoint) == 1
+    assert (
+        'VALIDATOR_LOGIN_RESPONSE=$(create_local_login "$VAL_USERNAME" '
+        '"$VAL_PASSWORD")' in text
+    )
+    assert (
+        'PLATFORM_LOGIN_RESPONSE=$(create_local_login "$PLATFORM_USERNAME" '
+        '"$PLATFORM_PASSWORD")' in text
+    )
+
+
+def _run_local_login(
+    tmp_path: pathlib.Path,
+    status: str,
+    *,
+    response_body: str = (
+        '{"id":"body-hostile-marker","token":"token-hostile-marker"}'
+    ),
+) -> tuple[dict[str, int], subprocess.CompletedProcess[str]]:
+    text = (ROOT / "scripts" / "rancher_provision.sh").read_text()
+    helpers = text[
+        text.index("validate_login_document()") : text.index(
+            "validate_ext_token_list()"
+        )
+    ]
+    harness_path = tmp_path / "local-login.sh"
+    username = "username-hostile-marker"
+    password = "password-hostile-marker"
+
+    harness_path.write_text(f"""#!/usr/bin/env sh
+RANCHER=https://rancher.invalid
+RANCHER_ID_PATTERN='^[A-Za-z0-9][A-Za-z0-9._-]{{0,253}}$'
+LOGIN_STATUS={shlex.quote(status)}
+LOGIN_BODY={shlex.quote(response_body)}
+EXPECTED_USERNAME={shlex.quote(username)}
+EXPECTED_PASSWORD={shlex.quote(password)}
+PAYLOAD_VALID_PATH={shlex.quote(str(tmp_path / "payload-valid"))}
+
+cr() {{
+  output_file=
+  payload=
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -o)
+        shift
+        output_file=$1
+        ;;
+      -d)
+        shift
+        payload=$1
+        ;;
+    esac
+    shift
+  done
+  [ -n "$output_file" ] || return 90
+  if printf '%s' "$payload" | jq -e \
+    --arg username "$EXPECTED_USERNAME" \
+    --arg password "$EXPECTED_PASSWORD" \
+    '.username == $username and .password == $password' >/dev/null; then
+    printf '1\n' > "$PAYLOAD_VALID_PATH"
+  else
+    printf '0\n' > "$PAYLOAD_VALID_PATH"
+  fi
+  printf '%s' "$LOGIN_BODY" > "$output_file"
+  [ "$LOGIN_STATUS" != "transport" ] || return 1
+  printf '%s' "$LOGIN_STATUS"
+}}
+
+log() {{ return 91; }}
+sleep() {{ return 92; }}
+
+{helpers}
+
+if login_document=$(create_local_login "$EXPECTED_USERNAME" "$EXPECTED_PASSWORD"); then
+  result=0
+else
+  result=$?
+fi
+if [ "$login_document" = "$LOGIN_BODY" ]; then
+  response_matches=1
+else
+  response_matches=0
+fi
+if [ -z "$login_document" ]; then
+  response_empty=1
+else
+  response_empty=0
+fi
+unset login_document LOGIN_BODY EXPECTED_USERNAME EXPECTED_PASSWORD
+printf 'result=%s\n' "$result"
+printf 'response_matches=%s\n' "$response_matches"
+printf 'response_empty=%s\n' "$response_empty"
+printf 'payload_valid=%s\n' "$(cat "$PAYLOAD_VALID_PATH")"
+""")
+    result = subprocess.run(
+        ["sh", str(harness_path)],
+        check=False,
+        capture_output=True,
+        text=True,
+        env={"PATH": os.environ["PATH"], "TMPDIR": str(tmp_path)},
+    )
+    outcome = {
+        key: int(value)
+        for key, value in (
+            line.split("=", maxsplit=1) for line in result.stdout.splitlines()
+        )
+    }
+    return outcome, result
+
+
+def test_local_login_accepts_only_exact_201(tmp_path: pathlib.Path):
+    outcome, result = _run_local_login(tmp_path, "201")
+
+    assert result.returncode == 0
+    assert result.stderr == ""
+    assert outcome == {
+        "result": 0,
+        "response_matches": 1,
+        "response_empty": 0,
+        "payload_valid": 1,
+    }
+    assert list(tmp_path.glob("kubetee-login.*")) == []
+
+
+def test_local_login_cleans_malformed_201_without_disclosure(
+    tmp_path: pathlib.Path,
+):
+    outcome, result = _run_local_login(
+        tmp_path,
+        "201",
+        response_body="malformed-body-hostile-marker",
+    )
+
+    assert result.returncode == 0
+    assert result.stderr == ""
+    assert outcome == {
+        "result": 1,
+        "response_matches": 0,
+        "response_empty": 1,
+        "payload_valid": 1,
+    }
+    assert "malformed-body-hostile-marker" not in result.stdout
+    assert list(tmp_path.glob("kubetee-login.*")) == []
+
+
+def test_local_login_cleans_transport_failure_without_disclosure(
+    tmp_path: pathlib.Path,
+):
+    outcome, result = _run_local_login(tmp_path, "transport")
+
+    assert result.returncode == 0
+    assert result.stderr == ""
+    assert outcome == {
+        "result": 1,
+        "response_matches": 0,
+        "response_empty": 1,
+        "payload_valid": 1,
+    }
+    assert "body-hostile-marker" not in result.stdout
+    assert "token-hostile-marker" not in result.stdout
+    assert list(tmp_path.glob("kubetee-login.*")) == []
+
+
+@pytest.mark.parametrize("status", ["200", "202", "204", "299"])
+def test_local_login_rejects_other_2xx_without_disclosure(
+    tmp_path: pathlib.Path,
+    status: str,
+):
+    outcome, result = _run_local_login(tmp_path, status)
+
+    assert result.returncode == 0
+    assert result.stderr == ""
+    assert outcome == {
+        "result": 1,
+        "response_matches": 0,
+        "response_empty": 1,
+        "payload_valid": 1,
+    }
+    for hostile_marker in (
+        "body-hostile-marker",
+        "token-hostile-marker",
+        "username-hostile-marker",
+        "password-hostile-marker",
+    ):
+        assert hostile_marker not in result.stdout
+        assert hostile_marker not in result.stderr
+    assert list(tmp_path.glob("kubetee-login.*")) == []
 
 
 def test_local_provisioner_uses_bounded_extension_token_api_only():

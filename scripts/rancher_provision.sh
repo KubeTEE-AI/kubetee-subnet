@@ -45,17 +45,33 @@ validate_login_document() {
   jq -e --arg pattern "$RANCHER_ID_PATTERN" '
     (.id | type == "string" and test($pattern))
     and (.token | type == "string" and length > 0)
-  ' >/dev/null
+  ' >/dev/null 2>&1
 }
+
+create_local_login() (
+  login_username=$1
+  login_password=$2
+  umask 077
+  login_response_file=$(mktemp "${TMPDIR:-/tmp}/kubetee-login.XXXXXX") \
+    || return 1
+  trap 'rm -f "$login_response_file"' EXIT
+  trap 'exit 1' HUP INT TERM
+  login_payload=$(jq -nc --arg username "$login_username" \
+    --arg password "$login_password" \
+    '{username: $username, password: $password}') || return 1
+  if ! login_status=$(cr -o "$login_response_file" -w '%{http_code}' \
+    -X POST "$RANCHER/v3-public/localProviders/local?action=login" \
+    -H 'Content-Type: application/json' -d "$login_payload" 2>/dev/null); then
+    return 1
+  fi
+  [ "$login_status" = "201" ] || return 1
+  validate_login_document < "$login_response_file" || return 1
+  cat "$login_response_file"
+)
 
 login_to_rancher() {
   for _ in $(seq 1 120); do
-    login_document=$(cr -f -X POST \
-      "$RANCHER/v3-public/localProviders/local?action=login" \
-      -H 'Content-Type: application/json' \
-      -d "{\"username\":\"admin\",\"password\":\"$BOOT\"}" \
-      2>/dev/null || true)
-    if printf '%s' "$login_document" | validate_login_document; then
+    if login_document=$(create_local_login "admin" "$BOOT"); then
       printf '%s' "$login_document"
       return 0
     fi
@@ -365,10 +381,8 @@ log "bindings verified exact (user-base + $VAL_ROLE_NAME)"
 # and minting this run's only long-lived validator credential.
 delete_ext_tokens_except "$LTOK" "$USER_ID"
 assert_ext_tokens_exact "$LTOK" "$USER_ID"
-VALIDATOR_LOGIN_RESPONSE=$(cr -f -X POST \
-  "$RANCHER/v3-public/localProviders/local?action=login" \
-  -H 'Content-Type: application/json' \
-  -d "{\"username\":\"$VAL_USERNAME\",\"password\":\"$VAL_PASSWORD\"}")
+VALIDATOR_LOGIN_RESPONSE=$(create_local_login "$VAL_USERNAME" "$VAL_PASSWORD") \
+  || { log "validator login failed"; exit 1; }
 printf '%s' "$VALIDATOR_LOGIN_RESPONSE" | validate_login_document \
   || { log "validator login failed"; exit 1; }
 VALIDATOR_LOGIN_TOKEN_ID=$(printf '%s' "$VALIDATOR_LOGIN_RESPONSE" | jq -r .id)
@@ -638,10 +652,8 @@ PATCH_BODY=$(jq -n \
 # earlier, but no writer credential existed while registration was pending.
 delete_ext_tokens_except "$LTOK" "$PLATFORM_USER_ID"
 assert_ext_tokens_exact "$LTOK" "$PLATFORM_USER_ID"
-PLATFORM_LOGIN_RESPONSE=$(cr -f -X POST \
-  "$RANCHER/v3-public/localProviders/local?action=login" \
-  -H 'Content-Type: application/json' \
-  -d "{\"username\":\"$PLATFORM_USERNAME\",\"password\":\"$PLATFORM_PASSWORD\"}")
+PLATFORM_LOGIN_RESPONSE=$(create_local_login "$PLATFORM_USERNAME" "$PLATFORM_PASSWORD") \
+  || { log "platform login failed"; exit 1; }
 printf '%s' "$PLATFORM_LOGIN_RESPONSE" | validate_login_document \
   || { log "platform login failed"; exit 1; }
 PLATFORM_LOGIN_TOKEN_ID=$(printf '%s' "$PLATFORM_LOGIN_RESPONSE" | jq -r .id)
