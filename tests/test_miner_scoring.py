@@ -206,3 +206,33 @@ def test_malformed_neuron_skips_instead_of_crashing():
     result = decide_cycle(snapshot, {}, config)
     assert isinstance(result, SkipCycle)
     assert result.reason == SkipReason.IDENTITY_VIOLATION
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("uid", True),
+        ("uid", -1),
+        ("uid", "2"),
+        ("hotkey", {"not": "scalar"}),
+        ("coldkey", 123),
+    ],
+)
+def test_malformed_neuron_scalar_shapes_skip_cycle(field, value):
+    snapshot = base_neurons()
+    snapshot[2][field] = value
+
+    outcome = decide_cycle(snapshot, {}, CONFIG)
+
+    assert isinstance(outcome, SkipCycle)
+    assert outcome.reason is SkipReason.IDENTITY_VIOLATION
+
+
+def test_duplicate_uid_in_metagraph_skips_cycle():
+    snapshot = base_neurons()
+    snapshot[2]["uid"] = snapshot[1]["uid"]
+
+    outcome = decide_cycle(snapshot, {}, CONFIG)
+
+    assert isinstance(outcome, SkipCycle)
+    assert outcome.reason is SkipReason.IDENTITY_VIOLATION

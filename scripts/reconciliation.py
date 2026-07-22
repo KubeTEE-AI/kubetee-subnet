@@ -1,17 +1,19 @@
 """Guarded deregistration reconciliation (g004 V5, spec §4.2a).
 
 The single Rancher mutation the validator may ever perform: removing a
-cluster whose canonical ``kubetee.ai/hotkey`` label points at a hotkey that has
-verifiably left the metagraph. Every guard is mandatory and fail-closed:
+cluster whose canonical binding labels match this validator's network/netuid
+and whose ``kubetee.ai/hotkey`` points at a hotkey that has verifiably left the
+metagraph. Every guard is mandatory and fail-closed:
 
 - runs only on cycles whose metagraph read AND complete Rancher enumeration
   both succeeded; any skip freezes (never increments, never resets) the
   per-hotkey absence counters and is counted as a suppression
 - absence must persist >= ``min_cycles`` consecutive successful cycles AND
   >= ``min_seconds`` wall-clock (both; plan-pinned 3 / 900)
-- pre-delete recheck in the same cycle: one fresh metagraph read must still
-  show the hotkey absent, and one final GET must re-validate the cluster's
-  id, uuid, and label value; any mismatch or error aborts
+- pre-delete recheck in the same cycle: one head-pinned metagraph read at
+  least as recent as the cycle must still show the hotkey absent, and one
+  final GET must re-validate the canonical cluster id, uuid, and binding
+  labels; any mismatch or error aborts
 - unlabeled clusters, ``internal`` clusters, and protected ids are
   structurally out of reach
 - DELETE 404/409 is idempotent (conflict counter, no retry); an AUTH error
@@ -31,12 +33,27 @@ import time
 import uuid as uuid_module
 from collections.abc import Callable, Iterable
 
-from infrastructure_validation import HOTKEY_LABEL
-from rancher_client import ErrorCategory, RancherError
+from infrastructure_validation import (
+    BINDING_STATUS_LABEL,
+    HOTKEY_LABEL,
+    NETUID_LABEL,
+    NETWORK_LABEL,
+)
+from rancher_client import ErrorCategory, RancherError, validate_cluster_id
 from validator_metrics import SuppressionReason, ValidatorMetrics
 
 MINER_LABEL = HOTKEY_LABEL
 PROTECTED_CLUSTER_IDS = frozenset({"local"})
+
+
+def _canonical_uuid(value: object) -> bool:
+    """Accept only Rancher's canonical 36-character UUID representation."""
+    if not isinstance(value, str) or len(value) != 36:
+        return False
+    try:
+        return str(uuid_module.UUID(value)) == value.lower()
+    except (ValueError, AttributeError):
+        return False
 
 
 @dataclasses.dataclass
@@ -53,6 +70,8 @@ class ReconciliationEngine:
         self,
         client,
         metrics: ValidatorMetrics,
+        expected_netuid: int,
+        expected_network: str,
         min_cycles: int = 3,
         min_seconds: float = 900.0,
         clock: Callable[[], float] = time.time,
@@ -63,14 +82,25 @@ class ReconciliationEngine:
             raise ValueError("min_cycles must be >= 1")
         if min_seconds < 0:
             raise ValueError("min_seconds must be >= 0")
+        if (
+            isinstance(expected_netuid, bool)
+            or not isinstance(expected_netuid, int)
+            or expected_netuid < 0
+        ):
+            raise ValueError("expected_netuid must be a non-negative integer")
+        if not isinstance(expected_network, str) or not expected_network:
+            raise ValueError("expected_network must be non-empty")
         self._client = client
         self._metrics = metrics
+        self._expected_netuid = str(expected_netuid)
+        self._expected_network = expected_network
         self._min_cycles = min_cycles
         self._min_seconds = min_seconds
         self._clock = clock
         self._sink = evidence_sink or (lambda event: None)
         self._protected = protected_ids
         self._absences: dict[str, _Absence] = {}
+        self._last_metagraph_block: int | None = None
 
     # -- introspection ---------------------------------------------------------
 
@@ -85,13 +115,15 @@ class ReconciliationEngine:
         registered_hotkeys: set[str] | None,
         clusters: list[dict] | None,
         metagraph_block: int | None,
-        refresh_registered: Callable[[], set[str] | None],
+        refresh_registered: Callable[[int], set[str] | None],
     ) -> None:
         """Evaluate reconciliation for one validator cycle.
 
         ``registered_hotkeys is None`` marks a failed metagraph read;
         ``clusters is None`` marks a failed/incomplete Rancher enumeration.
-        Either suppresses and freezes every counter.
+        Either suppresses and freezes every counter. Blocks must advance on
+        successful cycles; the final refresh receives the current block as a
+        minimum freshness bound.
         """
         if registered_hotkeys is None:
             self._metrics.record_reconciliation_suppressed(
@@ -103,6 +135,20 @@ class ReconciliationEngine:
                 SuppressionReason.RANCHER_DOWN
             )
             return
+        if (
+            isinstance(metagraph_block, bool)
+            or not isinstance(metagraph_block, int)
+            or metagraph_block < 0
+            or (
+                self._last_metagraph_block is not None
+                and metagraph_block <= self._last_metagraph_block
+            )
+        ):
+            self._metrics.record_reconciliation_suppressed(
+                SuppressionReason.METAGRAPH_FAILED
+            )
+            return
+        self._last_metagraph_block = metagraph_block
 
         candidates = self._candidates(clusters)
         seen_hotkeys = {hotkey for hotkey, _ in candidates}
@@ -129,7 +175,13 @@ class ReconciliationEngine:
                     SuppressionReason.BELOW_THRESHOLD
                 )
                 continue
-            self._attempt_delete(hotkey, hotkey_clusters, record, refresh_registered)
+            self._attempt_delete(
+                hotkey,
+                hotkey_clusters,
+                record,
+                metagraph_block,
+                refresh_registered,
+            )
 
     # -- internals ------------------------------------------------------------------
 
@@ -139,10 +191,27 @@ class ReconciliationEngine:
         for cluster in clusters:
             if not isinstance(cluster, dict):
                 continue
-            hotkey = (cluster.get("labels") or {}).get(MINER_LABEL)
-            if not hotkey:
+            labels = cluster.get("labels")
+            hotkey = labels.get(MINER_LABEL) if isinstance(labels, dict) else None
+            cluster_id = cluster.get("id")
+            cluster_uuid = cluster.get("uuid")
+            if not isinstance(labels, dict):
+                continue
+            if (
+                labels.get(BINDING_STATUS_LABEL) != "ENROLLED"
+                or labels.get(NETUID_LABEL) != self._expected_netuid
+                or labels.get(NETWORK_LABEL) != self._expected_network
+            ):
+                continue  # another trust domain: structurally out of reach
+            if not isinstance(hotkey, str) or not hotkey:
                 continue  # unlabeled: structurally out of reach
-            if cluster.get("internal") or cluster.get("id") in self._protected:
+            try:
+                validate_cluster_id(cluster_id)
+            except ValueError:
+                continue
+            if not _canonical_uuid(cluster_uuid):
+                continue
+            if cluster.get("internal") or cluster_id in self._protected:
                 continue  # management/protected: structurally out of reach
             grouped.setdefault(hotkey, []).append(cluster)
         return sorted(grouped.items())
@@ -152,10 +221,11 @@ class ReconciliationEngine:
         hotkey: str,
         hotkey_clusters: list[dict],
         record: _Absence,
-        refresh_registered: Callable[[], set[str] | None],
+        metagraph_block: int,
+        refresh_registered: Callable[[int], set[str] | None],
     ) -> None:
         # Pre-delete recheck 1: one final fresh metagraph read, same cycle.
-        fresh = refresh_registered()
+        fresh = refresh_registered(metagraph_block)
         if fresh is None:
             self._metrics.record_reconciliation_suppressed(
                 SuppressionReason.METAGRAPH_FAILED
@@ -170,15 +240,21 @@ class ReconciliationEngine:
             # Pre-delete recheck 2: final GET re-validating identity + label.
             try:
                 current = self._client.get_cluster(cluster_id)
-            except RancherError:
+            except (RancherError, ValueError):
                 self._metrics.record_reconciliation_suppressed(
                     SuppressionReason.RECHECK_MISMATCH
                 )
                 continue
+            current_labels = current.get("labels")
             if (
                 current.get("id") != cluster_id
                 or current.get("uuid") != cluster.get("uuid")
-                or (current.get("labels") or {}).get(MINER_LABEL) != hotkey
+                or not _canonical_uuid(current.get("uuid"))
+                or not isinstance(current_labels, dict)
+                or current_labels.get(MINER_LABEL) != hotkey
+                or current_labels.get(BINDING_STATUS_LABEL) != "ENROLLED"
+                or current_labels.get(NETUID_LABEL) != self._expected_netuid
+                or current_labels.get(NETWORK_LABEL) != self._expected_network
                 or current.get("internal")
                 or cluster_id in self._protected
             ):

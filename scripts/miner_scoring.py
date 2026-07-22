@@ -16,9 +16,11 @@ class SkipReason(enum.Enum):
     """Fixed-enum reasons a cycle refuses to set weights (fail-closed)."""
 
     METAGRAPH_UNAVAILABLE = "metagraph_unavailable"
+    METAGRAPH_STALE = "metagraph_stale"
     OWNER_UNRESOLVED = "owner_unresolved"
     IDENTITY_VIOLATION = "identity_violation"
     RANCHER_UNAVAILABLE = "rancher_unavailable"
+    UNEXPECTED_RUNTIME = "unexpected_runtime"
 
 
 def validate_share(value) -> float:
@@ -87,8 +89,30 @@ def decide_cycle(
                 SkipReason.IDENTITY_VIOLATION,
                 "neuron missing uid, hotkey, or coldkey",
             )
+        uid = neuron["uid"]
+        hotkey = neuron["hotkey"]
+        coldkey = neuron["coldkey"]
+        if (
+            isinstance(uid, bool)
+            or not isinstance(uid, int)
+            or uid < 0
+            or not isinstance(hotkey, str)
+            or not hotkey.strip()
+            or not isinstance(coldkey, str)
+            or not coldkey.strip()
+        ):
+            return SkipCycle(
+                SkipReason.IDENTITY_VIOLATION,
+                "neuron uid, hotkey, or coldkey has invalid shape",
+            )
 
-    hotkeys = [n.get("hotkey") for n in neurons]
+    uids = [n["uid"] for n in neurons]
+    if len(uids) != len(set(uids)):
+        return SkipCycle(
+            SkipReason.IDENTITY_VIOLATION, "duplicate uid in metagraph"
+        )
+
+    hotkeys = [n["hotkey"] for n in neurons]
     if len(hotkeys) != len(set(hotkeys)):
         return SkipCycle(
             SkipReason.IDENTITY_VIOLATION, "duplicate hotkey in metagraph"

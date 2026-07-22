@@ -32,16 +32,23 @@ import pytest
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent.parent / "scripts"))
 
+from infrastructure_validation import (
+    BINDING_STATUS_LABEL,
+    HOTKEY_LABEL,
+    NETUID_LABEL,
+    NETWORK_LABEL,
+    ValidationProfile,
+)
+from rancher_client import ErrorCategory, RancherClient, RancherError
+from reconciliation import ReconciliationEngine
 from validator import (
     BasicValidator,
     ConfigError,
     ValidatorConfig,
+    _log_reconciliation_evidence,
     load_config,
     main,
 )
-from infrastructure_validation import HOTKEY_LABEL, ValidationProfile
-from rancher_client import ErrorCategory, RancherClient, RancherError
-from reconciliation import ReconciliationEngine
 from validator_metrics import ValidatorMetrics
 
 OWNER = "5OwnerHotkeyFAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKE"
@@ -111,7 +118,7 @@ class FakeSubnetsNamespace:
         self._metagraph_errors = list(metagraph_errors or [])
         self.calls = calls if calls is not None else []
 
-    def metagraph(self, netuid: int):
+    def metagraph(self, netuid: int, block: int | None = None):
         self.calls.append("metagraph")
         if self._metagraph_errors:
             error = self._metagraph_errors.pop(0)
@@ -121,7 +128,8 @@ class FakeSubnetsNamespace:
             [
                 FakeNeuron(n["uid"], n["hotkey"], n["coldkey"])
                 for n in self._neurons
-            ]
+            ],
+            block=100 if block is None else block,
         )
 
 
@@ -159,6 +167,12 @@ class FakeSubtensor:
         self.set_weights_calls: list[dict] = []
         self._set_weights_results = list(set_weights_results or [])
         self.calls = calls if calls is not None else []
+        self._next_block = 100
+
+    def block(self) -> int:
+        block = self._next_block
+        self._next_block += 1
+        return block
 
     def execute(self, intent, wallet):
         self.calls.append("set_weights")
@@ -242,14 +256,14 @@ def active_bob_cluster() -> tuple[list[dict], dict[str, list[dict]]]:
     clusters = [
         {
             "id": "c-bob",
-            "uuid": "uuid-bob",
+            "uuid": "00000000-0000-4000-8000-000000000002",
             "state": "active",
             "transitioning": "no",
             "labels": {
                 "kubetee.ai/binding-id": "binding-bob",
                 HOTKEY_LABEL: BOB,
                 "kubetee.ai/coldkey": BOB_COLDKEY,
-                "kubetee.ai/provider-id": "provider-bob",
+                "kubetee.ai/provider-id": "00000000-0000-4000-8000-000000000002",
                 "kubetee.ai/binding-status": "ENROLLED",
                 "kubetee.ai/generation": "1",
                 "kubetee.ai/netuid": "1",
@@ -423,6 +437,22 @@ def test_non_https_rancher_url_refuses_to_start(url):
     assert "RANCHER_URL" in str(excinfo.value)
 
 
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://rancher.example/v3",
+        "https://rancher.example?scope=all",
+        "https://rancher.example#fragment",
+        "https://user:embedded-secret@rancher.example",
+    ],
+)
+def test_rancher_url_must_be_an_origin_without_credentials(url):
+    with pytest.raises(ConfigError) as excinfo:
+        ValidatorConfig.from_env(make_env(RANCHER_URL=url))
+    assert "RANCHER_URL" in str(excinfo.value)
+    assert "embedded-secret" not in str(excinfo.value)
+
+
 @pytest.mark.parametrize("profile", ["", "DEBUG", "staging"])
 def test_invalid_validation_profile_refuses_to_start(profile):
     with pytest.raises(ConfigError) as excinfo:
@@ -432,9 +462,35 @@ def test_invalid_validation_profile_refuses_to_start(profile):
 
 def test_validation_profile_ignores_outer_whitespace_only():
     config = ValidatorConfig.from_env(
-        make_env(KUBETEE_VALIDATION_PROFILE=" production ")
+        make_env(
+            KUBETEE_VALIDATION_PROFILE=" production ",
+            BT_NETWORK="finney",
+            BT_WALLET="validator",
+            BT_WALLET_HOTKEY="default",
+            KUBETEE_SUBNET_NETUID="90",
+        )
     )
     assert config.validation_profile is ValidationProfile.PRODUCTION
+
+
+@pytest.mark.parametrize(
+    "missing",
+    ["BT_NETWORK", "BT_WALLET", "BT_WALLET_HOTKEY", "KUBETEE_SUBNET_NETUID"],
+)
+def test_production_profile_requires_explicit_chain_and_wallet(missing):
+    env = make_env(
+        KUBETEE_VALIDATION_PROFILE="production",
+        BT_NETWORK="finney",
+        BT_WALLET="validator",
+        BT_WALLET_HOTKEY="default",
+        KUBETEE_SUBNET_NETUID="90",
+    )
+    env.pop(missing)
+
+    with pytest.raises(ConfigError) as excinfo:
+        ValidatorConfig.from_env(env)
+
+    assert missing in str(excinfo.value)
 
 
 def test_netuid_file_overrides_env(tmp_path):
@@ -557,8 +613,9 @@ def test_metagraph_coldkey_reaches_validator_snapshot():
 
 
 def test_invalid_metagraph_suppresses_rancher_and_reconciliation_actions():
-    duplicate = neurons_triad() + [
-        {"uid": 3, "hotkey": BOB, "coldkey": BOB_COLDKEY}
+    duplicate = [
+        *neurons_triad(),
+        {"uid": 3, "hotkey": BOB, "coldkey": BOB_COLDKEY},
     ]
     rancher = FakeRancher()
     reconciler = FakeReconciler()
@@ -574,6 +631,81 @@ def test_invalid_metagraph_suppresses_rancher_and_reconciliation_actions():
     assert rancher.calls == []
     assert reconciler.run_args[0]["registered"] is None
     assert reconciler.run_args[0]["clusters"] is None
+
+
+def test_missing_raw_metagraph_identity_is_not_stringified_into_valid_data():
+    snapshot = neurons_triad()
+    snapshot[2]["coldkey"] = None
+    rancher = FakeRancher()
+    reconciler = FakeReconciler()
+    validator, *_ = build_validator(
+        subtensor=FakeSubtensor(snapshot),
+        rancher=rancher,
+        reconciler=reconciler,
+    )
+
+    assert validator.run_cycle() == "skip"
+    assert rancher.calls == []
+    assert reconciler.run_args[0]["registered"] is None
+
+
+def test_reconciliation_refresh_rejects_invalid_metagraph_identity():
+    duplicate = [
+        *neurons_triad(),
+        {"uid": 3, "hotkey": BOB, "coldkey": BOB_COLDKEY},
+    ]
+    validator, *_ = build_validator(subtensor=FakeSubtensor(duplicate))
+    validator._ensure_subtensor()
+
+    assert validator._refresh_registered() is None
+
+
+def test_missing_metagraph_block_skips_before_rancher():
+    subtensor = FakeSubtensor(neurons_triad())
+    read_metagraph = subtensor.subnets.metagraph
+
+    def without_block(netuid, block=None):
+        metagraph = read_metagraph(netuid, block=block)
+        metagraph.block = None
+        return metagraph
+
+    subtensor.subnets.metagraph = without_block
+    rancher = FakeRancher()
+    validator, *_ = build_validator(subtensor=subtensor, rancher=rancher)
+
+    assert validator.run_cycle() == "skip"
+    assert rancher.calls == []
+
+
+def test_repeated_metagraph_block_skips_the_later_cycle():
+    class StaticBlockSubtensor(FakeSubtensor):
+        def block(self):
+            return 100
+
+    clusters, nodes = active_bob_cluster()
+    rancher = FakeRancher(clusters=clusters, nodes_by_cluster=nodes)
+    validator, subtensor, *_ = build_validator(
+        subtensor=StaticBlockSubtensor(neurons_triad()),
+        rancher=rancher,
+    )
+
+    assert validator.run_cycle() == "weights_set"
+    assert validator.run_cycle() == "skip"
+    assert len(subtensor.set_weights_calls) == 1
+    assert rancher.calls.count("list_clusters") == 1
+
+
+def test_reconciliation_refresh_must_not_precede_cycle_block():
+    class StaticBlockSubtensor(FakeSubtensor):
+        def block(self):
+            return 100
+
+    validator, *_ = build_validator(
+        subtensor=StaticBlockSubtensor(neurons_triad())
+    )
+    validator._ensure_subtensor()
+
+    assert validator._refresh_registered(101) is None
 
 
 @pytest.mark.parametrize("mutation", ["pending", "coldkey_mismatch"])
@@ -637,8 +769,9 @@ def test_two_miners_can_receive_different_complete_verdicts():
             "transitioning": "no",
         }
     ]
-    snapshot = neurons_triad() + [
-        {"uid": 3, "hotkey": CAROL, "coldkey": CAROL_COLDKEY}
+    snapshot = [
+        *neurons_triad(),
+        {"uid": 3, "hotkey": CAROL, "coldkey": CAROL_COLDKEY},
     ]
     validator, subtensor, *_ = build_validator(
         subtensor=FakeSubtensor(snapshot),
@@ -665,6 +798,32 @@ def test_registered_miner_without_cluster_scores_zero():
     assert (
         sample(metrics, "kubetee_validation_status", status="suspended") == 1
     )
+    assert (
+        sample(
+            metrics,
+            "kubetee_validation_reason",
+            reason="cluster_missing",
+        )
+        == 1
+    )
+
+
+def test_malformed_cluster_labels_score_zero_without_escaping_cycle():
+    rancher = FakeRancher(
+        clusters=[
+            {
+                "id": "c-malformed",
+                "state": "active",
+                "transitioning": "no",
+                "labels": "not-a-mapping",
+            }
+        ]
+    )
+    validator, subtensor, _, _, metrics, _ = build_validator(rancher=rancher)
+
+    assert validator.run_cycle() == "weights_set"
+
+    assert subtensor.set_weights_calls[0]["weights"] == [1.0, 0.0, 0.0]
     assert (
         sample(
             metrics,
@@ -807,10 +966,15 @@ def test_rejected_set_weights_is_honest_and_loop_continues(caplog):
 def test_unexpected_in_cycle_exception_never_exits(caplog):
     """D14 liveness path 3: an injected unexpected exception degrades to
     backoff and the loop continues - only operator signals stop the process."""
+    config = ValidatorConfig.from_env(
+        make_env(KUBETEE_MAX_CONSECUTIVE_SKIPS="2")
+    )
     reconciler = FakeReconciler(error=RuntimeError("unexpected bug"))
     sleep, sleep_calls = stop_after(3)
-    validator, _subtensor, _, _, _, _ = build_validator(
-        reconciler=reconciler, sleep=sleep
+    validator, _subtensor, _, _, metrics, _ = build_validator(
+        config=config,
+        reconciler=reconciler,
+        sleep=sleep,
     )
 
     with (
@@ -822,6 +986,16 @@ def test_unexpected_in_cycle_exception_never_exits(caplog):
     assert len(sleep_calls) == 3
     assert "unexpected cycle error" in caplog.text
     assert "RuntimeError" in caplog.text
+    assert (
+        sample(
+            metrics,
+            "kubetee_cycles_skipped_total",
+            reason="unexpected_runtime",
+        )
+        == 3
+    )
+    assert metrics.consecutive_skips == 3
+    assert metrics.degraded is True
 
 
 def test_set_weights_transport_exception_recreates_connection_once():
@@ -938,11 +1112,18 @@ def test_reconciliation_suppression_log_is_redacted(caplog):
     gone = "5GoneHotkeyFAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKEa"
     cluster = {
         "id": "c-gone",
-        "uuid": "uuid-gone",
+        "uuid": "00000000-0000-4000-8000-000000000099",
         "state": "active",
-        "labels": {HOTKEY_LABEL: gone},
+        "labels": {
+            HOTKEY_LABEL: gone,
+            BINDING_STATUS_LABEL: "ENROLLED",
+            NETUID_LABEL: "1",
+            NETWORK_LABEL: "finney",
+        },
     }
-    list_body = json.dumps({"data": [cluster], "pagination": {"limit": -1}})
+    list_body = json.dumps(
+        {"data": [cluster], "pagination": {"limit": -1, "total": 1}}
+    )
     get_body = json.dumps(cluster)
     client = RancherClient(
         "https://rancher.example.test",
@@ -967,6 +1148,8 @@ def test_reconciliation_suppression_log_is_redacted(caplog):
     engine = ReconciliationEngine(
         client,
         metrics,
+        expected_netuid=1,
+        expected_network="finney",
         min_cycles=1,
         min_seconds=0.0,
         evidence_sink=lambda event: log.info(
@@ -990,5 +1173,27 @@ def test_reconciliation_suppression_log_is_redacted(caplog):
         == 1
     )
     assert "operator action required" in caplog.text
+    assert TOKEN not in caplog.text
+
+
+def test_reconciliation_audit_logger_uses_only_allowlisted_fields(caplog):
+    event = {
+        "event": "reconciliation_deletion",
+        "correlation_id": "audit-1",
+        "cluster_id": "c-gone",
+        "absence_cycles": 3,
+        "metagraph_blocks": [100, 101, 102],
+        "response_class": "deleted-204",
+        "detail": None,
+        "raw_evidence": TOKEN,
+    }
+
+    with caplog.at_level(logging.INFO, logger="basic_validator"):
+        _log_reconciliation_evidence(event)
+
+    assert "reconciliation_deletion" in caplog.text
+    assert "c-gone" in caplog.text
+    assert "[100, 101, 102]" in caplog.text
+    assert "deleted-204" in caplog.text
     assert TOKEN not in caplog.text
     assert "denied-body" not in caplog.text

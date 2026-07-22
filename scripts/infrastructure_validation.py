@@ -39,10 +39,13 @@ _MEMORY_FACTORS = {
     "T": 10**12,
 }
 _ORIGIN_FP_PREFIX = re.compile(r"^[0-9a-f]{63}$")
-_SUPPORTED_GPU = re.compile(
-    r"(?:^|[^A-Z0-9])(H100|H200|B200|B300)(?:$|[^A-Z0-9])"
+_CANONICAL_UUID = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
 )
+_SUPPORTED_GPU = re.compile(r"(?<![A-Z0-9])(H100|H200|B200|B300)(?![A-Z0-9])")
 _BASE_TEN_INTEGER = re.compile(r"^(?:0|[1-9][0-9]*)$")
+_MAX_INT64 = 2**63 - 1
+_MAX_QUANTITY_TEXT = 64
 _REQUIRED_BINDING_LABELS = (
     BINDING_ID_LABEL,
     HOTKEY_LABEL,
@@ -113,7 +116,7 @@ class InfrastructurePolicy:
     required_runtime_handler: str | None
 
     @classmethod
-    def for_profile(cls, profile: ValidationProfile) -> "InfrastructurePolicy":
+    def for_profile(cls, profile: ValidationProfile) -> InfrastructurePolicy:
         if not isinstance(profile, ValidationProfile):
             raise TypeError("profile must be a ValidationProfile")
         if profile is ValidationProfile.PRODUCTION:
@@ -161,7 +164,13 @@ def parse_cpu_cores(value: object) -> Decimal | None:
     """Parse Kubernetes CPU cores/millicores, returning ``None`` on doubt."""
     if isinstance(value, bool):
         return None
-    match = _CPU_QUANTITY.fullmatch(str(value))
+    try:
+        text = str(value)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    if len(text) > _MAX_QUANTITY_TEXT:
+        return None
+    match = _CPU_QUANTITY.fullmatch(text)
     if match is None:
         return None
     cores = Decimal(match.group(1))
@@ -172,7 +181,13 @@ def parse_memory_bytes(value: object) -> int | None:
     """Parse supported Kubernetes memory quantities into whole bytes."""
     if isinstance(value, bool):
         return None
-    match = _MEMORY_QUANTITY.fullmatch(str(value))
+    try:
+        text = str(value)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    if len(text) > _MAX_QUANTITY_TEXT:
+        return None
+    match = _MEMORY_QUANTITY.fullmatch(text)
     if match is None:
         return None
     scaled = Decimal(match.group(1)) * _MEMORY_FACTORS[match.group(2)]
@@ -199,7 +214,10 @@ def _parse_base_ten_integer(value: object) -> int | None:
         return None
     if not _BASE_TEN_INTEGER.fullmatch(value):
         return None
-    return int(value)
+    if len(value) > 19:
+        return None
+    parsed = int(value)
+    return parsed if parsed <= _MAX_INT64 else None
 
 
 def _binding_metadata(cluster: dict) -> _BindingMetadata | None:
@@ -226,6 +244,8 @@ def _binding_metadata(cluster: dict) -> _BindingMetadata | None:
     if enrollment_uid is None or generation is None or netuid is None:
         return None
     if generation < 1:
+        return None
+    if not _CANONICAL_UUID.fullmatch(values[PROVIDER_ID_LABEL]):
         return None
     if not _ORIGIN_FP_PREFIX.fullmatch(values[ORIGIN_FP_PREFIX_LABEL]):
         return None
@@ -347,10 +367,13 @@ def _parse_resource_count(value: object) -> int | None:
     if isinstance(value, bool):
         return None
     if isinstance(value, int):
-        return value if value >= 0 else None
+        return value if 0 <= value <= _MAX_INT64 else None
     if not isinstance(value, str) or not _BASE_TEN_INTEGER.fullmatch(value):
         return None
-    return int(value)
+    if len(value) > 19:
+        return None
+    parsed = int(value)
+    return parsed if parsed <= _MAX_INT64 else None
 
 
 def _gpu_nodes(
@@ -396,6 +419,7 @@ def _gpu_nodes(
 
 
 def _gpu_models_supported(nodes: list[dict]) -> bool:
+    models: set[str] = set()
     for node in nodes:
         labels = node.get("labels")
         product = (
@@ -403,11 +427,15 @@ def _gpu_models_supported(nodes: list[dict]) -> bool:
             if isinstance(labels, dict)
             else None
         )
-        if not isinstance(product, str) or not _SUPPORTED_GPU.search(
-            product.upper()
-        ):
+        matches = (
+            _SUPPORTED_GPU.findall(product.upper())
+            if isinstance(product, str)
+            else []
+        )
+        if len(matches) != 1:
             return False
-    return True
+        models.add(matches[0])
+    return len(models) == 1
 
 
 def _runtime_handler_ready(nodes: list[dict], required: str) -> bool:
@@ -452,6 +480,11 @@ def validate_miner(
         return _suspended(ValidationReason.CLUSTER_AMBIGUOUS)
 
     cluster = matches[0]
+    if cluster.get("id") == "local" or cluster.get("internal") not in (
+        None,
+        False,
+    ):
+        return _suspended(ValidationReason.BINDING_METADATA_INVALID, cluster)
     metadata = _binding_metadata(cluster)
     if metadata is None:
         return _suspended(ValidationReason.BINDING_METADATA_INVALID, cluster)
@@ -482,6 +515,9 @@ def validate_miner(
     if not all(
         _node_ready(node, metadata.cluster_id, policy) for node in nodes
     ):
+        return _suspended(ValidationReason.NODE_NOT_READY, cluster)
+    node_ids = [node["id"] for node in nodes]
+    if len(node_ids) != len(set(node_ids)):
         return _suspended(ValidationReason.NODE_NOT_READY, cluster)
     if policy.profile is ValidationProfile.DEBUG:
         return ValidationVerdict(

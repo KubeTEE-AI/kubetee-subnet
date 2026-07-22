@@ -63,7 +63,7 @@ cd ..
 docker compose up -d --build
 # Logs: http://localhost:8080 (dozzle)
 ```
-`scripts/validator_entrypoint.py` bootstraps the subnet via `scripts/setup_single_node.py`, then execs `scripts/validator.py`, which reads `RANCHER_URL` / `RANCHER_BEARER_TOKEN` / `KUBETEE_*` from the environment and fails fast on missing/invalid config.
+`scripts/validator_entrypoint.py` bootstraps the subnet via `scripts/setup_single_node.py`, then execs `scripts/validator.py`, which reads `RANCHER_URL` / `RANCHER_BEARER_TOKEN` / optional transport-scoped `RANCHER_CA_FILE` / `KUBETEE_*` from the environment and fails fast on missing/invalid config.
 
 ### Local Development (Staging)
 
@@ -136,7 +136,7 @@ Setup (scripts/setup_single_node.py)
         ↓
 Validator Loop (scripts/validator.py) — per cycle:
   ├── metagraph read (chain_state.py)
-  ├── Rancher v3 enumeration (rancher_client.py) — read-only, fail-closed pagination
+  ├── Rancher v3 enumeration (rancher_client.py) — GET-only, fail-closed pagination
   ├── reconciliation (reconciliation.py) — guarded deregistration on sustained absence
   ├── validation (infrastructure_validation.py) — pure fail-closed policy
   ├── scoring (miner_scoring.py) — verdict scores + S/N weight split
@@ -148,7 +148,7 @@ Validator Loop (scripts/validator.py) — per cycle:
 
 **Per cycle (`scripts/validator.py`, spec 4.2):**
 1. Read the metagraph (`scripts/chain_state.py`) — discover miners by hotkey
-2. Enumerate clusters/nodes via the read-only Rancher v3 API (`scripts/rancher_client.py`)
+2. Enumerate clusters/nodes with GET-only Rancher v3 calls (`scripts/rancher_client.py`)
 3. Reconcile — guarded deregistration of clusters whose hotkey has been absent from the metagraph for ≥3 cycles / ≥900s (`scripts/reconciliation.py`)
 4. Validate — recompute the binary infrastructure verdict for every miner
    from the canonical binding and complete cluster/node snapshot
@@ -183,12 +183,11 @@ Validators read cluster metrics and information from the **Rancher v3 REST API**
 
 **Chosen mechanism — hotkey-signed auth via an auth mechanism connected to Rancher:**
 - A Rancher v3 call requires a bearer token (`Authorization: Bearer token-xxxxx:yyyyy`); the kubeconfig client cert used for `kubectl` does **not** work for `/v3`.
-- **Flow:** the validator (or miner) signs a challenge with its Bittensor **hotkey** (SR25519). An auth mechanism connected to Rancher — a custom external auth provider (SAML / OIDC) backed by the subnet — verifies the signature on-chain, maps the hotkey to a Rancher principal, and issues a **short-lived, read-only** Rancher v3 bearer token. The hotkey is the only credential; no long-lived admin token is held by the validator. Tracked as tasks in the subnet [Roadmap](README.md#roadmap) (Phase 0).
-  - **Validators** receive a **read-only** token (bound to `cluster-readonly`) to pull cluster/node metrics across clusters for scoring.
+- **Planned flow:** the validator (or miner) signs a challenge with its Bittensor **hotkey** (SR25519). An auth mechanism connected to Rancher — a custom external auth provider (SAML / OIDC) backed by the subnet — verifies the signature on-chain and maps the hotkey to a Rancher principal. Tracked as tasks in the subnet [Roadmap](README.md#roadmap) (Phase 0).
+  - **Validators (current combined runtime)** require a short-lived/rotatable least-privilege token with cluster/node GET/list plus cluster DELETE for guarded deregistration, and no create/update/patch or unrelated-resource authority. A truly read-only scoring token requires reconciliation to move behind a separate operator-owned mutation credential/controller.
   - **Miners** receive a **read-only** principal (bound to `cluster-readonly`) scoped to **their own cluster** (the cluster carrying their canonical `kubetee.ai/hotkey` binding), provisioned automatically **when a new cluster is created** — they can observe their cluster (nodes, workloads, metrics) while the subnet owner manages it via Fleet GitOps.
-- Alternative considered (not chosen): **Subnet-owner-issued per-validator tokens** — the subnet owner pre-provisions a read-only Rancher API key per validator hotkey (delivered out-of-band); the validator loads it like `.env`. Simpler but moves trust to out-of-band delivery and lacks hotkey-binding.
-- Whatever the mechanism: validator tokens must be **read-only** (bound to `cluster-readonly`); miner tokens are scoped to their own cluster; all tokens are **short-lived or rotatable** and never exposed.
-- References: `../CREATE-CLUSTER-GUIDE.md` (v3 API + `.env` token sourcing), `../cluster-readonly-roletemplate.yaml` (read-only RoleTemplate to bind validator principals to).
+- Alternative considered (not chosen): **Subnet-owner-issued per-validator tokens** — the subnet owner pre-provisions the narrow Rancher API key per validator hotkey (delivered out-of-band); the validator loads it like `.env`. Simpler but moves trust to out-of-band delivery and lacks hotkey-binding.
+- Whatever the mechanism: validator tokens must remain bounded to cluster/node reads plus guarded cluster deletion; miner tokens are read-only and scoped to their own cluster; all tokens are short-lived or rotatable and never exposed.
 
 ### Key Files and Locations
 

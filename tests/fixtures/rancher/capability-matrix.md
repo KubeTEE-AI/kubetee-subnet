@@ -29,11 +29,12 @@ AC12 operator-gated demo against a disposable cluster proves DELETE.
   are only valid on `/k8s/clusters/<id>/…`. The Early Access key must be a
   **No Scope** account key; least-privilege comes from the account's role
   bindings, not token scoping. (Verified empirically during V1 bring-up.)
-- The account behind the current key is an operator/admin account — the
-  D6 debt as recorded in the spec. A `cluster-readonly` RoleTemplate
-  exists on this Rancher (observed in role-template bindings) and is the
-  designated future least-privilege binding for a dedicated validator
-  user.
+- The account behind the historical capture key is an operator/admin account
+  and must not be reused by a validator. The combined validator/reconciler
+  requires a dedicated role with cluster/node GET/list plus cluster DELETE
+  and no other verbs/resources. A `cluster-readonly` RoleTemplate observed on
+  this Rancher is insufficient while guarded reconciliation remains in the
+  same process; it becomes suitable only after mutation authority is split.
 - Secret-bearing fields observed on live objects and therefore dropped by
   the fixture allowlist: cluster `caCert`, `clusterSecrets`,
   `importedConfig`, `appliedSpec`, and all annotations except the synthetic

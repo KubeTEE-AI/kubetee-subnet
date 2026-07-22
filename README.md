@@ -264,7 +264,12 @@ Armada addresses Kubernetes batch limitations that matter for the Factory: singl
   - One data center per cluster — all nodes co-located in a single DC
   - Regional deployment (One Region/Zone Control Plane with same region workers)
   - Cluster carries the platform-managed canonical enrollment binding
-  - Required binding labels: `kubetee.ai/binding-id`, `hotkey`, `coldkey`, `provider-id`, `binding-status`, `generation`, `netuid`, `network`, and `origin-fp-prefix`; current UID is the `kubetee.ai/enrollment-uid` annotation
+  - Required binding labels: `kubetee.ai/binding-id`,
+    `kubetee.ai/hotkey`, `kubetee.ai/coldkey`,
+    `kubetee.ai/provider-id`, `kubetee.ai/binding-status`,
+    `kubetee.ai/generation`, `kubetee.ai/netuid`,
+    `kubetee.ai/network`, and `kubetee.ai/origin-fp-prefix`; current UID is
+    the `kubetee.ai/enrollment-uid` annotation
 - Kata Containers and CoCo Containers (TEE)
 - Armada Executor + Installer (scheduled by the subnet-owner Armada Server)
 - Fleet Agent for automated deployments
@@ -543,7 +548,18 @@ The validator is the subnet's referee — so the referee itself must be trustwor
 
 ### Rancher v3 Access (Hotkey-signed Auth)
 
-To read cluster and node metrics for scoring, the validator calls the **Rancher v3 REST API**. Access is granted by **hotkey-signed authentication**: the validator signs a challenge with its Bittensor **hotkey** (SR25519), and an auth mechanism connected to Rancher verifies the signature on-chain, maps the hotkey to a Rancher principal, and issues a **short-lived, read-only** Rancher v3 bearer token bound to `cluster-readonly`. The hotkey is the only credential — no long-lived admin token is held by the validator — and it stays inside the validator's TEE pod.
+To read cluster and node evidence, the validator calls the **Rancher v3 REST
+API**. The current combined validator/reconciler needs a least-privilege token
+with cluster/node GET/list and cluster DELETE, with no create/update/patch or
+unrelated-resource authority. DELETE is reachable only through the guarded
+deregistration state machine. An optional `RANCHER_CA_FILE` applies only to
+the Rancher HTTP client, not the chain client's TLS trust store. The token
+stays inside the validator's TEE pod.
+
+Hotkey-signed issuance remains planned. It must issue the same narrow
+read-plus-delete validator role while reconciliation is in-process, or issue a
+truly read-only scoring token after reconciliation moves behind a separate
+operator-owned mutation credential/controller.
 
 Miners use the same hotkey-signed flow, scoped read-only to their own cluster
 (the one carrying their canonical `kubetee.ai/hotkey` binding), provisioned
@@ -694,7 +710,7 @@ flowchart LR
 - [ ] Extend scoring with fresh TEE attestation, Armada job metrics, serving probes, workload identity, and KeyLease freshness
 - [ ] Validator runs in a TEE (Kata + CoCo) on the control plane; CoCo attestation proves the validator code is unmodified
 - [ ] KubeTEE-hosted validator offering: KubeTEE runs the validator code in a KubeTEE confidential cluster for operators without their own TEE infrastructure
-- [ ] Validator Rancher v3 API access: a validator authenticates by **signing a challenge with its Bittensor hotkey**; an auth mechanism connected to Rancher verifies the signature and issues a **read-only** Rancher v3 bearer token (bound to `cluster-readonly`) — see [Rancher v3 Access (Hotkey-signed Auth)](#rancher-v3-access-hotkey-signed-auth) and CLAUDE.md "Validator Rancher API Access"
+- [ ] Validator Rancher v3 API access: a validator authenticates by **signing a challenge with its Bittensor hotkey**; an auth mechanism connected to Rancher verifies the signature and issues the narrow cluster/node-read plus guarded-cluster-delete role. Split reconciliation behind an operator-owned mutation credential/controller before describing validator scoring tokens as read-only — see [Rancher v3 Access (Hotkey-signed Auth)](#rancher-v3-access-hotkey-signed-auth) and CLAUDE.md "Validator Rancher API Access"
 - [ ] Miner Rancher access on cluster creation: the miner authenticates with the same **hotkey-signed** flow, scoped **read-only** to their own cluster (the one carrying their canonical `kubetee.ai/hotkey` binding, bound to `cluster-readonly`) so the miner can observe their cluster (subnet owner manages via Fleet)
 - [ ] Emissions rewards for miners providing confidential compute capacity (supply-side)
 - [ ] Alpha / TAO paid jobs (demand-side) — price compute at a **resources price per hour** that is **competitive** (benchmarked vs Targon/Lium/Chutes) and **dynamic according to the job queues** (Armada queue depth + the 75% utilization target set the resources price per hour per job class) — see [Competitive Pricing](./docs/COMPETITIVE-PRICING.md)

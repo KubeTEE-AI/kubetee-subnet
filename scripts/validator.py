@@ -27,8 +27,8 @@ without the SDK) exercises everything through injected seams.
 
 from __future__ import annotations
 
-import dataclasses
 import collections
+import dataclasses
 import logging
 import math
 import os
@@ -51,7 +51,7 @@ from miner_scoring import (
     validate_share,
 )
 from prometheus_client import start_http_server
-from rancher_client import RancherClient, RancherError
+from rancher_client import RancherClient, RancherError, normalize_https_origin
 from reconciliation import ReconciliationEngine
 from validator_metrics import ValidatorMetrics
 
@@ -61,6 +61,21 @@ DEFAULT_NETWORK = "ws://chain:9944"
 DEFAULT_WALLET = "alice"  # the validator signing identity (D7)
 DEFAULT_NETUID_FILE = "/app/.kubetee_netuid"
 MIN_POLL_SECONDS = 60.0
+
+
+def _log_reconciliation_evidence(event: dict) -> None:
+    """Emit only the fixed audit fields approved for destructive actions."""
+    _LOG.info(
+        "reconciliation evidence: event=%r correlation_id=%r cluster_id=%r "
+        "absence_cycles=%r metagraph_blocks=%r response_class=%r detail=%r",
+        event.get("event"),
+        event.get("correlation_id"),
+        event.get("cluster_id"),
+        event.get("absence_cycles"),
+        event.get("metagraph_blocks"),
+        event.get("response_class"),
+        event.get("detail"),
+    )
 
 
 class ConfigError(ValueError):
@@ -86,6 +101,7 @@ class ValidatorConfig:
     validation_profile: ValidationProfile
     rancher_url: str
     rancher_token: str
+    rancher_ca_file: str | None
     metrics_port: int
     metrics_addr: str
 
@@ -182,12 +198,25 @@ class ValidatorConfig:
                     "must be production or debug",
                 )
 
+        network = (env.get("BT_NETWORK") or DEFAULT_NETWORK).strip()
+        wallet_name = (env.get("BT_WALLET") or DEFAULT_WALLET).strip()
+        wallet_hotkey = (env.get("BT_WALLET_HOTKEY") or "default").strip()
+        if validation_profile is ValidationProfile.PRODUCTION and (
+            profile_raw == ValidationProfile.PRODUCTION.value
+        ):
+            network = require("BT_NETWORK")
+            wallet_name = require("BT_WALLET")
+            wallet_hotkey = require("BT_WALLET_HOTKEY")
+            require("KUBETEE_SUBNET_NETUID")
+
         rancher_url = require("RANCHER_URL")
         if rancher_url:
-            parts = urlsplit(rancher_url)
-            if parts.scheme != "https" or not parts.netloc:
+            try:
+                rancher_url = normalize_https_origin(rancher_url)
+            except ValueError:
                 fail("RANCHER_URL", "must be a https origin")
         rancher_token = require("RANCHER_BEARER_TOKEN")
+        rancher_ca_file = (env.get("RANCHER_CA_FILE") or "").strip() or None
 
         if errors:
             raise ConfigError(
@@ -195,9 +224,9 @@ class ValidatorConfig:
             )
 
         return cls(
-            network=(env.get("BT_NETWORK") or DEFAULT_NETWORK).strip(),
-            wallet_name=(env.get("BT_WALLET") or DEFAULT_WALLET).strip(),
-            wallet_hotkey=(env.get("BT_WALLET_HOTKEY") or "default").strip(),
+            network=network,
+            wallet_name=wallet_name,
+            wallet_hotkey=wallet_hotkey,
             netuid=netuid,
             miner_share=miner_share,
             poll_seconds=poll_seconds,
@@ -210,6 +239,7 @@ class ValidatorConfig:
             validation_profile=validation_profile,
             rancher_url=rancher_url,
             rancher_token=rancher_token,
+            rancher_ca_file=rancher_ca_file,
             metrics_port=metrics_port,
             metrics_addr=(
                 env.get("KUBETEE_METRICS_ADDR") or "0.0.0.0"
@@ -223,7 +253,7 @@ def load_config(env: Mapping[str, str] | None = None) -> ValidatorConfig:
     data = dict(os.environ if env is None else env)
     path = (data.get("KUBETEE_NETUID_FILE") or DEFAULT_NETUID_FILE).strip()
     try:
-        text = pathlib.Path(path).read_text().strip()
+        text = pathlib.Path(path).read_text(encoding="utf-8").strip()
     except OSError:
         text = ""
     if text:
@@ -255,6 +285,7 @@ class BasicValidator:
         self._log = _LOG
         self._subtensor = None
         self._chain_dirty = False
+        self._last_metagraph_block: int | None = None
         self._cycle_config = CycleConfig(
             owner_hotkey=config.owner_hotkey,
             validator_hotkey=config.validator_hotkey,
@@ -286,28 +317,58 @@ class BasicValidator:
 
     def _read_neurons(self, subtensor) -> tuple[list[dict] | None, int | None]:
         try:
-            meta = subtensor.subnets.metagraph(self._config.netuid)
-            neurons = [
-                {
-                    "uid": int(n.uid),
-                    "hotkey": str(n.hotkey),
-                    "coldkey": str(n.coldkey),
-                }
-                for n in meta.neurons
-            ]
+            head = subtensor.block()
+            if isinstance(head, bool) or not isinstance(head, int) or head < 0:
+                raise ValueError("chain head block is invalid")
+            meta = subtensor.subnets.metagraph(
+                self._config.netuid,
+                block=head,
+            )
+            neurons = []
+            for neuron in meta.neurons:
+                raw_uid = getattr(neuron, "uid", None)
+                if raw_uid is None or isinstance(raw_uid, bool):
+                    uid = raw_uid
+                else:
+                    try:
+                        uid = int(raw_uid)
+                    except (TypeError, ValueError, OverflowError):
+                        uid = raw_uid
+                neurons.append(
+                    {
+                        "uid": uid,
+                        "hotkey": getattr(neuron, "hotkey", None),
+                        "coldkey": getattr(neuron, "coldkey", None),
+                    }
+                )
             block = getattr(meta, "block", None)
-            return neurons, int(block) if block is not None else None
+            if (
+                isinstance(block, bool)
+                or not isinstance(block, int)
+                or block != head
+            ):
+                raise ValueError("metagraph is not pinned to the chain head")
+            return neurons, block
+        # The injected chain SDK does not expose one stable transport exception.
+        # pylint: disable-next=broad-exception-caught
         except Exception as error:  # fail closed; recreate only after failure
             self._chain_dirty = True
             self._log.warning("metagraph read failed: %s", self._render(error))
             return None, None
 
-    def _refresh_registered(self) -> set[str] | None:
+    def _refresh_registered(
+        self, minimum_block: int | None = None
+    ) -> set[str] | None:
         """Fresh metagraph read for the reconciliation pre-delete recheck."""
         if self._subtensor is None:
             return None
-        neurons, _ = self._read_neurons(self._subtensor)
-        if neurons is None:
+        neurons, block = self._read_neurons(self._subtensor)
+        if neurons is None or block is None:
+            return None
+        if minimum_block is not None and block < minimum_block:
+            return None
+        identity_check = decide_cycle(neurons, {}, self._cycle_config)
+        if isinstance(identity_check, SkipCycle):
             return None
         return {n["hotkey"] for n in neurons}
 
@@ -325,7 +386,8 @@ class BasicValidator:
                 c
                 for c in clusters
                 if isinstance(c, dict)
-                and (c.get("labels") or {}).get(HOTKEY_LABEL) == hotkey
+                and isinstance(c.get("labels"), dict)
+                and c["labels"].get(HOTKEY_LABEL) == hotkey
             ]
             if len(matches) != 1:
                 continue
@@ -385,6 +447,22 @@ class BasicValidator:
             )
             self._record_skip(identity_check.reason, identity_check.detail)
             return "skip"
+        if block is None or (
+            self._last_metagraph_block is not None
+            and block <= self._last_metagraph_block
+        ):
+            self._reconciler.run_cycle(
+                None,
+                None,
+                block,
+                self._refresh_registered,
+            )
+            self._record_skip(
+                SkipReason.METAGRAPH_STALE,
+                "metagraph block did not advance",
+            )
+            return "skip"
+        self._last_metagraph_block = block
         registered = {n["hotkey"] for n in neurons}
         miners = sorted(
             registered
@@ -453,6 +531,8 @@ class BasicValidator:
             result = subtensor.execute(intent, wallet=self._wallet)
             success = result.is_success
             message = str(result)
+        # Bittensor can surface transport and submission failures from plugins.
+        # pylint: disable-next=broad-exception-caught
         except Exception as error:
             self._chain_dirty = True
             self._metrics.record_set_weights(False)
@@ -502,9 +582,15 @@ class BasicValidator:
         while True:
             try:
                 self.run_cycle()
+            # The process liveness contract intentionally guards every cycle.
+            # pylint: disable-next=broad-exception-caught
             except Exception as error:  # never exit on a runtime error (D14)
                 self._log.error(
                     "unexpected cycle error (loop continues): %s",
+                    self._render(error),
+                )
+                self._record_skip(
+                    SkipReason.UNEXPECTED_RUNTIME,
                     self._render(error),
                 )
             self._sleep(self._config.poll_seconds)
@@ -548,24 +634,20 @@ def main(env: Mapping[str, str] | None = None) -> None:
         addr=config.metrics_addr,
         registry=metrics.registry,
     )
-    client = RancherClient(config.rancher_url, config.rancher_token)
-
-    def evidence_sink(event: dict) -> None:
-        _LOG.info(
-            "reconciliation evidence: event=%(event)s correlation_id=%(correlation_id)s",
-            {
-                "event": event.get("event"),
-                "correlation_id": event.get("correlation_id"),
-                **event,
-            },
-        )
+    client = RancherClient(
+        config.rancher_url,
+        config.rancher_token,
+        ca_file=config.rancher_ca_file,
+    )
 
     reconciler = ReconciliationEngine(
         client,
         metrics,
+        expected_netuid=config.netuid,
+        expected_network=config.chain_network,
         min_cycles=config.reconcile_min_cycles,
         min_seconds=config.reconcile_min_seconds,
-        evidence_sink=evidence_sink,
+        evidence_sink=_log_reconciliation_evidence,
     )
     validator = BasicValidator(
         config=config,

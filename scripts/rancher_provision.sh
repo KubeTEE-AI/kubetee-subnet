@@ -65,7 +65,7 @@ cr -X PUT "$RANCHER/v3/settings/server-url" -H "Authorization: Bearer $LTOK" \
 VAL_USERNAME="kubetee-validator"
 VAL_ROLE_NAME="kubetee-validator-scoring"
 
-# 2a. custom global role: clusters get/list/watch/delete, nodes get/list/watch
+# 2a. custom global role: clusters get/list/delete, nodes get/list
 ROLE_ID=$(cr "$RANCHER/v3/globalroles?name=$VAL_ROLE_NAME" -H "Authorization: Bearer $LTOK" \
            | jq -r '.data[0].id // empty')
 if [ -z "$ROLE_ID" ]; then
@@ -76,9 +76,9 @@ if [ -z "$ROLE_ID" ]; then
     \"description\": \"KubeTEE validator: cluster read + guarded delete, node read\",
     \"rules\": [
       {\"apiGroups\": [\"management.cattle.io\"], \"resources\": [\"clusters\"],
-       \"verbs\": [\"get\", \"list\", \"watch\", \"delete\"]},
+       \"verbs\": [\"get\", \"list\", \"delete\"]},
       {\"apiGroups\": [\"management.cattle.io\"], \"resources\": [\"nodes\"],
-       \"verbs\": [\"get\", \"list\", \"watch\"]}
+       \"verbs\": [\"get\", \"list\"]}
     ]}" | jq -r .id)
 fi
 [ -n "$ROLE_ID" ] && [ "$ROLE_ID" != "null" ] || { log "global role create failed"; exit 1; }
@@ -134,14 +134,14 @@ log "wrote Rancher CA ($(wc -c < "$SHARED/rancher-ca.crt") bytes)"
 # The downstream is ephemeral, so any cluster of this name left in a persisted
 # Rancher (after `down` without -v) is stale - remove it and import clean.
 for old in $(cr "$RANCHER/v3/clusters?name=$CLUSTER_NAME" -H "Authorization: Bearer $LTOK" | jq -r '.data[].id // empty'); do
-  log "removing stale cluster $old"
+  log "removing stale imported cluster"
   cr -X DELETE "$RANCHER/v3/clusters/$old" -H "Authorization: Bearer $LTOK" >/dev/null || true
 done
 CID=$(cr -X POST "$RANCHER/v3/cluster" -H "Authorization: Bearer $LTOK" \
        -H 'Content-Type: application/json' \
        -d "{\"type\":\"cluster\",\"name\":\"$CLUSTER_NAME\",\"import\":true}" | jq -r .id)
 [ -n "$CID" ] && [ "$CID" != "null" ] || { log "cluster create failed"; exit 1; }
-log "import cluster id=$CID"
+log "import cluster created"
 cr -X POST "$RANCHER/v3/clusterregistrationtoken" -H "Authorization: Bearer $LTOK" \
    -H 'Content-Type: application/json' \
    -d "{\"type\":\"clusterRegistrationToken\",\"clusterId\":\"$CID\"}" >/dev/null || true
@@ -152,7 +152,7 @@ for _ in $(seq 1 20); do
   [ -n "$MURL" ] && break; sleep 3
 done
 [ -n "$MURL" ] || { log "no manifest url"; exit 1; }
-log "registration manifest: $MURL"
+log "registration manifest obtained"
 
 # --- 5. apply manifest into the downstream miner-cluster ---------------------
 until [ -f "$K3S_KUBECONFIG" ]; do log "waiting for miner-cluster kubeconfig ..."; sleep 3; done
@@ -213,8 +213,8 @@ PATCH_BODY=$(jq -n \
 cr -X PATCH "$RANCHER/k8s/clusters/local/apis/management.cattle.io/v3/clusters/$CID" \
    -H "Authorization: Bearer $LTOK" -H 'Content-Type: application/merge-patch+json' \
    -d "$PATCH_BODY" >/dev/null
-log "applied canonical synthetic ENROLLED binding to $CID"
+log "applied canonical synthetic ENROLLED binding"
 
 echo "$CID" > "$SHARED/cluster-id"
 touch "$SHARED/ready"
-log "PROVISIONING COMPLETE (cluster=$CID)"
+log "PROVISIONING COMPLETE"

@@ -40,6 +40,7 @@ UID = 42
         ("-1", None),
         ("nan", None),
         ("8x", None),
+        ("9" * 5000, None),
         (True, None),
     ],
 )
@@ -59,6 +60,7 @@ def test_parse_cpu_cores(raw, expected):
         ("-1Gi", None),
         ("NaN", None),
         ("16watts", None),
+        ("9" * 5000 + "Gi", None),
         (False, None),
     ],
 )
@@ -121,7 +123,7 @@ def _valid_cluster() -> dict:
             "kubetee.ai/binding-id": "binding-miner-42",
             "kubetee.ai/hotkey": HOTKEY,
             "kubetee.ai/coldkey": COLDKEY,
-            "kubetee.ai/provider-id": "provider-miner-42",
+            "kubetee.ai/provider-id": "00000000-0000-4000-8000-000000000042",
             "kubetee.ai/binding-status": "ENROLLED",
             "kubetee.ai/generation": "1",
             "kubetee.ai/netuid": str(NETUID),
@@ -183,12 +185,18 @@ def _apply_mutation(
         clusters.append(duplicate)
     elif mutation == "remove_binding_id":
         del labels["kubetee.ai/binding-id"]
+    elif mutation == "management_cluster":
+        cluster["id"] = "local"
+    elif mutation == "internal_cluster":
+        cluster["internal"] = True
     elif mutation == "remove_enrollment_uid":
         del cluster["annotations"]["kubetee.ai/enrollment-uid"]
     elif mutation == "malform_generation":
         labels["kubetee.ai/generation"] = "one"
     elif mutation == "short_origin_prefix":
         labels["kubetee.ai/origin-fp-prefix"] = "abc"
+    elif mutation == "malformed_provider_id":
+        labels["kubetee.ai/provider-id"] = "not-a-canonical-uuid"
     elif mutation == "binding_pending":
         labels["kubetee.ai/binding-status"] = "PENDING"
     elif mutation == "coldkey_mismatch":
@@ -214,6 +222,8 @@ def _apply_mutation(
         nodes[0]["state"] = "unavailable"
     elif mutation == "node_wrong_cluster":
         nodes[0]["clusterId"] = "c-other"
+    elif mutation == "duplicate_node_id":
+        nodes.append(copy.deepcopy(nodes[0]))
     elif mutation == "node_pressure":
         nodes[0]["conditions"][1]["status"] = "True"
     elif mutation == "two_etcd_nodes":
@@ -246,9 +256,12 @@ def _apply_mutation(
         ("remove_cluster", ValidationReason.CLUSTER_MISSING),
         ("duplicate_hotkey_cluster", ValidationReason.CLUSTER_AMBIGUOUS),
         ("remove_binding_id", ValidationReason.BINDING_METADATA_INVALID),
+        ("management_cluster", ValidationReason.BINDING_METADATA_INVALID),
+        ("internal_cluster", ValidationReason.BINDING_METADATA_INVALID),
         ("remove_enrollment_uid", ValidationReason.BINDING_METADATA_INVALID),
         ("malform_generation", ValidationReason.BINDING_METADATA_INVALID),
         ("short_origin_prefix", ValidationReason.BINDING_METADATA_INVALID),
+        ("malformed_provider_id", ValidationReason.BINDING_METADATA_INVALID),
         ("binding_pending", ValidationReason.BINDING_NOT_ENROLLED),
         ("coldkey_mismatch", ValidationReason.BINDING_IDENTITY_MISMATCH),
         ("uid_mismatch", ValidationReason.BINDING_IDENTITY_MISMATCH),
@@ -260,6 +273,7 @@ def _apply_mutation(
         ("remove_nodes", ValidationReason.NODE_INVENTORY_EMPTY),
         ("node_inactive", ValidationReason.NODE_NOT_READY),
         ("node_wrong_cluster", ValidationReason.NODE_NOT_READY),
+        ("duplicate_node_id", ValidationReason.NODE_NOT_READY),
         ("node_pressure", ValidationReason.NODE_NOT_READY),
         ("two_etcd_nodes", ValidationReason.TOPOLOGY_INSUFFICIENT),
         ("all_workers_cordoned", ValidationReason.TOPOLOGY_INSUFFICIENT),
@@ -350,6 +364,72 @@ def test_gpu_product_substrings_do_not_pass_token_matching():
     )
 
     assert verdict.reason is ValidationReason.GPU_MODEL_UNSUPPORTED
+
+
+def test_gpu_product_with_multiple_model_markers_is_malformed():
+    neuron, clusters, nodes = valid_production_inventory()
+    nodes["c-miner"][0]["labels"]["nvidia.com/gpu.product"] = "H100-H200"
+
+    verdict = validate_miner(
+        neuron,
+        clusters,
+        nodes,
+        NETUID,
+        NETWORK,
+        InfrastructurePolicy.for_profile(ValidationProfile.PRODUCTION),
+    )
+
+    assert verdict.reason is ValidationReason.GPU_MODEL_UNSUPPORTED
+
+
+def test_mixed_supported_gpu_models_are_not_a_uniform_inventory():
+    neuron, clusters, nodes = valid_production_inventory()
+    nodes["c-miner"][1]["labels"][
+        "nvidia.com/gpu.product"
+    ] = "NVIDIA-H200-141GB"
+
+    verdict = validate_miner(
+        neuron,
+        clusters,
+        nodes,
+        NETUID,
+        NETWORK,
+        InfrastructurePolicy.for_profile(ValidationProfile.PRODUCTION),
+    )
+
+    assert verdict.reason is ValidationReason.GPU_MODEL_UNSUPPORTED
+
+
+def test_oversized_enrollment_uid_is_malformed_instead_of_raising():
+    neuron, clusters, nodes = valid_production_inventory()
+    clusters[0]["annotations"]["kubetee.ai/enrollment-uid"] = "9" * 5000
+
+    verdict = validate_miner(
+        neuron,
+        clusters,
+        nodes,
+        NETUID,
+        NETWORK,
+        InfrastructurePolicy.for_profile(ValidationProfile.PRODUCTION),
+    )
+
+    assert verdict.reason is ValidationReason.BINDING_METADATA_INVALID
+
+
+def test_oversized_gpu_count_is_invalid_instead_of_raising():
+    neuron, clusters, nodes = valid_production_inventory()
+    nodes["c-miner"][0]["capacity"]["nvidia.com/gpu"] = "9" * 5000
+
+    verdict = validate_miner(
+        neuron,
+        clusters,
+        nodes,
+        NETUID,
+        NETWORK,
+        InfrastructurePolicy.for_profile(ValidationProfile.PRODUCTION),
+    )
+
+    assert verdict.reason is ValidationReason.GPU_INVENTORY_INVALID
 
 
 def test_debug_accepts_one_active_node_without_production_fields():

@@ -38,3 +38,10 @@ def test_local_provisioner_requires_complete_synthetic_identity():
     ):
         assert f"{variable}=" in text
         assert f"${{{variable}:?" in text
+
+
+def test_local_provisioner_never_logs_bootstrap_url_or_binding_identity():
+    text = (ROOT / "scripts" / "rancher_provision.sh").read_text()
+
+    assert "registration manifest: $MURL" not in text
+    assert "canonical synthetic ENROLLED binding to $CID" not in text
