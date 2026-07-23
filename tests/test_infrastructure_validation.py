@@ -186,35 +186,12 @@ def _apply_mutation(
         duplicate["id"] = "c-duplicate"
         duplicate["labels"]["kubetee.ai/binding-id"] = "binding-duplicate"
         clusters.append(duplicate)
-    elif mutation == "remove_binding_id":
-        del labels["kubetee.ai/binding-id"]
     elif mutation == "management_cluster":
         cluster["id"] = "local"
     elif mutation == "internal_cluster":
         cluster["internal"] = True
-    elif mutation == "remove_enrollment_uid":
-        del cluster["annotations"]["kubetee.ai/enrollment-uid"]
-    elif mutation == "malform_generation":
-        labels["kubetee.ai/generation"] = "one"
-    elif mutation == "short_origin_prefix":
-        labels["kubetee.ai/origin-fp-prefix"] = "abc"
-    elif mutation == "malformed_provider_id":
-        labels["kubetee.ai/provider-id"] = "not-a-canonical-uuid"
-    elif mutation == "binding_pending":
-        labels["kubetee.ai/binding-status"] = "PENDING"
     elif mutation == "coldkey_mismatch":
         labels["kubetee.ai/coldkey"] = "5DifferentColdkey"
-    elif mutation == "uid_mismatch":
-        cluster["annotations"]["kubetee.ai/enrollment-uid"] = "43"
-    elif mutation == "netuid_mismatch":
-        labels["kubetee.ai/netuid"] = "91"
-    elif mutation == "network_mismatch":
-        labels["kubetee.ai/network"] = "test"
-    elif mutation == "duplicate_binding_id":
-        duplicate = copy.deepcopy(cluster)
-        duplicate["id"] = "c-other"
-        duplicate["labels"]["kubetee.ai/hotkey"] = "5OtherHotkey"
-        clusters.append(duplicate)
     elif mutation == "cluster_inactive":
         cluster["state"] = "unavailable"
     elif mutation == "cluster_ready_missing":
@@ -260,19 +237,9 @@ def _apply_mutation(
     [
         ("remove_cluster", ValidationReason.CLUSTER_MISSING),
         ("duplicate_hotkey_cluster", ValidationReason.CLUSTER_AMBIGUOUS),
-        ("remove_binding_id", ValidationReason.BINDING_METADATA_INVALID),
         ("management_cluster", ValidationReason.BINDING_METADATA_INVALID),
         ("internal_cluster", ValidationReason.BINDING_METADATA_INVALID),
-        ("remove_enrollment_uid", ValidationReason.BINDING_METADATA_INVALID),
-        ("malform_generation", ValidationReason.BINDING_METADATA_INVALID),
-        ("short_origin_prefix", ValidationReason.BINDING_METADATA_INVALID),
-        ("malformed_provider_id", ValidationReason.BINDING_METADATA_INVALID),
-        ("binding_pending", ValidationReason.BINDING_NOT_ENROLLED),
         ("coldkey_mismatch", ValidationReason.BINDING_IDENTITY_MISMATCH),
-        ("uid_mismatch", ValidationReason.BINDING_IDENTITY_MISMATCH),
-        ("netuid_mismatch", ValidationReason.BINDING_IDENTITY_MISMATCH),
-        ("network_mismatch", ValidationReason.BINDING_IDENTITY_MISMATCH),
-        ("duplicate_binding_id", ValidationReason.BINDING_DUPLICATE),
         ("cluster_inactive", ValidationReason.CLUSTER_NOT_READY),
         ("cluster_ready_missing", ValidationReason.CLUSTER_NOT_READY),
         ("remove_nodes", ValidationReason.NODE_INVENTORY_EMPTY),
@@ -300,8 +267,6 @@ def test_production_first_failure_is_deterministic(mutation, reason):
         neuron,
         clusters,
         nodes,
-        NETUID,
-        NETWORK,
         InfrastructurePolicy.for_profile(ValidationProfile.PRODUCTION),
     )
 
@@ -317,8 +282,6 @@ def test_valid_production_inventory_is_eligible():
         neuron,
         clusters,
         nodes,
-        NETUID,
-        NETWORK,
         InfrastructurePolicy.for_profile(ValidationProfile.PRODUCTION),
     )
 
@@ -347,8 +310,6 @@ def test_supported_gpu_product_tokens_are_eligible(product):
         neuron,
         clusters,
         nodes,
-        NETUID,
-        NETWORK,
         InfrastructurePolicy.for_profile(ValidationProfile.PRODUCTION),
     )
 
@@ -364,8 +325,6 @@ def test_gpu_product_substrings_do_not_pass_token_matching():
         neuron,
         clusters,
         nodes,
-        NETUID,
-        NETWORK,
         InfrastructurePolicy.for_profile(ValidationProfile.PRODUCTION),
     )
 
@@ -380,8 +339,6 @@ def test_gpu_product_with_multiple_model_markers_is_malformed():
         neuron,
         clusters,
         nodes,
-        NETUID,
-        NETWORK,
         InfrastructurePolicy.for_profile(ValidationProfile.PRODUCTION),
     )
 
@@ -398,28 +355,103 @@ def test_mixed_supported_gpu_models_are_not_a_uniform_inventory():
         neuron,
         clusters,
         nodes,
-        NETUID,
-        NETWORK,
         InfrastructurePolicy.for_profile(ValidationProfile.PRODUCTION),
     )
 
     assert verdict.reason is ValidationReason.GPU_MODEL_UNSUPPORTED
 
 
-def test_oversized_enrollment_uid_is_malformed_instead_of_raising():
-    neuron, clusters, nodes = valid_production_inventory()
-    clusters[0]["annotations"]["kubetee.ai/enrollment-uid"] = "9" * 5000
-
+def test_binding_is_hotkey_plus_coldkey_only():
+    """The scoring binding is reduced to the two stable chain identities: a
+    cluster carrying ONLY kubetee.ai/hotkey + kubetee.ai/coldkey (no
+    binding-id, provider-id, generation, netuid, network, origin-fp-prefix,
+    ENROLLED sentinel, or enrollment-uid annotation) is ELIGIBLE in debug."""
+    neuron = {"uid": UID, "hotkey": HOTKEY, "coldkey": COLDKEY}
+    minimal = {
+        "id": "c-miner",
+        "state": "active",
+        "transitioning": "no",
+        "labels": {
+            "kubetee.ai/hotkey": HOTKEY,
+            "kubetee.ai/coldkey": COLDKEY,
+        },
+    }
+    nodes = {
+        "c-miner": [
+            {
+                "id": "c-miner:n1",
+                "clusterId": "c-miner",
+                "state": "active",
+                "transitioning": "no",
+            }
+        ]
+    }
     verdict = validate_miner(
         neuron,
-        clusters,
+        [minimal],
         nodes,
-        NETUID,
-        NETWORK,
-        InfrastructurePolicy.for_profile(ValidationProfile.PRODUCTION),
+        InfrastructurePolicy.for_profile(ValidationProfile.DEBUG),
     )
+    assert verdict.status is ValidationStatus.ELIGIBLE
+    assert verdict.reason is ValidationReason.ELIGIBLE
 
-    assert verdict.reason is ValidationReason.BINDING_METADATA_INVALID
+
+def test_dropped_binding_fields_no_longer_suspend():
+    """Mutating the retired binding fields (netuid/network/uid/binding-id/
+    provider-id/generation/origin-fp-prefix/binding-status) must NOT change a
+    debug ELIGIBLE verdict now that they are not part of the binding."""
+    neuron = {"uid": UID, "hotkey": HOTKEY, "coldkey": COLDKEY}
+    cluster = _valid_cluster()
+    cluster["labels"]["kubetee.ai/netuid"] = "9999"
+    cluster["labels"]["kubetee.ai/network"] = "some-other-network"
+    cluster["labels"]["kubetee.ai/binding-status"] = "PENDING"
+    cluster["labels"]["kubetee.ai/provider-id"] = "not-a-uuid"
+    cluster["labels"]["kubetee.ai/origin-fp-prefix"] = "too-short"
+    del cluster["labels"]["kubetee.ai/binding-id"]
+    del cluster["annotations"]["kubetee.ai/enrollment-uid"]
+    nodes = {
+        "c-miner": [
+            {
+                "id": "c-miner:n1",
+                "clusterId": "c-miner",
+                "state": "active",
+                "transitioning": "no",
+            }
+        ]
+    }
+    verdict = validate_miner(
+        neuron,
+        [cluster],
+        nodes,
+        InfrastructurePolicy.for_profile(ValidationProfile.DEBUG),
+    )
+    assert verdict.status is ValidationStatus.ELIGIBLE
+
+
+def test_missing_coldkey_label_is_identity_mismatch():
+    neuron = {"uid": UID, "hotkey": HOTKEY, "coldkey": COLDKEY}
+    cluster = {
+        "id": "c-miner",
+        "state": "active",
+        "transitioning": "no",
+        "labels": {"kubetee.ai/hotkey": HOTKEY},
+    }
+    verdict = validate_miner(
+        neuron,
+        [cluster],
+        {
+            "c-miner": [
+                {
+                    "id": "c-miner:n1",
+                    "clusterId": "c-miner",
+                    "state": "active",
+                    "transitioning": "no",
+                }
+            ]
+        },
+        InfrastructurePolicy.for_profile(ValidationProfile.DEBUG),
+    )
+    assert verdict.reason is ValidationReason.BINDING_IDENTITY_MISMATCH
 
 
 def test_oversized_gpu_count_is_invalid_instead_of_raising():
@@ -430,8 +462,6 @@ def test_oversized_gpu_count_is_invalid_instead_of_raising():
         neuron,
         clusters,
         nodes,
-        NETUID,
-        NETWORK,
         InfrastructurePolicy.for_profile(ValidationProfile.PRODUCTION),
     )
 
@@ -457,8 +487,6 @@ def test_debug_accepts_one_active_node_without_production_fields():
         neuron,
         [cluster],
         nodes,
-        NETUID,
-        NETWORK,
         InfrastructurePolicy.for_profile(ValidationProfile.DEBUG),
     )
 
@@ -484,8 +512,6 @@ def test_debug_keeps_binding_identity_strict():
         neuron,
         [cluster],
         nodes,
-        NETUID,
-        NETWORK,
         InfrastructurePolicy.for_profile(ValidationProfile.DEBUG),
     )
 
@@ -545,8 +571,6 @@ def test_validate_miner_accepts_miner_prefixed_identity_labels():
         neuron,
         clusters,
         nodes,
-        NETUID,
-        NETWORK,
         InfrastructurePolicy.for_profile(ValidationProfile.DEBUG),
     )
     assert verdict.status is ValidationStatus.ELIGIBLE

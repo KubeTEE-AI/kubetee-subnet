@@ -670,8 +670,6 @@ class BasicValidator:
                 neurons_by_hotkey[hotkey],
                 clusters,
                 nodes_by_cluster,
-                self._config.netuid,
-                self._config.chain_network,
                 self._infrastructure_policy,
             )
             for hotkey in miners

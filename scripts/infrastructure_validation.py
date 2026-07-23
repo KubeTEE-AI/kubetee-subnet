@@ -346,17 +346,6 @@ def _suspended(
     )
 
 
-def _binding_id_count(binding_id: str, clusters: list[dict]) -> int:
-    return sum(
-        1
-        for cluster in clusters
-        if isinstance(cluster, dict)
-        and isinstance(cluster.get("labels"), dict)
-        and canonicalize_kubetee_keys(cluster["labels"]).get(BINDING_ID_LABEL)
-        == binding_id
-    )
-
-
 def _node_ready(
     node: object, cluster_id: str, policy: InfrastructurePolicy
 ) -> bool:
@@ -501,15 +490,29 @@ def _runtime_handler_ready(nodes: list[dict], required: str) -> bool:
     return True
 
 
+def _valid_binding_value(value: object) -> bool:
+    """A well-formed binding label value: non-empty str, <= 63 chars."""
+    return isinstance(value, str) and bool(value) and len(value) <= 63
+
+
 def validate_miner(
     neuron: dict,
     clusters: list[dict],
     nodes_by_cluster: dict[str, list[dict]],
-    expected_netuid: int,
-    expected_network: str,
     policy: InfrastructurePolicy,
 ) -> ValidationVerdict:
-    """Evaluate one miner against a complete Rancher/metagraph snapshot."""
+    """Evaluate one miner against a complete Rancher/metagraph snapshot.
+
+    The cluster<->miner binding is the miner's on-chain identity: the
+    hotkey (the 1:1 chain<->cluster identifier) plus its paired coldkey. A
+    cluster is the miner's iff exactly one cluster carries
+    ``kubetee.ai/hotkey`` == the neuron hotkey and ``kubetee.ai/coldkey`` ==
+    the neuron coldkey. Enrollment uid, network, netuid, binding-id,
+    provider-id, generation, origin-fp-prefix and the ENROLLED sentinel are
+    no longer part of the scoring binding (the hotkey is sufficient identity;
+    the mutable UID/network churn and the rest were unverified metadata).
+    Both keys also accept the ``kubetee.ai/miner-<x>`` alias.
+    """
     if not isinstance(policy, InfrastructurePolicy):
         raise TypeError("policy must be an InfrastructurePolicy")
 
@@ -533,21 +536,19 @@ def validate_miner(
         False,
     ):
         return _suspended(ValidationReason.BINDING_METADATA_INVALID, cluster)
-    metadata = _binding_metadata(cluster)
-    if metadata is None:
+
+    cluster_id = cluster.get("id")
+    if not isinstance(cluster_id, str) or not cluster_id:
         return _suspended(ValidationReason.BINDING_METADATA_INVALID, cluster)
-    if metadata.status != "ENROLLED":
-        return _suspended(ValidationReason.BINDING_NOT_ENROLLED, cluster)
-    if (
-        metadata.hotkey != neuron.get("hotkey")
-        or metadata.coldkey != neuron.get("coldkey")
-        or metadata.enrollment_uid != neuron.get("uid")
-        or metadata.netuid != expected_netuid
-        or metadata.network != expected_network
-    ):
+
+    # Identity binding reduced to the two stable chain identities. The hotkey
+    # already selected this cluster; require the paired coldkey to match the
+    # neuron's coldkey (missing/oversized label or mismatch is an identity
+    # failure).
+    labels = canonicalize_kubetee_keys(cluster["labels"])
+    coldkey = labels.get(COLDKEY_LABEL)
+    if not _valid_binding_value(coldkey) or coldkey != neuron.get("coldkey"):
         return _suspended(ValidationReason.BINDING_IDENTITY_MISMATCH, cluster)
-    if _binding_id_count(metadata.binding_id, clusters) != 1:
-        return _suspended(ValidationReason.BINDING_DUPLICATE, cluster)
 
     if not _active(cluster):
         return _suspended(ValidationReason.CLUSTER_NOT_READY, cluster)
@@ -557,12 +558,10 @@ def validate_miner(
     ):
         return _suspended(ValidationReason.CLUSTER_NOT_READY, cluster)
 
-    nodes = nodes_by_cluster.get(metadata.cluster_id)
+    nodes = nodes_by_cluster.get(cluster_id)
     if not isinstance(nodes, list) or not nodes:
         return _suspended(ValidationReason.NODE_INVENTORY_EMPTY, cluster)
-    if not all(
-        _node_ready(node, metadata.cluster_id, policy) for node in nodes
-    ):
+    if not all(_node_ready(node, cluster_id, policy) for node in nodes):
         return _suspended(ValidationReason.NODE_NOT_READY, cluster)
     node_ids = [node["id"] for node in nodes]
     if len(node_ids) != len(set(node_ids)):
@@ -571,7 +570,7 @@ def validate_miner(
         return ValidationVerdict(
             ValidationStatus.ELIGIBLE,
             ValidationReason.ELIGIBLE,
-            metadata.cluster_id,
+            cluster_id,
         )
 
     if not _topology_ready(nodes, policy):
@@ -597,5 +596,5 @@ def validate_miner(
     return ValidationVerdict(
         ValidationStatus.ELIGIBLE,
         ValidationReason.ELIGIBLE,
-        metadata.cluster_id,
+        cluster_id,
     )

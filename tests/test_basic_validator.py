@@ -883,11 +883,11 @@ def test_reconciliation_refresh_must_not_precede_cycle_block():
     assert validator._refresh_registered(101) is None
 
 
-@pytest.mark.parametrize("mutation", ["pending", "coldkey_mismatch"])
+@pytest.mark.parametrize("mutation", ["missing_coldkey", "coldkey_mismatch"])
 def test_complete_binding_failure_scores_only_that_miner_zero(mutation):
     clusters, nodes = active_bob_cluster()
-    if mutation == "pending":
-        clusters[0]["labels"]["kubetee.ai/binding-status"] = "PENDING"
+    if mutation == "missing_coldkey":
+        del clusters[0]["labels"]["kubetee.ai/coldkey"]
     else:
         clusters[0]["labels"]["kubetee.ai/coldkey"] = "5WrongColdkey"
     validator, subtensor, *_ = build_validator(
@@ -932,8 +932,10 @@ def test_two_miners_can_receive_different_complete_verdicts():
     carol_cluster["id"] = "c-carol"
     carol_cluster["labels"]["kubetee.ai/binding-id"] = "binding-carol"
     carol_cluster["labels"][HOTKEY_LABEL] = CAROL
-    carol_cluster["labels"]["kubetee.ai/coldkey"] = CAROL_COLDKEY
-    carol_cluster["labels"]["kubetee.ai/binding-status"] = "PENDING"
+    # Carol's cluster coldkey does not match her on-chain coldkey -> she
+    # scores zero via BINDING_IDENTITY_MISMATCH under the hotkey+coldkey
+    # binding (formerly failed via a PENDING binding-status).
+    carol_cluster["labels"]["kubetee.ai/coldkey"] = "5WrongCarolColdkeyFAKE"
     carol_cluster["annotations"]["kubetee.ai/enrollment-uid"] = "3"
     clusters.append(carol_cluster)
     nodes["c-carol"] = [
@@ -1460,8 +1462,6 @@ def test_debug_evidence_logs_labels_reasons_and_never_secrets(caplog):
         {"hotkey": "hot-bob", "coldkey": "cold-bob", "uid": 2},
         [],
         {},
-        1,
-        "kubetee-localnet",
         validator_module.InfrastructurePolicy.for_profile(
             validator_module.ValidationProfile.DEBUG
         ),
