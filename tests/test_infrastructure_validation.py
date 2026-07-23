@@ -520,3 +520,71 @@ def test_validate_miner_accepts_miner_prefixed_identity_labels():
     )
     assert verdict.status is ValidationStatus.ELIGIBLE
     assert verdict.reason is ValidationReason.ELIGIBLE
+
+
+# ---------------------------------------------------------------------------
+# kubetee.ai/ban: operator soft safety switch -> score 0.
+# ---------------------------------------------------------------------------
+
+
+def _hotkey_only_cluster(ban: str | None = None) -> dict:
+    labels = {"kubetee.ai/hotkey": HOTKEY}
+    if ban is not None:
+        labels["kubetee.ai/ban"] = ban
+    return {
+        "id": "c-miner",
+        "state": "active",
+        "transitioning": "no",
+        "labels": labels,
+    }
+
+
+def _one_active_node() -> dict:
+    return {
+        "c-miner": [
+            {
+                "id": "c-miner:n1",
+                "clusterId": "c-miner",
+                "state": "active",
+                "transitioning": "no",
+            }
+        ]
+    }
+
+
+def _debug_verdict(cluster: dict):
+    return validate_miner(
+        {"uid": UID, "hotkey": HOTKEY, "coldkey": COLDKEY},
+        [cluster],
+        _one_active_node(),
+        InfrastructurePolicy.for_profile(ValidationProfile.DEBUG),
+    )
+
+
+def test_ban_true_scores_zero():
+    verdict = _debug_verdict(_hotkey_only_cluster(ban="true"))
+    assert verdict.status is ValidationStatus.SUSPENDED
+    assert verdict.reason is ValidationReason.BANNED
+    assert verdict.score == 0
+
+
+def test_ban_false_is_eligible():
+    verdict = _debug_verdict(_hotkey_only_cluster(ban="false"))
+    assert verdict.status is ValidationStatus.ELIGIBLE
+
+
+def test_ban_absent_is_eligible():
+    verdict = _debug_verdict(_hotkey_only_cluster(ban=None))
+    assert verdict.status is ValidationStatus.ELIGIBLE
+
+
+def test_ban_non_true_value_is_eligible():
+    verdict = _debug_verdict(_hotkey_only_cluster(ban="1"))
+    assert verdict.status is ValidationStatus.ELIGIBLE
+
+
+def test_miner_ban_alias_is_honored():
+    cluster = _hotkey_only_cluster()
+    cluster["labels"]["kubetee.ai/miner-ban"] = "true"
+    verdict = _debug_verdict(cluster)
+    assert verdict.reason is ValidationReason.BANNED

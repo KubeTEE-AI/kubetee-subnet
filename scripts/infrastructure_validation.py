@@ -22,6 +22,7 @@ NETUID_LABEL = "kubetee.ai/netuid"
 NETWORK_LABEL = "kubetee.ai/network"
 ORIGIN_FP_PREFIX_LABEL = "kubetee.ai/origin-fp-prefix"
 ENROLLMENT_UID_ANNOTATION = "kubetee.ai/enrollment-uid"
+BAN_LABEL = "kubetee.ai/ban"
 
 _KUBETEE_NAMESPACE = "kubetee.ai/"
 _MINER_ALIAS_PREFIX = "miner-"
@@ -131,6 +132,7 @@ class ValidationReason(enum.Enum):
     GPU_INVENTORY_INVALID = "gpu_inventory_invalid"
     GPU_MODEL_UNSUPPORTED = "gpu_model_unsupported"
     RUNTIME_HANDLER_MISSING = "runtime_handler_missing"
+    BANNED = "banned"
 
 
 @dataclasses.dataclass(frozen=True)
@@ -536,7 +538,14 @@ def validate_miner(
 
     # Identity binding IS the hotkey match above (the unique cluster carrying
     # kubetee.ai/hotkey == the neuron hotkey). No further label identity is
-    # required; readiness gates follow.
+    # required.
+
+    # Operator safety switch: kubetee.ai/ban == "true" (alias miner-ban) scores
+    # this miner 0 without deleting anything. Deliberately centralised; the
+    # chain-deregistration -> reaper path removes the cluster over time.
+    labels = canonicalize_kubetee_keys(cluster["labels"])
+    if labels.get(BAN_LABEL) == "true":
+        return _suspended(ValidationReason.BANNED, cluster)
 
     if not _active(cluster):
         return _suspended(ValidationReason.CLUSTER_NOT_READY, cluster)
