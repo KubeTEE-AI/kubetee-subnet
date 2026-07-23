@@ -2,6 +2,12 @@
 
 This guide is for **miners** who need to register their nodes to an RKE2 cluster managed by Rancher.
 
+> **Validator contract (2026-07-24):** eligibility is the **hotkey** — the
+> cluster carries `kubetee.ai/hotkey == your registered hotkey` (one cluster
+> per hotkey) and is not banned (`kubetee.ai/ban != "true"`) and is ready.
+> The former canonical enrollment binding is no longer required by the
+> validator. See `docs/superpowers/specs/2026-07-24-hotkey-only-binding-design.md`.
+
 ## Prerequisites
 
 Before registering your node, ensure the infrastructure setup is complete:
