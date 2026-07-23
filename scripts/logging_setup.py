@@ -50,19 +50,31 @@ def _format_with_context(record: dict[str, Any]) -> str:
 
 
 def configure_logging(level: str = "INFO") -> None:
-    """Replace all sinks with one stderr sink at ``level`` (e.g. "INFO")."""
+    """Replace all sinks: below-ERROR to stdout, ERROR+ to stderr.
+
+    The split keeps IDE consoles (PyCharm paints all stderr red) readable
+    while real errors still land on stderr. Streams are resolved at write
+    time: binding the stream object here pins whatever replacement (e.g.
+    pytest capsys) is active when configure_logging runs, and writing to
+    it later fails — loguru's handler-error dump would then echo in-flight
+    exception chains, defeating redaction.
+    """
     logger.remove()
     logger.configure(patcher=_flatten_extra_kwarg)
-    logger.add(
-        # Resolve sys.stderr at write time: binding the stream object here
-        # pins whatever stderr replacement (e.g. pytest capsys) is active
-        # when configure_logging runs, and writing to it later fails —
-        # loguru's handler-error dump would then echo in-flight exception
-        # chains, defeating redaction.
-        lambda message: sys.stderr.write(message),
-        format=_format_with_context,
-        level=level,
+    common = {
+        "format": _format_with_context,
+        "level": level,
         # Never render local variable values into tracebacks: they can
         # contain seeds/bearer tokens (redaction contract, AC5).
-        diagnose=False,
+        "diagnose": False,
+    }
+    logger.add(
+        lambda message: sys.stdout.write(message),
+        filter=lambda record: record["level"].no < 40,
+        **common,
+    )
+    logger.add(
+        lambda message: sys.stderr.write(message),
+        filter=lambda record: record["level"].no >= 40,
+        **common,
     )
