@@ -95,15 +95,16 @@ _RANCHER_SKIP_DETAILS = {
 def _log_reconciliation_evidence(event: dict) -> None:
     """Emit only the fixed audit fields approved for destructive actions."""
     _LOG.info(
-        "reconciliation evidence: event={!r} correlation_id={!r} cluster_id={!r} "
-        "absence_cycles={!r} metagraph_blocks={!r} response_class={!r} detail={!r}",
-        event.get("event"),
-        event.get("correlation_id"),
-        event.get("cluster_id"),
-        event.get("absence_cycles"),
-        event.get("metagraph_blocks"),
-        event.get("response_class"),
-        event.get("detail"),
+        "reconciliation evidence",
+        extra={
+            "event": event.get("event"),
+            "correlation_id": event.get("correlation_id"),
+            "cluster_id": event.get("cluster_id"),
+            "absence_cycles": event.get("absence_cycles"),
+            "metagraph_blocks": event.get("metagraph_blocks"),
+            "response_class": event.get("response_class"),
+            "detail": event.get("detail"),
+        },
     )
 
 
@@ -489,19 +490,25 @@ class BasicValidator:
         entered_degraded = self._metrics.record_skip(reason)
         self._metrics.record_cycle_outcome("skip")
         self._log.warning(
-            "cycle skipped set_weights: reason={} detail={} consecutive={}",
-            reason.value,
-            detail,
-            self._metrics.consecutive_skips,
+            "cycle skipped set_weights",
+            extra={
+                "reason": reason.value,
+                "detail": detail,
+                "consecutive": self._metrics.consecutive_skips,
+            },
         )
         if entered_degraded:
             self._log.critical(
-                "DEGRADED MODE entered: {} consecutive skipped cycles exceeded "
-                "KUBETEE_MAX_CONSECUTIVE_SKIPS={} - on-chain weights are stale; "
+                "DEGRADED MODE entered: consecutive skipped cycles exceeded "
+                "KUBETEE_MAX_CONSECUTIVE_SKIPS - on-chain weights are stale; "
                 "operator intervention required (see SUBNET.md); weights are "
                 "never auto-zeroed",
-                self._metrics.consecutive_skips,
-                self._config.max_consecutive_skips,
+                extra={
+                    "consecutive": self._metrics.consecutive_skips,
+                    "max_consecutive_skips": (
+                        self._config.max_consecutive_skips
+                    ),
+                },
             )
 
     def run_cycle(self) -> str:
@@ -628,14 +635,15 @@ class BasicValidator:
         self._metrics.record_set_weights(bool(success))
         if success:
             self._log.info(
-                "set_weights accepted on chain: netuid={} miners={} scoring={} "
-                "validation_reasons={} uids={} weights={}",
-                self._config.netuid,
-                len(miners),
-                scoring_count,
-                validation_reasons,
-                uids,
-                weights,
+                "set_weights accepted on chain",
+                extra={
+                    "netuid": self._config.netuid,
+                    "miners": len(miners),
+                    "scoring": scoring_count,
+                    "validation_reasons": validation_reasons,
+                    "uids": uids,
+                    "weights": weights,
+                },
             )
             self._metrics.record_cycle_outcome("weights_set")
             return "weights_set"
@@ -647,15 +655,16 @@ class BasicValidator:
         """D14 liveness corollary: no runtime error may terminate the loop.
         Only operator signals (BaseException path) stop the process."""
         self._log.info(
-            "basic validator started: netuid={} chain_network={} profile={} "
-            "poll={:g}s share={:g} max_consecutive_skips={} rancher={}",
-            self._config.netuid,
-            self._config.chain_network,
-            self._config.validation_profile.value,
-            self._config.poll_seconds,
-            self._config.miner_share,
-            self._config.max_consecutive_skips,
-            urlsplit(self._config.rancher_url).netloc,
+            "basic validator started",
+            extra={
+                "netuid": self._config.netuid,
+                "chain_network": self._config.chain_network,
+                "profile": self._config.validation_profile.value,
+                "poll_seconds": self._config.poll_seconds,
+                "miner_share": self._config.miner_share,
+                "max_consecutive_skips": self._config.max_consecutive_skips,
+                "rancher": urlsplit(self._config.rancher_url).netloc,
+            },
         )
         while True:
             try:

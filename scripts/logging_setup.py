@@ -25,10 +25,19 @@ def _flatten_extra_kwarg(record: dict[str, Any]) -> None:
         record["extra"]["context"] = nested
 
 
+def render_context(extra: dict[str, Any]) -> str:
+    """Render structured context as space-separated ``key=value`` pairs."""
+    return " ".join(f"{key}={value}" for key, value in extra.items())
+
+
 def _format_with_context(record: dict[str, Any]) -> str:
     base = "{time:YYYY-MM-DD HH:mm:ss.SSS} {level} {message}"
     if record["extra"]:
-        return base + " | {extra}\n"
+        # Pre-render and escape braces: the returned string is a loguru
+        # format template, and dict/list values contain literal braces.
+        context = render_context(record["extra"])
+        escaped = context.replace("{", "{{").replace("}", "}}")
+        return base + " | " + escaped + "\n"
     return base + "\n"
 
 
