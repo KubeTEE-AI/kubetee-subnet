@@ -48,6 +48,7 @@ from infrastructure_validation import (
     ValidationProfile,
     validate_miner,
 )
+from logging_setup import configure_logging
 from miner_scoring import (
     CycleConfig,
     SkipCycle,
@@ -669,9 +670,10 @@ class BasicValidator:
 
 def main(env: Mapping[str, str] | None = None) -> None:
     if env is None:
-        # Host/PyCharm runs: pick up the repo .env (compose injects the same
-        # variables via its environment: block). Never overrides real env.
-        load_dotenv()
+        # Host/PyCharm runs: pick up the repo-root .env regardless of the
+        # process working directory (compose injects the same variables via
+        # its environment: block). Never overrides real env.
+        load_dotenv(pathlib.Path(__file__).resolve().parent.parent / ".env")
     runtime_env = dict(os.environ if env is None else env)
     try:
         config = load_config(runtime_env)
@@ -689,9 +691,8 @@ def main(env: Mapping[str, str] | None = None) -> None:
 
     # bittensor's import reconfigures global stdlib logging; loguru keeps its
     # own sinks, so the cycle-evidence INFO lines (AC5/AC9) cannot be muted.
-    # Reset to a single stderr sink at the operator-selected level.
-    logger.remove()
-    logger.add(sys.stderr, level=runtime_env.get("LOG_LEVEL", "INFO"))
+    # Sink format is shared with rbmk ml-pipeline (see logging_setup.py).
+    configure_logging(level=runtime_env.get("LOG_LEVEL", "INFO"))
 
     wallet = bt.Wallet(name=config.wallet_name, hotkey=config.wallet_hotkey)
     metrics = ValidatorMetrics(
