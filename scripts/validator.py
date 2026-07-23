@@ -29,7 +29,6 @@ from __future__ import annotations
 
 import collections
 import dataclasses
-import logging
 import math
 import os
 import pathlib
@@ -39,6 +38,9 @@ import time
 from collections.abc import Callable, Mapping
 from numbers import Integral
 from urllib.parse import urlsplit
+
+from dotenv import load_dotenv
+from loguru import logger
 
 from infrastructure_validation import (
     HOTKEY_LABEL,
@@ -63,7 +65,9 @@ from rancher_client import (
 from reconciliation import ReconciliationEngine
 from validator_metrics import ValidatorMetrics
 
-_LOG = logging.getLogger("basic_validator")
+# Loguru module logger; tests bridge it back into the stdlib
+# "basic_validator" logger via tests/conftest.py so caplog keeps working.
+_LOG = logger
 
 DEFAULT_NETWORK = "ws://chain:9944"
 DEFAULT_WALLET = "alice"  # the validator signing identity (D7)
@@ -90,8 +94,8 @@ _RANCHER_SKIP_DETAILS = {
 def _log_reconciliation_evidence(event: dict) -> None:
     """Emit only the fixed audit fields approved for destructive actions."""
     _LOG.info(
-        "reconciliation evidence: event=%r correlation_id=%r cluster_id=%r "
-        "absence_cycles=%r metagraph_blocks=%r response_class=%r detail=%r",
+        "reconciliation evidence: event={!r} correlation_id={!r} cluster_id={!r} "
+        "absence_cycles={!r} metagraph_blocks={!r} response_class={!r} detail={!r}",
         event.get("event"),
         event.get("correlation_id"),
         event.get("cluster_id"),
@@ -484,15 +488,15 @@ class BasicValidator:
         entered_degraded = self._metrics.record_skip(reason)
         self._metrics.record_cycle_outcome("skip")
         self._log.warning(
-            "cycle skipped set_weights: reason=%s detail=%s consecutive=%d",
+            "cycle skipped set_weights: reason={} detail={} consecutive={}",
             reason.value,
             detail,
             self._metrics.consecutive_skips,
         )
         if entered_degraded:
             self._log.critical(
-                "DEGRADED MODE entered: %d consecutive skipped cycles exceeded "
-                "KUBETEE_MAX_CONSECUTIVE_SKIPS=%d - on-chain weights are stale; "
+                "DEGRADED MODE entered: {} consecutive skipped cycles exceeded "
+                "KUBETEE_MAX_CONSECUTIVE_SKIPS={} - on-chain weights are stale; "
                 "operator intervention required (see SUBNET.md); weights are "
                 "never auto-zeroed",
                 self._metrics.consecutive_skips,
@@ -623,8 +627,8 @@ class BasicValidator:
         self._metrics.record_set_weights(bool(success))
         if success:
             self._log.info(
-                "set_weights accepted on chain: netuid=%d miners=%d scoring=%d "
-                "validation_reasons=%s uids=%s weights=%s",
+                "set_weights accepted on chain: netuid={} miners={} scoring={} "
+                "validation_reasons={} uids={} weights={}",
                 self._config.netuid,
                 len(miners),
                 scoring_count,
@@ -642,8 +646,8 @@ class BasicValidator:
         """D14 liveness corollary: no runtime error may terminate the loop.
         Only operator signals (BaseException path) stop the process."""
         self._log.info(
-            "basic validator started: netuid=%d chain_network=%s profile=%s "
-            "poll=%gs share=%g max_consecutive_skips=%d rancher=%s",
+            "basic validator started: netuid={} chain_network={} profile={} "
+            "poll={:g}s share={:g} max_consecutive_skips={} rancher={}",
             self._config.netuid,
             self._config.chain_network,
             self._config.validation_profile.value,
@@ -664,10 +668,10 @@ class BasicValidator:
 
 
 def main(env: Mapping[str, str] | None = None) -> None:
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(name)s %(message)s",
-    )
+    if env is None:
+        # Host/PyCharm runs: pick up the repo .env (compose injects the same
+        # variables via its environment: block). Never overrides real env.
+        load_dotenv()
     runtime_env = dict(os.environ if env is None else env)
     try:
         config = load_config(runtime_env)
@@ -676,25 +680,18 @@ def main(env: Mapping[str, str] | None = None) -> None:
         # process; reload so the validator and reconciliation use that value.
         config = load_config(runtime_env)
     except ConfigError as error:
-        _LOG.error("refusing to start: %s", error)
+        _LOG.error("refusing to start: {}", error)
         raise SystemExit(2) from error
 
     # Lazy import: unit tests (and hosts without the SDK) never import
     # real bittensor; only the live process pays this cost.
     import bittensor as bt
 
-    # bittensor's import reconfigures global logging to Warning, which would
-    # mute the cycle-evidence INFO lines that AC5/AC9 assert on. Give our
-    # logger its own handler and stop propagation so nothing upstream can
-    # silence it.
-    handler = logging.StreamHandler()
-    handler.setFormatter(
-        logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s")
-    )
-    _LOG.handlers.clear()
-    _LOG.addHandler(handler)
-    _LOG.setLevel(logging.INFO)
-    _LOG.propagate = False
+    # bittensor's import reconfigures global stdlib logging; loguru keeps its
+    # own sinks, so the cycle-evidence INFO lines (AC5/AC9) cannot be muted.
+    # Reset to a single stderr sink at the operator-selected level.
+    logger.remove()
+    logger.add(sys.stderr, level=runtime_env.get("LOG_LEVEL", "INFO"))
 
     wallet = bt.Wallet(name=config.wallet_name, hotkey=config.wallet_hotkey)
     metrics = ValidatorMetrics(

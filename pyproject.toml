@@ -9,7 +9,9 @@ description = "KubeTEE Bittensor subnet — confidential inference on TEE-protec
 requires-python = ">=3.13"
 dependencies = [
     "bittensor==11.0.0",
+    "loguru>=0.7",
     "prometheus-client>=0.20",
+    "python-dotenv>=1.0",
     "rich>=13",
     "docker>=7.0.0",
 ]

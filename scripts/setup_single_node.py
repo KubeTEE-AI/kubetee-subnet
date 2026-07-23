@@ -51,6 +51,8 @@ try:
 except ImportError:
     bt = None
 
+from loguru import logger
+
 import chain_state
 
 # =====================================================================================
@@ -100,7 +102,7 @@ def run(cmd: list[str], check=True, capture=False, env=None, dry_run=False):
     if dry_run:
         print(f"[DRY-RUN] $ {' '.join(cmd)}")
         return subprocess.CompletedProcess(cmd, returncode=0)
-    print(f"$ {' '.join(cmd)}")
+    logger.info(f"$ {' '.join(cmd)}")
     res = subprocess.run(
         cmd,
         check=check,
@@ -109,14 +111,14 @@ def run(cmd: list[str], check=True, capture=False, env=None, dry_run=False):
         env=env or os.environ,
     )
     if capture:
-        print(res.stdout)
+        logger.info(res.stdout)
     return res
 
 
 def wait_for_chain(
     chain_endpoint: str = "ws://127.0.0.1:9944", timeout=120, dry_run=False
 ):
-    print(f"Waiting for chain RPC at {chain_endpoint} ...")
+    logger.info(f"Waiting for chain RPC at {chain_endpoint} ...")
     start = time.time()
     while time.time() - start < timeout:
         try:
@@ -134,12 +136,12 @@ def wait_for_chain(
                 capture=True,
                 dry_run=dry_run,
             )
-            print("Chain is up!")
+            logger.info("Chain is up!")
             return True
         # The CLI/SDK boundary can raise subprocess, transport, or SDK errors.
         # pylint: disable-next=broad-exception-caught
         except Exception as e:
-            print(f"  ... not ready yet: {e}")
+            logger.info(f"  ... not ready yet: {e}")
             time.sleep(5)
     raise TimeoutError(
         "Chain did not become ready in time. Check docker logs."
@@ -207,13 +209,13 @@ def ensure_dev_wallet(
     so that owner addresses / UIDs are stable for the single-node pyramid.
     We regen BOTH coldkey (for sudo/ownership) and hotkey (for registration + signing weights).
     """
-    print(
+    logger.info(
         f"Ensuring dev wallet {name} (pinned seed for cold+hot, hotkey={hotkey}) ..."
     )
     _regenerate_wallet_key("coldkey", name, seed, hotkey, dry_run=dry_run)
     _regenerate_wallet_key("hotkey", name, seed, hotkey, dry_run=dry_run)
 
-    print(f"  dev wallet {name} ready (cold+hot seed-pinned).")
+    logger.info(f"  dev wallet {name} ready (cold+hot seed-pinned).")
 
 
 def get_wallet_coldkey_ss58(
@@ -224,12 +226,12 @@ def get_wallet_coldkey_ss58(
         try:
             w = bt.Wallet(name=name, hotkey=hotkey)
             addr = w.coldkeypub.ss58_address
-            print(f"  resolved {name} coldkey ss58 via SDK: {addr}")
+            logger.info(f"  resolved {name} coldkey ss58 via SDK: {addr}")
             return addr
         # Fall back to btcli for any SDK-specific wallet failure.
         # pylint: disable-next=broad-exception-caught
         except Exception as e:
-            print(
+            logger.info(
                 f"  bt.Wallet resolve for {name} failed: {e}, will try btcli"
             )
 
@@ -259,10 +261,12 @@ def get_wallet_coldkey_ss58(
     m = re.search(r"(5[0-9a-zA-Z]{46,48})", out)
     if m:
         addr = m.group(1)
-        print(f"  resolved {name} coldkey ss58 via btcli inspect: {addr}")
+        logger.info(
+            f"  resolved {name} coldkey ss58 via btcli inspect: {addr}"
+        )
         return addr
     # last resort
-    print(
+    logger.warning(
         f"  WARNING: could not resolve ss58 for {name}, using placeholder (funding may fail)"
     )
     return "5GT5Ycu59s7xiGj4VkRRZsEkypEFbECeMBCeQ14t8G7H8h8F"
@@ -275,7 +279,7 @@ def fund_from_alice(
     dry_run=False,
 ):
     """Fund using local Alice dev key (standard for localnet)."""
-    print(
+    logger.info(
         f"Funding {dest_name} from Alice dev account (endpoint={chain_endpoint})..."
     )
     _regenerate_wallet_key("coldkey", "alice", DEV_ALICE_SEED, dry_run=dry_run)
@@ -337,7 +341,7 @@ def create_subnet_if_needed(
     if dry_run:
         return netuid
 
-    print(
+    logger.info(
         "Creating/ensuring subnet "
         f"(target {netuid}, owner={owner_name}, network={chain_endpoint})..."
     )
@@ -378,7 +382,7 @@ def create_subnet_if_needed(
             "subnet creation did not yield exactly one new netuid"
         )
     actual = created.pop()
-    print(f"  Live chain postcondition resolved netuid {actual}.")
+    logger.info(f"  Live chain postcondition resolved netuid {actual}.")
     return actual
 
 
@@ -549,7 +553,7 @@ def register_neuron(
         return
 
     role = "validator" if as_validator else "miner"
-    print(
+    logger.info(
         f"Registering {wallet_name} as {role} on netuid {netuid} "
         f"(network={chain_endpoint}) ..."
     )
@@ -683,7 +687,7 @@ def set_hyperparam(
     chain_endpoint: str = "ws://127.0.0.1:9944",
     dry_run: bool = False,
 ):
-    print(
+    logger.info(
         f"Setting {param}={value} on netuid {netuid} (network={chain_endpoint}) ..."
     )
     # v11 uses btcli sudo set or tx set-hyperparameter
@@ -736,7 +740,9 @@ def set_conviction_and_recycle(
         chain_endpoint,
         dry_run=dry_run,
     )
-    print("Conviction auto-lock + Recycle mode enabled for owner emissions.")
+    logger.info(
+        "Conviction auto-lock + Recycle mode enabled for owner emissions."
+    )
 
 
 def main():
@@ -766,9 +772,9 @@ def main():
         print("[DRY-RUN] validator stake would be executed")
         return
 
-    print("=== KubeTEE Single-Node Pyramid Setup ===")
-    print(f"Netuid: {netuid}, Owner wallet: {owner}")
-    print(f"Chain endpoint: {chain_endpoint}")
+    logger.info("=== KubeTEE Single-Node Pyramid Setup ===")
+    logger.info(f"Netuid: {netuid}, Owner wallet: {owner}")
+    logger.info(f"Chain endpoint: {chain_endpoint}")
 
     wait_for_chain(chain_endpoint, dry_run=dry_run)
 
@@ -787,7 +793,7 @@ def main():
     )  # top up alice faucet
 
     # Wait for transfers to land (localnet is fast but extrinsic finality + balance query can lag)
-    print("Waiting briefly for balances to settle after funding...")
+    logger.info("Waiting briefly for balances to settle after funding...")
     time.sleep(6)
 
     # Subnet + neuron setup (owner registers to have a UID for weighting)
@@ -815,10 +821,12 @@ def main():
         netuid, our_owner_ss58, chain_endpoint
     )
     decision = decide_owner_actions(ownership)
-    print(
+    logger.info(
         f"\nOwnership check: netuid={netuid} our_wallet={our_owner_ss58} -> {ownership}"
     )
-    print(f"Decision: proceed={decision['proceed']} ({decision['reason']})")
+    logger.info(
+        f"Decision: proceed={decision['proceed']} ({decision['reason']})"
+    )
 
     if not decision["proceed"]:
         raise RuntimeError("subnet ownership verification failed") from None
@@ -836,25 +844,27 @@ def main():
     # Status-file failure must not hide the on-chain setup outcome.
     # pylint: disable-next=broad-exception-caught
     except Exception as e:
-        print(f"  Warning: could not write ownership status file: {e}")
+        logger.warning(
+            f"  Warning: could not write ownership status file: {e}"
+        )
 
-    print("\n=== Setup complete ===")
-    print("Owner emissions will now:")
-    print(
+    logger.info("\n=== Setup complete ===")
+    logger.info("Owner emissions will now:")
+    logger.info(
         "  - Have owner cut auto-locked into CONVICTION (via owner_cut_auto_lock_enabled)"
     )
-    print(
+    logger.info(
         "  - Miner emissions directed to owner UID will be RECYCLED (not burned)"
     )
-    print(
+    logger.info(
         "\nUsing pinned dev seeds (owner SS58 ~5FLbZa... ) so the registered UID is stable."
     )
-    print(
+    logger.info(
         "Next: The basic validator (alice) discovers miners from the "
         "metagraph, scores them via Rancher, and splits weights "
         "(default 10% miners / 90% owner recycle UID)."
     )
-    print(
+    logger.info(
         "When used inside the validator container, this script runs first "
         "then the validator starts automatically."
     )
@@ -864,13 +874,13 @@ def main():
     try:
         with open("/app/.kubetee_netuid", "w", encoding="utf-8") as f:
             f.write(str(netuid))
-        print(
+        logger.info(
             f"  Wrote actual netuid={netuid} to /app/.kubetee_netuid for the validator phase."
         )
     # Status-file failure must not hide the on-chain setup outcome.
     # pylint: disable-next=broad-exception-caught
     except Exception as e:
-        print(f"  Warning: could not write netuid file: {e}")
+        logger.warning(f"  Warning: could not write netuid file: {e}")
 
 
 if __name__ == "__main__":
