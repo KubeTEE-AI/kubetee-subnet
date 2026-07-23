@@ -675,6 +675,11 @@ def main(env: Mapping[str, str] | None = None) -> None:
         # its environment: block). Never overrides real env.
         load_dotenv(pathlib.Path(__file__).resolve().parent.parent / ".env")
     runtime_env = dict(os.environ if env is None else env)
+    # Configure the shared ml-pipeline sink format before the first log line
+    # (config refusal included). bittensor's later import reconfigures global
+    # stdlib logging only; loguru keeps its own sinks, so the cycle-evidence
+    # INFO lines (AC5/AC9) cannot be muted.
+    configure_logging(level=runtime_env.get("LOG_LEVEL", "INFO"))
     try:
         config = load_config(runtime_env)
         _bootstrap_if_debug(config, runtime_env)
@@ -688,11 +693,6 @@ def main(env: Mapping[str, str] | None = None) -> None:
     # Lazy import: unit tests (and hosts without the SDK) never import
     # real bittensor; only the live process pays this cost.
     import bittensor as bt
-
-    # bittensor's import reconfigures global stdlib logging; loguru keeps its
-    # own sinks, so the cycle-evidence INFO lines (AC5/AC9) cannot be muted.
-    # Sink format is shared with rbmk ml-pipeline (see logging_setup.py).
-    configure_logging(level=runtime_env.get("LOG_LEVEL", "INFO"))
 
     wallet = bt.Wallet(name=config.wallet_name, hotkey=config.wallet_hotkey)
     metrics = ValidatorMetrics(

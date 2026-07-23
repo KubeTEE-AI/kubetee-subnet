@@ -54,6 +54,7 @@ except ImportError:
 from loguru import logger
 
 import chain_state
+from logging_setup import configure_logging
 
 # =====================================================================================
 # PINNED DEV KEYS (inspired by fdn-subnet's approach with Alith/Baltathar etc.)
@@ -746,6 +747,7 @@ def set_conviction_and_recycle(
 
 
 def main():
+    configure_logging(level=os.getenv("LOG_LEVEL", "INFO"))
     parser = argparse.ArgumentParser()
     parser.add_argument("--netuid", type=int, default=1)
     parser.add_argument("--owner-wallet", default="owner")
