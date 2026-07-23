@@ -1478,3 +1478,39 @@ def test_debug_evidence_logs_labels_reasons_and_never_secrets(caplog):
     assert "uid=2" in caplog.text
     assert '"unrelated": "ignored"' in caplog.text
     assert "token" not in caplog.text.lower()
+
+
+# ---------------------------------------------------------------------------
+# Two-label contract (hotkey + ban) end-to-end through a full cycle.
+# ---------------------------------------------------------------------------
+
+
+def test_two_label_contract_hotkey_only_cluster_scores():
+    """The write->read seam: a cluster carrying ONLY kubetee.ai/hotkey (no
+    canonical binding) + a ready node scores its miner in a real cycle."""
+    clusters, nodes = active_bob_cluster()
+    clusters[0]["labels"] = {HOTKEY_LABEL: BOB}
+    clusters[0].pop("annotations", None)
+    validator, subtensor, *_ = build_validator(
+        rancher=FakeRancher(clusters=clusters, nodes_by_cluster=nodes)
+    )
+
+    assert validator.run_cycle() == "weights_set"
+
+    assert subtensor.set_weights_calls[0]["weights"] == pytest.approx(
+        [0.9, 0.0, 0.1]
+    )
+
+
+def test_banned_hotkey_only_cluster_scores_zero_in_cycle():
+    """kubetee.ai/ban=true on the miner's cluster -> that miner scores 0."""
+    clusters, nodes = active_bob_cluster()
+    clusters[0]["labels"] = {HOTKEY_LABEL: BOB, "kubetee.ai/ban": "true"}
+    clusters[0].pop("annotations", None)
+    validator, subtensor, *_ = build_validator(
+        rancher=FakeRancher(clusters=clusters, nodes_by_cluster=nodes)
+    )
+
+    assert validator.run_cycle() == "weights_set"
+
+    assert subtensor.set_weights_calls[0]["weights"] == [1.0, 0.0, 0.0]
