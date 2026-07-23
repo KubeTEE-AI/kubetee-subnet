@@ -258,9 +258,9 @@ healthcheck. The local Compose command wires the image together with Rancher,
 the localnet chain, and Dozzle; the external command runs `scripts/validator.py`
 directly.
 
-For standalone development without compose, see
-[Running the validator manually (host)](#4-running-the-validator-manually-host)
-below.
+For the production-shaped external runtime, see
+[Running a KubeTEE Validator](docs/RUNNING_A_VALIDATOR.md). The local stack
+below is not a Finney host example.
 
 Services (all using deterministic pinned dev accounts, see `keys/README.md`):
 
@@ -306,23 +306,14 @@ What it does:
 - Treats a local chain run as ready only after the transient permit/rate
   window yields a typed accepted validator weight
 
-### 4. Running the validator manually (host)
+### 4. External mainnet runtime
 
-`scripts/validator.py` is the validator entrypoint. In `debug` mode it runs
-the disposable local `setup_single_node.py` bootstrap before starting the
-validator loop. In `production` mode it never creates a subnet, registers
-wallets, stakes, or changes chain hyperparameters; provide the already
-registered validator and Rancher configuration explicitly.
-
-```bash
-BT_NETWORK=finney \
-KUBETEE_SUBNET_NETUID=1 \
-BT_WALLET=alice \
-KUBETEE_VALIDATOR_HOTKEY=5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY \
-RANCHER_URL=... RANCHER_BEARER_TOKEN=... RANCHER_CA_FILE=/path/to/ca.crt \
-KUBETEE_CHAIN_NETWORK=finney KUBETEE_VALIDATION_PROFILE=production \
-python scripts/validator.py
-```
+This document retains the local stack material above. For a production-shaped
+external runtime, including Finney configuration, image digest selection,
+least-privilege Rancher access, verification, and rollback, use
+[Running a KubeTEE Validator](docs/RUNNING_A_VALIDATOR.md). Do not reuse the
+local owner/alice/bob identities or local chain values outside the disposable
+stack.
 
 ### 5. Observability
 
@@ -334,14 +325,14 @@ python scripts/validator.py
 - **subnet-stats** loop prints hypers (conviction, recycle_or_burn where
   readable), stake, ownership, and the alice validator stake.
 
-### 6. Testnet / Mainnet notes
+### 6. External mainnet runtime notes
 
-- Use real funded wallets; `--network test` or `finney`.
-- Provision and verify the D6 least-privilege cluster/node-read plus guarded
-  cluster-delete role before any non-local deployment.
-- Always test recycle + conviction on local first.
+No public KubeTEE testnet is documented. The supported non-local surface is
+the external mainnet runtime described in
+[Running a KubeTEE Validator](docs/RUNNING_A_VALIDATOR.md). It requires
+operator-managed Finney identities and least-privilege Rancher authority.
 
-### 7. Common commands (v11 / btcli)
+### 7. Localnet BTCLI examples (v11)
 
 ```bash
 # View hypers on the uniquely created local subnet (netuid 2 in the dedicated proof)

@@ -142,6 +142,7 @@ As a member of the [Confidential Computing Consortium (CCC)](https://confidentia
   - [Workflow Orchestration (Airflow \& Metaflow)](#workflow-orchestration-airflow--metaflow)
   - [Job Pricing MCP Server](#job-pricing-mcp-server)
   - [For Miners (Infrastructure)](#for-miners-infrastructure)
+    - [Enrollment operating modes](#enrollment-operating-modes)
   - [Roadmap](#roadmap)
     - [Phase 0 — Early Access (Current)](#phase-0--early-access-current)
     - [Phase 1 — Expansion](#phase-1--expansion)
@@ -540,6 +541,9 @@ The validator is the subnet's referee. In Early Access it scores each miner (one
 > Armada, and KeyLease serving gates remain future work (see
 > [SUBNET.md](SUBNET.md)).
 
+For operator-facing localnet and Finney runtime steps, see
+[Running a KubeTEE Validator](docs/RUNNING_A_VALIDATOR.md).
+
 ### Validator Runtime (TEE)
 
 The validator is the subnet's referee — so the referee itself must be trustworthy. The validator process runs **inside a confidential TEE pod** (`kata-qemu-nvidia-gpu-tdx` or `kata-qemu-tdx`) on the subnet-owner control plane, with CoCo remote attestation proving the validator code and configuration are unmodified. Scoring, weight-setting, and credentials (Rancher token, Bittensor wallet) stay confidential and tamper-resistant — the validator cannot be silently altered by the host or hypervisor.
@@ -666,6 +670,22 @@ flowchart LR
 ---
 
 ## For Miners (Infrastructure)
+
+### Enrollment operating modes
+
+The KubeTEE subnet supports two operator-selected enrollment modes:
+
+- **Permissionless** — a registered miner uses the supported platform
+  enrollment flow to prove control of its cluster.
+- **Operator-bound** — the subnet operator binds the cluster through a private
+  control-plane process before the validator evaluates it; public self-service
+  enrollment is not available in this mode.
+
+In either mode, a cluster must have a valid canonical enrollment binding before
+it can receive validator score. The validator continues checking existing
+operator-bound clusters independently of the enrollment mode. Private platform
+endpoints, credentials, and binding procedures are intentionally not published
+in this public repository.
 
 **Early Access Cluster Rules**:
 - One hotkey per cluster (one miner = one cluster)

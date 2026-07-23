@@ -8,7 +8,7 @@ version = "0.0.0"
 description = "KubeTEE Bittensor subnet — confidential inference on TEE-protected GPU clusters"
 requires-python = ">=3.13"
 dependencies = [
-    "bittensor>=11.0.0.dev0",
+    "bittensor==11.0.0",
     "prometheus-client>=0.20",
     "rich>=13",
     "docker>=7.0.0",
