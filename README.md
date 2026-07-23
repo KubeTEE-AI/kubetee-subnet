@@ -142,6 +142,7 @@ As a member of the [Confidential Computing Consortium (CCC)](https://confidentia
   - [Workflow Orchestration (Airflow \& Metaflow)](#workflow-orchestration-airflow--metaflow)
   - [Job Pricing MCP Server](#job-pricing-mcp-server)
   - [For Miners (Infrastructure)](#for-miners-infrastructure)
+    - [Enrollment operating modes](#enrollment-operating-modes)
   - [Roadmap](#roadmap)
     - [Phase 0 — Early Access (Current)](#phase-0--early-access-current)
     - [Phase 1 — Expansion](#phase-1--expansion)
