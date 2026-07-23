@@ -387,44 +387,6 @@ def test_malformed_labels_during_recheck_abort():
     assert 'reason="recheck_mismatch"' in metrics.exposition().decode()
 
 
-@pytest.mark.parametrize(
-    ("label", "value"),
-    [(NETUID_LABEL, "2"), (NETWORK_LABEL, "test")],
-)
-def test_reconciliation_scope_changed_midcycle_aborts(label, value):
-    engine, client, metrics, _, _, clusters = ready_engine()
-    current = cluster("c-gone")
-    current["labels"][label] = value
-    client.clusters["c-gone"] = current
-
-    engine.run_cycle(
-        registered_hotkeys={BOB},
-        clusters=clusters,
-        metagraph_block=BLOCK + 1,
-        refresh_registered=lambda _minimum_block: set(),
-    )
-
-    assert client.deleted == []
-    assert 'reason="recheck_mismatch"' in metrics.exposition().decode()
-
-
-def test_binding_generation_changed_midcycle_aborts():
-    engine, client, metrics, _, _, clusters = ready_engine()
-    current = cluster("c-gone")
-    current["labels"][GENERATION_LABEL] = "2"
-    client.clusters["c-gone"] = current
-
-    engine.run_cycle(
-        registered_hotkeys={BOB},
-        clusters=clusters,
-        metagraph_block=BLOCK + 1,
-        refresh_registered=lambda _minimum_block: set(),
-    )
-
-    assert client.deleted == []
-    assert 'reason="recheck_mismatch"' in metrics.exposition().decode()
-
-
 def test_uuid_changed_midcycle_aborts():
     engine, client, _, _, _, clusters = ready_engine()
     client.clusters["c-gone"] = cluster("c-gone", uuid=UUID_OTHER)
@@ -486,56 +448,24 @@ def test_unlabeled_and_internal_clusters_never_considered():
     assert client.deleted == []
 
 
-def test_retired_miner_hotkey_label_is_not_a_reconciliation_candidate():
+def test_miner_alias_only_cluster_is_now_reaped_when_hotkey_absent():
+    """Symmetric hotkey binding: a cluster labelled with ONLY the
+    kubetee.ai/miner-hotkey alias is now recognised by the reaper (as by the
+    scorer) and is deregistered once its hotkey leaves the metagraph. This
+    replaces the former posture where the alias was reaper-immune."""
     engine, client, _, clock, _ = make_engine(min_cycles=1, min_seconds=0)
-    legacy = cluster("c-legacy", hotkey=None)
-    retired_label = "kubetee.ai/" + "miner-hotkey"
-    legacy["labels"] = {retired_label: GONE}
+    aliased = cluster("c-aliased", hotkey=None)
+    aliased["labels"] = {"kubetee.ai/miner-hotkey": GONE}
+    client.clusters["c-aliased"] = aliased
     for offset in range(2):
         engine.run_cycle(
             registered_hotkeys={BOB},
-            clusters=[legacy],
+            clusters=[aliased],
             metagraph_block=BLOCK + offset,
             refresh_registered=lambda _minimum_block: set(),
         )
         clock.advance(10)
-    assert client.deleted == []
-
-
-@pytest.mark.parametrize(
-    ("label", "value"),
-    [(NETUID_LABEL, "2"), (NETWORK_LABEL, "test")],
-)
-def test_cluster_outside_reconciliation_scope_is_never_deleted(label, value):
-    engine, client, _, _, _ = make_engine(min_cycles=1, min_seconds=0)
-    outside = cluster("c-outside")
-    outside["labels"][label] = value
-    client.clusters["c-outside"] = outside
-
-    engine.run_cycle(
-        registered_hotkeys={BOB},
-        clusters=[outside],
-        metagraph_block=BLOCK,
-        refresh_registered=lambda _minimum_block: set(),
-    )
-
-    assert client.deleted == []
-
-
-def test_non_enrolled_binding_is_never_a_reconciliation_candidate():
-    engine, client, _, _, _ = make_engine(min_cycles=1, min_seconds=0)
-    pending = cluster("c-pending")
-    pending["labels"][BINDING_STATUS_LABEL] = "PENDING"
-    client.clusters["c-pending"] = pending
-
-    engine.run_cycle(
-        registered_hotkeys={BOB},
-        clusters=[pending],
-        metagraph_block=BLOCK,
-        refresh_registered=lambda _minimum_block: set(),
-    )
-
-    assert client.deleted == []
+    assert "c-aliased" in client.deleted
 
 
 def test_malformed_labels_are_not_reconciliation_candidates():
@@ -550,22 +480,6 @@ def test_malformed_labels_are_not_reconciliation_candidates():
             refresh_registered=lambda _minimum_block: set(),
         )
         clock.advance(10)
-    assert client.deleted == []
-
-
-def test_incomplete_canonical_binding_is_never_deleted():
-    engine, client, _, _, _ = make_engine(min_cycles=1, min_seconds=0)
-    malformed = cluster("c-incomplete")
-    del malformed["labels"][BINDING_ID_LABEL]
-    client.clusters[malformed["id"]] = malformed
-
-    engine.run_cycle(
-        registered_hotkeys={BOB},
-        clusters=[malformed],
-        metagraph_block=BLOCK,
-        refresh_registered=lambda _minimum_block: set(),
-    )
-
     assert client.deleted == []
 
 
@@ -833,27 +747,3 @@ def test_evidence_bundle_never_contains_raw_labels_dump_or_state_payload():
     ]
     assert "labels" not in bundle
     assert "state" not in bundle
-
-
-def test_miner_prefixed_hotkey_cluster_is_scored_but_never_auto_deleted():
-    """Deliberate posture: the validator accepts kubetee.ai/miner-hotkey as a
-    scoring alias (infrastructure_validation.canonicalize_kubetee_keys), but the
-    guarded deletion path extracts the hotkey via the RAW kubetee.ai/hotkey key.
-    A cluster labeled only with the miner- alias therefore yields no hotkey for
-    reconciliation and is never a deletion candidate — hand-provisioned staging
-    clusters stay immune to the reaper even though they score."""
-    engine, client, _, clock, _ = make_engine(min_cycles=1, min_seconds=0)
-    aliased = cluster("c-aliased")
-    aliased["labels"]["kubetee.ai/miner-hotkey"] = aliased["labels"].pop(LABEL)
-    client.clusters["c-aliased"] = aliased
-
-    for offset in range(3):
-        engine.run_cycle(
-            registered_hotkeys={BOB},  # GONE is absent from the metagraph
-            clusters=[aliased],
-            metagraph_block=BLOCK + offset,
-            refresh_registered=lambda _minimum_block: set(),
-        )
-        clock.advance(1000)
-
-    assert client.deleted == []

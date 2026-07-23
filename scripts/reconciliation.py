@@ -34,34 +34,14 @@ import uuid as uuid_module
 from collections.abc import Callable, Iterable
 
 from infrastructure_validation import (
-    BINDING_ID_LABEL,
-    BINDING_STATUS_LABEL,
-    COLDKEY_LABEL,
-    ENROLLMENT_UID_ANNOTATION,
-    GENERATION_LABEL,
     HOTKEY_LABEL,
-    NETUID_LABEL,
-    NETWORK_LABEL,
-    ORIGIN_FP_PREFIX_LABEL,
-    PROVIDER_ID_LABEL,
-    has_canonical_binding_metadata,
+    canonicalize_kubetee_keys,
 )
 from rancher_client import ErrorCategory, RancherError, validate_cluster_id
 from validator_metrics import SuppressionReason, ValidatorMetrics
 
 MINER_LABEL = HOTKEY_LABEL
 PROTECTED_CLUSTER_IDS = frozenset({"local"})
-_BINDING_IDENTITY_LABELS = (
-    BINDING_ID_LABEL,
-    HOTKEY_LABEL,
-    COLDKEY_LABEL,
-    PROVIDER_ID_LABEL,
-    BINDING_STATUS_LABEL,
-    GENERATION_LABEL,
-    NETUID_LABEL,
-    NETWORK_LABEL,
-    ORIGIN_FP_PREFIX_LABEL,
-)
 _MAX_EVIDENCE_BLOCKS = 32
 
 
@@ -75,23 +55,11 @@ def _canonical_uuid(value: object) -> bool:
         return False
 
 
-def _same_binding_identity(expected: dict, current: dict) -> bool:
-    """Require every canonical binding field to survive the final GET."""
-    if not (
-        has_canonical_binding_metadata(expected)
-        and has_canonical_binding_metadata(current)
-    ):
-        return False
-    expected_labels = expected["labels"]
-    current_labels = current["labels"]
-    if any(
-        current_labels.get(label) != expected_labels.get(label)
-        for label in _BINDING_IDENTITY_LABELS
-    ):
-        return False
-    return current["annotations"].get(ENROLLMENT_UID_ANNOTATION) == expected[
-        "annotations"
-    ].get(ENROLLMENT_UID_ANNOTATION)
+def _cluster_hotkey(labels: object) -> object:
+    """The cluster's bound hotkey (kubetee.ai/hotkey or the miner- alias)."""
+    if not isinstance(labels, dict):
+        return None
+    return canonicalize_kubetee_keys(labels).get(MINER_LABEL)
 
 
 @dataclasses.dataclass
@@ -236,21 +204,16 @@ class ReconciliationEngine:
             if not isinstance(cluster, dict):
                 continue
             labels = cluster.get("labels")
-            hotkey = (
-                labels.get(MINER_LABEL) if isinstance(labels, dict) else None
-            )
             cluster_id = cluster.get("id")
             cluster_uuid = cluster.get("uuid")
             if not isinstance(labels, dict):
                 continue
-            if not has_canonical_binding_metadata(cluster):
-                continue
-            if (
-                labels.get(BINDING_STATUS_LABEL) != "ENROLLED"
-                or labels.get(NETUID_LABEL) != self._expected_netuid
-                or labels.get(NETWORK_LABEL) != self._expected_network
-            ):
-                continue  # another trust domain: structurally out of reach
+            # Identity is the hotkey only (kubetee.ai/hotkey or the miner-
+            # alias). The canonical enrollment binding is no longer required
+            # for deregistration candidacy — the deletion guards below
+            # (valid id + canonical uuid + not internal/protected) plus the
+            # absence window and the two pre-delete rechecks remain.
+            hotkey = _cluster_hotkey(labels)
             if not isinstance(hotkey, str) or not hotkey:
                 continue  # unlabeled: structurally out of reach
             try:
@@ -299,12 +262,8 @@ class ReconciliationEngine:
                 current.get("id") != cluster_id
                 or current.get("uuid") != cluster.get("uuid")
                 or not _canonical_uuid(current.get("uuid"))
-                or not _same_binding_identity(cluster, current)
                 or not isinstance(current_labels, dict)
-                or current_labels.get(MINER_LABEL) != hotkey
-                or current_labels.get(BINDING_STATUS_LABEL) != "ENROLLED"
-                or current_labels.get(NETUID_LABEL) != self._expected_netuid
-                or current_labels.get(NETWORK_LABEL) != self._expected_network
+                or _cluster_hotkey(current_labels) != hotkey
                 or current.get("internal")
                 or cluster_id in self._protected
             ):

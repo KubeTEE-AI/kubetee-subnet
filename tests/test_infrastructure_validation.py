@@ -190,8 +190,6 @@ def _apply_mutation(
         cluster["id"] = "local"
     elif mutation == "internal_cluster":
         cluster["internal"] = True
-    elif mutation == "coldkey_mismatch":
-        labels["kubetee.ai/coldkey"] = "5DifferentColdkey"
     elif mutation == "cluster_inactive":
         cluster["state"] = "unavailable"
     elif mutation == "cluster_ready_missing":
@@ -239,7 +237,6 @@ def _apply_mutation(
         ("duplicate_hotkey_cluster", ValidationReason.CLUSTER_AMBIGUOUS),
         ("management_cluster", ValidationReason.BINDING_METADATA_INVALID),
         ("internal_cluster", ValidationReason.BINDING_METADATA_INVALID),
-        ("coldkey_mismatch", ValidationReason.BINDING_IDENTITY_MISMATCH),
         ("cluster_inactive", ValidationReason.CLUSTER_NOT_READY),
         ("cluster_ready_missing", ValidationReason.CLUSTER_NOT_READY),
         ("remove_nodes", ValidationReason.NODE_INVENTORY_EMPTY),
@@ -361,11 +358,11 @@ def test_mixed_supported_gpu_models_are_not_a_uniform_inventory():
     assert verdict.reason is ValidationReason.GPU_MODEL_UNSUPPORTED
 
 
-def test_binding_is_hotkey_plus_coldkey_only():
-    """The scoring binding is reduced to the two stable chain identities: a
-    cluster carrying ONLY kubetee.ai/hotkey + kubetee.ai/coldkey (no
-    binding-id, provider-id, generation, netuid, network, origin-fp-prefix,
-    ENROLLED sentinel, or enrollment-uid annotation) is ELIGIBLE in debug."""
+def test_binding_is_hotkey_only():
+    """The scoring binding is the hotkey alone: a cluster carrying ONLY
+    kubetee.ai/hotkey (no coldkey, binding-id, provider-id, generation,
+    netuid, network, origin-fp-prefix, ENROLLED sentinel, or enrollment-uid
+    annotation) is ELIGIBLE in debug."""
     neuron = {"uid": UID, "hotkey": HOTKEY, "coldkey": COLDKEY}
     minimal = {
         "id": "c-miner",
@@ -373,7 +370,6 @@ def test_binding_is_hotkey_plus_coldkey_only():
         "transitioning": "no",
         "labels": {
             "kubetee.ai/hotkey": HOTKEY,
-            "kubetee.ai/coldkey": COLDKEY,
         },
     }
     nodes = {
@@ -428,32 +424,6 @@ def test_dropped_binding_fields_no_longer_suspend():
     assert verdict.status is ValidationStatus.ELIGIBLE
 
 
-def test_missing_coldkey_label_is_identity_mismatch():
-    neuron = {"uid": UID, "hotkey": HOTKEY, "coldkey": COLDKEY}
-    cluster = {
-        "id": "c-miner",
-        "state": "active",
-        "transitioning": "no",
-        "labels": {"kubetee.ai/hotkey": HOTKEY},
-    }
-    verdict = validate_miner(
-        neuron,
-        [cluster],
-        {
-            "c-miner": [
-                {
-                    "id": "c-miner:n1",
-                    "clusterId": "c-miner",
-                    "state": "active",
-                    "transitioning": "no",
-                }
-            ]
-        },
-        InfrastructurePolicy.for_profile(ValidationProfile.DEBUG),
-    )
-    assert verdict.reason is ValidationReason.BINDING_IDENTITY_MISMATCH
-
-
 def test_oversized_gpu_count_is_invalid_instead_of_raising():
     neuron, clusters, nodes = valid_production_inventory()
     nodes["c-miner"][0]["capacity"]["nvidia.com/gpu"] = "9" * 5000
@@ -491,31 +461,6 @@ def test_debug_accepts_one_active_node_without_production_fields():
     )
 
     assert verdict.status is ValidationStatus.ELIGIBLE
-
-
-def test_debug_keeps_binding_identity_strict():
-    neuron = {"uid": UID, "hotkey": HOTKEY, "coldkey": COLDKEY}
-    cluster = _valid_cluster()
-    cluster["labels"]["kubetee.ai/coldkey"] = "5WrongColdkey"
-    nodes = {
-        "c-miner": [
-            {
-                "id": "c-miner:debug",
-                "clusterId": "c-miner",
-                "state": "active",
-                "transitioning": "no",
-            }
-        ]
-    }
-
-    verdict = validate_miner(
-        neuron,
-        [cluster],
-        nodes,
-        InfrastructurePolicy.for_profile(ValidationProfile.DEBUG),
-    )
-
-    assert verdict.reason is ValidationReason.BINDING_IDENTITY_MISMATCH
 
 
 # ---------------------------------------------------------------------------

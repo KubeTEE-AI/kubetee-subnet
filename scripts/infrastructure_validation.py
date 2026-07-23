@@ -490,11 +490,6 @@ def _runtime_handler_ready(nodes: list[dict], required: str) -> bool:
     return True
 
 
-def _valid_binding_value(value: object) -> bool:
-    """A well-formed binding label value: non-empty str, <= 63 chars."""
-    return isinstance(value, str) and bool(value) and len(value) <= 63
-
-
 def validate_miner(
     neuron: dict,
     clusters: list[dict],
@@ -503,15 +498,13 @@ def validate_miner(
 ) -> ValidationVerdict:
     """Evaluate one miner against a complete Rancher/metagraph snapshot.
 
-    The cluster<->miner binding is the miner's on-chain identity: the
-    hotkey (the 1:1 chain<->cluster identifier) plus its paired coldkey. A
-    cluster is the miner's iff exactly one cluster carries
-    ``kubetee.ai/hotkey`` == the neuron hotkey and ``kubetee.ai/coldkey`` ==
-    the neuron coldkey. Enrollment uid, network, netuid, binding-id,
-    provider-id, generation, origin-fp-prefix and the ENROLLED sentinel are
-    no longer part of the scoring binding (the hotkey is sufficient identity;
-    the mutable UID/network churn and the rest were unverified metadata).
-    Both keys also accept the ``kubetee.ai/miner-<x>`` alias.
+    The cluster<->miner binding IS the hotkey: the miner's hotkey is its
+    on-chain identity and the 1:1 chain<->cluster identifier. A cluster is
+    the miner's iff exactly one cluster carries ``kubetee.ai/hotkey`` (or the
+    ``kubetee.ai/miner-hotkey`` alias) == the neuron hotkey. All former
+    binding metadata (coldkey, enrollment-uid, network, netuid, binding-id,
+    provider-id, generation, origin-fp-prefix, the ENROLLED sentinel) is no
+    longer part of the scoring binding.
     """
     if not isinstance(policy, InfrastructurePolicy):
         raise TypeError("policy must be an InfrastructurePolicy")
@@ -541,14 +534,9 @@ def validate_miner(
     if not isinstance(cluster_id, str) or not cluster_id:
         return _suspended(ValidationReason.BINDING_METADATA_INVALID, cluster)
 
-    # Identity binding reduced to the two stable chain identities. The hotkey
-    # already selected this cluster; require the paired coldkey to match the
-    # neuron's coldkey (missing/oversized label or mismatch is an identity
-    # failure).
-    labels = canonicalize_kubetee_keys(cluster["labels"])
-    coldkey = labels.get(COLDKEY_LABEL)
-    if not _valid_binding_value(coldkey) or coldkey != neuron.get("coldkey"):
-        return _suspended(ValidationReason.BINDING_IDENTITY_MISMATCH, cluster)
+    # Identity binding IS the hotkey match above (the unique cluster carrying
+    # kubetee.ai/hotkey == the neuron hotkey). No further label identity is
+    # required; readiness gates follow.
 
     if not _active(cluster):
         return _suspended(ValidationReason.CLUSTER_NOT_READY, cluster)

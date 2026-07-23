@@ -883,13 +883,13 @@ def test_reconciliation_refresh_must_not_precede_cycle_block():
     assert validator._refresh_registered(101) is None
 
 
-@pytest.mark.parametrize("mutation", ["missing_coldkey", "coldkey_mismatch"])
+@pytest.mark.parametrize("mutation", ["cluster_inactive", "no_nodes"])
 def test_complete_binding_failure_scores_only_that_miner_zero(mutation):
     clusters, nodes = active_bob_cluster()
-    if mutation == "missing_coldkey":
-        del clusters[0]["labels"]["kubetee.ai/coldkey"]
+    if mutation == "cluster_inactive":
+        clusters[0]["state"] = "unavailable"
     else:
-        clusters[0]["labels"]["kubetee.ai/coldkey"] = "5WrongColdkey"
+        nodes["c-bob"] = []
     validator, subtensor, *_ = build_validator(
         rancher=FakeRancher(clusters=clusters, nodes_by_cluster=nodes)
     )
@@ -932,20 +932,13 @@ def test_two_miners_can_receive_different_complete_verdicts():
     carol_cluster["id"] = "c-carol"
     carol_cluster["labels"]["kubetee.ai/binding-id"] = "binding-carol"
     carol_cluster["labels"][HOTKEY_LABEL] = CAROL
-    # Carol's cluster coldkey does not match her on-chain coldkey -> she
-    # scores zero via BINDING_IDENTITY_MISMATCH under the hotkey+coldkey
-    # binding (formerly failed via a PENDING binding-status).
-    carol_cluster["labels"]["kubetee.ai/coldkey"] = "5WrongCarolColdkeyFAKE"
+    carol_cluster["labels"]["kubetee.ai/coldkey"] = CAROL_COLDKEY
     carol_cluster["annotations"]["kubetee.ai/enrollment-uid"] = "3"
     clusters.append(carol_cluster)
-    nodes["c-carol"] = [
-        {
-            "id": "c-carol:node-1",
-            "clusterId": "c-carol",
-            "state": "active",
-            "transitioning": "no",
-        }
-    ]
+    # Carol's cluster has no ready node inventory -> she scores zero via
+    # NODE_INVENTORY_EMPTY while bob stays eligible (formerly Carol failed via
+    # a PENDING binding-status, which is no longer a scoring input).
+    nodes["c-carol"] = []
     snapshot = [
         *neurons_triad(),
         {"uid": 3, "hotkey": CAROL, "coldkey": CAROL_COLDKEY},
