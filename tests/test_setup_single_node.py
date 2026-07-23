@@ -736,11 +736,18 @@ def test_wallet_regeneration_source_has_no_obsolete_flag_or_shell_pipeline():
     assert '"sh", "-c"' not in source
 
 
-def test_dockerfile_healthcheck_curls_metrics_with_a_timeout():
+def test_dockerfile_does_not_own_validator_startup_or_healthcheck():
     dockerfile = (_root / "Dockerfile").read_text(encoding="utf-8")
-    assert "curl --fail --silent --show-error --max-time" in dockerfile
-    assert "http://127.0.0.1:9100/metrics" in dockerfile
-    assert 'python -c "import bittensor' not in dockerfile
+    assert "validator_entrypoint.py" not in dockerfile
+    assert "\nCMD " not in dockerfile
+    assert "\nHEALTHCHECK " not in dockerfile
+
+
+def test_validator_module_owns_the_application_entrypoint():
+    validator = (_root / "scripts/validator.py").read_text(encoding="utf-8")
+    assert "def _run_local_bootstrap(" in validator
+    assert "def main(" in validator
+    assert 'if __name__ == "__main__":' in validator
 
 
 class _SnapshotSubnet:

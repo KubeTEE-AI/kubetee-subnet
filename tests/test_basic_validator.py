@@ -60,6 +60,7 @@ from validator import (
     load_config,
     main,
 )
+import validator as validator_module
 from validator_metrics import ValidatorMetrics
 
 OWNER = "5OwnerHotkeyFAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKE"
@@ -73,7 +74,6 @@ CAROL_COLDKEY = "5CarolColdkeyFAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKEFA"
 TOKEN = "token-fake12345:pretendsecretvalue"
 
 BASE_ENV = {
-    "KUBETEE_OWNER_HOTKEY": OWNER,
     "KUBETEE_VALIDATOR_HOTKEY": VALIDATOR,
     "RANCHER_URL": "https://rancher.example.test",
     "RANCHER_BEARER_TOKEN": TOKEN,
@@ -106,9 +106,15 @@ class FakeNeuron:
 
 
 class FakeMetagraph:
-    def __init__(self, neurons: list[FakeNeuron], block: int = 100):
+    def __init__(
+        self,
+        neurons: list[FakeNeuron],
+        block: int = 100,
+        owner_hotkey: str | None = OWNER,
+    ):
         self.neurons = neurons
         self.block = block
+        self.owner_hotkey = owner_hotkey
 
 
 class _FakeBalance:
@@ -124,10 +130,12 @@ class FakeSubnetsNamespace:
         neurons: list[dict],
         metagraph_errors=None,
         calls: list | None = None,
+        owner_hotkey: str | None = OWNER,
     ):
         self._neurons = neurons
         self._metagraph_errors = list(metagraph_errors or [])
         self.calls = calls if calls is not None else []
+        self._owner_hotkey = owner_hotkey
 
     def metagraph(self, netuid: int, block: int | None = None):
         self.calls.append("metagraph")
@@ -141,6 +149,7 @@ class FakeSubnetsNamespace:
                 for n in self._neurons
             ],
             block=100 if block is None else block,
+            owner_hotkey=self._owner_hotkey,
         )
 
 
@@ -158,9 +167,13 @@ class FakeSubtensor:
         set_weights_results=None,
         metagraph_errors=None,
         calls: list | None = None,
+        owner_hotkey: str | None = OWNER,
     ):
         self.subnets = FakeSubnetsNamespace(
-            neurons, metagraph_errors=metagraph_errors, calls=calls
+            neurons,
+            metagraph_errors=metagraph_errors,
+            calls=calls,
+            owner_hotkey=owner_hotkey,
         )
         self.staking = FakeStakingNamespace()
         self.hyperparameters = object()
@@ -352,10 +365,92 @@ def test_from_env_happy_path_pins_plan_defaults():
     assert config.reconcile_min_cycles == 3
     assert config.reconcile_min_seconds == 900.0
     assert config.wallet_name == "alice"
-    assert config.owner_hotkey == OWNER
     assert config.validator_hotkey == VALIDATOR
     assert config.chain_network == "finney"
     assert config.validation_profile is ValidationProfile.DEBUG
+
+
+@pytest.mark.parametrize("profile", [None, ""])
+def test_missing_validation_profile_defaults_to_production(profile):
+    config = ValidatorConfig.from_env(
+        make_env(
+            KUBETEE_VALIDATION_PROFILE=profile,
+            BT_NETWORK="finney",
+            BT_WALLET="validator",
+            BT_WALLET_HOTKEY="default",
+            KUBETEE_SUBNET_NETUID="90",
+        )
+    )
+
+    assert config.validation_profile is ValidationProfile.PRODUCTION
+    assert config.poll_seconds == 60.0
+
+
+def test_owner_hotkey_is_resolved_from_selected_metagraph():
+    config = ValidatorConfig.from_env(make_env())
+    subtensor = FakeSubtensor(neurons_triad(), owner_hotkey=OWNER)
+    validator, subtensor, _, _, _, _ = build_validator(
+        config=config, subtensor=subtensor
+    )
+
+    assert validator.run_cycle() == "weights_set"
+    assert subtensor.set_weights_calls[0]["weights"] == [1.0, 0.0, 0.0]
+
+
+def test_debug_main_runs_local_bootstrap_with_redacted_subprocess(monkeypatch):
+    observed: dict[str, object] = {}
+
+    def fake_run(command, **kwargs):
+        observed["command"] = command
+        observed.update(kwargs)
+        return object()
+
+    monkeypatch.setattr(validator_module.subprocess, "run", fake_run)
+    env = make_env(
+        BT_NETWORK="ws://chain:9944",
+        KUBETEE_OWNER_WALLET="owner",
+    )
+    config = ValidatorConfig.from_env(env)
+
+    validator_module._bootstrap_if_debug(config, env)
+
+    command = observed["command"]
+    assert command[0] == sys.executable
+    assert command[1:3] == ["-u", str(validator_module._SETUP_SCRIPT)]
+    assert command[3:] == [
+        "--netuid",
+        "1",
+        "--owner-wallet",
+        "owner",
+        "--chain-endpoint",
+        "ws://chain:9944",
+    ]
+    assert observed["check"] is True
+    assert observed["capture_output"] is True
+    assert observed["text"] is True
+    assert observed["env"] == env
+
+
+def test_production_main_skips_local_bootstrap(monkeypatch):
+    called = False
+
+    def fail_if_called(*_args, **_kwargs):
+        nonlocal called
+        called = True
+
+    monkeypatch.setattr(validator_module, "_run_local_bootstrap", fail_if_called)
+    env = make_env(
+        KUBETEE_VALIDATION_PROFILE="production",
+        BT_NETWORK="finney",
+        BT_WALLET="validator",
+        BT_WALLET_HOTKEY="default",
+        KUBETEE_SUBNET_NETUID="90",
+    )
+    config = ValidatorConfig.from_env(env)
+
+    validator_module._bootstrap_if_debug(config, env)
+
+    assert called is False
 
 
 @pytest.mark.parametrize(
@@ -363,10 +458,8 @@ def test_from_env_happy_path_pins_plan_defaults():
     [
         "RANCHER_URL",
         "RANCHER_BEARER_TOKEN",
-        "KUBETEE_OWNER_HOTKEY",
         "KUBETEE_VALIDATOR_HOTKEY",
         "KUBETEE_CHAIN_NETWORK",
-        "KUBETEE_VALIDATION_PROFILE",
     ],
 )
 def test_missing_static_config_refuses_to_start(missing):
@@ -456,8 +549,8 @@ def test_production_profile_allows_sixty_second_poll_interval():
     assert config.poll_seconds == 60.0
 
 
-@pytest.mark.parametrize("profile", [None, "", "staging"])
-def test_invalid_or_missing_profile_never_unlocks_debug_poll_interval(profile):
+@pytest.mark.parametrize("profile", ["staging"])
+def test_invalid_profile_never_unlocks_debug_poll_interval(profile):
     """Only a parsed debug enum may unlock the UAT cadence."""
     with pytest.raises(ConfigError) as excinfo:
         ValidatorConfig.from_env(
@@ -490,11 +583,6 @@ def test_invalid_numeric_config_refuses_to_start(var, value):
     assert var in str(excinfo.value)
 
 
-def test_equal_owner_and_validator_hotkeys_refuse_to_start():
-    with pytest.raises(ConfigError):
-        ValidatorConfig.from_env(make_env(KUBETEE_VALIDATOR_HOTKEY=OWNER))
-
-
 @pytest.mark.parametrize(
     "url", ["http://insecure.example", "not-a-url", "ftp://x"]
 )
@@ -520,7 +608,7 @@ def test_rancher_url_must_be_an_origin_without_credentials(url):
     assert "embedded-secret" not in str(excinfo.value)
 
 
-@pytest.mark.parametrize("profile", ["", "DEBUG", "staging"])
+@pytest.mark.parametrize("profile", ["DEBUG", "staging"])
 def test_invalid_validation_profile_refuses_to_start(profile):
     with pytest.raises(ConfigError) as excinfo:
         ValidatorConfig.from_env(make_env(KUBETEE_VALIDATION_PROFILE=profile))
@@ -586,9 +674,8 @@ def test_main_refuses_to_start_without_credentials():
     assert isinstance(cause, ConfigError)
     assert "RANCHER_URL" in str(cause)
     assert "RANCHER_BEARER_TOKEN" in str(cause)
-    assert "KUBETEE_OWNER_HOTKEY" in str(cause)
     assert "KUBETEE_CHAIN_NETWORK" in str(cause)
-    assert "KUBETEE_VALIDATION_PROFILE" in str(cause)
+    assert "KUBETEE_VALIDATION_PROFILE" not in str(cause)
 
 
 # ---------------------------------------------------------------------------
@@ -669,9 +756,10 @@ def test_healthy_miner_gets_share_and_owner_gets_rest():
 def test_metagraph_coldkey_reaches_validator_snapshot():
     validator, subtensor, *_ = build_validator()
 
-    neurons, block = validator._read_neurons(subtensor)
+    neurons, block, owner_hotkey = validator._read_neurons(subtensor)
 
     assert block == 100
+    assert owner_hotkey == OWNER
     assert neurons[2] == {
         "uid": 2,
         "hotkey": BOB,
