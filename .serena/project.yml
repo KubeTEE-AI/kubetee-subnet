@@ -33,7 +33,7 @@ project_name: "kubetee-subnet"
 # When using multiple languages, the first language server that supports a given file will be used for that file.
 # The first language is the default language and the respective language server will be used as a fallback.
 # Note that when using the JetBrains backend, language servers are not used and this list is correspondingly ignored.
-languages:
+language_servers:
 - python
 
 # the encoding used by text files in the project
