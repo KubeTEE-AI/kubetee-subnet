@@ -7,8 +7,8 @@ reconciliation -> scoring -> weights -> log + metrics.
 
 Startup vs runtime failure contract (D14):
 - ALL static configuration is validated fail-fast at startup - a missing or
-  malformed value (share, poll interval, max skips, reconcile params, owner
-  and validator hotkeys, RANCHER_URL/RANCHER_BEARER_TOKEN) refuses to start
+  malformed value (share, poll interval, max skips, reconcile params, the
+  validator hotkey, RANCHER_URL/RANCHER_BEARER_TOKEN) refuses to start
   with a clear error naming the variable, never echoing a secret.
 - Once started the process NEVER exits on a runtime error: Rancher outages,
   rejected set_weights, and unexpected in-cycle exceptions all degrade to
@@ -33,6 +33,8 @@ import logging
 import math
 import os
 import pathlib
+import subprocess
+import sys
 import time
 from collections.abc import Callable, Mapping
 from numbers import Integral
@@ -66,6 +68,7 @@ _LOG = logging.getLogger("basic_validator")
 DEFAULT_NETWORK = "ws://chain:9944"
 DEFAULT_WALLET = "alice"  # the validator signing identity (D7)
 DEFAULT_NETUID_FILE = "/app/.kubetee_netuid"
+_SETUP_SCRIPT = pathlib.Path(__file__).with_name("setup_single_node.py")
 MIN_POLL_SECONDS = 60.0
 DEBUG_MIN_POLL_SECONDS = 5.0
 
@@ -116,7 +119,6 @@ class ValidatorConfig:
     max_consecutive_skips: int
     reconcile_min_cycles: int
     reconcile_min_seconds: float
-    owner_hotkey: str
     validator_hotkey: str
     chain_network: str
     validation_profile: ValidationProfile
@@ -177,16 +179,18 @@ class ValidatorConfig:
                 return default
             return value
 
-        profile_raw = require("KUBETEE_VALIDATION_PROFILE")
+        profile_raw = (
+            str(env.get("KUBETEE_VALIDATION_PROFILE") or "").strip()
+            or ValidationProfile.PRODUCTION.value
+        )
         validation_profile = ValidationProfile.PRODUCTION
-        if profile_raw:
-            try:
-                validation_profile = ValidationProfile(profile_raw)
-            except ValueError:
-                fail(
-                    "KUBETEE_VALIDATION_PROFILE",
-                    "must be production or debug",
-                )
+        try:
+            validation_profile = ValidationProfile(profile_raw)
+        except ValueError:
+            fail(
+                "KUBETEE_VALIDATION_PROFILE",
+                "must be production or debug",
+            )
 
         raw_share = str(env.get("KUBETEE_MINER_SHARE") or "0.10").strip()
         miner_share = 0.10
@@ -212,17 +216,7 @@ class ValidatorConfig:
         netuid = parse_int("KUBETEE_SUBNET_NETUID", 1, 0)
         metrics_port = parse_int("KUBETEE_METRICS_PORT", 9100, 1, 65535)
 
-        owner_hotkey = require("KUBETEE_OWNER_HOTKEY")
         validator_hotkey = require("KUBETEE_VALIDATOR_HOTKEY")
-        if (
-            owner_hotkey
-            and validator_hotkey
-            and owner_hotkey == validator_hotkey
-        ):
-            fail(
-                "KUBETEE_VALIDATOR_HOTKEY",
-                "must differ from KUBETEE_OWNER_HOTKEY",
-            )
 
         chain_network = require("KUBETEE_CHAIN_NETWORK")
 
@@ -261,7 +255,6 @@ class ValidatorConfig:
             max_consecutive_skips=max_skips,
             reconcile_min_cycles=reconcile_cycles,
             reconcile_min_seconds=reconcile_seconds,
-            owner_hotkey=owner_hotkey,
             validator_hotkey=validator_hotkey,
             chain_network=chain_network,
             validation_profile=validation_profile,
@@ -289,6 +282,41 @@ def load_config(env: Mapping[str, str] | None = None) -> ValidatorConfig:
     return ValidatorConfig.from_env(data)
 
 
+def _run_local_bootstrap(env: Mapping[str, str], netuid: int) -> None:
+    """Run the disposable local-chain setup without exposing its output."""
+    runtime_env = dict(env)
+    setup_cmd = [
+        sys.executable,
+        "-u",
+        str(_SETUP_SCRIPT),
+        "--netuid",
+        str(netuid),
+        "--owner-wallet",
+        runtime_env.get("KUBETEE_OWNER_WALLET", "owner"),
+        "--chain-endpoint",
+        runtime_env.get("BT_NETWORK", DEFAULT_NETWORK),
+    ]
+    try:
+        subprocess.run(
+            setup_cmd,
+            check=True,
+            env=runtime_env,
+            capture_output=True,
+            text=True,
+        )
+    except (subprocess.CalledProcessError, OSError):
+        _LOG.error("validator bootstrap failed")
+        raise SystemExit(1) from None
+
+
+def _bootstrap_if_debug(
+    config: ValidatorConfig, env: Mapping[str, str]
+) -> None:
+    """Bootstrap only the disposable debug/local validator environment."""
+    if config.validation_profile is ValidationProfile.DEBUG:
+        _run_local_bootstrap(env, config.netuid)
+
+
 class BasicValidator:
     """The validator loop. Every boundary (chain, Rancher, metrics, clock)
     is injected; the loop owns no secrets besides the redaction pattern."""
@@ -314,11 +342,8 @@ class BasicValidator:
         self._subtensor = None
         self._chain_dirty = False
         self._last_metagraph_block: int | None = None
-        self._cycle_config = CycleConfig(
-            owner_hotkey=config.owner_hotkey,
-            validator_hotkey=config.validator_hotkey,
-            miner_share=config.miner_share,
-        )
+        self._validator_hotkey = config.validator_hotkey
+        self._miner_share = config.miner_share
         self._infrastructure_policy = InfrastructurePolicy.for_profile(
             config.validation_profile
         )
@@ -335,7 +360,9 @@ class BasicValidator:
             self._chain_dirty = False
         return self._subtensor
 
-    def _read_neurons(self, subtensor) -> tuple[list[dict] | None, int | None]:
+    def _read_neurons(
+        self, subtensor
+    ) -> tuple[list[dict] | None, int | None, str | None]:
         try:
             head = subtensor.block()
             if isinstance(head, bool) or not isinstance(head, int) or head < 0:
@@ -367,13 +394,29 @@ class BasicValidator:
                 or block != head
             ):
                 raise ValueError("metagraph is not pinned to the chain head")
-            return neurons, block
+            owner_hotkey = getattr(meta, "owner_hotkey", None)
+            if not isinstance(owner_hotkey, str) or not owner_hotkey.strip():
+                return neurons, block, None
+            return neurons, block, owner_hotkey.strip()
         # The injected chain SDK does not expose one stable transport exception.
         # pylint: disable-next=broad-exception-caught
         except Exception:  # fail closed; never reflect remote exception text
             self._chain_dirty = True
             self._log.warning("metagraph read failed")
-            return None, None
+            return None, None, None
+
+    def _cycle_config(self, owner_hotkey: str | None) -> CycleConfig | None:
+        """Build cycle identity config from the chain-derived owner key."""
+        if not isinstance(owner_hotkey, str) or not owner_hotkey.strip():
+            return None
+        try:
+            return CycleConfig(
+                owner_hotkey=owner_hotkey,
+                validator_hotkey=self._validator_hotkey,
+                miner_share=self._miner_share,
+            )
+        except ValueError:
+            return None
 
     def _refresh_registered(
         self, minimum_block: int | None = None
@@ -381,12 +424,15 @@ class BasicValidator:
         """Fresh metagraph read for the reconciliation pre-delete recheck."""
         if self._subtensor is None:
             return None
-        neurons, block = self._read_neurons(self._subtensor)
-        if neurons is None or block is None:
+        neurons, block, owner_hotkey = self._read_neurons(self._subtensor)
+        if neurons is None or block is None or owner_hotkey is None:
             return None
         if minimum_block is not None and block < minimum_block:
             return None
-        identity_check = decide_cycle(neurons, {}, self._cycle_config)
+        cycle_config = self._cycle_config(owner_hotkey)
+        if cycle_config is None:
+            return None
+        identity_check = decide_cycle(neurons, {}, cycle_config)
         if isinstance(identity_check, SkipCycle):
             return None
         return {n["hotkey"] for n in neurons}
@@ -458,14 +504,24 @@ class BasicValidator:
         subtensor = self._ensure_subtensor()
 
         # 1. metagraph (identity preconditions re-checked every cycle)
-        neurons, block = self._read_neurons(subtensor)
+        neurons, block, owner_hotkey = self._read_neurons(subtensor)
         if neurons is None:
             self._reconciler.run_cycle(
                 None, None, None, self._refresh_registered
             )
             self._record_skip(SkipReason.METAGRAPH_UNAVAILABLE)
             return "skip"
-        identity_check = decide_cycle(neurons, {}, self._cycle_config)
+        cycle_config = self._cycle_config(owner_hotkey)
+        if cycle_config is None:
+            self._reconciler.run_cycle(
+                None,
+                None,
+                block,
+                self._refresh_registered,
+            )
+            self._record_skip(SkipReason.OWNER_UNRESOLVED)
+            return "skip"
+        identity_check = decide_cycle(neurons, {}, cycle_config)
         if isinstance(identity_check, SkipCycle):
             self._reconciler.run_cycle(
                 None,
@@ -490,8 +546,7 @@ class BasicValidator:
         self._last_metagraph_block = block
         registered = {n["hotkey"] for n in neurons}
         miners = sorted(
-            registered
-            - {self._config.owner_hotkey, self._config.validator_hotkey}
+            registered - {owner_hotkey, self._config.validator_hotkey}
         )
 
         # 2. Rancher enumeration (complete pagination inside the client)
@@ -530,7 +585,7 @@ class BasicValidator:
         scores = {
             hotkey: verdict.score for hotkey, verdict in verdicts.items()
         }
-        decision = decide_cycle(neurons, scores, self._cycle_config)
+        decision = decide_cycle(neurons, scores, cycle_config)
         if isinstance(decision, SkipCycle):
             self._record_skip(decision.reason)
             return "skip"
@@ -613,8 +668,13 @@ def main(env: Mapping[str, str] | None = None) -> None:
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
+    runtime_env = dict(os.environ if env is None else env)
     try:
-        config = load_config(env)
+        config = load_config(runtime_env)
+        _bootstrap_if_debug(config, runtime_env)
+        # setup_single_node.py writes the netuid actually owned by the local
+        # process; reload so the validator and reconciliation use that value.
+        config = load_config(runtime_env)
     except ConfigError as error:
         _LOG.error("refusing to start: %s", error)
         raise SystemExit(2) from error

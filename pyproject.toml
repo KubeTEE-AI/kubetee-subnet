@@ -16,7 +16,6 @@ dependencies = [
 
 [project.scripts]
 kubetee-validator = "scripts.validator:main"
-kubetee-validator-entrypoint = "scripts.validator_entrypoint:main"
 kubetee-print-subnet-stats = "scripts.print_subnet_stats:main"
 kubetee-setup-single-node = "scripts.setup_single_node:main"
 

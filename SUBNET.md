@@ -23,9 +23,9 @@ an unexpired KeyLease; those remain independent serving gates.
 Each cycle (every `KUBETEE_POLL_SECONDS`, minimum 60s) the validator:
 
 1. **Reads the metagraph** and discovers miners: every registered hotkey
-   that is not one of our own subnet keys (`KUBETEE_OWNER_HOTKEY`,
-   `KUBETEE_VALIDATOR_HOTKEY`). UIDs are resolved by hotkey SS58 — there is
-   no fixed-UID configuration.
+   that is not the chain-reported subnet owner or our configured
+   `KUBETEE_VALIDATOR_HOTKEY`. UIDs are resolved by hotkey SS58 — there is no
+   fixed-UID or manually configured owner-hotkey input.
 2. **Enumerates Rancher** (GET-only, complete pagination): finds each
    miner's unique cluster by the canonical `kubetee.ai/hotkey` binding label
    and reads its nodes.
@@ -83,7 +83,8 @@ docs and owner decision D13. What the validator/UAT verifies is exactly:
 - the hyperparameters we set are in place, **where the chain allows
   reading/setting them**, and
 - the weights target the **proper owner-controlled key** (the owner UID's
-  hotkey equals `KUBETEE_OWNER_HOTKEY`).
+  hotkey equals the owner hotkey reported by the selected netuid's
+  metagraph).
 
 ### Localnet readiness sequence (D1)
 
@@ -133,9 +134,9 @@ to true read-only access.
 
 - **Startup (fail-fast):** every static config value is validated before
   the loop starts — `KUBETEE_MINER_SHARE`, `KUBETEE_POLL_SECONDS` (≥ 60),
-  `KUBETEE_MAX_CONSECUTIVE_SKIPS`, reconcile parameters, owner + validator
-  hotkeys (present, distinct), exact `KUBETEE_VALIDATION_PROFILE`
-  (`production` or `debug`), `KUBETEE_CHAIN_NETWORK`, and
+  `KUBETEE_MAX_CONSECUTIVE_SKIPS`, reconcile parameters, the validator
+  hotkey (present), `KUBETEE_VALIDATION_PROFILE` (defaults to `production`;
+  set `debug` explicitly only for local UAT), `KUBETEE_CHAIN_NETWORK`, and
   `RANCHER_URL`/`RANCHER_BEARER_TOKEN` (present, well-formed https origin).
   Any violation → the process refuses to start with a clear error naming
   every offending variable (values of secrets are never echoed).
@@ -225,7 +226,7 @@ This gives you a fast local chain + the validator (and optional miners) with ful
   (copy `.env.example`, never commit it) only to override tunables or to
   point the validator at an **external** chain/Rancher. Root
   `make subnet-external` requires the chain network/netuid, existing signing
-  wallet path/name/hotkey, owner/validator hotkeys, `RANCHER_URL`, token, CA
+  wallet path/name/hotkey, validator hotkey, `RANCHER_URL`, token, CA
   file, and binding-domain `KUBETEE_CHAIN_NETWORK`. External mode selects the
   `production` policy; the self-contained stack explicitly selects `debug`.
   The validator still refuses to start without all required values (by design,
@@ -251,7 +252,11 @@ docker compose up -d --build
 # Logs: http://localhost:8080 (dozzle)
 ```
 
-The `kubetee-subnet` repo provides the validator container image (`Dockerfile`); the compose file wires it together with Rancher, localnet chain, and Dozzle.
+The `kubetee-subnet` repo provides the validator image (`Dockerfile`); the
+root Compose files own the startup command, bootstrap sequencing, and metrics
+healthcheck. The local Compose command wires the image together with Rancher,
+the localnet chain, and Dozzle; the external command runs `scripts/validator.py`
+directly.
 
 For standalone development without compose, see
 [Running the validator manually (host)](#4-running-the-validator-manually-host)
@@ -260,7 +265,7 @@ below.
 Services (all using deterministic pinned dev accounts, see `keys/README.md`):
 
 - `chain`: subtensor-localnet (FAST_BLOCKS for fast testing)
-- `validator`: entrypoint creates a unique subnet, registers the
+- `validator`: the local Compose command creates a unique subnet, registers the
   **owner/alice/bob** triad, checks ownership, activates emissions, stakes
   **alice only** by 1 TAO, attempts conviction/recycle hypers, then runs
   `validator.py`
@@ -303,11 +308,16 @@ What it does:
 
 ### 4. Running the validator manually (host)
 
+`scripts/validator.py` is the validator entrypoint. In `debug` mode it runs
+the disposable local `setup_single_node.py` bootstrap before starting the
+validator loop. In `production` mode it never creates a subnet, registers
+wallets, stakes, or changes chain hyperparameters; provide the already
+registered validator and Rancher configuration explicitly.
+
 ```bash
 BT_NETWORK=finney \
 KUBETEE_SUBNET_NETUID=1 \
 BT_WALLET=alice \
-KUBETEE_OWNER_HOTKEY=5FLbZav21bAsjH5SAdmJZwTP5C4b3bcaaWqC6GSmGmsbzUJ9 \
 KUBETEE_VALIDATOR_HOTKEY=5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY \
 RANCHER_URL=... RANCHER_BEARER_TOKEN=... RANCHER_CA_FILE=/path/to/ca.crt \
 KUBETEE_CHAIN_NETWORK=finney KUBETEE_VALIDATION_PROFILE=production \

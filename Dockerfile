@@ -36,13 +36,5 @@ ENV PATH="/usr/local/bin:${PATH}"
 # Copy source
 COPY . .
 
-# Default: run the validator container entrypoint.
-# It first executes btcli registration + hyperparam setup (conviction + recycle,
-# owner/alice/bob triad), then execs the basic validator (alice signs
-# set_weights; Rancher-scored miner share, owner recycle split).
-# This matches the desired flow: "first run btcli commands, once all is set then run validator".
-CMD ["python", "scripts/validator_entrypoint.py"]
-
-# Health for compose
-HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-  CMD curl --fail --silent --show-error --max-time 5 http://127.0.0.1:9100/metrics || exit 1
+# Startup commands and health checks belong to the owning Docker Compose
+# deployment. The application entry point is scripts/validator.py::main.
