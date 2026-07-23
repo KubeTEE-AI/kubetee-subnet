@@ -31,7 +31,7 @@ def render_context(extra: dict[str, Any]) -> str:
 
 
 def _format_with_context(record: dict[str, Any]) -> str:
-    base = "{time:YYYY-MM-DD HH:mm:ss.SSS} {level} {message}"
+    base = "{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {message}"
     if record["extra"]:
         # Pre-render and escape braces: the returned string is a loguru
         # format template, and dict/list values contain literal braces.
