@@ -37,9 +37,10 @@ Result:
   `5FLbZav21bAsjH5SAdmJZwTP5C4b3bcaaWqC6GSmGmsbzUJ9`
 - First registration on a fresh subnet tends to land on a stable UID
   (commonly 0 for the creator).
-- UIDs are resolved from the metagraph by hotkey SS58
-  (`KUBETEE_OWNER_HOTKEY` / `KUBETEE_VALIDATOR_HOTKEY` in compose) — there
-  is no `TARGET_UID` anymore.
+- UIDs are resolved from the selected netuid's metagraph by hotkey SS58. The
+  validator hotkey is configured explicitly as `KUBETEE_VALIDATOR_HOTKEY`; the
+  subnet owner hotkey is read from the metagraph — there is no
+  `KUBETEE_OWNER_HOTKEY` or `TARGET_UID` anymore.
 - The validator container entrypoint + setup is fully deterministic.
 
 ## How it works here

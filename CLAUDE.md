@@ -63,7 +63,12 @@ cd ..
 docker compose up -d --build
 # Logs: http://localhost:8080 (dozzle)
 ```
-`scripts/validator_entrypoint.py` bootstraps the subnet via `scripts/setup_single_node.py`, then execs `scripts/validator.py`, which reads `RANCHER_URL` / `RANCHER_BEARER_TOKEN` / optional transport-scoped `RANCHER_CA_FILE` / `KUBETEE_*` from the environment and fails fast on missing/invalid config.
+Compose owns the container command: the local stack bootstraps the subnet via
+`scripts/setup_single_node.py` and then execs `scripts/validator.py`; the
+external stack runs `scripts/validator.py` directly. The validator reads
+`RANCHER_URL` / `RANCHER_BEARER_TOKEN` / optional transport-scoped
+`RANCHER_CA_FILE` / `KUBETEE_*` from the environment and fails fast on
+missing/invalid config.
 
 ### Local Development (Staging)
 
@@ -129,12 +134,8 @@ workload identity, and KeyLease feeds remain roadmap dimensions.
 
 ```
 Entry Points (scripts/)
-  └── validator_entrypoint.py - Container entrypoint (setup → exec validator)
-        ↓
-Setup (scripts/setup_single_node.py)
-  └── btcli bootstrap: subnet, owner/alice/bob triad, stake, emissions, conviction/recycle
-        ↓
-Validator Loop (scripts/validator.py) — per cycle:
+  ├── setup_single_node.py - Local Compose bootstrap: subnet, owner/alice/bob triad, stake, emissions, conviction/recycle
+  └── validator.py - Compose-launched validator process and main loop:
   ├── metagraph read (chain_state.py)
   ├── Rancher v3 enumeration (rancher_client.py) — GET-only, fail-closed pagination
   ├── reconciliation (reconciliation.py) — guarded deregistration on sustained absence
@@ -192,8 +193,7 @@ Validators read cluster metrics and information from the **Rancher v3 REST API**
 ### Key Files and Locations
 
 **Entry Points:**
-- `scripts/validator_entrypoint.py` - Container entrypoint: runs `setup_single_node.py` (btcli bootstrap) then execs the validator
-- `scripts/validator.py` - Validator main loop (g004): metagraph → Rancher enumeration → reconciliation → scoring → set_weights, with fail-fast startup and degraded-mode skip/backoff
+- `scripts/validator.py` - Validator process entry point and main loop (g004): metagraph → Rancher enumeration → reconciliation → scoring → set_weights, with fail-fast startup and degraded-mode skip/backoff
 
 **Core Scoring & Reconciliation:**
 - `scripts/infrastructure_validation.py` - Pure canonical-binding and infrastructure-readiness policy
