@@ -7,6 +7,7 @@ import re
 
 ROOT = pathlib.Path(__file__).parent.parent
 GUIDE = ROOT / "docs" / "RUNNING_A_VALIDATOR.md"
+README = ROOT / "README.md"
 
 
 def test_operations_guide_uses_a_direct_mainnet_container():
@@ -24,6 +25,31 @@ def test_operations_guide_uses_a_direct_mainnet_container():
     assert "python -u scripts/validator.py" in text
     assert "docker compose" not in text
     assert "make subnet" not in text
+
+
+def test_public_docs_explain_both_enrollment_modes_without_private_controls():
+    text = README.read_text(encoding="utf-8")
+    guide = GUIDE.read_text(encoding="utf-8")
+
+    assert "### Enrollment operating modes" in text
+    assert "Permissionless" in text
+    assert "Operator-bound" in text
+    assert "Private platform" in text
+    assert "## Enrollment operating mode" in guide
+    assert "permissionless" in guide
+    assert "operator-bound" in guide
+    assert "Existing operator-bound clusters remain eligible" in guide
+
+    public_section = text.split("### Enrollment operating modes", 1)[1].split(
+        "\n## ", 1
+    )[0]
+    guide_section = guide.split("## Enrollment operating mode", 1)[1].split(
+        "\n## ", 1
+    )[0]
+    for section in (public_section, guide_section):
+        assert "-enrollment-mode" not in section
+        assert "RANCHER_BEARER_TOKEN" not in section
+        assert "/shared/rancher-ca.crt" not in section
 
 
 def test_operations_guide_records_the_public_mainnet_snapshot_defaults():
