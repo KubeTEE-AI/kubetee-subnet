@@ -213,6 +213,16 @@ class ReconciliationEngine:
             # for deregistration candidacy — the deletion guards below
             # (valid id + canonical uuid + not internal/protected) plus the
             # absence window and the two pre-delete rechecks remain.
+            #
+            # DEPLOYMENT INVARIANT (safety-critical): the netuid is a
+            # system-wide singleton and this validator's Rancher token sees
+            # only clusters for that one subnet. Absence is judged against the
+            # configured netuid's metagraph (the registered set passed in by
+            # validator.py). A hotkey-labelled cluster whose hotkey is absent
+            # from that metagraph is therefore a genuinely departed miner. If
+            # a single Rancher were ever shared across multiple netuids, this
+            # would need an explicit kubetee.ai/netuid scope guard restored
+            # here to avoid reaping another subnet's clusters.
             hotkey = _cluster_hotkey(labels)
             if not isinstance(hotkey, str) or not hotkey:
                 continue  # unlabeled: structurally out of reach
