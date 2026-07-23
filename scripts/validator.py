@@ -310,8 +310,24 @@ def _run_local_bootstrap(env: Mapping[str, str], netuid: int) -> None:
             capture_output=True,
             text=True,
         )
-    except (subprocess.CalledProcessError, OSError):
-        _LOG.error("validator bootstrap failed")
+    except subprocess.CalledProcessError as error:
+        # Debug-only path with pinned public dev seeds; setup_single_node
+        # redacts seed-bearing command echoes, so its failure output is safe
+        # to surface for diagnosis.
+        _LOG.opt(exception=True).error(
+            "validator bootstrap failed",
+            extra={
+                "returncode": error.returncode,
+                "stdout_tail": (error.stdout or "")[-2000:],
+                "stderr_tail": (error.stderr or "")[-2000:],
+            },
+        )
+        raise SystemExit(1) from None
+    except OSError:
+        _LOG.opt(exception=True).error(
+            "validator bootstrap failed to launch",
+            extra={"command": setup_cmd},
+        )
         raise SystemExit(1) from None
 
 

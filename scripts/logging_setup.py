@@ -37,7 +37,11 @@ def _format_with_context(record: dict[str, Any]) -> str:
         # format template, and dict/list values contain literal braces.
         context = render_context(record["extra"])
         escaped = context.replace("{", "{{").replace("}", "}}")
-        return base + " | " + escaped + "\n"
+        base = base + " | " + escaped
+    if record["exception"]:
+        # A callable format must request the traceback explicitly; loguru
+        # only auto-appends it for plain string formats.
+        return base + "\n{exception}\n"
     return base + "\n"
 
 
