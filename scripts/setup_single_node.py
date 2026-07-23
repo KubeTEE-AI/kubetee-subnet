@@ -185,7 +185,7 @@ def _regenerate_wallet_key(
     if dry_run:
         return
 
-    execution_failed = False
+    result = None
     try:
         result = subprocess.run(
             command,
@@ -196,8 +196,28 @@ def _regenerate_wallet_key(
         )
     # Normalize every launch-layer failure without exposing seed-bearing data.
     except Exception:  # pylint: disable=broad-exception-caught
-        execution_failed = True
-    if execution_failed or result.returncode != 0:
+        # Deliberately no exception/traceback here: the launch error can
+        # carry seed-bearing data (tested contract).
+        logger.error(
+            "wallet key regeneration launch failed",
+            extra={"key_kind": key_kind, "wallet": name},
+        )
+    if result is None or result.returncode != 0:
+
+        def _redact(text: str) -> str:
+            return (text or "").replace(seed, "<redacted-seed>")
+
+        if result is not None:
+            logger.error(
+                "wallet key regeneration failed",
+                extra={
+                    "key_kind": key_kind,
+                    "wallet": name,
+                    "returncode": result.returncode,
+                    "stdout_tail": _redact(result.stdout)[-1000:],
+                    "stderr_tail": _redact(result.stderr)[-1000:],
+                },
+            )
         raise RuntimeError(f"{key_kind} regeneration failed")
 
 

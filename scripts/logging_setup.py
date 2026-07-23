@@ -33,10 +33,14 @@ def render_context(extra: dict[str, Any]) -> str:
 def _format_with_context(record: dict[str, Any]) -> str:
     base = "{time:YYYY-MM-DD HH:mm:ss.SSS} | {level} | {message}"
     if record["extra"]:
-        # Pre-render and escape braces: the returned string is a loguru
-        # format template, and dict/list values contain literal braces.
+        # Pre-render and escape: the returned string is a loguru format
+        # template, so literal braces must be doubled and "<" escaped —
+        # loguru otherwise parses substrings like "<redacted-seed>" as
+        # color markup tags and the handler errors out.
         context = render_context(record["extra"])
-        escaped = context.replace("{", "{{").replace("}", "}}")
+        escaped = (
+            context.replace("{", "{{").replace("}", "}}").replace("<", "\\<")
+        )
         base = base + " | " + escaped
     if record["exception"]:
         # A callable format must request the traceback explicitly; loguru
@@ -50,7 +54,15 @@ def configure_logging(level: str = "INFO") -> None:
     logger.remove()
     logger.configure(patcher=_flatten_extra_kwarg)
     logger.add(
-        sys.stderr,
+        # Resolve sys.stderr at write time: binding the stream object here
+        # pins whatever stderr replacement (e.g. pytest capsys) is active
+        # when configure_logging runs, and writing to it later fails —
+        # loguru's handler-error dump would then echo in-flight exception
+        # chains, defeating redaction.
+        lambda message: sys.stderr.write(message),
         format=_format_with_context,
         level=level,
+        # Never render local variable values into tracebacks: they can
+        # contain seeds/bearer tokens (redaction contract, AC5).
+        diagnose=False,
     )
