@@ -17,6 +17,7 @@ from infrastructure_validation import (
     ValidationReason,
     ValidationStatus,
     ValidationVerdict,
+    canonicalize_kubetee_keys,
     parse_cpu_cores,
     parse_memory_bytes,
     validate_miner,
@@ -489,3 +490,64 @@ def test_debug_keeps_binding_identity_strict():
     )
 
     assert verdict.reason is ValidationReason.BINDING_IDENTITY_MISMATCH
+
+
+# ---------------------------------------------------------------------------
+# kubetee.ai/miner-<x> prefix tolerance: accept both the canonical
+# kubetee.ai/<x> and the kubetee.ai/miner-<x> alias.
+# ---------------------------------------------------------------------------
+
+
+def test_canonicalize_exposes_miner_alias_as_canonical():
+    out = canonicalize_kubetee_keys(
+        {"kubetee.ai/miner-hotkey": "H", "kubetee.ai/miner-coldkey": "C"}
+    )
+    assert out["kubetee.ai/hotkey"] == "H"
+    assert out["kubetee.ai/coldkey"] == "C"
+    # original alias key is preserved too
+    assert out["kubetee.ai/miner-hotkey"] == "H"
+
+
+def test_canonicalize_canonical_key_wins_over_alias():
+    out = canonicalize_kubetee_keys(
+        {"kubetee.ai/hotkey": "REAL", "kubetee.ai/miner-hotkey": "ALIAS"}
+    )
+    assert out["kubetee.ai/hotkey"] == "REAL"
+
+
+def test_canonicalize_passes_through_unrelated_and_non_kubetee_keys():
+    out = canonicalize_kubetee_keys(
+        {"environment": "staging", "kubetee.ai/city": "oakland"}
+    )
+    assert out == {"environment": "staging", "kubetee.ai/city": "oakland"}
+
+
+def test_canonicalize_non_dict_is_empty_fail_closed():
+    assert canonicalize_kubetee_keys(None) == {}
+    assert canonicalize_kubetee_keys("nope") == {}
+
+
+def _miner_prefixed(cluster: dict) -> dict:
+    """Rewrite the identity labels of a valid cluster to the miner- alias."""
+    labels = cluster["labels"]
+    for canonical in ("kubetee.ai/hotkey", "kubetee.ai/coldkey"):
+        suffix = canonical[len("kubetee.ai/") :]
+        labels["kubetee.ai/miner-" + suffix] = labels.pop(canonical)
+    return cluster
+
+
+def test_validate_miner_accepts_miner_prefixed_identity_labels():
+    """A cluster carrying kubetee.ai/miner-hotkey / miner-coldkey (rest
+    canonical) still selects and validates as ELIGIBLE in debug."""
+    neuron, clusters, nodes = valid_production_inventory()
+    _miner_prefixed(clusters[0])
+    verdict = validate_miner(
+        neuron,
+        clusters,
+        nodes,
+        NETUID,
+        NETWORK,
+        InfrastructurePolicy.for_profile(ValidationProfile.DEBUG),
+    )
+    assert verdict.status is ValidationStatus.ELIGIBLE
+    assert verdict.reason is ValidationReason.ELIGIBLE

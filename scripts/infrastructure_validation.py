@@ -23,6 +23,34 @@ NETWORK_LABEL = "kubetee.ai/network"
 ORIGIN_FP_PREFIX_LABEL = "kubetee.ai/origin-fp-prefix"
 ENROLLMENT_UID_ANNOTATION = "kubetee.ai/enrollment-uid"
 
+_KUBETEE_NAMESPACE = "kubetee.ai/"
+_MINER_ALIAS_PREFIX = "miner-"
+
+
+def canonicalize_kubetee_keys(mapping: object) -> dict:
+    """Return a copy of a Rancher labels/annotations map that also exposes
+    every ``kubetee.ai/miner-<suffix>`` key under the canonical
+    ``kubetee.ai/<suffix>``.
+
+    Provisioners may label a cluster with either the canonical binding keys
+    or a ``miner-``-prefixed alias (e.g. ``kubetee.ai/miner-hotkey``); both
+    forms resolve to the same binding field. A canonical key already present
+    always wins over an alias. Non-``kubetee.ai/`` keys pass through
+    untouched, and a non-dict input yields an empty dict (fail-closed).
+    """
+    if not isinstance(mapping, dict):
+        return {}
+    canonical = dict(mapping)
+    for key, value in mapping.items():
+        if not isinstance(key, str) or not key.startswith(_KUBETEE_NAMESPACE):
+            continue
+        suffix = key[len(_KUBETEE_NAMESPACE) :]
+        if suffix.startswith(_MINER_ALIAS_PREFIX):
+            aliased = _KUBETEE_NAMESPACE + suffix[len(_MINER_ALIAS_PREFIX) :]
+            canonical.setdefault(aliased, value)
+    return canonical
+
+
 _CPU_QUANTITY = re.compile(r"^((?:0|[1-9][0-9]*)(?:\.[0-9]+)?)(m)?$")
 _MEMORY_QUANTITY = re.compile(
     r"^((?:0|[1-9][0-9]*)(?:\.[0-9]+)?)(Ki|Mi|Gi|Ti|K|M|G|T)?$"
@@ -234,6 +262,8 @@ def _binding_metadata(cluster: dict) -> _BindingMetadata | None:
         return None
     if not isinstance(labels, dict) or not isinstance(annotations, dict):
         return None
+    labels = canonicalize_kubetee_keys(labels)
+    annotations = canonicalize_kubetee_keys(annotations)
 
     values: dict[str, str] = {}
     for key in _REQUIRED_BINDING_LABELS:
@@ -322,7 +352,8 @@ def _binding_id_count(binding_id: str, clusters: list[dict]) -> int:
         for cluster in clusters
         if isinstance(cluster, dict)
         and isinstance(cluster.get("labels"), dict)
-        and cluster["labels"].get(BINDING_ID_LABEL) == binding_id
+        and canonicalize_kubetee_keys(cluster["labels"]).get(BINDING_ID_LABEL)
+        == binding_id
     )
 
 
@@ -488,7 +519,8 @@ def validate_miner(
         for cluster in clusters
         if isinstance(cluster, dict)
         and isinstance(cluster.get("labels"), dict)
-        and cluster["labels"].get(HOTKEY_LABEL) == hotkey
+        and canonicalize_kubetee_keys(cluster["labels"]).get(HOTKEY_LABEL)
+        == hotkey
     ]
     if not matches:
         return _suspended(ValidationReason.CLUSTER_MISSING)

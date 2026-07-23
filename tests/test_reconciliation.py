@@ -833,3 +833,27 @@ def test_evidence_bundle_never_contains_raw_labels_dump_or_state_payload():
     ]
     assert "labels" not in bundle
     assert "state" not in bundle
+
+
+def test_miner_prefixed_hotkey_cluster_is_scored_but_never_auto_deleted():
+    """Deliberate posture: the validator accepts kubetee.ai/miner-hotkey as a
+    scoring alias (infrastructure_validation.canonicalize_kubetee_keys), but the
+    guarded deletion path extracts the hotkey via the RAW kubetee.ai/hotkey key.
+    A cluster labeled only with the miner- alias therefore yields no hotkey for
+    reconciliation and is never a deletion candidate — hand-provisioned staging
+    clusters stay immune to the reaper even though they score."""
+    engine, client, _, clock, _ = make_engine(min_cycles=1, min_seconds=0)
+    aliased = cluster("c-aliased")
+    aliased["labels"]["kubetee.ai/miner-hotkey"] = aliased["labels"].pop(LABEL)
+    client.clusters["c-aliased"] = aliased
+
+    for offset in range(3):
+        engine.run_cycle(
+            registered_hotkeys={BOB},  # GONE is absent from the metagraph
+            clusters=[aliased],
+            metagraph_block=BLOCK + offset,
+            refresh_registered=lambda _minimum_block: set(),
+        )
+        clock.advance(1000)
+
+    assert client.deleted == []
