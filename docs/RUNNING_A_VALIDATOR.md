@@ -5,6 +5,15 @@ not create a subnet, hold stake custody, or administer Rancher. Keep those
 responsibilities with the operator and their approved Bittensor and
 infrastructure workflows.
 
+## Enrollment operating mode
+
+The subnet may operate in **permissionless** mode, where registered miners use
+the supported enrollment flow, or **operator-bound** mode, where the operator
+binds clusters before validation. This validator manual assumes the cluster is
+already bound. Existing operator-bound clusters remain eligible for the same
+validator checks; private platform endpoints and binding credentials are not
+part of this public guide.
+
 ## Security model
 
 Run the validator host with only the signing hotkey it needs. The mounted

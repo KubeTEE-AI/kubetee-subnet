@@ -142,6 +142,7 @@ As a member of the [Confidential Computing Consortium (CCC)](https://confidentia
   - [Workflow Orchestration (Airflow \& Metaflow)](#workflow-orchestration-airflow--metaflow)
   - [Job Pricing MCP Server](#job-pricing-mcp-server)
   - [For Miners (Infrastructure)](#for-miners-infrastructure)
+    - [Enrollment operating modes](#enrollment-operating-modes)
   - [Roadmap](#roadmap)
     - [Phase 0 — Early Access (Current)](#phase-0--early-access-current)
     - [Phase 1 — Expansion](#phase-1--expansion)
@@ -669,6 +670,22 @@ flowchart LR
 ---
 
 ## For Miners (Infrastructure)
+
+### Enrollment operating modes
+
+The KubeTEE subnet supports two operator-selected enrollment modes:
+
+- **Permissionless** — a registered miner uses the supported platform
+  enrollment flow to prove control of its cluster.
+- **Operator-bound** — the subnet operator binds the cluster through a private
+  control-plane process before the validator evaluates it; public self-service
+  enrollment is not available in this mode.
+
+In either mode, a cluster must have a valid canonical enrollment binding before
+it can receive validator score. The validator continues checking existing
+operator-bound clusters independently of the enrollment mode. Private platform
+endpoints, credentials, and binding procedures are intentionally not published
+in this public repository.
 
 **Early Access Cluster Rules**:
 - One hotkey per cluster (one miner = one cluster)
