@@ -353,6 +353,34 @@ def _snapshot_subnet_netuids(chain_endpoint: str) -> set[int]:
     return set(netuids)
 
 
+def _find_owned_subnet(
+    netuids: set[int], owner_name: str, chain_endpoint: str
+) -> int | None:
+    """Return the lowest netuid already owned by the owner wallet, if any.
+
+    Uses one shared Subtensor connection for every ownership query (HTTP
+    429 lesson). Any query failure means "no reusable subnet" — the caller
+    then attempts creation, which fail-fasts on its own.
+    """
+    if bt is None:
+        return None
+    try:
+        owner_ss58 = bt.Wallet(name=owner_name).coldkeypub.ss58_address
+        subtensor = bt.Subtensor(network=chain_endpoint)
+    # SDK/wallet unavailability just disables reuse, never setup itself.
+    except Exception:  # pylint: disable=broad-exception-caught
+        return None
+    for candidate in sorted(netuids):
+        if candidate == 0:
+            continue  # root subnet is never a bootstrap target
+        ownership = chain_state.query_subnet_ownership(
+            candidate, owner_ss58, chain_endpoint, subtensor=subtensor
+        )
+        if ownership.get("error") is None and ownership.get("owned_by_us"):
+            return candidate
+    return None
+
+
 def create_subnet_if_needed(
     netuid: int,
     owner_name: str,
@@ -367,6 +395,17 @@ def create_subnet_if_needed(
         f"(target {netuid}, owner={owner_name}, network={chain_endpoint})..."
     )
     before = _snapshot_subnet_netuids(chain_endpoint)
+
+    # Reuse a subnet the owner already owns before paying for a new one:
+    # every localnet subnet registration raises the next lock cost, so
+    # creating one per bootstrap run eventually drains the owner wallet.
+    reused = _find_owned_subnet(before, owner_name, chain_endpoint)
+    if reused is not None:
+        logger.info(
+            "reusing subnet already owned by owner wallet",
+            extra={"netuid": reused},
+        )
+        return reused
     command = [
         "btcli",
         "subnet",
@@ -381,18 +420,28 @@ def create_subnet_if_needed(
         "--json",
     ]
     try:
-        subprocess.run(
+        creation = subprocess.run(
             command,
             check=True,
             capture_output=True,
             text=True,
             shell=False,
         )
-    # Launch and command-status failures share one fixed public error.
+    except subprocess.CalledProcessError as error:
+        # Contract: btcli output is hostile and never logged from here.
+        # For diagnosis re-run `btcli subnet create` manually.
+        logger.error(
+            "subnet creation command failed",
+            extra={"returncode": error.returncode},
+        )
+        creation_failed = True
+    # Launch failures share one fixed public error.
     except Exception:  # pylint: disable=broad-exception-caught
+        logger.error("subnet creation command failed to launch")
         creation_failed = True
     else:
         creation_failed = False
+        del creation
     if creation_failed:
         raise RuntimeError("subnet creation failed")
 
@@ -616,6 +665,22 @@ def register_neuron(
         raise RuntimeError("neuron registration postcondition failed")
 
 
+def _emissions_already_started(netuid: int, chain_endpoint: str) -> bool:
+    """True only when the chain confirms emissions started for `netuid`."""
+    if bt is None:
+        return False
+    try:
+        subtensor = bt.Subtensor(network=chain_endpoint)
+        first_emission_block = subtensor.query(
+            ("SubtensorModule", "FirstEmissionBlockNumber"), params=[netuid]
+        )
+    # Any query failure means "unconfirmed": caller keeps failing fast.
+    except Exception:  # pylint: disable=broad-exception-caught
+        return False
+    value = getattr(first_emission_block, "value", first_emission_block)
+    return isinstance(value, int) and value > 0
+
+
 def start_emissions(
     netuid: int,
     owner_name: str,
@@ -653,6 +718,14 @@ def start_emissions(
     except Exception:
         activation_failed = True
     if activation_failed:
+        # Idempotent reuse: a rerun against an already-activated subnet
+        # fails the sudo start call; the chain state is the truth.
+        if _emissions_already_started(netuid, chain_endpoint):
+            logger.info(
+                "subnet emissions already started; activation skipped",
+                extra={"netuid": netuid},
+            )
+            return
         raise RuntimeError("subnet activation failed")
 
 

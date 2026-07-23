@@ -1256,3 +1256,49 @@ def test_main_fails_closed_for_every_negative_ownership_decision(
     assert [
         event for event in events if event[0] in {"activation", "stake"}
     ] == []
+
+
+def test_create_subnet_reuses_existing_owned_subnet_without_creating(
+    monkeypatch,
+):
+    """Reuse: an owner-owned subnet short-circuits creation entirely, so
+    repeated bootstraps never mint new subnets (lock-cost drain loop)."""
+    monkeypatch.setattr(
+        _setup, "_snapshot_subnet_netuids", lambda endpoint: {0, 1, 2, 3}
+    )
+
+    class FakeColdkeypub:
+        ss58_address = "owner-ss58"
+
+    class FakeWallet:
+        def __init__(self, name):
+            self.coldkeypub = FakeColdkeypub()
+
+    class FakeSubtensor:
+        def __init__(self, network):
+            pass
+
+    monkeypatch.setattr(
+        _setup,
+        "bt",
+        SimpleNamespace(Wallet=FakeWallet, Subtensor=FakeSubtensor),
+    )
+
+    def fake_ownership(netuid, our_ss58, endpoint, subtensor=None):
+        return {
+            "exists": True,
+            "owner_ss58": "owner-ss58" if netuid == 2 else "other",
+            "owned_by_us": netuid == 2,
+            "error": None,
+        }
+
+    monkeypatch.setattr(
+        _setup.chain_state, "query_subnet_ownership", fake_ownership
+    )
+
+    def forbidden(*_args, **_kwargs):
+        raise AssertionError("reuse path must not run subnet create")
+
+    monkeypatch.setattr(_setup.subprocess, "run", forbidden)
+
+    assert _setup.create_subnet_if_needed(1, "owner") == 2
