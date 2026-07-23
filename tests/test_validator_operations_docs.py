@@ -3,28 +3,106 @@
 from __future__ import annotations
 
 import pathlib
+import re
 
 ROOT = pathlib.Path(__file__).parent.parent
 GUIDE = ROOT / "docs" / "RUNNING_A_VALIDATOR.md"
 
 
-def test_operations_guide_separates_localnet_from_mainnet():
+def test_operations_guide_uses_a_direct_mainnet_container():
     text = GUIDE.read_text(encoding="utf-8")
+
     assert "# Running a KubeTEE Validator" in text
-    assert "## Localnet only" in text
     assert "## Finney mainnet" in text
-    assert "make subnet" in text
-    assert "make subnet-external" in text
-    assert "ghcr.io/kubetee-ai/kubetee-subnet:latest" in text
+    assert "docker run -d" in text
+    assert "--name kubetee-validator" in text
+    assert "--restart unless-stopped" in text
+    assert "--env-file /secure/path/validator.env" in text
+    assert "-v /secure/path/validator-wallet:/root/.bittensor:ro" in text
+    assert "-v /secure/path/rancher-ca.crt:/shared/rancher-ca.crt:ro" in text
+    assert "-p 127.0.0.1:9100:9100" in text
+    assert "python -u scripts/validator.py" in text
+    assert "docker compose" not in text
+    assert "make subnet" not in text
 
 
-def test_operations_guide_never_uses_dev_keys_as_mainnet_values():
+def test_operations_guide_records_the_public_mainnet_snapshot_defaults():
     text = GUIDE.read_text(encoding="utf-8")
-    assert "owner / alice / bob" in text
-    assert "never use those identities on Finney" in text
-    assert "RANCHER_BEARER_TOKEN=<" not in text
+
+    assert "KUBETEE_SUBNET_NETUID=90" in text
+    assert "KUBETEE_OWNER_HOTKEY=5EKtGWqskt8qBqdAZ78pSWRCYRuYmDc5XbwJPDqH1EpiSTEE" in text
+    assert "KUBETEE_CHAIN_NETWORK=finney" in text
+    assert "BTCLI v11" in text
+    assert "block 8680289" in text
+    assert "https://rancher.kubetee.ai" in text
+    assert "provisional" in text
+    assert "not DNS-resolvable" in text
+
+
+def test_operations_guide_has_one_complete_copyable_production_environment_block():
+    text = GUIDE.read_text(encoding="utf-8")
+
+    expected_block = """```dotenv
+KUBETEE_VALIDATION_PROFILE=production
+BT_NETWORK=finney
+KUBETEE_SUBNET_NETUID=90
+KUBETEE_OWNER_HOTKEY=5EKtGWqskt8qBqdAZ78pSWRCYRuYmDc5XbwJPDqH1EpiSTEE
+KUBETEE_CHAIN_NETWORK=finney
+RANCHER_URL=https://rancher.kubetee.ai
+RANCHER_CA_FILE=/shared/rancher-ca.crt
+BT_WALLET=<operator wallet name>
+BT_WALLET_HOTKEY=<operator wallet hotkey name>
+KUBETEE_VALIDATOR_HOTKEY=<registered validator hotkey>
+RANCHER_BEARER_TOKEN=<operator-supplied Rancher API token>
+```"""
+
+    assert text.count(expected_block) == 1
+
+
+def test_operations_guide_records_snapshot_provenance_date():
+    text = GUIDE.read_text(encoding="utf-8")
+
+    assert "2026-07-23" in text
+
+
+def test_operations_guide_sets_the_in_container_rancher_ca_file():
+    text = GUIDE.read_text(encoding="utf-8")
+
+    assert "RANCHER_CA_FILE=/shared/rancher-ca.crt" in text
+
+
+def test_operations_guide_pins_the_exact_published_image_digest():
+    text = GUIDE.read_text(encoding="utf-8")
+
+    assert (
+        "ghcr.io/kubetee-ai/kubetee-subnet@sha256:"
+        "6ee1381b131885cdc65256845fb264bd51d0fe14dd675b742c9d33998cf63008"
+    ) in text
+
+
+def test_operations_guide_calls_the_owner_hotkey_a_public_recycle_identity():
+    text = GUIDE.read_text(encoding="utf-8")
+
+    assert "The owner hotkey above is a public recycle identity, not a credential." in text
+
+
+def test_operations_guide_explicitly_replaces_the_provisional_rancher_origin():
+    text = GUIDE.read_text(encoding="utf-8")
+
+    assert (
+        "Replace `https://rancher.kubetee.ai` with the operator's active "
+        "Rancher HTTPS origin before starting the container."
+    ) in text
+
+
+def test_operations_guide_never_exposes_credentials_or_bootstraps_chain_state():
+    text = GUIDE.read_text(encoding="utf-8")
+
+    assert "RANCHER_BEARER_TOKEN=<operator-supplied Rancher API token>" in text
     assert "token-" not in text
     assert "BEGIN PRIVATE KEY" not in text
+    assert "overrides the local bootstrap entrypoint" in text
+    assert "never creates a subnet, registers a key, stakes, or changes Finney state" in text
 
 
 def test_operations_guide_keeps_external_environment_file_outside_checkout():
@@ -36,39 +114,51 @@ def test_operations_guide_keeps_external_environment_file_outside_checkout():
         f"`{external_env_file}` outside the\nrepository."
     ) in text
     assert f"chmod 600 {external_env_file}" in text
-    assert text.count(f"--env-file {external_env_file}") == 5
+    assert text.count(f"--env-file {external_env_file}") == 3
     assert "--env-file validator.env" not in text
 
-    observation = text.split("Verify observable behavior without printing credentials:", 1)[1]
-    observation = observation.split("A startup error", 1)[0]
-    assert observation.count(f"--env-file {external_env_file}") == 2
 
-
-def test_operations_guide_covers_safe_dynamic_localnet_inspection():
+def test_operations_guide_names_required_private_operator_values_without_values():
     text = GUIDE.read_text(encoding="utf-8")
 
-    assert "make subnet-clean" in text
-    assert "NETUID=$(cat /app/.kubetee_netuid)" in text
-    assert 'btcli subnets metagraph --netuid "$NETUID" --network ws://chain:9944' in text
-    assert "btcli stake list --wallet alice --network ws://chain:9944" in text
-    assert "validator permit" in text
-    assert "stake" in text
-    assert "weights" in text
-    assert "http://127.0.0.1:9100/metrics" in text
-    assert "debug/synthetic" in text
-    assert "not production certification" in text
+    assert "BT_NETWORK=finney" in text
+    for name in (
+        "BT_WALLET",
+        "BT_WALLET_HOTKEY",
+        "KUBETEE_VALIDATOR_HOTKEY",
+        "RANCHER_BEARER_TOKEN",
+    ):
+        assert name in text
 
 
 def test_operations_guide_requires_external_rancher_ca_bundle_path():
     text = GUIDE.read_text(encoding="utf-8")
 
-    assert "Required host path to the Rancher CA/bundle file." in text
+    assert "/secure/path/rancher-ca.crt:/shared/rancher-ca.crt:ro" in text
 
 
 def test_operations_guide_requires_a_dedicated_hotkey_only_wallet_root():
     text = GUIDE.read_text(encoding="utf-8")
 
-    assert "`BITTENSOR_WALLET_DIR` must point to a dedicated validator wallet root" in text
-    assert "only the required signing hotkey and public coldkey metadata" in text
+    assert "wallet root contains only the signing hotkey and public coldkey metadata" in text
     assert "Do not mount a normal/operator wallet root" in text
     assert "private coldkey or recovery material" in text
+
+
+def test_operations_guide_has_an_executable_named_container_recreate_sequence():
+    text = GUIDE.read_text(encoding="utf-8")
+
+    assert re.search(
+        r"docker stop kubetee-validator\n"
+        r"docker rm kubetee-validator\n"
+        r"docker run -d --name kubetee-validator",
+        text,
+    )
+
+
+def test_operations_guide_has_an_explicit_prior_digest_rollback_command():
+    text = GUIDE.read_text(encoding="utf-8")
+
+    assert "Prior reviewed digest:" in text
+    assert "docker run -d --name kubetee-validator" in text
+    assert "@sha256:<prior-reviewed-digest>" in text
