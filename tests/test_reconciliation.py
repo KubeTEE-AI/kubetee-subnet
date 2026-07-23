@@ -114,7 +114,6 @@ def make_engine(min_cycles: int = 3, min_seconds: float = 900.0):
         client=client,
         metrics=metrics,
         expected_netuid=NETUID,
-        expected_network=NETWORK,
         min_cycles=min_cycles,
         min_seconds=min_seconds,
         clock=clock,

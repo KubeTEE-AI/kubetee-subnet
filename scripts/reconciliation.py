@@ -77,7 +77,6 @@ class ReconciliationEngine:
         client,
         metrics: ValidatorMetrics,
         expected_netuid: int,
-        expected_network: str,
         min_cycles: int = 3,
         min_seconds: float = 900.0,
         clock: Callable[[], float] = time.time,
@@ -94,12 +93,9 @@ class ReconciliationEngine:
             or expected_netuid < 0
         ):
             raise ValueError("expected_netuid must be a non-negative integer")
-        if not isinstance(expected_network, str) or not expected_network:
-            raise ValueError("expected_network must be non-empty")
         self._client = client
         self._metrics = metrics
         self._expected_netuid = str(expected_netuid)
-        self._expected_network = expected_network
         self._min_cycles = min_cycles
         self._min_seconds = min_seconds
         self._clock = clock

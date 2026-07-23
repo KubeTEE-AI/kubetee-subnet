@@ -1384,7 +1384,6 @@ def test_reconciliation_suppression_log_is_redacted(caplog):
         client,
         metrics,
         expected_netuid=1,
-        expected_network="finney",
         min_cycles=1,
         min_seconds=0.0,
         evidence_sink=lambda event: log.info(

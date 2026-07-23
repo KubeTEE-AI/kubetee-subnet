@@ -67,10 +67,6 @@ _MEMORY_FACTORS = {
     "G": 10**9,
     "T": 10**12,
 }
-_ORIGIN_FP_PREFIX = re.compile(r"^[0-9a-f]{63}$")
-_CANONICAL_UUID = re.compile(
-    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
-)
 _SUPPORTED_GPU = re.compile(r"(?<![A-Z0-9])(H100|H200|B200|B300)(?![A-Z0-9])")
 _BASE_TEN_INTEGER = re.compile(r"^(?:0|[1-9][0-9]*)$")
 _MAX_INT64 = 2**63 - 1
@@ -79,17 +75,6 @@ _RANCHER_CLUSTER_ID_PART = r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?"
 _RANCHER_NODE_ID_PART = r"[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?"
 _RANCHER_NODE_ID = re.compile(
     rf"^{_RANCHER_CLUSTER_ID_PART}:{_RANCHER_NODE_ID_PART}$"
-)
-_REQUIRED_BINDING_LABELS = (
-    BINDING_ID_LABEL,
-    HOTKEY_LABEL,
-    COLDKEY_LABEL,
-    PROVIDER_ID_LABEL,
-    BINDING_STATUS_LABEL,
-    GENERATION_LABEL,
-    NETUID_LABEL,
-    NETWORK_LABEL,
-    ORIGIN_FP_PREFIX_LABEL,
 )
 _PRESSURE_CONDITIONS = (
     "MemoryPressure",
@@ -230,80 +215,6 @@ def parse_memory_bytes(value: object) -> int | None:
     if scaled > _MAX_INT64 or scaled != scaled.to_integral_value():
         return None
     return int(scaled)
-
-
-@dataclasses.dataclass(frozen=True)
-class _BindingMetadata:
-    cluster_id: str
-    binding_id: str
-    hotkey: str
-    coldkey: str
-    status: str
-    generation: int
-    netuid: int
-    network: str
-    enrollment_uid: int
-
-
-def _parse_base_ten_integer(value: object) -> int | None:
-    if isinstance(value, bool) or not isinstance(value, str):
-        return None
-    if not _BASE_TEN_INTEGER.fullmatch(value):
-        return None
-    if len(value) > 19:
-        return None
-    parsed = int(value)
-    return parsed if parsed <= _MAX_INT64 else None
-
-
-def _binding_metadata(cluster: dict) -> _BindingMetadata | None:
-    cluster_id = cluster.get("id")
-    labels = cluster.get("labels")
-    annotations = cluster.get("annotations")
-    if not isinstance(cluster_id, str) or not cluster_id:
-        return None
-    if not isinstance(labels, dict) or not isinstance(annotations, dict):
-        return None
-    labels = canonicalize_kubetee_keys(labels)
-    annotations = canonicalize_kubetee_keys(annotations)
-
-    values: dict[str, str] = {}
-    for key in _REQUIRED_BINDING_LABELS:
-        value = labels.get(key)
-        if not isinstance(value, str) or not value or len(value) > 63:
-            return None
-        values[key] = value
-
-    enrollment_uid = _parse_base_ten_integer(
-        annotations.get(ENROLLMENT_UID_ANNOTATION)
-    )
-    generation = _parse_base_ten_integer(values[GENERATION_LABEL])
-    netuid = _parse_base_ten_integer(values[NETUID_LABEL])
-    if enrollment_uid is None or generation is None or netuid is None:
-        return None
-    if generation < 1:
-        return None
-    if not _CANONICAL_UUID.fullmatch(values[PROVIDER_ID_LABEL]):
-        return None
-    if not _ORIGIN_FP_PREFIX.fullmatch(values[ORIGIN_FP_PREFIX_LABEL]):
-        return None
-
-    return _BindingMetadata(
-        cluster_id=cluster_id,
-        binding_id=values[BINDING_ID_LABEL],
-        hotkey=values[HOTKEY_LABEL],
-        coldkey=values[COLDKEY_LABEL],
-        status=values[BINDING_STATUS_LABEL],
-        generation=generation,
-        netuid=netuid,
-        network=values[NETWORK_LABEL],
-        enrollment_uid=enrollment_uid,
-    )
-
-
-def has_canonical_binding_metadata(cluster: object) -> bool:
-    """Whether a Rancher object carries the complete canonical binding shape."""
-    return isinstance(cluster, dict) and _binding_metadata(cluster) is not None
 
 
 def _condition_status(conditions: object, name: str):

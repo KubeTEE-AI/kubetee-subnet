@@ -806,7 +806,6 @@ def main(env: Mapping[str, str] | None = None) -> None:
         client,
         metrics,
         expected_netuid=config.netuid,
-        expected_network=config.chain_network,
         min_cycles=config.reconcile_min_cycles,
         min_seconds=config.reconcile_min_seconds,
         evidence_sink=_log_reconciliation_evidence,
