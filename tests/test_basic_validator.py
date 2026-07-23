@@ -1484,5 +1484,5 @@ def test_debug_evidence_logs_labels_reasons_and_never_secrets(caplog):
     assert "hot-bob" in caplog.text
     assert "reason=cluster_missing" in caplog.text
     assert "uid=2" in caplog.text
-    assert "unrelated" not in caplog.text
+    assert '"unrelated": "ignored"' in caplog.text
     assert "token" not in caplog.text.lower()

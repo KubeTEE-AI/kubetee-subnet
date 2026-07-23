@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import collections
 import dataclasses
+import json
 import math
 import os
 import pathlib
@@ -47,13 +48,6 @@ from infrastructure_validation import (
     InfrastructurePolicy,
     ValidationProfile,
     validate_miner,
-)
-from infrastructure_validation import (
-    BINDING_ID_LABEL,
-    BINDING_STATUS_LABEL,
-    COLDKEY_LABEL,
-    NETUID_LABEL,
-    NETWORK_LABEL,
 )
 from logging_setup import configure_logging
 from miner_scoring import (
@@ -115,20 +109,10 @@ def _log_reconciliation_evidence(event: dict) -> None:
     )
 
 
-_DEBUG_EVIDENCE_LABELS = (
-    HOTKEY_LABEL,
-    COLDKEY_LABEL,
-    BINDING_ID_LABEL,
-    BINDING_STATUS_LABEL,
-    NETUID_LABEL,
-    NETWORK_LABEL,
-)
-
-
 def _log_cluster_debug_evidence(clusters: list) -> None:
-    """DEBUG-only enumeration evidence: kubetee.ai/* identity labels and
-    readiness state per cluster. Never bearer tokens or raw upstream bodies
-    (AC5); label values are the same identities already public on-chain."""
+    """DEBUG-only enumeration evidence: the complete cluster label map (as
+    JSON) and readiness state per cluster. Never bearer tokens or raw
+    upstream bodies (AC5); labels are operator-authored cluster metadata."""
     _LOG.debug(
         "rancher enumeration complete", extra={"clusters": len(clusters)}
     )
@@ -140,12 +124,8 @@ def _log_cluster_debug_evidence(clusters: list) -> None:
             )
             continue
         labels = cluster.get("labels")
-        binding_labels = (
-            {
-                label: labels.get(label)
-                for label in _DEBUG_EVIDENCE_LABELS
-                if label in labels
-            }
+        labels_json = (
+            json.dumps(labels, sort_keys=True, default=str)
             if isinstance(labels, dict)
             else None
         )
@@ -156,7 +136,7 @@ def _log_cluster_debug_evidence(clusters: list) -> None:
                 "name": cluster.get("name"),
                 "state": cluster.get("state"),
                 "internal": cluster.get("internal"),
-                "binding_labels": binding_labels,
+                "labels": labels_json,
             },
         )
 
