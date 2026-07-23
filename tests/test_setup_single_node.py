@@ -663,12 +663,36 @@ def test_ensure_dev_wallet_regenerates_coldkey_then_hotkey(monkeypatch):
 
     monkeypatch.setattr(_setup, "_regenerate_wallet_key", fake_regenerate)
 
-    _setup.ensure_dev_wallet("owner", _setup.DEV_OWNER_SEED, dry_run=True)
+    _setup.ensure_dev_wallet(
+        "owner",
+        _setup.DEV_OWNER_SEED,
+        _setup.DEV_OWNER_HOT_SEED,
+        dry_run=True,
+    )
 
     assert regenerated == [
         ("coldkey", "owner", _setup.DEV_OWNER_SEED, "default", True),
-        ("hotkey", "owner", _setup.DEV_OWNER_SEED, "default", True),
+        ("hotkey", "owner", _setup.DEV_OWNER_HOT_SEED, "default", True),
     ]
+
+
+def test_ensure_dev_wallet_rejects_identical_cold_and_hot_seeds(monkeypatch):
+    monkeypatch.setattr(
+        _setup,
+        "_regenerate_wallet_key",
+        lambda *_a, **_k: (_ for _ in ()).throw(
+            AssertionError("must not regenerate on rejected seeds")
+        ),
+    )
+    with pytest.raises(ValueError, match="must differ"):
+        _setup.ensure_dev_wallet(
+            "owner", _setup.DEV_OWNER_SEED, _setup.DEV_OWNER_SEED
+        )
+
+
+def test_registration_plan_uses_distinct_cold_and_hot_seeds():
+    for entry in _setup.registration_plan("owner"):
+        assert entry["seed"] != entry["hot_seed"], entry["wallet"]
 
 
 def test_fund_from_alice_reuses_fail_closed_coldkey_regeneration(monkeypatch):

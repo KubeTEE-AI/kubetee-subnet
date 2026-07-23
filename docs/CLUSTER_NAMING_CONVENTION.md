@@ -107,7 +107,7 @@ labels:
   kubetee.ai/country: fr
   kubetee.ai/city: paris
   kubetee.ai/binding-id: "binding-example"
-  kubetee.ai/hotkey: "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+  kubetee.ai/hotkey: "5CcPtWDUmeMgxzp3pwPtRVEuU1N4CjVK5D6iAmb12JNiFBdx"
   kubetee.ai/coldkey: "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
   kubetee.ai/provider-id: "00000000-0000-4000-8000-000000000123"
   kubetee.ai/binding-status: "ENROLLED"
@@ -164,7 +164,7 @@ CITY="paris"             # Full city name (lowercase)
 MINER_UID="123"          # Current miner UID
 
 # Current chain identity (committed by platform enrollment, not this script)
-MINER_HOTKEY="5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+MINER_HOTKEY="5CcPtWDUmeMgxzp3pwPtRVEuU1N4CjVK5D6iAmb12JNiFBdx"
 MINER_COLDKEY="5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
 
 # Build cluster name
@@ -249,7 +249,7 @@ spec:
   - name: miner-cluster
     clusterSelector:
       matchLabels:
-        kubetee.ai/hotkey: "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+        kubetee.ai/hotkey: "5CcPtWDUmeMgxzp3pwPtRVEuU1N4CjVK5D6iAmb12JNiFBdx"
 ```
 
 **Target all clusters in a specific continent**:
