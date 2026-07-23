@@ -892,12 +892,17 @@ def main():
     )
 
     # Write the actual netuid we own so the validator and other containers
-    # can use the correct one.
+    # can use the correct one. Honor KUBETEE_NETUID_FILE like validator.py
+    # does (host/PyCharm runs have no /app).
+    netuid_file = (
+        os.environ.get("KUBETEE_NETUID_FILE") or "/app/.kubetee_netuid"
+    ).strip()
     try:
-        with open("/app/.kubetee_netuid", "w", encoding="utf-8") as f:
+        with open(netuid_file, "w", encoding="utf-8") as f:
             f.write(str(netuid))
         logger.info(
-            f"  Wrote actual netuid={netuid} to /app/.kubetee_netuid for the validator phase."
+            "wrote actual netuid for the validator phase",
+            extra={"netuid": netuid, "netuid_file": netuid_file},
         )
     # Status-file failure must not hide the on-chain setup outcome.
     # pylint: disable-next=broad-exception-caught
