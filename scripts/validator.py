@@ -48,6 +48,13 @@ from infrastructure_validation import (
     ValidationProfile,
     validate_miner,
 )
+from infrastructure_validation import (
+    BINDING_ID_LABEL,
+    BINDING_STATUS_LABEL,
+    COLDKEY_LABEL,
+    NETUID_LABEL,
+    NETWORK_LABEL,
+)
 from logging_setup import configure_logging
 from miner_scoring import (
     CycleConfig,
@@ -106,6 +113,83 @@ def _log_reconciliation_evidence(event: dict) -> None:
             "detail": event.get("detail"),
         },
     )
+
+
+_DEBUG_EVIDENCE_LABELS = (
+    HOTKEY_LABEL,
+    COLDKEY_LABEL,
+    BINDING_ID_LABEL,
+    BINDING_STATUS_LABEL,
+    NETUID_LABEL,
+    NETWORK_LABEL,
+)
+
+
+def _log_cluster_debug_evidence(clusters: list) -> None:
+    """DEBUG-only enumeration evidence: kubetee.ai/* identity labels and
+    readiness state per cluster. Never bearer tokens or raw upstream bodies
+    (AC5); label values are the same identities already public on-chain."""
+    _LOG.debug(
+        "rancher enumeration complete", extra={"clusters": len(clusters)}
+    )
+    for cluster in clusters:
+        if not isinstance(cluster, dict):
+            _LOG.debug(
+                "cluster entry malformed",
+                extra={"entry_type": type(cluster).__name__},
+            )
+            continue
+        labels = cluster.get("labels")
+        binding_labels = (
+            {
+                label: labels.get(label)
+                for label in _DEBUG_EVIDENCE_LABELS
+                if label in labels
+            }
+            if isinstance(labels, dict)
+            else None
+        )
+        _LOG.debug(
+            "cluster evidence",
+            extra={
+                "cluster_id": cluster.get("id"),
+                "name": cluster.get("name"),
+                "state": cluster.get("state"),
+                "internal": cluster.get("internal"),
+                "binding_labels": binding_labels,
+            },
+        )
+
+
+def _log_verdict_debug_evidence(
+    miners: list,
+    neurons_by_hotkey: dict,
+    verdicts: dict,
+    nodes_by_cluster: dict,
+) -> None:
+    """DEBUG-only per-miner verdict evidence: which reason fired and what
+    the miner's chain identity and node inventory looked like."""
+    for hotkey in miners:
+        neuron = neurons_by_hotkey.get(hotkey, {})
+        verdict = verdicts.get(hotkey)
+        cluster_id = getattr(verdict, "cluster_id", None)
+        nodes = nodes_by_cluster.get(cluster_id)
+        _LOG.debug(
+            "miner verdict",
+            extra={
+                "hotkey": hotkey,
+                "uid": neuron.get("uid"),
+                "coldkey": neuron.get("coldkey"),
+                "status": getattr(
+                    getattr(verdict, "status", None), "value", None
+                ),
+                "reason": getattr(
+                    getattr(verdict, "reason", None), "value", None
+                ),
+                "cluster_id": cluster_id,
+                "node_count": len(nodes) if isinstance(nodes, list) else None,
+            },
+        )
 
 
 class ConfigError(ValueError):
@@ -591,6 +675,8 @@ class BasicValidator:
             self._record_skip(SkipReason.RANCHER_UNAVAILABLE, error.category)
             return "skip"
 
+        _log_cluster_debug_evidence(clusters)
+
         # 3. reconciliation (spec 4.2a; requires fresh metagraph + complete
         #    enumeration from this same cycle)
         self._reconciler.run_cycle(
@@ -610,6 +696,9 @@ class BasicValidator:
             )
             for hotkey in miners
         }
+        _log_verdict_debug_evidence(
+            miners, neurons_by_hotkey, verdicts, nodes_by_cluster
+        )
         scores = {
             hotkey: verdict.score for hotkey, verdict in verdicts.items()
         }
