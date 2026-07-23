@@ -30,11 +30,21 @@ for the g004 triad (D7):
   pinned seed constant was removed with it). Must be an ordinary random hex
   seed (#20): the earlier all-`0x0b` value serialised into an unreadable
   keyfile, so bob could never sign or register.
-  Hotkey ss58: `5FsfgiqMdQzgqtJQLb15ox6MzcZLvFG55vtAsy4TYuDCEEFs`.
+- `DEV_*_HOT_SEED` — separate pinned **hotkey** seeds
+  (`sha256("kubetee-dev-hotkey-<wallet>")`). Coldkey and hotkey are
+  DISTINCT identities even on dev, mirroring real-network key hygiene so
+  cold/hot mix-ups surface locally. Alice's coldkey stays the classic
+  genesis-funded dev seed.
+
+Pinned addresses:
+
+| wallet | coldkey ss58 | hotkey ss58 |
+| --- | --- | --- |
+| owner | `5FLbZav21bAsjH5SAdmJZwTP5C4b3bcaaWqC6GSmGmsbzUJ9` | `5HE91XqGKKkJEZdMGqD2GgkJLdQR2G5ZWUYsz42zjWvXZnkD` |
+| alice | `5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY` | `5DSSvKMW652MA749h5y4UTXeQJqDGuu3MA5CJ7Hb5HHZMu8Q` |
+| bob | `5FsfgiqMdQzgqtJQLb15ox6MzcZLvFG55vtAsy4TYuDCEEFs` | `5CcPtWDUmeMgxzp3pwPtRVEuU1N4CjVK5D6iAmb12JNiFBdx` |
 
 Result:
-- Owner coldkey/hotkey SS58 is always the same:
-  `5FLbZav21bAsjH5SAdmJZwTP5C4b3bcaaWqC6GSmGmsbzUJ9`
 - First registration on a fresh subnet tends to land on a stable UID
   (commonly 0 for the creator).
 - UIDs are resolved from the selected netuid's metagraph by hotkey SS58. The

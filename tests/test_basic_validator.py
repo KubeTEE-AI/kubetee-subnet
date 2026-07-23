@@ -438,7 +438,9 @@ def test_production_main_skips_local_bootstrap(monkeypatch):
         nonlocal called
         called = True
 
-    monkeypatch.setattr(validator_module, "_run_local_bootstrap", fail_if_called)
+    monkeypatch.setattr(
+        validator_module, "_run_local_bootstrap", fail_if_called
+    )
     env = make_env(
         KUBETEE_VALIDATION_PROFILE="production",
         BT_NETWORK="finney",
@@ -1435,3 +1437,52 @@ def test_reconciliation_audit_logger_uses_only_allowlisted_fields(caplog):
     assert "deleted-204" in caplog.text
     assert TOKEN not in caplog.text
     assert "denied-body" not in caplog.text
+
+
+def test_debug_evidence_logs_labels_reasons_and_never_secrets(caplog):
+    """DEBUG evidence: cluster kubetee.ai/* labels and per-miner verdict
+    reasons are visible at DEBUG, and bearer-token material never appears."""
+    clusters = [
+        {
+            "id": "c-bob",
+            "name": "miner-cluster",
+            "state": "active",
+            "internal": False,
+            "labels": {
+                "kubetee.ai/hotkey": "hot-bob",
+                "kubetee.ai/binding-status": "ENROLLED",
+                "unrelated": "ignored",
+            },
+        },
+        "malformed-entry",
+    ]
+    verdict = validator_module.validate_miner(
+        {"hotkey": "hot-bob", "coldkey": "cold-bob", "uid": 2},
+        [],
+        {},
+        1,
+        "kubetee-localnet",
+        validator_module.InfrastructurePolicy.for_profile(
+            validator_module.ValidationProfile.DEBUG
+        ),
+    )
+    with caplog.at_level(logging.DEBUG, logger="basic_validator"):
+        validator_module._log_cluster_debug_evidence(clusters)
+        validator_module._log_verdict_debug_evidence(
+            ["hot-bob"],
+            {
+                "hot-bob": {
+                    "hotkey": "hot-bob",
+                    "coldkey": "cold-bob",
+                    "uid": 2,
+                }
+            },
+            {"hot-bob": verdict},
+            {},
+        )
+    assert "kubetee.ai/hotkey" in caplog.text
+    assert "hot-bob" in caplog.text
+    assert "reason=cluster_missing" in caplog.text
+    assert "uid=2" in caplog.text
+    assert "unrelated" not in caplog.text
+    assert "token" not in caplog.text.lower()

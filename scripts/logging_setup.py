@@ -68,13 +68,22 @@ def configure_logging(level: str = "INFO") -> None:
         # contain seeds/bearer tokens (redaction contract, AC5).
         "diagnose": False,
     }
+
+    def _write_stdout(message: str) -> None:
+        sys.stdout.write(message)
+        sys.stdout.flush()  # unbuffered under file/pipe redirection
+
+    def _write_stderr(message: str) -> None:
+        sys.stderr.write(message)
+        sys.stderr.flush()
+
     logger.add(
-        lambda message: sys.stdout.write(message),
+        _write_stdout,
         filter=lambda record: record["level"].no < 40,
         **common,
     )
     logger.add(
-        lambda message: sys.stderr.write(message),
+        _write_stderr,
         filter=lambda record: record["level"].no >= 40,
         **common,
     )

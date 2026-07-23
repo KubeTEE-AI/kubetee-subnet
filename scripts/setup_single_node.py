@@ -78,9 +78,9 @@ DEV_ALICE_SEED = (
     "0xe5be9a5092b81bca64be81d212e7f2f9eba183bb7a90954f7b76361f6edb5c0a"
 )
 
-# Pinned dev seed for the subnet *owner* wallet (the one that creates the subnet,
-# registers its hotkey, sets hypers via sudo, and the validator weights to).
-# Derived SS58 (cold+hot for dev simplicity): 5FLbZav21bAsjH5SAdmJZwTP5C4b3bcaaWqC6GSmGmsbzUJ9
+# Pinned dev seed for the subnet *owner* wallet COLDKEY (the one that creates
+# the subnet, sets hypers via sudo; its separate hotkey registers + receives
+# the recycle weight). Coldkey SS58: 5FLbZav21bAsjH5SAdmJZwTP5C4b3bcaaWqC6GSmGmsbzUJ9
 DEV_OWNER_SEED = (
     "0x398f0c28f98885e046333d4a41c19cee4c37368a9832c749be0086a2a9b4e8c0"
 )
@@ -96,6 +96,24 @@ DEV_OWNER_COLD_SS58 = "5FLbZav21bAsjH5SAdmJZwTP5C4b3bcaaWqC6GSmGmsbzUJ9"
 # never sign or register). ss58: 5FsfgiqMdQzgqtJQLb15ox6MzcZLvFG55vtAsy4TYuDCEEFs
 DEV_BOB_SEED = (
     "0x907fd5b32015c612b7badd5c4ab60de2fbb641333989e5eeabcd226a240a4689"
+)
+
+# Separate pinned HOTKEY seeds (localnet-only, PUBLIC by design): coldkey and
+# hotkey must be distinct identities even on dev so mistakes that conflate
+# them (funding a hotkey, signing with a coldkey) surface locally instead of
+# on a real network. Seeds are sha256("kubetee-dev-hotkey-<wallet>") for
+# reproducibility. Alice's COLDKEY stays the classic genesis-funded dev seed.
+# owner  hot ss58: 5HE91XqGKKkJEZdMGqD2GgkJLdQR2G5ZWUYsz42zjWvXZnkD
+DEV_OWNER_HOT_SEED = (
+    "0xf05f900407710f65e378149cf06951899b1fceb573c17045df493fdd7ab5e897"
+)
+# alice  hot ss58: 5DSSvKMW652MA749h5y4UTXeQJqDGuu3MA5CJ7Hb5HHZMu8Q
+DEV_ALICE_HOT_SEED = (
+    "0x1570daaa15619853b6abc29ca074dc49cd8c8f509e3ad679bbb38cfb7900ad10"
+)
+# bob    hot ss58: 5CcPtWDUmeMgxzp3pwPtRVEuU1N4CjVK5D6iAmb12JNiFBdx
+DEV_BOB_HOT_SEED = (
+    "0x9ad96a4f79e29d070143caeb69a2093b0f7bca311c4e9aeb40955f0e71e5a6bc"
 )
 
 
@@ -222,19 +240,28 @@ def _regenerate_wallet_key(
 
 
 def ensure_dev_wallet(
-    name: str, seed: str, hotkey: str = "default", dry_run=False
+    name: str,
+    cold_seed: str,
+    hot_seed: str,
+    hotkey: str = "default",
+    dry_run=False,
 ):
-    """Ensure a wallet exists using a *pinned dev seed* (regen, not random new_coldkey).
+    """Ensure a wallet exists using *pinned dev seeds* (regen, not random new_coldkey).
 
     This follows the fdn-subnet pattern of using well-known dev keys (Alith etc.)
     so that owner addresses / UIDs are stable for the single-node pyramid.
-    We regen BOTH coldkey (for sudo/ownership) and hotkey (for registration + signing weights).
+    Coldkey (sudo/ownership/funds) and hotkey (registration + signing weights)
+    are DISTINCT pinned identities, mirroring real-network key hygiene.
     """
+    if cold_seed == hot_seed:
+        raise ValueError(
+            "cold_seed and hot_seed must differ (key-separation contract)"
+        )
     logger.info(
-        f"Ensuring dev wallet {name} (pinned seed for cold+hot, hotkey={hotkey}) ..."
+        f"Ensuring dev wallet {name} (pinned distinct cold/hot seeds, hotkey={hotkey}) ..."
     )
-    _regenerate_wallet_key("coldkey", name, seed, hotkey, dry_run=dry_run)
-    _regenerate_wallet_key("hotkey", name, seed, hotkey, dry_run=dry_run)
+    _regenerate_wallet_key("coldkey", name, cold_seed, hotkey, dry_run=dry_run)
+    _regenerate_wallet_key("hotkey", name, hot_seed, hotkey, dry_run=dry_run)
 
     logger.info(f"  dev wallet {name} ready (cold+hot seed-pinned).")
 
@@ -502,18 +529,21 @@ def registration_plan(owner_wallet: str = "owner") -> list[dict]:
         {
             "wallet": owner_wallet,
             "seed": DEV_OWNER_SEED,
+            "hot_seed": DEV_OWNER_HOT_SEED,
             "role": "owner",
             "validator": True,
         },
         {
             "wallet": "alice",
             "seed": DEV_ALICE_SEED,
+            "hot_seed": DEV_ALICE_HOT_SEED,
             "role": "validator",
             "validator": True,
         },
         {
             "wallet": "bob",
             "seed": DEV_BOB_SEED,
+            "hot_seed": DEV_BOB_HOT_SEED,
             "role": "miner",
             "validator": False,
         },
@@ -878,7 +908,12 @@ def main():
     # signs set_weights), bob (miner). Alice also stays the funding source.
     triad = registration_plan(owner)
     for entry in triad:
-        ensure_dev_wallet(entry["wallet"], entry["seed"], dry_run=dry_run)
+        ensure_dev_wallet(
+            entry["wallet"],
+            entry["seed"],
+            entry["hot_seed"],
+            dry_run=dry_run,
+        )
 
     # Fund the actual addresses of the wallets we will use.
     fund_from_alice(owner, 5000, chain_endpoint, dry_run=dry_run)
