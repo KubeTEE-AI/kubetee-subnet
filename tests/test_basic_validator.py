@@ -87,6 +87,9 @@ BASE_ENV = {
     # dynamic share exactly 0.1 -> historical [0.9, 0, 0.1] expectations hold.
     "KUBETEE_USD_PER_ALPHA_OVERRIDE": "1.0",
     "KUBETEE_MINER_BUCKET_ALPHA_OVERRIDE": "24",
+    # Pinned TEST card (cheapest class $2 drives the debug node price);
+    # the production default card is asserted in its own tests.
+    "KUBETEE_GPU_USD_PRICES": "H100=2.00,H200=2.34,B200=4.34,B300=5.34",
 }
 
 
@@ -369,7 +372,6 @@ def test_from_env_happy_path_pins_plan_defaults():
     config = ValidatorConfig.from_env(make_env())
     assert config.payout_window_hours == 1.2
     assert config.price_divergence_max == 0.10
-    assert config.gpu_usd_prices["H100"] == 2.00
     assert config.poll_seconds == 60.0
     assert config.max_consecutive_skips == 10
     assert config.reconcile_min_cycles == 3
@@ -1731,3 +1733,17 @@ def test_divergent_feed_price_skips_cycle():
     validator._chain_alpha_tao = lambda subtensor: 0.0067  # feed 3x off
     assert validator.run_cycle() == "skip"
     assert subtensor.set_weights_calls == []
+
+
+def test_default_usd_card_is_the_owner_decision():
+    """Owner card 2026-07-24: H200 $3.50, B200 $6.50, B300 $8.00 per
+    GPU-hour. H100 deliberately absent -> earns $0 (fail-closed)."""
+    env = make_env()
+    env.pop("KUBETEE_GPU_USD_PRICES")
+    config = ValidatorConfig.from_env(env)
+    assert config.gpu_usd_prices == {
+        "H200": 3.50,
+        "B200": 6.50,
+        "B300": 8.00,
+    }
+    assert "H100" not in config.gpu_usd_prices

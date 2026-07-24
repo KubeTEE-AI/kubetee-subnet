@@ -44,13 +44,13 @@ DEFAULT_GPU_WEIGHTS: dict[str, float] = {
     "B300": 2.67,
 }
 
-# Placeholder $/GPU/hour card (Targon-ratio-consistent, $2 H100 base) until
-# the operator's real USD price card lands via KUBETEE_GPU_USD_PRICES.
+# The operator's USD price card (owner decision 2026-07-24), overridable via
+# KUBETEE_GPU_USD_PRICES. H100 is DELIBERATELY absent: H100 clusters pass
+# validation but earn $0 under this card (fail-closed pricing).
 DEFAULT_GPU_USD_PRICES: dict[str, float] = {
-    "H100": 2.00,
-    "H200": 2.34,
-    "B200": 4.34,
-    "B300": 5.34,
+    "H200": 3.50,
+    "B200": 6.50,
+    "B300": 8.00,
 }
 
 _GPU_CLASS = re.compile(r"(?<![A-Z0-9])(H100|H200|B200|B300)(?![A-Z0-9])")
@@ -191,7 +191,10 @@ def usd_target_per_hour(
     if not isinstance(nodes, list):
         return 0.0
     if profile is ValidationProfile.DEBUG:
-        return float(len(nodes)) * float(usd_card.get("H100", 0.0))
+        # The disposable local stack has no GPU inventory: price each active
+        # node at the card's cheapest class so the v3 path stays exercised.
+        cheapest = min(usd_card.values()) if usd_card else 0.0
+        return float(len(nodes)) * float(cheapest)
     total = 0.0
     for node in nodes:
         count = node_gpu_count(node)
