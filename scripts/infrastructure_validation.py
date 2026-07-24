@@ -22,6 +22,35 @@ NETUID_LABEL = "kubetee.ai/netuid"
 NETWORK_LABEL = "kubetee.ai/network"
 ORIGIN_FP_PREFIX_LABEL = "kubetee.ai/origin-fp-prefix"
 ENROLLMENT_UID_ANNOTATION = "kubetee.ai/enrollment-uid"
+BAN_LABEL = "kubetee.ai/ban"
+
+_KUBETEE_NAMESPACE = "kubetee.ai/"
+_MINER_ALIAS_PREFIX = "miner-"
+
+
+def canonicalize_kubetee_keys(mapping: object) -> dict:
+    """Return a copy of a Rancher labels/annotations map that also exposes
+    every ``kubetee.ai/miner-<suffix>`` key under the canonical
+    ``kubetee.ai/<suffix>``.
+
+    Provisioners may label a cluster with either the canonical binding keys
+    or a ``miner-``-prefixed alias (e.g. ``kubetee.ai/miner-hotkey``); both
+    forms resolve to the same binding field. A canonical key already present
+    always wins over an alias. Non-``kubetee.ai/`` keys pass through
+    untouched, and a non-dict input yields an empty dict (fail-closed).
+    """
+    if not isinstance(mapping, dict):
+        return {}
+    canonical = dict(mapping)
+    for key, value in mapping.items():
+        if not isinstance(key, str) or not key.startswith(_KUBETEE_NAMESPACE):
+            continue
+        suffix = key[len(_KUBETEE_NAMESPACE) :]
+        if suffix.startswith(_MINER_ALIAS_PREFIX):
+            aliased = _KUBETEE_NAMESPACE + suffix[len(_MINER_ALIAS_PREFIX) :]
+            canonical.setdefault(aliased, value)
+    return canonical
+
 
 _CPU_QUANTITY = re.compile(r"^((?:0|[1-9][0-9]*)(?:\.[0-9]+)?)(m)?$")
 _MEMORY_QUANTITY = re.compile(
@@ -38,10 +67,6 @@ _MEMORY_FACTORS = {
     "G": 10**9,
     "T": 10**12,
 }
-_ORIGIN_FP_PREFIX = re.compile(r"^[0-9a-f]{63}$")
-_CANONICAL_UUID = re.compile(
-    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
-)
 _SUPPORTED_GPU = re.compile(r"(?<![A-Z0-9])(H100|H200|B200|B300)(?![A-Z0-9])")
 _BASE_TEN_INTEGER = re.compile(r"^(?:0|[1-9][0-9]*)$")
 _MAX_INT64 = 2**63 - 1
@@ -50,17 +75,6 @@ _RANCHER_CLUSTER_ID_PART = r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?"
 _RANCHER_NODE_ID_PART = r"[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?"
 _RANCHER_NODE_ID = re.compile(
     rf"^{_RANCHER_CLUSTER_ID_PART}:{_RANCHER_NODE_ID_PART}$"
-)
-_REQUIRED_BINDING_LABELS = (
-    BINDING_ID_LABEL,
-    HOTKEY_LABEL,
-    COLDKEY_LABEL,
-    PROVIDER_ID_LABEL,
-    BINDING_STATUS_LABEL,
-    GENERATION_LABEL,
-    NETUID_LABEL,
-    NETWORK_LABEL,
-    ORIGIN_FP_PREFIX_LABEL,
 )
 _PRESSURE_CONDITIONS = (
     "MemoryPressure",
@@ -103,6 +117,7 @@ class ValidationReason(enum.Enum):
     GPU_INVENTORY_INVALID = "gpu_inventory_invalid"
     GPU_MODEL_UNSUPPORTED = "gpu_model_unsupported"
     RUNTIME_HANDLER_MISSING = "runtime_handler_missing"
+    BANNED = "banned"
 
 
 @dataclasses.dataclass(frozen=True)
@@ -202,78 +217,6 @@ def parse_memory_bytes(value: object) -> int | None:
     return int(scaled)
 
 
-@dataclasses.dataclass(frozen=True)
-class _BindingMetadata:
-    cluster_id: str
-    binding_id: str
-    hotkey: str
-    coldkey: str
-    status: str
-    generation: int
-    netuid: int
-    network: str
-    enrollment_uid: int
-
-
-def _parse_base_ten_integer(value: object) -> int | None:
-    if isinstance(value, bool) or not isinstance(value, str):
-        return None
-    if not _BASE_TEN_INTEGER.fullmatch(value):
-        return None
-    if len(value) > 19:
-        return None
-    parsed = int(value)
-    return parsed if parsed <= _MAX_INT64 else None
-
-
-def _binding_metadata(cluster: dict) -> _BindingMetadata | None:
-    cluster_id = cluster.get("id")
-    labels = cluster.get("labels")
-    annotations = cluster.get("annotations")
-    if not isinstance(cluster_id, str) or not cluster_id:
-        return None
-    if not isinstance(labels, dict) or not isinstance(annotations, dict):
-        return None
-
-    values: dict[str, str] = {}
-    for key in _REQUIRED_BINDING_LABELS:
-        value = labels.get(key)
-        if not isinstance(value, str) or not value or len(value) > 63:
-            return None
-        values[key] = value
-
-    enrollment_uid = _parse_base_ten_integer(
-        annotations.get(ENROLLMENT_UID_ANNOTATION)
-    )
-    generation = _parse_base_ten_integer(values[GENERATION_LABEL])
-    netuid = _parse_base_ten_integer(values[NETUID_LABEL])
-    if enrollment_uid is None or generation is None or netuid is None:
-        return None
-    if generation < 1:
-        return None
-    if not _CANONICAL_UUID.fullmatch(values[PROVIDER_ID_LABEL]):
-        return None
-    if not _ORIGIN_FP_PREFIX.fullmatch(values[ORIGIN_FP_PREFIX_LABEL]):
-        return None
-
-    return _BindingMetadata(
-        cluster_id=cluster_id,
-        binding_id=values[BINDING_ID_LABEL],
-        hotkey=values[HOTKEY_LABEL],
-        coldkey=values[COLDKEY_LABEL],
-        status=values[BINDING_STATUS_LABEL],
-        generation=generation,
-        netuid=netuid,
-        network=values[NETWORK_LABEL],
-        enrollment_uid=enrollment_uid,
-    )
-
-
-def has_canonical_binding_metadata(cluster: object) -> bool:
-    """Whether a Rancher object carries the complete canonical binding shape."""
-    return isinstance(cluster, dict) and _binding_metadata(cluster) is not None
-
-
 def _condition_status(conditions: object, name: str):
     if not isinstance(conditions, list):
         return None
@@ -313,16 +256,6 @@ def _suspended(
         ValidationStatus.SUSPENDED,
         reason,
         cluster_id,
-    )
-
-
-def _binding_id_count(binding_id: str, clusters: list[dict]) -> int:
-    return sum(
-        1
-        for cluster in clusters
-        if isinstance(cluster, dict)
-        and isinstance(cluster.get("labels"), dict)
-        and cluster["labels"].get(BINDING_ID_LABEL) == binding_id
     )
 
 
@@ -474,11 +407,18 @@ def validate_miner(
     neuron: dict,
     clusters: list[dict],
     nodes_by_cluster: dict[str, list[dict]],
-    expected_netuid: int,
-    expected_network: str,
     policy: InfrastructurePolicy,
 ) -> ValidationVerdict:
-    """Evaluate one miner against a complete Rancher/metagraph snapshot."""
+    """Evaluate one miner against a complete Rancher/metagraph snapshot.
+
+    The cluster<->miner binding IS the hotkey: the miner's hotkey is its
+    on-chain identity and the 1:1 chain<->cluster identifier. A cluster is
+    the miner's iff exactly one cluster carries ``kubetee.ai/hotkey`` (or the
+    ``kubetee.ai/miner-hotkey`` alias) == the neuron hotkey. All former
+    binding metadata (coldkey, enrollment-uid, network, netuid, binding-id,
+    provider-id, generation, origin-fp-prefix, the ENROLLED sentinel) is no
+    longer part of the scoring binding.
+    """
     if not isinstance(policy, InfrastructurePolicy):
         raise TypeError("policy must be an InfrastructurePolicy")
 
@@ -488,7 +428,8 @@ def validate_miner(
         for cluster in clusters
         if isinstance(cluster, dict)
         and isinstance(cluster.get("labels"), dict)
-        and cluster["labels"].get(HOTKEY_LABEL) == hotkey
+        and canonicalize_kubetee_keys(cluster["labels"]).get(HOTKEY_LABEL)
+        == hotkey
     ]
     if not matches:
         return _suspended(ValidationReason.CLUSTER_MISSING)
@@ -501,21 +442,21 @@ def validate_miner(
         False,
     ):
         return _suspended(ValidationReason.BINDING_METADATA_INVALID, cluster)
-    metadata = _binding_metadata(cluster)
-    if metadata is None:
+
+    cluster_id = cluster.get("id")
+    if not isinstance(cluster_id, str) or not cluster_id:
         return _suspended(ValidationReason.BINDING_METADATA_INVALID, cluster)
-    if metadata.status != "ENROLLED":
-        return _suspended(ValidationReason.BINDING_NOT_ENROLLED, cluster)
-    if (
-        metadata.hotkey != neuron.get("hotkey")
-        or metadata.coldkey != neuron.get("coldkey")
-        or metadata.enrollment_uid != neuron.get("uid")
-        or metadata.netuid != expected_netuid
-        or metadata.network != expected_network
-    ):
-        return _suspended(ValidationReason.BINDING_IDENTITY_MISMATCH, cluster)
-    if _binding_id_count(metadata.binding_id, clusters) != 1:
-        return _suspended(ValidationReason.BINDING_DUPLICATE, cluster)
+
+    # Identity binding IS the hotkey match above (the unique cluster carrying
+    # kubetee.ai/hotkey == the neuron hotkey). No further label identity is
+    # required.
+
+    # Operator safety switch: kubetee.ai/ban == "true" (alias miner-ban) scores
+    # this miner 0 without deleting anything. Deliberately centralised; the
+    # chain-deregistration -> reaper path removes the cluster over time.
+    labels = canonicalize_kubetee_keys(cluster["labels"])
+    if labels.get(BAN_LABEL) == "true":
+        return _suspended(ValidationReason.BANNED, cluster)
 
     if not _active(cluster):
         return _suspended(ValidationReason.CLUSTER_NOT_READY, cluster)
@@ -525,12 +466,10 @@ def validate_miner(
     ):
         return _suspended(ValidationReason.CLUSTER_NOT_READY, cluster)
 
-    nodes = nodes_by_cluster.get(metadata.cluster_id)
+    nodes = nodes_by_cluster.get(cluster_id)
     if not isinstance(nodes, list) or not nodes:
         return _suspended(ValidationReason.NODE_INVENTORY_EMPTY, cluster)
-    if not all(
-        _node_ready(node, metadata.cluster_id, policy) for node in nodes
-    ):
+    if not all(_node_ready(node, cluster_id, policy) for node in nodes):
         return _suspended(ValidationReason.NODE_NOT_READY, cluster)
     node_ids = [node["id"] for node in nodes]
     if len(node_ids) != len(set(node_ids)):
@@ -539,7 +478,7 @@ def validate_miner(
         return ValidationVerdict(
             ValidationStatus.ELIGIBLE,
             ValidationReason.ELIGIBLE,
-            metadata.cluster_id,
+            cluster_id,
         )
 
     if not _topology_ready(nodes, policy):
@@ -565,5 +504,5 @@ def validate_miner(
     return ValidationVerdict(
         ValidationStatus.ELIGIBLE,
         ValidationReason.ELIGIBLE,
-        metadata.cluster_id,
+        cluster_id,
     )

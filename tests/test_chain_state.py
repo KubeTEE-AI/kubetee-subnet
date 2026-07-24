@@ -217,7 +217,7 @@ def test_query_wallet_stake_success():
         chain_endpoint="ws://ignored",
         subtensor=fake,
     )
-    assert result == {"stake_tao": 12.5, "error": None}
+    assert result == {"stake_tao": 12.5, "unit": "TAO", "error": None}
 
 
 def test_query_wallet_stake_error_is_reported_not_swallowed():
@@ -231,3 +231,29 @@ def test_query_wallet_stake_error_is_reported_not_swallowed():
     )
     assert result["stake_tao"] is None
     assert result["error"] == "HTTP 429"
+
+
+def test_alpha_balance_reports_alpha_units_instead_of_failing():
+    """v11 subnet stakes are alpha Balances whose .tao accessor raises;
+    the query must report the alpha amount, not a query failure."""
+
+    class _AlphaBalance:
+        @property
+        def tao(self):
+            raise TypeError(
+                "This balance is subnet-2 alpha, not TAO. Use .alpha"
+            )
+
+        alpha = 42.5
+
+    class _AlphaStaking:
+        def get(self, coldkey_ss58, hotkey_ss58, netuid):
+            return _AlphaBalance()
+
+    class _AlphaSub:
+        staking = _AlphaStaking()
+
+    result = query_wallet_stake(2, "ck", "hk", "ws://x", subtensor=_AlphaSub())
+    assert result["error"] is None
+    assert result["stake_tao"] == 42.5
+    assert result["unit"] == "alpha"

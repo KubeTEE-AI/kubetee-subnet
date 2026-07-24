@@ -10,7 +10,7 @@ Bittensor 11+ (signed requests for neuron comms + unified `bittensor` SDK).
 
 **Early Access scoring boundary:** the basic validator applies a binary,
 fail-closed **infrastructure-readiness** policy to a fresh Rancher v3 snapshot.
-Production checks canonical enrollment identity, cluster/node readiness, HA
+Production checks the miner's hotkey identity, cluster/node readiness, HA
 roles, per-node CPU and memory, supported eight-GPU workers, passthrough
 wiring, and the confidential runtime handler. This does **not** prove fresh
 TEE attestation, a live tunnel/probe, workload identity, Armada readiness, or
@@ -31,47 +31,67 @@ Each cycle (every `KUBETEE_POLL_SECONDS`, minimum 60s) the validator:
    and reads its nodes.
 3. **Runs deregistration reconciliation** (the single guarded Rancher
    mutation — see below).
-4. **Validates each miner** binary fail-closed. The `production` profile
-   requires the canonical binding, Ready cluster/nodes, 3 etcd, 3
-   control-plane, a schedulable worker, at least 8 CPU/16 GiB per active
-   node, and supported eight-GPU passthrough workers exposing
-   `kata-qemu-nvidia-gpu-tdx`. The explicit `debug` profile retains strict
-   identity/state checks but accepts one active node for the disposable
-   local stack. A complete per-miner failure scores `0` immediately.
-5. **Sets weights**, signed by **alice** (`BT_WALLET=alice`): each scoring
-   miner gets `KUBETEE_MINER_SHARE / N`; the owner recycle UID gets
-   `1 − KUBETEE_MINER_SHARE` (or `1.0` when no miner scores); all other
-   UIDs get explicit zero. Success is claimed only on chain acceptance.
+4. **Validates each miner** binary fail-closed. Identity is the hotkey: the
+   miner's unique cluster carries `kubetee.ai/hotkey == neuron hotkey`, is not
+   banned (`kubetee.ai/ban != "true"`), and is ready. The `production`
+   profile additionally requires Ready cluster/nodes, 3 etcd, 3 control-plane,
+   a schedulable worker, at least 8 CPU/16 GiB per active node, and supported
+   eight-GPU passthrough workers exposing `kata-qemu-nvidia-gpu-tdx`. The
+   explicit `debug` profile accepts one active node for the disposable local
+   stack. A banned cluster, an ambiguous (duplicate-hotkey) match, a missing
+   cluster, or a readiness failure scores `0` immediately.
+5. **Sets weights**, signed by **alice** (`BT_WALLET=alice`) — scoring v3,
+   USD-priced: each earning miner has a per-window USD target
+   (`GPUs × $/GPU/hour card` (`KUBETEE_GPU_USD_PRICES`; debug: node count ×
+   H100 price) `× tenure × KUBETEE_PAYOUT_WINDOW_HOURS`), converted to Alpha
+   at live prices (taostats TAO/USD × SN90 alpha/TAO, cross-checked against
+   the on-chain pool; `KUBETEE_USD_PER_ALPHA_OVERRIDE` pins it on the local
+   stack). The **miner share is computed, not configured**: share =
+   min(1, Σ target_alpha / miner-bucket alpha per window
+   (`KUBETEE_MINER_BUCKET_ALPHA_OVERRIDE` until the chain emission read
+   lands)); weights are pro-rata to targets; the owner recycle UID gets the
+   remainder. Tenure ramps 1.0→1.2× over 7 days; probation
+   (`KUBETEE_PROBATION_CYCLES`, default 60) gates new/recovered miners at 0.
+   State persists across restarts and is chain-bootstrapped if lost. A price
+   feed failure or divergence **skips the cycle fail-closed** (previous
+   weights persist; counters freeze). Success is claimed only on chain
+   acceptance.
 6. **Logs and exports Prometheus metrics** (structured, redacted — the
    bearer token and response bodies never appear in logs or metrics).
 
 With no scoring miner the subnet degenerates to owner-only recycle
 (100% owner weight) — the behavior of the retired owner validator.
 
-### Canonical enrollment binding
+### Cluster binding (two labels)
 
-Onboarding writes the platform binding contract to the Rancher Cluster: the
-nine labels `kubetee.ai/binding-id`, `kubetee.ai/hotkey`,
-`kubetee.ai/coldkey`, `kubetee.ai/provider-id`,
-`kubetee.ai/binding-status`, `kubetee.ai/generation`,
-`kubetee.ai/netuid`, `kubetee.ai/network`, and
-`kubetee.ai/origin-fp-prefix`, plus the `kubetee.ai/enrollment-uid`
-annotation. The
-validator reads only that annotation and never copies or logs other
-enrollment evidence.
+The validator↔cluster binding is the **hotkey**. The validator reads exactly
+two labels on a Rancher cluster and nothing else:
 
-`kubetee.ai/binding-status=ENROLLED` means onboarding completed; it is not an
-eligibility verdict. Every validation cycle rechecks the binding against the
-fresh metagraph. Missing/malformed identity, a non-`ENROLLED` state, a stale
-UID/coldkey/netuid/network, duplicate hotkey candidate, or duplicate binding
-ID scores `0`. The validator never writes validation state back to Rancher.
+- **`kubetee.ai/hotkey`** — the miner's SS58 hotkey: its identity and the 1:1
+  chain↔cluster link. The alias `kubetee.ai/miner-hotkey` is also accepted
+  (hand-provisioned / dev clusters). **At most one cluster per hotkey**
+  (platform-enforced); two clusters carrying the same hotkey are ambiguous and
+  score `0`.
+- **`kubetee.ai/ban`** — an operator safety switch. Value exactly `"true"` ⇒
+  that miner scores `0`. Absent or any other value ⇒ not banned. The ban does
+  not delete anything; sustained score `0` deregisters the miner on-chain and
+  the reaper then removes the cluster.
 
-### Configurable weight split (D12)
+The former rich enrollment binding (`binding-id`, `coldkey`, `provider-id`,
+`binding-status`/`ENROLLED`, `generation`, `netuid`, `network`,
+`origin-fp-prefix`, the `enrollment-uid` annotation) is **no longer read** by
+the validator. The platform may still write additional labels for its own
+purposes; the validator ignores everything outside the two above. The
+validator never writes validation state back to Rancher.
 
-`KUBETEE_MINER_SHARE` lives in `.env` (see `.env.example`), default
-**0.10** — i.e. 10% to scoring miners, 90% recycled to the subnet-owner
-UID. It must be finite and within `[0, 1]`; anything else refuses to start.
-Changing the split is a `.env` edit + container restart, no code change.
+### Dynamic weight split (scoring v3, supersedes D12's fixed share)
+
+`KUBETEE_MINER_SHARE` is retired. The miner share is computed each cycle
+from USD compensation targets at live token prices (see step 5 above);
+everything miners don't earn recycles to the subnet-owner UID. The USD
+price card (`KUBETEE_GPU_USD_PRICES`, $/GPU/hour) and payout window are
+`.env`-tunable; the price source is the taostats API
+(`TAOSTATS_API_KEY`) or a pinned override for local runs.
 
 ### Recycle mechanism (D13)
 

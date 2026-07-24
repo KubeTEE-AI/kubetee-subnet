@@ -242,3 +242,30 @@ def test_cycle_outcome_counter():
     assert 'kubetee_cycles_total{outcome="skip"} 1.0' in text
     assert 'kubetee_cycles_total{outcome="weights_set"} 1.0' in text
     assert 'kubetee_cycles_total{outcome="weights_rejected"} 1.0' in text
+
+
+def test_cluster_change_removes_ghost_series():
+    """A hotkey moving to a new cluster_id must not leave zero-valued
+    series under the old (hotkey, cluster_id) label pair."""
+    metrics = ValidatorMetrics(max_consecutive_skips=10)
+    entry = {
+        "hotkey": "hk",
+        "cluster_id": "c-old",
+        "state": "earning",
+        "probation_cycles": 0,
+        "tenure_factor": 1.0,
+        "capacity": 1.0,
+        "score": 1.0,
+        "weight": 0.1,
+        "gpu_count": 0,
+        "node_count": 1,
+        "gpu_class": None,
+        "reason": "eligible",
+        "transitioned": None,
+    }
+    metrics.record_miner_scoring([entry])
+    entry2 = dict(entry, cluster_id="c-new")
+    metrics.record_miner_scoring([entry2])
+    text = metrics.exposition().decode()
+    assert 'cluster_id="c-new"' in text
+    assert 'cluster_id="c-old"' not in text

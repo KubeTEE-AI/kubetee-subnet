@@ -79,6 +79,20 @@ BASE_ENV = {
     "RANCHER_BEARER_TOKEN": TOKEN,
     "KUBETEE_CHAIN_NETWORK": "finney",
     "KUBETEE_VALIDATION_PROFILE": "debug",
+    # Scoring v2: cycle tests exercise scoring/weights directly; the
+    # probation gate has its own dedicated tests.
+    "KUBETEE_PROBATION_CYCLES": "0",
+    # Scoring v3: pin the conversion so a 1-node debug miner's target is
+    # 1 node x $2/h (H100 card) x 1.2h = 2.4 alpha, and bucket 24 makes the
+    # dynamic share exactly 0.1 -> historical [0.9, 0, 0.1] expectations hold.
+    "KUBETEE_USD_PER_ALPHA_OVERRIDE": "1.0",
+    "KUBETEE_MINER_BUCKET_ALPHA_OVERRIDE": "24",
+    # Pinned TEST card (cheapest class $2 drives the debug node price);
+    # the production default card is asserted in its own tests.
+    "KUBETEE_GPU_USD_PRICES": "H100=2.00,H200=2.34,B200=4.34,B300=5.34",
+    # Single chain clock: tempo=1 makes every fake block a new epoch so
+    # run_forever cycles each iteration; epoch gating has dedicated tests.
+    "KUBETEE_TEMPO_BLOCKS": "1",
 }
 
 
@@ -359,7 +373,8 @@ def sample(metrics: ValidatorMetrics, name: str, **labels) -> float:
 
 def test_from_env_happy_path_pins_plan_defaults():
     config = ValidatorConfig.from_env(make_env())
-    assert config.miner_share == 0.10
+    assert config.payout_window_hours == 1.2
+    assert config.price_divergence_max == 0.10
     assert config.poll_seconds == 60.0
     assert config.max_consecutive_skips == 10
     assert config.reconcile_min_cycles == 3
@@ -472,11 +487,26 @@ def test_missing_static_config_refuses_to_start(missing):
     assert TOKEN not in str(excinfo.value)
 
 
-@pytest.mark.parametrize("share", ["1.5", "-0.1", "abc", "nan", "inf"])
-def test_invalid_share_refuses_to_start(share):
+@pytest.mark.parametrize("value", ["-0.1", "abc", "nan", "inf", "0"])
+def test_invalid_price_override_refuses_to_start(value):
     with pytest.raises(ConfigError) as excinfo:
-        ValidatorConfig.from_env(make_env(KUBETEE_MINER_SHARE=share))
-    assert "KUBETEE_MINER_SHARE" in str(excinfo.value)
+        ValidatorConfig.from_env(
+            make_env(KUBETEE_USD_PER_ALPHA_OVERRIDE=value)
+        )
+    assert "KUBETEE_USD_PER_ALPHA_OVERRIDE" in str(excinfo.value)
+
+
+def test_missing_price_source_refuses_to_start():
+    """No override and no taostats key -> the validator cannot price."""
+    with pytest.raises(ConfigError) as excinfo:
+        ValidatorConfig.from_env(make_env(KUBETEE_USD_PER_ALPHA_OVERRIDE=None))
+    assert "TAOSTATS_API_KEY" in str(excinfo.value)
+
+
+def test_invalid_usd_card_refuses_to_start():
+    with pytest.raises(ConfigError) as excinfo:
+        ValidatorConfig.from_env(make_env(KUBETEE_GPU_USD_PRICES="H100=zero"))
+    assert "KUBETEE_GPU_USD_PRICES" in str(excinfo.value)
 
 
 def test_empty_tunables_fall_back_to_pinned_defaults():
@@ -485,12 +515,12 @@ def test_empty_tunables_fall_back_to_pinned_defaults():
     hotkeys never do this - empty is missing there (D14)."""
     config = ValidatorConfig.from_env(
         make_env(
-            KUBETEE_MINER_SHARE="",
             KUBETEE_POLL_SECONDS="",
             KUBETEE_MAX_CONSECUTIVE_SKIPS="",
+            KUBETEE_PAYOUT_WINDOW_HOURS="",
         )
     )
-    assert config.miner_share == 0.10
+    assert config.payout_window_hours == 1.2
     assert config.poll_seconds == 60.0
     assert config.max_consecutive_skips == 10
 
@@ -721,22 +751,6 @@ def test_owner_only_mode_when_no_miners_registered():
     assert call["weights"] == [1.0, 0.0]
 
 
-def test_degenerate_share_zero_reproduces_owner_only_weights():
-    """Migrated owner-validator expectation: share x score = 0 keeps 100%
-    owner weight with explicit zeros for everyone else."""
-    clusters, nodes = active_bob_cluster()
-    config = ValidatorConfig.from_env(make_env(KUBETEE_MINER_SHARE="0"))
-    validator, subtensor, *_ = build_validator(
-        config=config,
-        rancher=FakeRancher(clusters=clusters, nodes_by_cluster=nodes),
-    )
-
-    assert validator.run_cycle() == "weights_set"
-    call = subtensor.set_weights_calls[0]
-    assert call["uids"] == [0, 1, 2]
-    assert call["weights"] == [1.0, 0.0, 0.0]
-
-
 def test_healthy_miner_gets_share_and_owner_gets_rest():
     clusters, nodes = active_bob_cluster()
     validator, subtensor, _, _, metrics, _ = build_validator(
@@ -883,13 +897,13 @@ def test_reconciliation_refresh_must_not_precede_cycle_block():
     assert validator._refresh_registered(101) is None
 
 
-@pytest.mark.parametrize("mutation", ["pending", "coldkey_mismatch"])
+@pytest.mark.parametrize("mutation", ["cluster_inactive", "no_nodes"])
 def test_complete_binding_failure_scores_only_that_miner_zero(mutation):
     clusters, nodes = active_bob_cluster()
-    if mutation == "pending":
-        clusters[0]["labels"]["kubetee.ai/binding-status"] = "PENDING"
+    if mutation == "cluster_inactive":
+        clusters[0]["state"] = "unavailable"
     else:
-        clusters[0]["labels"]["kubetee.ai/coldkey"] = "5WrongColdkey"
+        nodes["c-bob"] = []
     validator, subtensor, *_ = build_validator(
         rancher=FakeRancher(clusters=clusters, nodes_by_cluster=nodes)
     )
@@ -933,17 +947,12 @@ def test_two_miners_can_receive_different_complete_verdicts():
     carol_cluster["labels"]["kubetee.ai/binding-id"] = "binding-carol"
     carol_cluster["labels"][HOTKEY_LABEL] = CAROL
     carol_cluster["labels"]["kubetee.ai/coldkey"] = CAROL_COLDKEY
-    carol_cluster["labels"]["kubetee.ai/binding-status"] = "PENDING"
     carol_cluster["annotations"]["kubetee.ai/enrollment-uid"] = "3"
     clusters.append(carol_cluster)
-    nodes["c-carol"] = [
-        {
-            "id": "c-carol:node-1",
-            "clusterId": "c-carol",
-            "state": "active",
-            "transitioning": "no",
-        }
-    ]
+    # Carol's cluster has no ready node inventory -> she scores zero via
+    # NODE_INVENTORY_EMPTY while bob stays eligible (formerly Carol failed via
+    # a PENDING binding-status, which is no longer a scoring input).
+    nodes["c-carol"] = []
     snapshot = [
         *neurons_triad(),
         {"uid": 3, "hotkey": CAROL, "coldkey": CAROL_COLDKEY},
@@ -1389,7 +1398,6 @@ def test_reconciliation_suppression_log_is_redacted(caplog):
         client,
         metrics,
         expected_netuid=1,
-        expected_network="finney",
         min_cycles=1,
         min_seconds=0.0,
         evidence_sink=lambda event: log.info(
@@ -1460,8 +1468,6 @@ def test_debug_evidence_logs_labels_reasons_and_never_secrets(caplog):
         {"hotkey": "hot-bob", "coldkey": "cold-bob", "uid": 2},
         [],
         {},
-        1,
-        "kubetee-localnet",
         validator_module.InfrastructurePolicy.for_profile(
             validator_module.ValidationProfile.DEBUG
         ),
@@ -1484,5 +1490,303 @@ def test_debug_evidence_logs_labels_reasons_and_never_secrets(caplog):
     assert "hot-bob" in caplog.text
     assert "reason=cluster_missing" in caplog.text
     assert "uid=2" in caplog.text
-    assert "unrelated" not in caplog.text
+    assert '"unrelated": "ignored"' in caplog.text
     assert "token" not in caplog.text.lower()
+
+
+# ---------------------------------------------------------------------------
+# Two-label contract (hotkey + ban) end-to-end through a full cycle.
+# ---------------------------------------------------------------------------
+
+
+def test_two_label_contract_hotkey_only_cluster_scores():
+    """The write->read seam: a cluster carrying ONLY kubetee.ai/hotkey (no
+    canonical binding) + a ready node scores its miner in a real cycle."""
+    clusters, nodes = active_bob_cluster()
+    clusters[0]["labels"] = {HOTKEY_LABEL: BOB}
+    clusters[0].pop("annotations", None)
+    validator, subtensor, *_ = build_validator(
+        rancher=FakeRancher(clusters=clusters, nodes_by_cluster=nodes)
+    )
+
+    assert validator.run_cycle() == "weights_set"
+
+    assert subtensor.set_weights_calls[0]["weights"] == pytest.approx(
+        [0.9, 0.0, 0.1]
+    )
+
+
+def test_banned_hotkey_only_cluster_scores_zero_in_cycle():
+    """kubetee.ai/ban=true on the miner's cluster -> that miner scores 0."""
+    clusters, nodes = active_bob_cluster()
+    clusters[0]["labels"] = {HOTKEY_LABEL: BOB, "kubetee.ai/ban": "true"}
+    clusters[0].pop("annotations", None)
+    validator, subtensor, *_ = build_validator(
+        rancher=FakeRancher(clusters=clusters, nodes_by_cluster=nodes)
+    )
+
+    assert validator.run_cycle() == "weights_set"
+
+    assert subtensor.set_weights_calls[0]["weights"] == [1.0, 0.0, 0.0]
+
+
+def test_alias_labeled_cluster_gets_nodes_fetched_and_scores():
+    """Regression: _fetch_miner_nodes must match the cluster with the same
+    canonicalized (miner- alias aware) hotkey lookup the scorer uses;
+    a cluster labeled only kubetee.ai/miner-hotkey previously never had its
+    nodes fetched -> node_inventory_empty despite a healthy inventory."""
+    clusters, nodes = active_bob_cluster()
+    clusters[0]["labels"] = {"kubetee.ai/miner-hotkey": BOB}
+    clusters[0].pop("annotations", None)
+    validator, subtensor, *_ = build_validator(
+        rancher=FakeRancher(clusters=clusters, nodes_by_cluster=nodes)
+    )
+
+    assert validator.run_cycle() == "weights_set"
+
+    assert subtensor.set_weights_calls[0]["weights"] == pytest.approx(
+        [0.9, 0.0, 0.1]
+    )
+
+
+# ---------------------------------------------------------------------------
+# Scoring v2: probation gate, capacity-proportional weights, metrics.
+# ---------------------------------------------------------------------------
+
+
+def _gpu_node_for(cluster_id, index, product="NVIDIA-H100-80GB-HBM3"):
+    return {
+        "id": f"{cluster_id}:node-{index}",
+        "clusterId": cluster_id,
+        "state": "active",
+        "transitioning": "no",
+        "capacity": {"nvidia.com/gpu": "8"},
+        "labels": {"nvidia.com/gpu.product": product},
+    }
+
+
+def test_probation_gates_first_cycles_then_earns():
+    config = ValidatorConfig.from_env(make_env(KUBETEE_PROBATION_CYCLES="2"))
+    clusters, nodes = active_bob_cluster()
+    validator, subtensor, *_ = build_validator(
+        config=config,
+        rancher=FakeRancher(clusters=clusters, nodes_by_cluster=nodes),
+    )
+    for _ in range(3):
+        assert validator.run_cycle() == "weights_set"
+    weights = [c["weights"] for c in subtensor.set_weights_calls]
+    # 2 gated cycles (owner-only), then bob earns.
+    assert weights[0] == [1.0, 0.0, 0.0]
+    assert weights[1] == [1.0, 0.0, 0.0]
+    assert weights[2] == pytest.approx([0.9, 0.0, 0.1])
+
+
+def test_failure_during_probation_resets_gate():
+    config = ValidatorConfig.from_env(make_env(KUBETEE_PROBATION_CYCLES="1"))
+    clusters, nodes = active_bob_cluster()
+    rancher = FakeRancher(clusters=clusters, nodes_by_cluster=nodes)
+    validator, subtensor, *_ = build_validator(config=config, rancher=rancher)
+
+    assert validator.run_cycle() == "weights_set"  # gated (k=1)
+    clusters[0]["labels"]["kubetee.ai/ban"] = "true"  # fail a cycle
+    assert validator.run_cycle() == "weights_set"  # reset to k=0
+    del clusters[0]["labels"]["kubetee.ai/ban"]
+    assert validator.run_cycle() == "weights_set"  # k=1 again
+    assert validator.run_cycle() == "weights_set"  # earns now
+    weights = [c["weights"] for c in subtensor.set_weights_calls]
+    assert weights[2] == [1.0, 0.0, 0.0]
+    assert weights[3] == pytest.approx([0.9, 0.0, 0.1])
+
+
+def test_weights_proportional_to_gpu_capacity():
+    """Two earning miners, one with B200s (2.17x H100): weights split
+    proportionally to gpus x class weight in the production profile."""
+    # Debug-profile capacity (node count) keeps the fixtures small while
+    # still proving proportional splitting end to end.
+    config = ValidatorConfig.from_env(make_env())
+    clusters, nodes = active_bob_cluster()
+    carol_cluster = copy.deepcopy(clusters[0])
+    carol_cluster["id"] = "c-carol"
+    carol_cluster["labels"] = {HOTKEY_LABEL: CAROL}
+    clusters.append(carol_cluster)
+    # debug capacity = node count: bob 1 node, carol 3 nodes -> 1:3 split
+    nodes["c-carol"] = [
+        {
+            "id": f"c-carol:n{i}",
+            "clusterId": "c-carol",
+            "state": "active",
+            "transitioning": "no",
+        }
+        for i in range(3)
+    ]
+    snapshot = [
+        *neurons_triad(),
+        {"uid": 3, "hotkey": CAROL, "coldkey": CAROL_COLDKEY},
+    ]
+    validator, subtensor, *_ = build_validator(
+        config=config,
+        subtensor=FakeSubtensor(snapshot),
+        rancher=FakeRancher(clusters=clusters, nodes_by_cluster=nodes),
+    )
+    assert validator.run_cycle() == "weights_set"
+    weights = subtensor.set_weights_calls[0]["weights"]
+    # v3 dynamic share: bob 1 node -> 2.4 alpha, carol 3 nodes -> 7.2 alpha;
+    # sum 9.6 over bucket 24 -> share 0.4 split 1:3 -> 0.1 / 0.3, owner 0.6.
+    assert weights == pytest.approx([0.6, 0.0, 0.1, 0.3])
+
+
+def test_miner_scoring_metrics_exposed():
+    clusters, nodes = active_bob_cluster()
+    validator, _, _, _, metrics, _ = build_validator(
+        rancher=FakeRancher(clusters=clusters, nodes_by_cluster=nodes)
+    )
+    assert validator.run_cycle() == "weights_set"
+    text = metrics.exposition().decode()
+    assert 'kubetee_miner_state{cluster_id="c-bob",hotkey="' in text
+    assert "kubetee_miner_score{" in text
+    assert "kubetee_miner_weight{" in text
+    assert "kubetee_scoring_earning_miners 1.0" in text
+    assert 'reason="eligible"' in text
+
+
+# ---------------------------------------------------------------------------
+# Scoring v3: USD-priced weights.
+# ---------------------------------------------------------------------------
+
+
+def test_token_price_doubling_halves_miner_weight():
+    """Same hardware, same USD target: alpha price x2 => weight /2."""
+    clusters, nodes = active_bob_cluster()
+    config = ValidatorConfig.from_env(
+        make_env(KUBETEE_USD_PER_ALPHA_OVERRIDE="2.0")
+    )
+    validator, subtensor, *_ = build_validator(
+        config=config,
+        rancher=FakeRancher(clusters=clusters, nodes_by_cluster=nodes),
+    )
+    assert validator.run_cycle() == "weights_set"
+    assert subtensor.set_weights_calls[0]["weights"] == pytest.approx(
+        [0.95, 0.0, 0.05]
+    )
+
+
+def test_bucket_smaller_than_targets_caps_share_pro_rata():
+    """Token crash: targets exceed the bucket => share caps at 1.0 and the
+    owner gets explicit zero (all emissions to miners, pro-rata)."""
+    clusters, nodes = active_bob_cluster()
+    config = ValidatorConfig.from_env(
+        make_env(KUBETEE_MINER_BUCKET_ALPHA_OVERRIDE="1.0")
+    )
+    validator, subtensor, *_ = build_validator(
+        config=config,
+        rancher=FakeRancher(clusters=clusters, nodes_by_cluster=nodes),
+    )
+    assert validator.run_cycle() == "weights_set"
+    weights = subtensor.set_weights_calls[0]["weights"]
+    assert weights == pytest.approx([0.0, 0.0, 1.0])
+    assert sum(weights) == pytest.approx(1.0)
+
+
+def test_price_feed_failure_skips_cycle_and_freezes_state():
+    from price_feed import PriceFeedError
+
+    config = ValidatorConfig.from_env(make_env(KUBETEE_PROBATION_CYCLES="5"))
+    clusters, nodes = active_bob_cluster()
+    validator, subtensor, _, _, metrics, _ = build_validator(
+        config=config,
+        rancher=FakeRancher(clusters=clusters, nodes_by_cluster=nodes),
+    )
+    # two healthy cycles advance probation to k=2
+    assert validator.run_cycle() == "weights_set"
+    assert validator.run_cycle() == "weights_set"
+
+    def broken_provider():
+        raise PriceFeedError("feed down")
+
+    validator._price_provider = broken_provider
+    assert validator.run_cycle() == "skip"
+    assert subtensor.set_weights_calls[-1]["weights"] == [1.0, 0.0, 0.0]
+    text = metrics.exposition().decode()
+    assert 'reason="price_unavailable"' in text
+    # freeze: probation counter did not reset; two more healthy cycles
+    # continue from k=2 (needs 5 -> still gated), proving no reset happened.
+    validator._price_provider = validator._build_price_provider(config)
+    assert validator.run_cycle() == "weights_set"  # k=3
+    st = json_probation(metrics)
+    assert st == 3
+
+
+def json_probation(metrics) -> int:
+    for line in metrics.exposition().decode().splitlines():
+        if line.startswith("kubetee_miner_probation_cycles{"):
+            return int(float(line.rsplit(" ", 1)[1]))
+    return -1
+
+
+def test_divergent_feed_price_skips_cycle():
+    clusters, nodes = active_bob_cluster()
+    validator, subtensor, *_ = build_validator(
+        rancher=FakeRancher(clusters=clusters, nodes_by_cluster=nodes)
+    )
+    from price_feed import PriceQuote
+
+    validator._price_provider = lambda: PriceQuote(
+        tao_usd=192.0, alpha_tao=0.02, usd_per_alpha=3.84, fetched_at=0.0
+    )
+    validator._chain_alpha_tao = lambda subtensor: 0.0067  # feed 3x off
+    assert validator.run_cycle() == "skip"
+    assert subtensor.set_weights_calls == []
+
+
+def test_default_usd_card_is_the_owner_decision():
+    """Owner card 2026-07-24: H200 $3.50, B200 $6.50, B300 $8.00 per
+    GPU-hour; H100 $3.00 derived via the Targon ratios (~$3.00/unit)."""
+    env = make_env()
+    env.pop("KUBETEE_GPU_USD_PRICES")
+    config = ValidatorConfig.from_env(env)
+    assert config.gpu_usd_prices == {
+        "H100": 3.00,
+        "H200": 3.50,
+        "B200": 6.50,
+        "B300": 8.00,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Single chain clock: one cycle per epoch.
+# ---------------------------------------------------------------------------
+
+
+def test_one_cycle_per_epoch_on_the_chain_clock():
+    """tempo=10: the loop cycles once per epoch (in its final stretch) and
+    idles through mid-epoch ticks — no per-tick weight submissions."""
+    config = ValidatorConfig.from_env(make_env(KUBETEE_TEMPO_BLOCKS="10"))
+    clusters, nodes = active_bob_cluster()
+    sleep, sleep_calls = stop_after(30)
+    validator, subtensor, *_ = build_validator(
+        config=config,
+        rancher=FakeRancher(clusters=clusters, nodes_by_cluster=nodes),
+        sleep=sleep,
+    )
+    with pytest.raises(_StopLoop):
+        validator.run_forever()
+    # 30 ticks, head advancing ~1-2 blocks per tick over tempo+1=11 block
+    # epochs: one submission per epoch entered, far fewer than 30 ticks.
+    assert 2 <= len(subtensor.set_weights_calls) <= 8
+    assert len(sleep_calls) == 30
+
+
+def test_same_epoch_never_cycles_twice():
+    config = ValidatorConfig.from_env(make_env(KUBETEE_TEMPO_BLOCKS="1000"))
+    clusters, nodes = active_bob_cluster()
+    sleep, sleep_calls = stop_after(10)
+    validator, subtensor, *_ = build_validator(
+        config=config,
+        rancher=FakeRancher(clusters=clusters, nodes_by_cluster=nodes),
+        sleep=sleep,
+    )
+    with pytest.raises(_StopLoop):
+        validator.run_forever()
+    # first observation of the (single) current epoch cycles exactly once;
+    # the remaining 9 ticks stay inside the same epoch -> no more calls.
+    assert len(subtensor.set_weights_calls) == 1

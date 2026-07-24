@@ -97,11 +97,25 @@ def query_wallet_stake(
         balance = sub.staking.get(
             coldkey_ss58=coldkey_ss58, hotkey_ss58=hotkey_ss58, netuid=netuid
         )
-        return {"stake_tao": float(balance.tao), "error": None}
+        try:
+            return {
+                "stake_tao": float(balance.tao),
+                "unit": "TAO",
+                "error": None,
+            }
+        # v11 subnet stakes are alpha Balances whose .tao accessor raises;
+        # report the alpha amount instead of a query failure.
+        # pylint: disable-next=broad-exception-caught
+        except Exception:
+            return {
+                "stake_tao": float(balance.alpha),
+                "unit": "alpha",
+                "error": None,
+            }
     # Bittensor can surface transport, decoding, or SDK errors here.
     # pylint: disable-next=broad-exception-caught
     except Exception as e:
-        return {"stake_tao": None, "error": str(e)}
+        return {"stake_tao": None, "unit": None, "error": str(e)}
 
 
 def resolve_coldkey_ss58(

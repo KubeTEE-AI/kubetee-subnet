@@ -1,5 +1,15 @@
 # KubeTEE Cluster Naming Convention
 
+> **Validator contract (2026-07-24):** the validator binds a miner to its
+> cluster by the **hotkey** alone — `kubetee.ai/hotkey` (alias
+> `kubetee.ai/miner-hotkey`), one cluster per hotkey — plus an operator safety
+> switch `kubetee.ai/ban` (value `"true"` ⇒ score 0). The former rich
+> enrollment labels (`binding-id`, `coldkey`, `provider-id`, `binding-status`,
+> `generation`, `netuid`, `network`, `origin-fp-prefix`, `enrollment-uid`) are
+> **no longer read**. The naming/geo labels below are operator/dashboard
+> metadata the validator ignores. See
+> `docs/superpowers/specs/2026-07-24-hotkey-only-binding-design.md`.
+
 ## Format
 
 ```

@@ -142,6 +142,144 @@ class ValidatorMetrics:
             registry=self.registry,
         )
 
+        # Scoring v2 per-miner dashboard metrics (cardinality bounded by the
+        # <=256-UID metagraph; stale hotkeys are removed on metagraph exit).
+        miner_labels = ["hotkey", "cluster_id"]
+        self._miner_state = Gauge(
+            "kubetee_miner_state",
+            "Miner reliability state (0=probation, 1=earning)",
+            miner_labels,
+            registry=self.registry,
+        )
+        self._miner_probation = Gauge(
+            "kubetee_miner_probation_cycles",
+            "Consecutive healthy cycles accumulated in probation",
+            miner_labels,
+            registry=self.registry,
+        )
+        self._miner_tenure = Gauge(
+            "kubetee_miner_tenure_factor",
+            "Tenure multiplier (0 while probation; 1.0..1.0+bonus earning)",
+            miner_labels,
+            registry=self.registry,
+        )
+        self._miner_capacity = Gauge(
+            "kubetee_miner_capacity_score",
+            "Hardware capacity score (GPUs x class weight; debug: nodes)",
+            miner_labels,
+            registry=self.registry,
+        )
+        self._miner_score = Gauge(
+            "kubetee_miner_score",
+            "Final miner score this cycle (capacity x tenure; 0 if gated)",
+            miner_labels,
+            registry=self.registry,
+        )
+        self._miner_weight = Gauge(
+            "kubetee_miner_weight",
+            "On-chain weight assigned to the miner this cycle",
+            miner_labels,
+            registry=self.registry,
+        )
+        self._miner_gpus = Gauge(
+            "kubetee_miner_gpu_count",
+            "Total GPUs in the miner cluster inventory",
+            miner_labels,
+            registry=self.registry,
+        )
+        self._miner_nodes = Gauge(
+            "kubetee_miner_node_count",
+            "Nodes in the miner cluster inventory",
+            miner_labels,
+            registry=self.registry,
+        )
+        self._miner_gpu_class = Gauge(
+            "kubetee_miner_gpu_class",
+            "Info gauge: 1 for the miner's GPU class",
+            miner_labels + ["gpu_class"],
+            registry=self.registry,
+        )
+        self._miner_reason = Gauge(
+            "kubetee_miner_validation_reason",
+            "Info gauge: 1 for the miner's validation reason this cycle",
+            miner_labels + ["reason"],
+            registry=self.registry,
+        )
+        self._miner_transitions = Counter(
+            "kubetee_miner_state_transitions",
+            "Miner reliability state transitions",
+            ["hotkey", "transition"],
+            registry=self.registry,
+        )
+        self._earning_total = Gauge(
+            "kubetee_scoring_earning_miners",
+            "Miners currently in the EARNING state",
+            registry=self.registry,
+        )
+        self._probation_total = Gauge(
+            "kubetee_scoring_probation_miners",
+            "Miners currently in probation",
+            registry=self.registry,
+        )
+        self._capacity_total = Gauge(
+            "kubetee_scoring_total_capacity",
+            "Sum of capacity scores across earning miners",
+            registry=self.registry,
+        )
+        self._miner_series: dict[str, tuple] = {}
+        self._miner_target_usd = Gauge(
+            "kubetee_miner_target_usd",
+            "Per-window USD compensation target (0 while gated)",
+            miner_labels,
+            registry=self.registry,
+        )
+        self._miner_target_alpha = Gauge(
+            "kubetee_miner_target_alpha",
+            "Per-window Alpha target at live prices (0 while gated)",
+            miner_labels,
+            registry=self.registry,
+        )
+        self._price_tao_usd = Gauge(
+            "kubetee_price_tao_usd",
+            "TAO price in USD from the feed (0 when overridden)",
+            registry=self.registry,
+        )
+        self._price_alpha_tao = Gauge(
+            "kubetee_price_alpha_tao",
+            "Subnet alpha price in TAO from the feed (0 when overridden)",
+            registry=self.registry,
+        )
+        self._price_usd_per_alpha = Gauge(
+            "kubetee_price_usd_per_alpha",
+            "USD value of one alpha used for target conversion",
+            registry=self.registry,
+        )
+        self._price_feed_age = Gauge(
+            "kubetee_price_feed_age_seconds",
+            "Age of the price quote when applied",
+            registry=self.registry,
+        )
+        self._dynamic_share = Gauge(
+            "kubetee_scoring_dynamic_miner_share",
+            "Computed miner share of the weight vector this cycle",
+            registry=self.registry,
+        )
+        self._bucket_alpha = Gauge(
+            "kubetee_scoring_bucket_alpha",
+            "Miner-bucket alpha per payout window used for the share",
+            registry=self.registry,
+        )
+        self._epoch_index = Gauge(
+            "kubetee_epoch_index",
+            "Current chain epoch index for this netuid",
+            registry=self.registry,
+        )
+        self._epoch_blocks_until = Gauge(
+            "kubetee_epoch_blocks_until_next",
+            "Blocks remaining until the next epoch boundary",
+            registry=self.registry,
+        )
+
         self._consecutive_count = 0
         self._in_degraded = False
         # Touch enum-labelled series so exposition always carries the names.
@@ -255,6 +393,129 @@ class ValidatorMetrics:
         self._cycles_total.labels(outcome=outcome).inc()
 
     # -- exposition ------------------------------------------------------------
+
+    def record_epoch_position(
+        self, epoch_index: int, blocks_until: int
+    ) -> None:
+        self._epoch_index.set(epoch_index)
+        self._epoch_blocks_until.set(blocks_until)
+
+    def record_pricing(
+        self, quote, dynamic_share: float, bucket: float
+    ) -> None:
+        """Publish the cycle's price conversion + computed share."""
+        self._price_tao_usd.set(quote.tao_usd)
+        self._price_alpha_tao.set(quote.alpha_tao)
+        self._price_usd_per_alpha.set(quote.usd_per_alpha)
+        self._price_feed_age.set(
+            max(0.0, self._clock() - quote.fetched_at)
+            if quote.fetched_at
+            else 0.0
+        )
+        self._dynamic_share.set(dynamic_share)
+        self._bucket_alpha.set(bucket)
+
+    def record_miner_scoring(self, evidence: list[dict]) -> None:
+        """Set the per-miner dashboard series from one cycle's evidence and
+        drop series for hotkeys no longer present."""
+        seen: dict[str, tuple] = {}
+        earning = probation = 0
+        capacity_sum = 0.0
+        for entry in evidence:
+            hotkey = entry["hotkey"]
+            cluster_id = entry.get("cluster_id") or ""
+            labels = (hotkey, cluster_id)
+            previous = self._miner_series.get(hotkey)
+            if previous is not None:
+                prev_labels, prev_reason, prev_class = previous
+                if prev_labels != labels:
+                    # The hotkey moved to a different cluster: drop every
+                    # series under the old (hotkey, cluster_id) pair so
+                    # zero-valued ghosts don't linger on the dashboard.
+                    for gauge in (
+                        self._miner_state,
+                        self._miner_probation,
+                        self._miner_tenure,
+                        self._miner_capacity,
+                        self._miner_score,
+                        self._miner_target_usd,
+                        self._miner_target_alpha,
+                        self._miner_weight,
+                        self._miner_gpus,
+                        self._miner_nodes,
+                    ):
+                        try:
+                            gauge.remove(*prev_labels)
+                        except KeyError:
+                            pass
+                if prev_reason != entry["reason"] or prev_labels != labels:
+                    try:
+                        self._miner_reason.remove(*prev_labels, prev_reason)
+                    except KeyError:
+                        pass
+                if prev_class and prev_class != entry.get("gpu_class"):
+                    try:
+                        self._miner_gpu_class.remove(*prev_labels, prev_class)
+                    except KeyError:
+                        pass
+            seen[hotkey] = (
+                labels,
+                entry["reason"],
+                entry.get("gpu_class"),
+            )
+            is_earning = entry["state"] == "earning"
+            earning += int(is_earning)
+            probation += int(not is_earning)
+            if is_earning:
+                capacity_sum += entry["capacity"]
+            self._miner_state.labels(*labels).set(int(is_earning))
+            self._miner_probation.labels(*labels).set(
+                entry["probation_cycles"]
+            )
+            self._miner_tenure.labels(*labels).set(entry["tenure_factor"])
+            self._miner_capacity.labels(*labels).set(entry["capacity"])
+            self._miner_score.labels(*labels).set(entry["score"])
+            self._miner_target_usd.labels(*labels).set(
+                entry.get("target_usd", 0.0)
+            )
+            self._miner_target_alpha.labels(*labels).set(
+                entry.get("target_alpha", 0.0)
+            )
+            self._miner_weight.labels(*labels).set(entry["weight"])
+            self._miner_gpus.labels(*labels).set(entry["gpu_count"])
+            self._miner_nodes.labels(*labels).set(entry["node_count"])
+            if entry.get("gpu_class"):
+                self._miner_gpu_class.labels(*labels, entry["gpu_class"]).set(
+                    1
+                )
+            self._miner_reason.labels(*labels, entry["reason"]).set(1)
+            if entry.get("transitioned"):
+                self._miner_transitions.labels(
+                    hotkey, entry["transitioned"]
+                ).inc()
+        for hotkey, (labels, _reason, _class) in self._miner_series.items():
+            if hotkey in seen:
+                continue
+            for gauge in (
+                self._miner_state,
+                self._miner_probation,
+                self._miner_tenure,
+                self._miner_capacity,
+                self._miner_score,
+                self._miner_target_usd,
+                self._miner_target_alpha,
+                self._miner_weight,
+                self._miner_gpus,
+                self._miner_nodes,
+            ):
+                try:
+                    gauge.remove(*labels)
+                except KeyError:
+                    pass
+        self._miner_series = seen
+        self._earning_total.set(earning)
+        self._probation_total.set(probation)
+        self._capacity_total.set(capacity_sum)
 
     def exposition(self) -> bytes:
         return generate_latest(self.registry)
