@@ -1,0 +1,17 @@
+# Never bake local env/secrets into the image: /app/.env would be loaded by
+# validator main()'s load_dotenv and override container config (host-absolute
+# KUBETEE_NETUID_FILE broke the netuid handoff), and it can carry real
+# RANCHER_BEARER_TOKEN values.
+.env
+.env.*
+!.env.example
+
+# Local dev artifacts
+.venv
+.git
+.kubetee_netuid
+logs/
+__pycache__/
+*.pyc
+.pytest_cache
+kubetee_subnet.egg-info/
