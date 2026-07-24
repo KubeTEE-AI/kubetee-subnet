@@ -58,7 +58,7 @@ class CycleConfig:
 @dataclasses.dataclass(frozen=True)
 class WeightsDecision:
     weights: dict[int, float]
-    miner_scores: dict[str, int]
+    miner_scores: dict[str, float]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -69,7 +69,7 @@ class SkipCycle:
 
 def decide_cycle(
     neurons: list[dict],
-    miner_scores: dict[str, int],
+    miner_scores: dict[str, float],
     config: CycleConfig,
 ) -> WeightsDecision | SkipCycle:
     """Resolve identities, discover miners, and compute the weight vector.
@@ -140,16 +140,26 @@ def decide_cycle(
     }
 
     share = config.miner_share
-    scoring = [hotkey for hotkey in miners if miner_scores.get(hotkey, 0) == 1]
+    # Scoring v2: scores are non-negative floats (capacity x tenure); the
+    # miner share is split PROPORTIONALLY to score. Binary 0/1 inputs
+    # degenerate to the historical equal split.
+    scores = {
+        hotkey: float(miner_scores.get(hotkey, 0) or 0) for hotkey in miners
+    }
+    scoring = {
+        hotkey: score
+        for hotkey, score in scores.items()
+        if score > 0.0 and math.isfinite(score)
+    }
     weights: dict[int, float] = {n["uid"]: 0.0 for n in neurons}
-    if scoring and share > 0.0:
-        per_miner = share / len(scoring)
-        for hotkey in scoring:
-            weights[miners[hotkey]] = per_miner
+    total_score = sum(scoring.values())
+    if scoring and share > 0.0 and total_score > 0.0:
+        for hotkey, score in scoring.items():
+            weights[miners[hotkey]] = share * (score / total_score)
         weights[owner_uid] = 1.0 - share
     else:
         weights[owner_uid] = 1.0
     return WeightsDecision(
         weights=weights,
-        miner_scores={h: miner_scores.get(h, 0) for h in miners},
+        miner_scores=scores,
     )

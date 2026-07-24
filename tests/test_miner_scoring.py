@@ -236,3 +236,19 @@ def test_duplicate_uid_in_metagraph_skips_cycle():
 
     assert isinstance(outcome, SkipCycle)
     assert outcome.reason is SkipReason.IDENTITY_VIOLATION
+
+
+def test_share_splits_proportionally_to_float_scores():
+    """Scoring v2: a miner with 2x the score earns 2x the weight."""
+    ns = neurons((0, OWNER), (1, ALICE), (2, BOB), (3, CAROL))
+    outcome = decide_cycle(ns, {BOB: 16.0, CAROL: 8.0}, CONFIG)
+    assert outcome.weights[2] == pytest.approx(0.1 * 2 / 3)
+    assert outcome.weights[3] == pytest.approx(0.1 * 1 / 3)
+    assert outcome.weights[0] == pytest.approx(0.9)
+
+
+def test_zero_and_nonfinite_scores_are_excluded():
+    ns = neurons((0, OWNER), (1, ALICE), (2, BOB), (3, CAROL))
+    outcome = decide_cycle(ns, {BOB: 8.0, CAROL: float("nan")}, CONFIG)
+    assert outcome.weights[3] == 0.0
+    assert outcome.weights[2] == pytest.approx(0.1)
