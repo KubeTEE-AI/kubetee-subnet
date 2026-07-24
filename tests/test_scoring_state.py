@@ -273,16 +273,13 @@ def test_usd_target_debug_is_node_count_times_cheapest_class():
     )  # min of the test card
 
 
-def test_h100_cluster_earns_zero_under_default_card():
+def test_default_card_prices_all_supported_classes():
     from scoring_state import DEFAULT_GPU_USD_PRICES, usd_target_per_hour
 
-    h100 = [_gpu_node()]  # 8 x H100
-    assert (
-        usd_target_per_hour(
-            h100, ValidationProfile.PRODUCTION, DEFAULT_GPU_USD_PRICES
-        )
-        == 0.0
-    )
+    h100 = [_gpu_node()]  # 8 x H100 -> $3.00 derived via Targon ratios
+    assert usd_target_per_hour(
+        h100, ValidationProfile.PRODUCTION, DEFAULT_GPU_USD_PRICES
+    ) == pytest.approx(8 * 3.00)
     h200 = [_gpu_node(product="NVIDIA-H200-141GB")]
     assert usd_target_per_hour(
         h200, ValidationProfile.PRODUCTION, DEFAULT_GPU_USD_PRICES

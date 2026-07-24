@@ -45,9 +45,10 @@ DEFAULT_GPU_WEIGHTS: dict[str, float] = {
 }
 
 # The operator's USD price card (owner decision 2026-07-24), overridable via
-# KUBETEE_GPU_USD_PRICES. H100 is DELIBERATELY absent: H100 clusters pass
-# validation but earn $0 under this card (fail-closed pricing).
+# KUBETEE_GPU_USD_PRICES. H100 derived from the owner's three prices via the
+# Targon market ratios (3.50/1.17 = 6.50/2.17 = 8.00/2.67 = ~$3.00/ratio).
 DEFAULT_GPU_USD_PRICES: dict[str, float] = {
+    "H100": 3.00,
     "H200": 3.50,
     "B200": 6.50,
     "B300": 8.00,

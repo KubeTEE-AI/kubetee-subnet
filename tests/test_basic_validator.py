@@ -1737,13 +1737,13 @@ def test_divergent_feed_price_skips_cycle():
 
 def test_default_usd_card_is_the_owner_decision():
     """Owner card 2026-07-24: H200 $3.50, B200 $6.50, B300 $8.00 per
-    GPU-hour. H100 deliberately absent -> earns $0 (fail-closed)."""
+    GPU-hour; H100 $3.00 derived via the Targon ratios (~$3.00/unit)."""
     env = make_env()
     env.pop("KUBETEE_GPU_USD_PRICES")
     config = ValidatorConfig.from_env(env)
     assert config.gpu_usd_prices == {
+        "H100": 3.00,
         "H200": 3.50,
         "B200": 6.50,
         "B300": 8.00,
     }
-    assert "H100" not in config.gpu_usd_prices
