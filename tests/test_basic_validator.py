@@ -79,6 +79,9 @@ BASE_ENV = {
     "RANCHER_BEARER_TOKEN": TOKEN,
     "KUBETEE_CHAIN_NETWORK": "finney",
     "KUBETEE_VALIDATION_PROFILE": "debug",
+    # Scoring v2: cycle tests exercise scoring/weights directly; the
+    # probation gate has its own dedicated tests.
+    "KUBETEE_PROBATION_CYCLES": "0",
 }
 
 
@@ -1533,3 +1536,101 @@ def test_alias_labeled_cluster_gets_nodes_fetched_and_scores():
     assert subtensor.set_weights_calls[0]["weights"] == pytest.approx(
         [0.9, 0.0, 0.1]
     )
+
+
+# ---------------------------------------------------------------------------
+# Scoring v2: probation gate, capacity-proportional weights, metrics.
+# ---------------------------------------------------------------------------
+
+
+def _gpu_node_for(cluster_id, index, product="NVIDIA-H100-80GB-HBM3"):
+    return {
+        "id": f"{cluster_id}:node-{index}",
+        "clusterId": cluster_id,
+        "state": "active",
+        "transitioning": "no",
+        "capacity": {"nvidia.com/gpu": "8"},
+        "labels": {"nvidia.com/gpu.product": product},
+    }
+
+
+def test_probation_gates_first_cycles_then_earns():
+    config = ValidatorConfig.from_env(make_env(KUBETEE_PROBATION_CYCLES="2"))
+    clusters, nodes = active_bob_cluster()
+    validator, subtensor, *_ = build_validator(
+        config=config,
+        rancher=FakeRancher(clusters=clusters, nodes_by_cluster=nodes),
+    )
+    for _ in range(3):
+        assert validator.run_cycle() == "weights_set"
+    weights = [c["weights"] for c in subtensor.set_weights_calls]
+    # 2 gated cycles (owner-only), then bob earns.
+    assert weights[0] == [1.0, 0.0, 0.0]
+    assert weights[1] == [1.0, 0.0, 0.0]
+    assert weights[2] == pytest.approx([0.9, 0.0, 0.1])
+
+
+def test_failure_during_probation_resets_gate():
+    config = ValidatorConfig.from_env(make_env(KUBETEE_PROBATION_CYCLES="1"))
+    clusters, nodes = active_bob_cluster()
+    rancher = FakeRancher(clusters=clusters, nodes_by_cluster=nodes)
+    validator, subtensor, *_ = build_validator(config=config, rancher=rancher)
+
+    assert validator.run_cycle() == "weights_set"  # gated (k=1)
+    clusters[0]["labels"]["kubetee.ai/ban"] = "true"  # fail a cycle
+    assert validator.run_cycle() == "weights_set"  # reset to k=0
+    del clusters[0]["labels"]["kubetee.ai/ban"]
+    assert validator.run_cycle() == "weights_set"  # k=1 again
+    assert validator.run_cycle() == "weights_set"  # earns now
+    weights = [c["weights"] for c in subtensor.set_weights_calls]
+    assert weights[2] == [1.0, 0.0, 0.0]
+    assert weights[3] == pytest.approx([0.9, 0.0, 0.1])
+
+
+def test_weights_proportional_to_gpu_capacity():
+    """Two earning miners, one with B200s (2.17x H100): weights split
+    proportionally to gpus x class weight in the production profile."""
+    # Debug-profile capacity (node count) keeps the fixtures small while
+    # still proving proportional splitting end to end.
+    config = ValidatorConfig.from_env(make_env())
+    clusters, nodes = active_bob_cluster()
+    carol_cluster = copy.deepcopy(clusters[0])
+    carol_cluster["id"] = "c-carol"
+    carol_cluster["labels"] = {HOTKEY_LABEL: CAROL}
+    clusters.append(carol_cluster)
+    # debug capacity = node count: bob 1 node, carol 3 nodes -> 1:3 split
+    nodes["c-carol"] = [
+        {
+            "id": f"c-carol:n{i}",
+            "clusterId": "c-carol",
+            "state": "active",
+            "transitioning": "no",
+        }
+        for i in range(3)
+    ]
+    snapshot = [
+        *neurons_triad(),
+        {"uid": 3, "hotkey": CAROL, "coldkey": CAROL_COLDKEY},
+    ]
+    validator, subtensor, *_ = build_validator(
+        config=config,
+        subtensor=FakeSubtensor(snapshot),
+        rancher=FakeRancher(clusters=clusters, nodes_by_cluster=nodes),
+    )
+    assert validator.run_cycle() == "weights_set"
+    weights = subtensor.set_weights_calls[0]["weights"]
+    assert weights == pytest.approx([0.9, 0.0, 0.1 * 0.25, 0.1 * 0.75])
+
+
+def test_miner_scoring_metrics_exposed():
+    clusters, nodes = active_bob_cluster()
+    validator, _, _, _, metrics, _ = build_validator(
+        rancher=FakeRancher(clusters=clusters, nodes_by_cluster=nodes)
+    )
+    assert validator.run_cycle() == "weights_set"
+    text = metrics.exposition().decode()
+    assert 'kubetee_miner_state{cluster_id="c-bob",hotkey="' in text
+    assert "kubetee_miner_score{" in text
+    assert "kubetee_miner_weight{" in text
+    assert "kubetee_scoring_earning_miners 1.0" in text
+    assert 'reason="eligible"' in text

@@ -66,6 +66,16 @@ from rancher_client import (
     normalize_https_origin,
 )
 from reconciliation import ReconciliationEngine
+from scoring_state import (
+    DEFAULT_GPU_WEIGHTS,
+    MinerState,
+    ScoringConfig,
+    ScoringStateEngine,
+    capacity_score,
+    node_gpu_class,
+    node_gpu_count,
+    parse_gpu_weights,
+)
 from validator_metrics import ValidatorMetrics
 
 # Loguru module logger; tests bridge it back into the stdlib
@@ -198,6 +208,8 @@ class ValidatorConfig:
     rancher_ca_file: str | None
     metrics_port: int
     metrics_addr: str
+    scoring: ScoringConfig
+    scoring_state_file: str
 
     @classmethod
     def from_env(cls, env: Mapping[str, str]) -> ValidatorConfig:
@@ -311,6 +323,30 @@ class ValidatorConfig:
         rancher_token = require("RANCHER_BEARER_TOKEN")
         rancher_ca_file = (env.get("RANCHER_CA_FILE") or "").strip() or None
 
+        probation_default = (
+            3 if validation_profile is ValidationProfile.DEBUG else 60
+        )
+        probation_cycles = parse_int(
+            "KUBETEE_PROBATION_CYCLES", probation_default, 0
+        )
+        tenure_bonus = parse_float("KUBETEE_TENURE_BONUS", 0.2, 0.0)
+        tenure_days = parse_float("KUBETEE_TENURE_DAYS", 7.0, 0.1)
+        gpu_weights = dict(DEFAULT_GPU_WEIGHTS)
+        raw_weights = (env.get("KUBETEE_GPU_WEIGHTS") or "").strip()
+        if raw_weights:
+            try:
+                gpu_weights = parse_gpu_weights(raw_weights)
+            except ValueError:
+                fail(
+                    "KUBETEE_GPU_WEIGHTS",
+                    "must be CLASS=FLOAT[,CLASS=FLOAT...] with positive"
+                    " finite weights",
+                )
+        scoring_state_file = (
+            env.get("KUBETEE_SCORING_STATE_FILE")
+            or "/app/.kubetee_scoring_state.json"
+        ).strip()
+
         if errors:
             raise ConfigError(
                 "invalid static configuration: " + "; ".join(errors)
@@ -336,6 +372,13 @@ class ValidatorConfig:
             metrics_addr=(
                 env.get("KUBETEE_METRICS_ADDR") or "0.0.0.0"
             ).strip(),
+            scoring=ScoringConfig(
+                probation_cycles=probation_cycles,
+                tenure_bonus=tenure_bonus,
+                tenure_days=tenure_days,
+                gpu_weights=gpu_weights,
+            ),
+            scoring_state_file=scoring_state_file,
         )
 
 
@@ -417,6 +460,7 @@ class BasicValidator:
         metrics: ValidatorMetrics,
         reconciler: ReconciliationEngine,
         sleep: Callable[[float], None] = time.sleep,
+        scoring_engine: ScoringStateEngine | None = None,
     ) -> None:
         self._config = config
         self._subtensor_factory = subtensor_factory
@@ -434,6 +478,12 @@ class BasicValidator:
         self._infrastructure_policy = InfrastructurePolicy.for_profile(
             config.validation_profile
         )
+        if scoring_engine is None:
+            scoring_engine = ScoringStateEngine(
+                config.scoring, state_file=None
+            )
+            scoring_engine.load(bootstrap_earning=set())
+        self._scoring_engine = scoring_engine
 
     # -- chain session (AC6: one connection, recreated only after failure) -----
 
@@ -679,20 +729,27 @@ class BasicValidator:
         _log_verdict_debug_evidence(
             miners, neurons_by_hotkey, verdicts, nodes_by_cluster
         )
-        scores = {
-            hotkey: verdict.score for hotkey, verdict in verdicts.items()
-        }
+        scores, miner_evidence = self._score_miners(
+            miners, verdicts, nodes_by_cluster
+        )
         decision = decide_cycle(neurons, scores, cycle_config)
         if isinstance(decision, SkipCycle):
             self._record_skip(decision.reason)
             return "skip"
 
         self._metrics.record_validation_results(tuple(verdicts.values()))
+        self._scoring_engine.drop_missing(set(miners))
+        self._scoring_engine.save()
+        self._record_miner_metrics(
+            miner_evidence, decision.weights, neurons_by_hotkey
+        )
         reason_counts = collections.Counter(
             verdict.reason.value for verdict in verdicts.values()
         )
         validation_reasons = dict(sorted(reason_counts.items()))
-        scoring_count = sum(decision.miner_scores.values())
+        scoring_count = sum(
+            1 for value in decision.miner_scores.values() if value > 0
+        )
         self._metrics.record_scoring_result(len(miners), scoring_count)
         self._metrics.record_successful_scoring()
 
@@ -736,6 +793,74 @@ class BasicValidator:
         self._metrics.record_cycle_outcome("weights_rejected")
         return "weights_rejected"
 
+    def _score_miners(
+        self,
+        miners: list[str],
+        verdicts: dict,
+        nodes_by_cluster: dict,
+    ) -> tuple[dict[str, float], list[dict]]:
+        """Scoring v2: feed each miner's cycle health into the reliability
+        engine and produce capacity x tenure scores plus dashboard evidence.
+
+        Called only on completed (non-skipped) cycles, so skipped cycles
+        freeze the engine by construction.
+        """
+        scores: dict[str, float] = {}
+        evidence: list[dict] = []
+        weights = self._config.scoring.gpu_weights
+        for hotkey in miners:
+            verdict = verdicts[hotkey]
+            healthy = verdict.score == 1
+            observed = self._scoring_engine.observe(hotkey, healthy=healthy)
+            nodes = nodes_by_cluster.get(verdict.cluster_id)
+            capacity = capacity_score(
+                nodes, self._config.validation_profile, weights
+            )
+            earning = observed.state is MinerState.EARNING
+            score = capacity * observed.tenure_factor if earning else 0.0
+            scores[hotkey] = score
+            node_list = nodes if isinstance(nodes, list) else []
+            gpu_count = sum(node_gpu_count(n) for n in node_list)
+            gpu_classes = {
+                c
+                for c in (node_gpu_class(n) for n in node_list)
+                if c is not None
+            }
+            evidence.append(
+                {
+                    "hotkey": hotkey,
+                    "cluster_id": verdict.cluster_id,
+                    "state": observed.state.value,
+                    "probation_cycles": observed.probation_cycles,
+                    "tenure_factor": observed.tenure_factor,
+                    "capacity": capacity,
+                    "score": score,
+                    "weight": 0.0,  # filled in after decide_cycle
+                    "gpu_count": gpu_count,
+                    "node_count": len(node_list),
+                    "gpu_class": (
+                        next(iter(gpu_classes))
+                        if len(gpu_classes) == 1
+                        else None
+                    ),
+                    "reason": verdict.reason.value,
+                    "transitioned": observed.transitioned,
+                }
+            )
+        return scores, evidence
+
+    def _record_miner_metrics(
+        self,
+        evidence: list[dict],
+        weights: dict[int, float],
+        neurons_by_hotkey: dict,
+    ) -> None:
+        for entry in evidence:
+            neuron = neurons_by_hotkey.get(entry["hotkey"]) or {}
+            uid = neuron.get("uid")
+            entry["weight"] = weights.get(uid, 0.0)
+        self._metrics.record_miner_scoring(evidence)
+
     def run_forever(self) -> None:
         """D14 liveness corollary: no runtime error may terminate the loop.
         Only operator signals (BaseException path) stop the process."""
@@ -760,6 +885,56 @@ class BasicValidator:
                 self._log.error("unexpected cycle error; loop continues")
                 self._record_skip(SkipReason.UNEXPECTED_RUNTIME)
             self._sleep(self._config.poll_seconds)
+
+
+def _bootstrap_earning_from_chain(
+    subtensor, netuid: int, validator_hotkey: str
+) -> set[str]:
+    """Best-effort recovery of EARNING miners from our on-chain weight row.
+
+    Used only when the scoring state file is missing/corrupt: any miner our
+    validator currently weights nonzero was evidently EARNING. Failures
+    return an empty set (everyone re-enters probation) with a warning —
+    never a crash.
+    """
+    try:
+        meta = subtensor.subnets.metagraph(netuid)
+        hotkey_by_uid = {
+            int(getattr(n, "uid")): getattr(n, "hotkey", None)
+            for n in meta.neurons
+        }
+        our_uid = next(
+            (
+                uid
+                for uid, hotkey in hotkey_by_uid.items()
+                if hotkey == validator_hotkey
+            ),
+            None,
+        )
+        if our_uid is None:
+            return set()
+        rows = getattr(meta, "weights", None)
+        if rows is None:
+            return set()
+        row = rows[our_uid]
+        earning: set[str] = set()
+        for index, value in enumerate(row):
+            if isinstance(value, (tuple, list)) and len(value) == 2:
+                uid, weight = value
+            else:
+                uid, weight = index, value
+            if float(weight) > 0.0:
+                hotkey = hotkey_by_uid.get(int(uid))
+                if hotkey and hotkey != validator_hotkey:
+                    earning.add(hotkey)
+        return earning
+    # Best-effort by contract: any SDK/shape surprise degrades to probation.
+    except Exception:  # pylint: disable=broad-exception-caught
+        _LOG.warning(
+            "scoring bootstrap from chain failed; all miners re-enter"
+            " probation"
+        )
+        return set()
 
 
 def main(env: Mapping[str, str] | None = None) -> None:
@@ -812,6 +987,23 @@ def main(env: Mapping[str, str] | None = None) -> None:
         min_seconds=config.reconcile_min_seconds,
         evidence_sink=_log_reconciliation_evidence,
     )
+    scoring_engine = ScoringStateEngine(
+        config.scoring,
+        state_file=pathlib.Path(config.scoring_state_file),
+    )
+    state_path = pathlib.Path(config.scoring_state_file)
+    bootstrap: set[str] = set()
+    if not state_path.exists():
+        bootstrap = _bootstrap_earning_from_chain(
+            bt.Subtensor(network=config.network),
+            config.netuid,
+            config.validator_hotkey,
+        )
+        _LOG.info(
+            "scoring state bootstrap",
+            extra={"earning_from_chain": len(bootstrap)},
+        )
+    scoring_engine.load(bootstrap_earning=bootstrap)
     validator = BasicValidator(
         config=config,
         subtensor_factory=lambda: bt.Subtensor(network=config.network),
@@ -819,6 +1011,7 @@ def main(env: Mapping[str, str] | None = None) -> None:
         rancher=client,
         metrics=metrics,
         reconciler=reconciler,
+        scoring_engine=scoring_engine,
     )
     validator.run_forever()
 

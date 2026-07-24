@@ -40,10 +40,18 @@ Each cycle (every `KUBETEE_POLL_SECONDS`, minimum 60s) the validator:
    explicit `debug` profile accepts one active node for the disposable local
    stack. A banned cluster, an ambiguous (duplicate-hotkey) match, a missing
    cluster, or a readiness failure scores `0` immediately.
-5. **Sets weights**, signed by **alice** (`BT_WALLET=alice`): each scoring
-   miner gets `KUBETEE_MINER_SHARE / N`; the owner recycle UID gets
-   `1 − KUBETEE_MINER_SHARE` (or `1.0` when no miner scores); all other
-   UIDs get explicit zero. Success is claimed only on chain acceptance.
+5. **Sets weights**, signed by **alice** (`BT_WALLET=alice`): the miner
+   share (`KUBETEE_MINER_SHARE`) is split **proportionally to each earning
+   miner's score** — `capacity × tenure`, where capacity = GPUs × market
+   class weight (H100 1.0 / H200 1.17 / B200 2.17 / B300 2.67; debug: node
+   count) and tenure ramps 1.0→1.2× over 7 days of continuous earning. New
+   and recovered miners pass a probation gate (`KUBETEE_PROBATION_CYCLES`,
+   default 60) scoring 0 before earning; any failed cycle resets the gate
+   and forfeits tenure. State persists across validator restarts
+   (`KUBETEE_SCORING_STATE_FILE`) and is chain-bootstrapped if lost. The
+   owner recycle UID gets `1 − KUBETEE_MINER_SHARE` (or `1.0` when no miner
+   earns); all other UIDs get explicit zero. Success is claimed only on
+   chain acceptance.
 6. **Logs and exports Prometheus metrics** (structured, redacted — the
    bearer token and response bodies never appear in logs or metrics).
 

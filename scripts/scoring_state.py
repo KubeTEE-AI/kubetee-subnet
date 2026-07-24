@@ -113,7 +113,7 @@ def parse_gpu_weights(raw: str) -> dict[str, float]:
     return weights
 
 
-def _node_gpu_count(node: object) -> int:
+def node_gpu_count(node: object) -> int:
     if not isinstance(node, dict):
         return 0
     capacity = node.get("capacity")
@@ -127,7 +127,7 @@ def _node_gpu_count(node: object) -> int:
     return count if count > 0 else 0
 
 
-def _node_gpu_class(node: object) -> str | None:
+def node_gpu_class(node: object) -> str | None:
     if not isinstance(node, dict):
         return None
     labels = node.get("labels")
@@ -157,8 +157,8 @@ def capacity_score(
         return float(len(nodes))
     total = 0.0
     for node in nodes:
-        count = _node_gpu_count(node)
-        gpu_class = _node_gpu_class(node)
+        count = node_gpu_count(node)
+        gpu_class = node_gpu_class(node)
         if count <= 0 or gpu_class is None:
             continue
         weight = gpu_weights.get(gpu_class)
