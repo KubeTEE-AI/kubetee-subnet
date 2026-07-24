@@ -327,3 +327,40 @@ def test_price_swing_marathon_usd_income_constant():
     weight_2, usd_2 = run_with_price(2.0)
     assert usd_1 == pytest.approx(usd_2)  # USD income target constant
     assert weight_2 == pytest.approx(weight_1 / 2)  # weight halves
+
+
+# -- single chain clock marathon ----------------------------------------------
+
+
+def test_epoch_clock_marathon_exactly_one_cycle_per_epoch():
+    """500 loop ticks over tempo=100 epochs: the validator submits weights
+    exactly once per distinct epoch it observes — never twice in an epoch,
+    never skipping an observed epoch."""
+    import test_basic_validator as tb
+
+    config = tb.ValidatorConfig.from_env(
+        tb.make_env(KUBETEE_TEMPO_BLOCKS="100")
+    )
+    clusters, nodes = tb.active_bob_cluster()
+    sleep, sleep_calls = tb.stop_after(500)
+    validator, subtensor, *_ = tb.build_validator(
+        config=config,
+        rancher=tb.FakeRancher(clusters=clusters, nodes_by_cluster=nodes),
+        sleep=sleep,
+    )
+    observed_epochs = set()
+    original_due = validator._epoch_due
+
+    def tracking_due():
+        due = original_due()
+        if validator._last_cycled_epoch is not None:
+            observed_epochs.add(validator._last_cycled_epoch)
+        return due
+
+    validator._epoch_due = tracking_due
+    with pytest.raises(tb._StopLoop):
+        validator.run_forever()
+
+    assert len(sleep_calls) == 500
+    assert len(subtensor.set_weights_calls) == len(observed_epochs)
+    assert len(observed_epochs) >= 5  # the run genuinely crossed epochs

@@ -1770,10 +1770,9 @@ def test_one_cycle_per_epoch_on_the_chain_clock():
     )
     with pytest.raises(_StopLoop):
         validator.run_forever()
-    # 30 ticks with the fake head advancing ~1 block per tick and one extra
-    # read inside each executed cycle: expect ~2-3 epochs' worth of
-    # submissions, definitely far fewer than 30.
-    assert 1 <= len(subtensor.set_weights_calls) <= 4
+    # 30 ticks, head advancing ~1-2 blocks per tick over tempo+1=11 block
+    # epochs: one submission per epoch entered, far fewer than 30 ticks.
+    assert 2 <= len(subtensor.set_weights_calls) <= 8
     assert len(sleep_calls) == 30
 
 
@@ -1788,5 +1787,6 @@ def test_same_epoch_never_cycles_twice():
     )
     with pytest.raises(_StopLoop):
         validator.run_forever()
-    # heads 100..109 sit mid-epoch for tempo=1000 -> no submission at all
-    assert subtensor.set_weights_calls == []
+    # first observation of the (single) current epoch cycles exactly once;
+    # the remaining 9 ticks stay inside the same epoch -> no more calls.
+    assert len(subtensor.set_weights_calls) == 1

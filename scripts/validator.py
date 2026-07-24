@@ -1077,7 +1077,7 @@ class BasicValidator:
         if tempo is None:
             return False
         if tempo <= 1:
-            # Degenerate clock (tests / fast localnets): every tick is due.
+            # Degenerate clock (tests): every tick is due.
             return True
         try:
             head = subtensor.block()
@@ -1089,11 +1089,21 @@ class BasicValidator:
         phase = (head + self._config.netuid + 1) % (tempo + 1)
         epoch_index = (head + self._config.netuid + 1) // (tempo + 1)
         blocks_until = (tempo + 1) - phase
-        lead = max(1, min(15, tempo // 4))
         self._metrics.record_epoch_position(epoch_index, blocks_until)
-        if self._last_cycled_epoch == epoch_index or blocks_until > lead:
+        if self._last_cycled_epoch == epoch_index:
             return False
+        # First observation of a new epoch: cycle exactly once. Robust to any
+        # block time (finney 12s, localnet FAST_BLOCKS) - the submission
+        # stands until the epoch settles.
         self._last_cycled_epoch = epoch_index
+        self._log.info(
+            "epoch cycle",
+            extra={
+                "epoch_index": epoch_index,
+                "blocks_until_next": blocks_until,
+                "tempo": tempo,
+            },
+        )
         return True
 
 
