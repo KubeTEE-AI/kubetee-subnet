@@ -151,7 +151,9 @@ def format_report(report: dict) -> str:
         if stake["error"]:
             lines.append(f"  {name}: query failed ({stake['error']})")
         else:
-            lines.append(f"  {name}: {stake['stake_tao']} TAO")
+            lines.append(
+                f"  {name}: {stake['stake_tao']} {stake.get('unit') or 'TAO'}"
+            )
 
     lines.append("")
     lines.append("Subnet overview (short):")

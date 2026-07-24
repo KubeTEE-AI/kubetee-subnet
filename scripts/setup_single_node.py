@@ -822,7 +822,7 @@ def set_hyperparam(
             "set",
             "--netuid",
             str(netuid),
-            "--param",
+            "--name",
             param,
             "--value",
             value,
