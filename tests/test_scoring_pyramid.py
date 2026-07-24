@@ -73,7 +73,7 @@ def test_tenure_ramp_is_monotonic_over_a_simulated_week():
     clock = SimClock()
     engine = sim_engine(clock)
     factors = []
-    for index in range(60 + 7 * 24 * 60):
+    for _ in range(60 + 7 * 24 * 60):
         result = engine.observe("hot-a", healthy=True)
         if result.state is MinerState.EARNING:
             factors.append(result.tenure_factor)
