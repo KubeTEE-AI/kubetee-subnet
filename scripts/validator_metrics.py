@@ -355,6 +355,24 @@ class ValidatorMetrics:
             previous = self._miner_series.get(hotkey)
             if previous is not None:
                 prev_labels, prev_reason, prev_class = previous
+                if prev_labels != labels:
+                    # The hotkey moved to a different cluster: drop every
+                    # series under the old (hotkey, cluster_id) pair so
+                    # zero-valued ghosts don't linger on the dashboard.
+                    for gauge in (
+                        self._miner_state,
+                        self._miner_probation,
+                        self._miner_tenure,
+                        self._miner_capacity,
+                        self._miner_score,
+                        self._miner_weight,
+                        self._miner_gpus,
+                        self._miner_nodes,
+                    ):
+                        try:
+                            gauge.remove(*prev_labels)
+                        except KeyError:
+                            pass
                 if prev_reason != entry["reason"] or prev_labels != labels:
                     try:
                         self._miner_reason.remove(*prev_labels, prev_reason)
