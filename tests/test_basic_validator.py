@@ -1514,3 +1514,22 @@ def test_banned_hotkey_only_cluster_scores_zero_in_cycle():
     assert validator.run_cycle() == "weights_set"
 
     assert subtensor.set_weights_calls[0]["weights"] == [1.0, 0.0, 0.0]
+
+
+def test_alias_labeled_cluster_gets_nodes_fetched_and_scores():
+    """Regression: _fetch_miner_nodes must match the cluster with the same
+    canonicalized (miner- alias aware) hotkey lookup the scorer uses;
+    a cluster labeled only kubetee.ai/miner-hotkey previously never had its
+    nodes fetched -> node_inventory_empty despite a healthy inventory."""
+    clusters, nodes = active_bob_cluster()
+    clusters[0]["labels"] = {"kubetee.ai/miner-hotkey": BOB}
+    clusters[0].pop("annotations", None)
+    validator, subtensor, *_ = build_validator(
+        rancher=FakeRancher(clusters=clusters, nodes_by_cluster=nodes)
+    )
+
+    assert validator.run_cycle() == "weights_set"
+
+    assert subtensor.set_weights_calls[0]["weights"] == pytest.approx(
+        [0.9, 0.0, 0.1]
+    )

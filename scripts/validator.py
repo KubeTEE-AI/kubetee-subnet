@@ -47,6 +47,7 @@ from infrastructure_validation import (
     HOTKEY_LABEL,
     InfrastructurePolicy,
     ValidationProfile,
+    canonicalize_kubetee_keys,
     validate_miner,
 )
 from logging_setup import configure_logging
@@ -538,7 +539,8 @@ class BasicValidator:
                 for c in clusters
                 if isinstance(c, dict)
                 and isinstance(c.get("labels"), dict)
-                and c["labels"].get(HOTKEY_LABEL) == hotkey
+                and canonicalize_kubetee_keys(c["labels"]).get(HOTKEY_LABEL)
+                == hotkey
             ]
             if len(matches) != 1:
                 continue
