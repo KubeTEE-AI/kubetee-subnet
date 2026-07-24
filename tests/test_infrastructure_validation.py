@@ -178,7 +178,6 @@ def _apply_mutation(
 ) -> None:
     cluster = clusters[0]
     nodes = nodes_by_cluster["c-miner"]
-    labels = cluster["labels"]
     if mutation == "remove_cluster":
         clusters.clear()
     elif mutation == "duplicate_hotkey_cluster":

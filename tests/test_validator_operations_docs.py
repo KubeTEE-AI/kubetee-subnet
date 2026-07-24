@@ -56,7 +56,10 @@ def test_operations_guide_records_the_public_mainnet_snapshot_defaults():
     text = GUIDE.read_text(encoding="utf-8")
 
     assert "KUBETEE_SUBNET_NETUID=90" in text
-    assert "KUBETEE_OWNER_HOTKEY=5EKtGWqskt8qBqdAZ78pSWRCYRuYmDc5XbwJPDqH1EpiSTEE" in text
+    assert (
+        "KUBETEE_OWNER_HOTKEY=5EKtGWqskt8qBqdAZ78pSWRCYRuYmDc5XbwJPDqH1EpiSTEE"
+        in text
+    )
     assert "KUBETEE_CHAIN_NETWORK=finney" in text
     assert "BTCLI v11" in text
     assert "block 8680289" in text
@@ -109,7 +112,10 @@ def test_operations_guide_pins_the_exact_published_image_digest():
 def test_operations_guide_calls_the_owner_hotkey_a_public_recycle_identity():
     text = GUIDE.read_text(encoding="utf-8")
 
-    assert "The owner hotkey above is a public recycle identity, not a credential." in text
+    assert (
+        "The owner hotkey above is a public recycle identity, not a credential."
+        in text
+    )
 
 
 def test_operations_guide_explicitly_replaces_the_provisional_rancher_origin():
@@ -128,7 +134,10 @@ def test_operations_guide_never_exposes_credentials_or_bootstraps_chain_state():
     assert "token-" not in text
     assert "BEGIN PRIVATE KEY" not in text
     assert "overrides the local bootstrap entrypoint" in text
-    assert "never creates a subnet, registers a key, stakes, or changes Finney state" in text
+    assert (
+        "never creates a subnet, registers a key, stakes, or changes Finney state"
+        in text
+    )
 
 
 def test_operations_guide_keeps_external_environment_file_outside_checkout():
@@ -166,7 +175,10 @@ def test_operations_guide_requires_external_rancher_ca_bundle_path():
 def test_operations_guide_requires_a_dedicated_hotkey_only_wallet_root():
     text = GUIDE.read_text(encoding="utf-8")
 
-    assert "wallet root contains only the signing hotkey and public coldkey metadata" in text
+    assert (
+        "wallet root contains only the signing hotkey and public coldkey metadata"
+        in text
+    )
     assert "Do not mount a normal/operator wallet root" in text
     assert "private coldkey or recovery material" in text
 

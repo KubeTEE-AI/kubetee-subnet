@@ -16,11 +16,11 @@ def test_production_publish_uses_repository_dockerfile():
 
 def test_production_publish_has_traceable_tags_and_remote_smoke():
     text = WORKFLOW.read_text(encoding="utf-8")
-    assert '${IMAGE}:latest' in text
-    assert '${IMAGE}:v${VERSION}' in text
-    assert '${IMAGE}:$(date +%Y-%m-%d-%H%M)' in text
+    assert "${IMAGE}:latest" in text
+    assert "${IMAGE}:v${VERSION}" in text
+    assert "${IMAGE}:$(date +%Y-%m-%d-%H%M)" in text
     assert 'docker pull "${IMAGE}:latest"' in text
-    assert 'remote import smoke OK' in text
+    assert "remote import smoke OK" in text
 
 
 def test_production_publish_normalizes_the_ghcr_repository_name():
@@ -31,12 +31,14 @@ def test_production_publish_normalizes_the_ghcr_repository_name():
         "tr '[:upper:]' '[:lower:]')"
     )
     assert text.count(normalized_image) == 2
-    assert 'IMAGE: ghcr.io/${{ github.repository }}' not in text
+    assert "IMAGE: ghcr.io/${{ github.repository }}" not in text
 
 
 def test_production_publish_requires_anonymous_public_image_smoke():
     text = WORKFLOW.read_text(encoding="utf-8")
-    smoke_step = text.index("- name: Pull and import-smoke the published production image")
+    smoke_step = text.index(
+        "- name: Pull and import-smoke the published production image"
+    )
     smoke_block = text[smoke_step:]
 
     assert "- name: Make image public" not in text
