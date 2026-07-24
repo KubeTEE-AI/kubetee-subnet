@@ -245,3 +245,41 @@ def test_save_is_atomic_json(tmp_path):
     data = json.loads((tmp_path / "state.json").read_text())
     assert HOT in data["miners"]
     assert not list(tmp_path.glob("*.tmp"))
+
+
+# -- USD targets (scoring v3) -------------------------------------------------
+
+
+USD_CARD = {"H100": 2.00, "H200": 2.34, "B200": 4.34, "B300": 5.34}
+
+
+def test_usd_target_production_sums_gpus_times_card():
+    from scoring_state import usd_target_per_hour
+
+    nodes = [_gpu_node(), _gpu_node(product="NVIDIA-B200")]  # 8xH100 + 8xB200
+    assert usd_target_per_hour(
+        nodes, ValidationProfile.PRODUCTION, USD_CARD
+    ) == pytest.approx(8 * 2.00 + 8 * 4.34)
+
+
+def test_usd_target_debug_is_node_count_times_h100():
+    from scoring_state import usd_target_per_hour
+
+    nodes = [{"state": "active"}] * 3
+    assert usd_target_per_hour(
+        nodes, ValidationProfile.DEBUG, USD_CARD
+    ) == pytest.approx(3 * 2.00)
+
+
+def test_usd_target_fails_closed_on_unknown_class_or_bad_nodes():
+    from scoring_state import usd_target_per_hour
+
+    unknown = [_gpu_node(product="NVIDIA-A100-SXM4")]
+    assert (
+        usd_target_per_hour(unknown, ValidationProfile.PRODUCTION, USD_CARD)
+        == 0.0
+    )
+    assert (
+        usd_target_per_hour(None, ValidationProfile.PRODUCTION, USD_CARD)
+        == 0.0
+    )

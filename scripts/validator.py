@@ -56,7 +56,6 @@ from miner_scoring import (
     SkipCycle,
     SkipReason,
     decide_cycle,
-    validate_share,
 )
 from prometheus_client import start_http_server
 from rancher_client import (
@@ -65,8 +64,15 @@ from rancher_client import (
     RancherError,
     normalize_https_origin,
 )
+from price_feed import (
+    PriceFeedError,
+    PriceQuote,
+    TaostatsPriceFeed,
+    check_divergence,
+)
 from reconciliation import ReconciliationEngine
 from scoring_state import (
+    DEFAULT_GPU_USD_PRICES,
     DEFAULT_GPU_WEIGHTS,
     MinerState,
     ScoringConfig,
@@ -75,6 +81,7 @@ from scoring_state import (
     node_gpu_class,
     node_gpu_count,
     parse_gpu_weights,
+    usd_target_per_hour,
 )
 from validator_metrics import ValidatorMetrics
 
@@ -95,6 +102,7 @@ _SKIP_DETAILS = {
     SkipReason.OWNER_UNRESOLVED: "owner_hotkey_unresolved",
     SkipReason.IDENTITY_VIOLATION: "metagraph_identity_violation",
     SkipReason.UNEXPECTED_RUNTIME: "unexpected_runtime_error",
+    SkipReason.PRICE_UNAVAILABLE: "price_feed_unavailable",
 }
 _RANCHER_SKIP_DETAILS = {
     ErrorCategory.TRANSPORT: "rancher_transport_failure",
@@ -195,7 +203,6 @@ class ValidatorConfig:
     wallet_name: str
     wallet_hotkey: str
     netuid: int
-    miner_share: float
     poll_seconds: float
     max_consecutive_skips: int
     reconcile_min_cycles: int
@@ -210,6 +217,12 @@ class ValidatorConfig:
     metrics_addr: str
     scoring: ScoringConfig
     scoring_state_file: str
+    gpu_usd_prices: dict
+    payout_window_hours: float
+    price_divergence_max: float
+    usd_per_alpha_override: float | None
+    bucket_alpha_override: float | None
+    taostats_api_key: str | None
 
     @classmethod
     def from_env(cls, env: Mapping[str, str]) -> ValidatorConfig:
@@ -274,13 +287,6 @@ class ValidatorConfig:
                 "KUBETEE_VALIDATION_PROFILE",
                 "must be production or debug",
             )
-
-        raw_share = str(env.get("KUBETEE_MINER_SHARE") or "0.10").strip()
-        miner_share = 0.10
-        try:
-            miner_share = validate_share(float(raw_share))
-        except ValueError:
-            fail("KUBETEE_MINER_SHARE", "must be finite and within [0, 1]")
 
         poll_seconds = parse_float(
             "KUBETEE_POLL_SECONDS",
@@ -347,6 +353,56 @@ class ValidatorConfig:
             or "/app/.kubetee_scoring_state.json"
         ).strip()
 
+        gpu_usd_prices = dict(DEFAULT_GPU_USD_PRICES)
+        raw_card = (env.get("KUBETEE_GPU_USD_PRICES") or "").strip()
+        if raw_card:
+            try:
+                gpu_usd_prices = parse_gpu_weights(raw_card)
+            except ValueError:
+                fail(
+                    "KUBETEE_GPU_USD_PRICES",
+                    "must be CLASS=USD_PER_GPU_HOUR[,...] with positive"
+                    " finite prices",
+                )
+        payout_window_hours = parse_float(
+            "KUBETEE_PAYOUT_WINDOW_HOURS", 1.2, 0.01
+        )
+        price_divergence_max = parse_float(
+            "KUBETEE_PRICE_DIVERGENCE_MAX", 0.10, 0.0
+        )
+
+        def parse_optional_positive(name: str) -> float | None:
+            raw = str(env.get(name) or "").strip()
+            if not raw:
+                return None
+            try:
+                value = float(raw)
+            except ValueError:
+                fail(name, "must be a number")
+                return None
+            if not math.isfinite(value) or value <= 0:
+                fail(name, "must be finite and > 0")
+                return None
+            return value
+
+        usd_per_alpha_override = parse_optional_positive(
+            "KUBETEE_USD_PER_ALPHA_OVERRIDE"
+        )
+        bucket_alpha_override = parse_optional_positive(
+            "KUBETEE_MINER_BUCKET_ALPHA_OVERRIDE"
+        )
+        taostats_api_key = (env.get("TAOSTATS_API_KEY") or "").strip() or None
+        if usd_per_alpha_override is None and taostats_api_key is None:
+            fail(
+                "TAOSTATS_API_KEY",
+                "is required unless KUBETEE_USD_PER_ALPHA_OVERRIDE is set",
+            )
+        if bucket_alpha_override is None:
+            fail(
+                "KUBETEE_MINER_BUCKET_ALPHA_OVERRIDE",
+                "is required (chain emission read lands in a follow-up)",
+            )
+
         if errors:
             raise ConfigError(
                 "invalid static configuration: " + "; ".join(errors)
@@ -357,7 +413,6 @@ class ValidatorConfig:
             wallet_name=wallet_name,
             wallet_hotkey=wallet_hotkey,
             netuid=netuid,
-            miner_share=miner_share,
             poll_seconds=poll_seconds,
             max_consecutive_skips=max_skips,
             reconcile_min_cycles=reconcile_cycles,
@@ -379,6 +434,12 @@ class ValidatorConfig:
                 gpu_weights=gpu_weights,
             ),
             scoring_state_file=scoring_state_file,
+            gpu_usd_prices=gpu_usd_prices,
+            payout_window_hours=payout_window_hours,
+            price_divergence_max=price_divergence_max,
+            usd_per_alpha_override=usd_per_alpha_override,
+            bucket_alpha_override=bucket_alpha_override,
+            taostats_api_key=taostats_api_key,
         )
 
 
@@ -461,6 +522,7 @@ class BasicValidator:
         reconciler: ReconciliationEngine,
         sleep: Callable[[float], None] = time.sleep,
         scoring_engine: ScoringStateEngine | None = None,
+        price_provider: Callable[[], PriceQuote] | None = None,
     ) -> None:
         self._config = config
         self._subtensor_factory = subtensor_factory
@@ -474,7 +536,6 @@ class BasicValidator:
         self._chain_dirty = False
         self._last_metagraph_block: int | None = None
         self._validator_hotkey = config.validator_hotkey
-        self._miner_share = config.miner_share
         self._infrastructure_policy = InfrastructurePolicy.for_profile(
             config.validation_profile
         )
@@ -484,6 +545,9 @@ class BasicValidator:
             )
             scoring_engine.load(bootstrap_earning=set())
         self._scoring_engine = scoring_engine
+        if price_provider is None:
+            price_provider = self._build_price_provider(config)
+        self._price_provider = price_provider
 
     # -- chain session (AC6: one connection, recreated only after failure) -----
 
@@ -542,17 +606,55 @@ class BasicValidator:
             self._log.warning("metagraph read failed")
             return None, None, None
 
-    def _cycle_config(self, owner_hotkey: str | None) -> CycleConfig | None:
-        """Build cycle identity config from the chain-derived owner key."""
+    def _cycle_config(
+        self, owner_hotkey: str | None, miner_share: float = 0.0
+    ) -> CycleConfig | None:
+        """Build cycle config from the chain-derived owner key. The share is
+        dynamic in scoring v3 (computed from USD targets each cycle); the
+        identity-only call sites pass the default 0.0."""
         if not isinstance(owner_hotkey, str) or not owner_hotkey.strip():
             return None
         try:
             return CycleConfig(
                 owner_hotkey=owner_hotkey,
                 validator_hotkey=self._validator_hotkey,
-                miner_share=self._miner_share,
+                miner_share=miner_share,
             )
         except ValueError:
+            return None
+
+    @staticmethod
+    def _build_price_provider(
+        config: ValidatorConfig,
+    ) -> Callable[[], PriceQuote]:
+        if config.usd_per_alpha_override is not None:
+            override = config.usd_per_alpha_override
+
+            def _pinned() -> PriceQuote:
+                return PriceQuote(
+                    tao_usd=0.0,
+                    alpha_tao=0.0,
+                    usd_per_alpha=override,
+                    fetched_at=time.time(),
+                )
+
+            return _pinned
+        feed = TaostatsPriceFeed(
+            api_key=config.taostats_api_key or "",
+            netuid=config.netuid,
+        )
+        return feed.fetch
+
+    def _chain_alpha_tao(self, subtensor) -> float | None:
+        """Best-effort on-chain alpha->TAO reference for the divergence
+        cross-check; None (no veto) when the SDK surface is unavailable."""
+        try:
+            pool = subtensor.subnets.pool(self._config.netuid)
+            price = getattr(pool, "price", None)
+            value = float(getattr(price, "tao", price))
+            return value if value > 0 else None
+        # Optional reference by contract: any SDK surprise means no veto.
+        except Exception:  # pylint: disable=broad-exception-caught
             return None
 
     def _refresh_registered(
@@ -729,10 +831,44 @@ class BasicValidator:
         _log_verdict_debug_evidence(
             miners, neurons_by_hotkey, verdicts, nodes_by_cluster
         )
+
+        # Scoring v3: resolve live prices BEFORE observing the reliability
+        # engine, so a price outage skips the cycle with all counters frozen
+        # (the validator never guesses a price).
+        try:
+            quote = self._price_provider()
+        except PriceFeedError:
+            self._log.warning("price feed unavailable; cycle skipped")
+            self._record_skip(SkipReason.PRICE_UNAVAILABLE)
+            return "skip"
+        if quote.alpha_tao > 0 and check_divergence(
+            quote.alpha_tao,
+            self._chain_alpha_tao(subtensor),
+            self._config.price_divergence_max,
+        ):
+            self._log.warning(
+                "price feed diverges from on-chain pool; cycle skipped",
+                extra={"feed_alpha_tao": quote.alpha_tao},
+            )
+            self._record_skip(SkipReason.PRICE_UNAVAILABLE)
+            return "skip"
+
         scores, miner_evidence = self._score_miners(
-            miners, verdicts, nodes_by_cluster
+            miners, verdicts, nodes_by_cluster, quote
         )
-        decision = decide_cycle(neurons, scores, cycle_config)
+        bucket_alpha = self._config.bucket_alpha_override or 0.0
+        total_target_alpha = sum(scores.values())
+        dynamic_share = (
+            min(1.0, total_target_alpha / bucket_alpha)
+            if bucket_alpha > 0 and total_target_alpha > 0
+            else 0.0
+        )
+        weights_config = self._cycle_config(owner_hotkey, dynamic_share)
+        if weights_config is None:
+            self._record_skip(SkipReason.OWNER_UNRESOLVED)
+            return "skip"
+        self._metrics.record_pricing(quote, dynamic_share, bucket_alpha)
+        decision = decide_cycle(neurons, scores, weights_config)
         if isinstance(decision, SkipCycle):
             self._record_skip(decision.reason)
             return "skip"
@@ -798,16 +934,20 @@ class BasicValidator:
         miners: list[str],
         verdicts: dict,
         nodes_by_cluster: dict,
+        quote: PriceQuote,
     ) -> tuple[dict[str, float], list[dict]]:
-        """Scoring v2: feed each miner's cycle health into the reliability
-        engine and produce capacity x tenure scores plus dashboard evidence.
+        """Scoring v3: feed each miner's cycle health into the reliability
+        engine and produce USD-priced Alpha targets plus dashboard evidence.
 
-        Called only on completed (non-skipped) cycles, so skipped cycles
-        freeze the engine by construction.
+        score == target_alpha = usd_target/hour x tenure x window_hours
+        / usd_per_alpha (0 unless EARNING). Called only on completed
+        (non-skipped) cycles, so skipped cycles freeze the engine.
         """
         scores: dict[str, float] = {}
         evidence: list[dict] = []
         weights = self._config.scoring.gpu_weights
+        usd_card = self._config.gpu_usd_prices
+        window_hours = self._config.payout_window_hours
         for hotkey in miners:
             verdict = verdicts[hotkey]
             healthy = verdict.score == 1
@@ -817,7 +957,20 @@ class BasicValidator:
                 nodes, self._config.validation_profile, weights
             )
             earning = observed.state is MinerState.EARNING
-            score = capacity * observed.tenure_factor if earning else 0.0
+            usd_per_hour = usd_target_per_hour(
+                nodes, self._config.validation_profile, usd_card
+            )
+            target_usd = (
+                usd_per_hour * observed.tenure_factor * window_hours
+                if earning
+                else 0.0
+            )
+            target_alpha = (
+                target_usd / quote.usd_per_alpha
+                if quote.usd_per_alpha > 0
+                else 0.0
+            )
+            score = target_alpha
             scores[hotkey] = score
             node_list = nodes if isinstance(nodes, list) else []
             gpu_count = sum(node_gpu_count(n) for n in node_list)
@@ -834,6 +987,8 @@ class BasicValidator:
                     "probation_cycles": observed.probation_cycles,
                     "tenure_factor": observed.tenure_factor,
                     "capacity": capacity,
+                    "target_usd": target_usd,
+                    "target_alpha": target_alpha,
                     "score": score,
                     "weight": 0.0,  # filled in after decide_cycle
                     "gpu_count": gpu_count,
@@ -871,7 +1026,7 @@ class BasicValidator:
                 "chain_network": self._config.chain_network,
                 "profile": self._config.validation_profile.value,
                 "poll_seconds": self._config.poll_seconds,
-                "miner_share": self._config.miner_share,
+                "payout_window_hours": self._config.payout_window_hours,
                 "max_consecutive_skips": self._config.max_consecutive_skips,
                 "rancher": urlsplit(self._config.rancher_url).netloc,
             },

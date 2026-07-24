@@ -227,6 +227,48 @@ class ValidatorMetrics:
             registry=self.registry,
         )
         self._miner_series: dict[str, tuple] = {}
+        self._miner_target_usd = Gauge(
+            "kubetee_miner_target_usd",
+            "Per-window USD compensation target (0 while gated)",
+            miner_labels,
+            registry=self.registry,
+        )
+        self._miner_target_alpha = Gauge(
+            "kubetee_miner_target_alpha",
+            "Per-window Alpha target at live prices (0 while gated)",
+            miner_labels,
+            registry=self.registry,
+        )
+        self._price_tao_usd = Gauge(
+            "kubetee_price_tao_usd",
+            "TAO price in USD from the feed (0 when overridden)",
+            registry=self.registry,
+        )
+        self._price_alpha_tao = Gauge(
+            "kubetee_price_alpha_tao",
+            "Subnet alpha price in TAO from the feed (0 when overridden)",
+            registry=self.registry,
+        )
+        self._price_usd_per_alpha = Gauge(
+            "kubetee_price_usd_per_alpha",
+            "USD value of one alpha used for target conversion",
+            registry=self.registry,
+        )
+        self._price_feed_age = Gauge(
+            "kubetee_price_feed_age_seconds",
+            "Age of the price quote when applied",
+            registry=self.registry,
+        )
+        self._dynamic_share = Gauge(
+            "kubetee_scoring_dynamic_miner_share",
+            "Computed miner share of the weight vector this cycle",
+            registry=self.registry,
+        )
+        self._bucket_alpha = Gauge(
+            "kubetee_scoring_bucket_alpha",
+            "Miner-bucket alpha per payout window used for the share",
+            registry=self.registry,
+        )
 
         self._consecutive_count = 0
         self._in_degraded = False
@@ -342,6 +384,21 @@ class ValidatorMetrics:
 
     # -- exposition ------------------------------------------------------------
 
+    def record_pricing(
+        self, quote, dynamic_share: float, bucket: float
+    ) -> None:
+        """Publish the cycle's price conversion + computed share."""
+        self._price_tao_usd.set(quote.tao_usd)
+        self._price_alpha_tao.set(quote.alpha_tao)
+        self._price_usd_per_alpha.set(quote.usd_per_alpha)
+        self._price_feed_age.set(
+            max(0.0, self._clock() - quote.fetched_at)
+            if quote.fetched_at
+            else 0.0
+        )
+        self._dynamic_share.set(dynamic_share)
+        self._bucket_alpha.set(bucket)
+
     def record_miner_scoring(self, evidence: list[dict]) -> None:
         """Set the per-miner dashboard series from one cycle's evidence and
         drop series for hotkeys no longer present."""
@@ -365,6 +422,8 @@ class ValidatorMetrics:
                         self._miner_tenure,
                         self._miner_capacity,
                         self._miner_score,
+                        self._miner_target_usd,
+                        self._miner_target_alpha,
                         self._miner_weight,
                         self._miner_gpus,
                         self._miner_nodes,
@@ -400,6 +459,12 @@ class ValidatorMetrics:
             self._miner_tenure.labels(*labels).set(entry["tenure_factor"])
             self._miner_capacity.labels(*labels).set(entry["capacity"])
             self._miner_score.labels(*labels).set(entry["score"])
+            self._miner_target_usd.labels(*labels).set(
+                entry.get("target_usd", 0.0)
+            )
+            self._miner_target_alpha.labels(*labels).set(
+                entry.get("target_alpha", 0.0)
+            )
             self._miner_weight.labels(*labels).set(entry["weight"])
             self._miner_gpus.labels(*labels).set(entry["gpu_count"])
             self._miner_nodes.labels(*labels).set(entry["node_count"])
@@ -421,6 +486,8 @@ class ValidatorMetrics:
                 self._miner_tenure,
                 self._miner_capacity,
                 self._miner_score,
+                self._miner_target_usd,
+                self._miner_target_alpha,
                 self._miner_weight,
                 self._miner_gpus,
                 self._miner_nodes,

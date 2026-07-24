@@ -44,6 +44,15 @@ DEFAULT_GPU_WEIGHTS: dict[str, float] = {
     "B300": 2.67,
 }
 
+# Placeholder $/GPU/hour card (Targon-ratio-consistent, $2 H100 base) until
+# the operator's real USD price card lands via KUBETEE_GPU_USD_PRICES.
+DEFAULT_GPU_USD_PRICES: dict[str, float] = {
+    "H100": 2.00,
+    "H200": 2.34,
+    "B200": 4.34,
+    "B300": 5.34,
+}
+
 _GPU_CLASS = re.compile(r"(?<![A-Z0-9])(H100|H200|B200|B300)(?![A-Z0-9])")
 _STATE_VERSION = 1
 
@@ -165,6 +174,34 @@ def capacity_score(
         if weight is None:
             continue
         total += count * weight
+    return total
+
+
+def usd_target_per_hour(
+    nodes: object,
+    profile: ValidationProfile,
+    usd_card: dict[str, float],
+) -> float:
+    """USD/hour compensation target of one already-eligible cluster
+    (scoring v3): production = sum over nodes of GPU count x $/GPU/hour for
+    the node's class (unknown class or count fails closed to 0 for that
+    node); debug = node count x the H100 card price (the disposable local
+    stack has no GPU inventory).
+    """
+    if not isinstance(nodes, list):
+        return 0.0
+    if profile is ValidationProfile.DEBUG:
+        return float(len(nodes)) * float(usd_card.get("H100", 0.0))
+    total = 0.0
+    for node in nodes:
+        count = node_gpu_count(node)
+        gpu_class = node_gpu_class(node)
+        if count <= 0 or gpu_class is None:
+            continue
+        price = usd_card.get(gpu_class)
+        if price is None:
+            continue
+        total += count * float(price)
     return total
 
 

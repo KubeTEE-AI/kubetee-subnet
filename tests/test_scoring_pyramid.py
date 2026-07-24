@@ -292,3 +292,38 @@ def test_validator_marathon_probation_then_proportional_weights():
     assert weights[1] == [1.0, 0.0, 0.0]
     for vector in weights[2:]:
         assert vector == pytest.approx([0.9, 0.0, 0.1])
+
+
+# -- USD-priced weights marathon (scoring v3) ---------------------------------
+
+
+def test_price_swing_marathon_usd_income_constant():
+    """Whole-validator marathon across a token price swing: the miner's USD
+    target stays constant while its weight halves when alpha price doubles."""
+    import test_basic_validator as tb
+
+    clusters, nodes = tb.active_bob_cluster()
+
+    def run_with_price(usd_per_alpha):
+        config = tb.ValidatorConfig.from_env(
+            tb.make_env(KUBETEE_USD_PER_ALPHA_OVERRIDE=str(usd_per_alpha))
+        )
+        validator, subtensor, _, _, metrics, _ = tb.build_validator(
+            config=config,
+            rancher=tb.FakeRancher(clusters=clusters, nodes_by_cluster=nodes),
+        )
+        for _ in range(20):
+            assert validator.run_cycle() == "weights_set"
+        weight = subtensor.set_weights_calls[-1]["weights"][2]
+        text = metrics.exposition().decode()
+        target_usd = next(
+            float(line.rsplit(" ", 1)[1])
+            for line in text.splitlines()
+            if line.startswith("kubetee_miner_target_usd{")
+        )
+        return weight, target_usd
+
+    weight_1, usd_1 = run_with_price(1.0)
+    weight_2, usd_2 = run_with_price(2.0)
+    assert usd_1 == pytest.approx(usd_2)  # USD income target constant
+    assert weight_2 == pytest.approx(weight_1 / 2)  # weight halves

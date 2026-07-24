@@ -40,18 +40,22 @@ Each cycle (every `KUBETEE_POLL_SECONDS`, minimum 60s) the validator:
    explicit `debug` profile accepts one active node for the disposable local
    stack. A banned cluster, an ambiguous (duplicate-hotkey) match, a missing
    cluster, or a readiness failure scores `0` immediately.
-5. **Sets weights**, signed by **alice** (`BT_WALLET=alice`): the miner
-   share (`KUBETEE_MINER_SHARE`) is split **proportionally to each earning
-   miner's score** — `capacity × tenure`, where capacity = GPUs × market
-   class weight (H100 1.0 / H200 1.17 / B200 2.17 / B300 2.67; debug: node
-   count) and tenure ramps 1.0→1.2× over 7 days of continuous earning. New
-   and recovered miners pass a probation gate (`KUBETEE_PROBATION_CYCLES`,
-   default 60) scoring 0 before earning; any failed cycle resets the gate
-   and forfeits tenure. State persists across validator restarts
-   (`KUBETEE_SCORING_STATE_FILE`) and is chain-bootstrapped if lost. The
-   owner recycle UID gets `1 − KUBETEE_MINER_SHARE` (or `1.0` when no miner
-   earns); all other UIDs get explicit zero. Success is claimed only on
-   chain acceptance.
+5. **Sets weights**, signed by **alice** (`BT_WALLET=alice`) — scoring v3,
+   USD-priced: each earning miner has a per-window USD target
+   (`GPUs × $/GPU/hour card` (`KUBETEE_GPU_USD_PRICES`; debug: node count ×
+   H100 price) `× tenure × KUBETEE_PAYOUT_WINDOW_HOURS`), converted to Alpha
+   at live prices (taostats TAO/USD × SN90 alpha/TAO, cross-checked against
+   the on-chain pool; `KUBETEE_USD_PER_ALPHA_OVERRIDE` pins it on the local
+   stack). The **miner share is computed, not configured**: share =
+   min(1, Σ target_alpha / miner-bucket alpha per window
+   (`KUBETEE_MINER_BUCKET_ALPHA_OVERRIDE` until the chain emission read
+   lands)); weights are pro-rata to targets; the owner recycle UID gets the
+   remainder. Tenure ramps 1.0→1.2× over 7 days; probation
+   (`KUBETEE_PROBATION_CYCLES`, default 60) gates new/recovered miners at 0.
+   State persists across restarts and is chain-bootstrapped if lost. A price
+   feed failure or divergence **skips the cycle fail-closed** (previous
+   weights persist; counters freeze). Success is claimed only on chain
+   acceptance.
 6. **Logs and exports Prometheus metrics** (structured, redacted — the
    bearer token and response bodies never appear in logs or metrics).
 
@@ -80,12 +84,14 @@ the validator. The platform may still write additional labels for its own
 purposes; the validator ignores everything outside the two above. The
 validator never writes validation state back to Rancher.
 
-### Configurable weight split (D12)
+### Dynamic weight split (scoring v3, supersedes D12's fixed share)
 
-`KUBETEE_MINER_SHARE` lives in `.env` (see `.env.example`), default
-**0.10** — i.e. 10% to scoring miners, 90% recycled to the subnet-owner
-UID. It must be finite and within `[0, 1]`; anything else refuses to start.
-Changing the split is a `.env` edit + container restart, no code change.
+`KUBETEE_MINER_SHARE` is retired. The miner share is computed each cycle
+from USD compensation targets at live token prices (see step 5 above);
+everything miners don't earn recycles to the subnet-owner UID. The USD
+price card (`KUBETEE_GPU_USD_PRICES`, $/GPU/hour) and payout window are
+`.env`-tunable; the price source is the taostats API
+(`TAOSTATS_API_KEY`) or a pinned override for local runs.
 
 ### Recycle mechanism (D13)
 

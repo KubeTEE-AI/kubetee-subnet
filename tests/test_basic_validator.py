@@ -82,6 +82,11 @@ BASE_ENV = {
     # Scoring v2: cycle tests exercise scoring/weights directly; the
     # probation gate has its own dedicated tests.
     "KUBETEE_PROBATION_CYCLES": "0",
+    # Scoring v3: pin the conversion so a 1-node debug miner's target is
+    # 1 node x $2/h (H100 card) x 1.2h = 2.4 alpha, and bucket 24 makes the
+    # dynamic share exactly 0.1 -> historical [0.9, 0, 0.1] expectations hold.
+    "KUBETEE_USD_PER_ALPHA_OVERRIDE": "1.0",
+    "KUBETEE_MINER_BUCKET_ALPHA_OVERRIDE": "24",
 }
 
 
@@ -362,7 +367,9 @@ def sample(metrics: ValidatorMetrics, name: str, **labels) -> float:
 
 def test_from_env_happy_path_pins_plan_defaults():
     config = ValidatorConfig.from_env(make_env())
-    assert config.miner_share == 0.10
+    assert config.payout_window_hours == 1.2
+    assert config.price_divergence_max == 0.10
+    assert config.gpu_usd_prices["H100"] == 2.00
     assert config.poll_seconds == 60.0
     assert config.max_consecutive_skips == 10
     assert config.reconcile_min_cycles == 3
@@ -475,11 +482,26 @@ def test_missing_static_config_refuses_to_start(missing):
     assert TOKEN not in str(excinfo.value)
 
 
-@pytest.mark.parametrize("share", ["1.5", "-0.1", "abc", "nan", "inf"])
-def test_invalid_share_refuses_to_start(share):
+@pytest.mark.parametrize("value", ["-0.1", "abc", "nan", "inf", "0"])
+def test_invalid_price_override_refuses_to_start(value):
     with pytest.raises(ConfigError) as excinfo:
-        ValidatorConfig.from_env(make_env(KUBETEE_MINER_SHARE=share))
-    assert "KUBETEE_MINER_SHARE" in str(excinfo.value)
+        ValidatorConfig.from_env(
+            make_env(KUBETEE_USD_PER_ALPHA_OVERRIDE=value)
+        )
+    assert "KUBETEE_USD_PER_ALPHA_OVERRIDE" in str(excinfo.value)
+
+
+def test_missing_price_source_refuses_to_start():
+    """No override and no taostats key -> the validator cannot price."""
+    with pytest.raises(ConfigError) as excinfo:
+        ValidatorConfig.from_env(make_env(KUBETEE_USD_PER_ALPHA_OVERRIDE=None))
+    assert "TAOSTATS_API_KEY" in str(excinfo.value)
+
+
+def test_invalid_usd_card_refuses_to_start():
+    with pytest.raises(ConfigError) as excinfo:
+        ValidatorConfig.from_env(make_env(KUBETEE_GPU_USD_PRICES="H100=zero"))
+    assert "KUBETEE_GPU_USD_PRICES" in str(excinfo.value)
 
 
 def test_empty_tunables_fall_back_to_pinned_defaults():
@@ -488,12 +510,12 @@ def test_empty_tunables_fall_back_to_pinned_defaults():
     hotkeys never do this - empty is missing there (D14)."""
     config = ValidatorConfig.from_env(
         make_env(
-            KUBETEE_MINER_SHARE="",
             KUBETEE_POLL_SECONDS="",
             KUBETEE_MAX_CONSECUTIVE_SKIPS="",
+            KUBETEE_PAYOUT_WINDOW_HOURS="",
         )
     )
-    assert config.miner_share == 0.10
+    assert config.payout_window_hours == 1.2
     assert config.poll_seconds == 60.0
     assert config.max_consecutive_skips == 10
 
@@ -722,22 +744,6 @@ def test_owner_only_mode_when_no_miners_registered():
     call = subtensor.set_weights_calls[0]
     assert call["uids"] == [0, 1]
     assert call["weights"] == [1.0, 0.0]
-
-
-def test_degenerate_share_zero_reproduces_owner_only_weights():
-    """Migrated owner-validator expectation: share x score = 0 keeps 100%
-    owner weight with explicit zeros for everyone else."""
-    clusters, nodes = active_bob_cluster()
-    config = ValidatorConfig.from_env(make_env(KUBETEE_MINER_SHARE="0"))
-    validator, subtensor, *_ = build_validator(
-        config=config,
-        rancher=FakeRancher(clusters=clusters, nodes_by_cluster=nodes),
-    )
-
-    assert validator.run_cycle() == "weights_set"
-    call = subtensor.set_weights_calls[0]
-    assert call["uids"] == [0, 1, 2]
-    assert call["weights"] == [1.0, 0.0, 0.0]
 
 
 def test_healthy_miner_gets_share_and_owner_gets_rest():
@@ -1619,7 +1625,9 @@ def test_weights_proportional_to_gpu_capacity():
     )
     assert validator.run_cycle() == "weights_set"
     weights = subtensor.set_weights_calls[0]["weights"]
-    assert weights == pytest.approx([0.9, 0.0, 0.1 * 0.25, 0.1 * 0.75])
+    # v3 dynamic share: bob 1 node -> 2.4 alpha, carol 3 nodes -> 7.2 alpha;
+    # sum 9.6 over bucket 24 -> share 0.4 split 1:3 -> 0.1 / 0.3, owner 0.6.
+    assert weights == pytest.approx([0.6, 0.0, 0.1, 0.3])
 
 
 def test_miner_scoring_metrics_exposed():
@@ -1634,3 +1642,92 @@ def test_miner_scoring_metrics_exposed():
     assert "kubetee_miner_weight{" in text
     assert "kubetee_scoring_earning_miners 1.0" in text
     assert 'reason="eligible"' in text
+
+
+# ---------------------------------------------------------------------------
+# Scoring v3: USD-priced weights.
+# ---------------------------------------------------------------------------
+
+
+def test_token_price_doubling_halves_miner_weight():
+    """Same hardware, same USD target: alpha price x2 => weight /2."""
+    clusters, nodes = active_bob_cluster()
+    config = ValidatorConfig.from_env(
+        make_env(KUBETEE_USD_PER_ALPHA_OVERRIDE="2.0")
+    )
+    validator, subtensor, *_ = build_validator(
+        config=config,
+        rancher=FakeRancher(clusters=clusters, nodes_by_cluster=nodes),
+    )
+    assert validator.run_cycle() == "weights_set"
+    assert subtensor.set_weights_calls[0]["weights"] == pytest.approx(
+        [0.95, 0.0, 0.05]
+    )
+
+
+def test_bucket_smaller_than_targets_caps_share_pro_rata():
+    """Token crash: targets exceed the bucket => share caps at 1.0 and the
+    owner gets explicit zero (all emissions to miners, pro-rata)."""
+    clusters, nodes = active_bob_cluster()
+    config = ValidatorConfig.from_env(
+        make_env(KUBETEE_MINER_BUCKET_ALPHA_OVERRIDE="1.0")
+    )
+    validator, subtensor, *_ = build_validator(
+        config=config,
+        rancher=FakeRancher(clusters=clusters, nodes_by_cluster=nodes),
+    )
+    assert validator.run_cycle() == "weights_set"
+    weights = subtensor.set_weights_calls[0]["weights"]
+    assert weights == pytest.approx([0.0, 0.0, 1.0])
+    assert sum(weights) == pytest.approx(1.0)
+
+
+def test_price_feed_failure_skips_cycle_and_freezes_state():
+    from price_feed import PriceFeedError
+
+    config = ValidatorConfig.from_env(make_env(KUBETEE_PROBATION_CYCLES="5"))
+    clusters, nodes = active_bob_cluster()
+    validator, subtensor, _, _, metrics, _ = build_validator(
+        config=config,
+        rancher=FakeRancher(clusters=clusters, nodes_by_cluster=nodes),
+    )
+    # two healthy cycles advance probation to k=2
+    assert validator.run_cycle() == "weights_set"
+    assert validator.run_cycle() == "weights_set"
+
+    def broken_provider():
+        raise PriceFeedError("feed down")
+
+    validator._price_provider = broken_provider
+    assert validator.run_cycle() == "skip"
+    assert subtensor.set_weights_calls[-1]["weights"] == [1.0, 0.0, 0.0]
+    text = metrics.exposition().decode()
+    assert 'reason="price_unavailable"' in text
+    # freeze: probation counter did not reset; two more healthy cycles
+    # continue from k=2 (needs 5 -> still gated), proving no reset happened.
+    validator._price_provider = validator._build_price_provider(config)
+    assert validator.run_cycle() == "weights_set"  # k=3
+    st = json_probation(metrics)
+    assert st == 3
+
+
+def json_probation(metrics) -> int:
+    for line in metrics.exposition().decode().splitlines():
+        if line.startswith("kubetee_miner_probation_cycles{"):
+            return int(float(line.rsplit(" ", 1)[1]))
+    return -1
+
+
+def test_divergent_feed_price_skips_cycle():
+    clusters, nodes = active_bob_cluster()
+    validator, subtensor, *_ = build_validator(
+        rancher=FakeRancher(clusters=clusters, nodes_by_cluster=nodes)
+    )
+    from price_feed import PriceQuote
+
+    validator._price_provider = lambda: PriceQuote(
+        tao_usd=192.0, alpha_tao=0.02, usd_per_alpha=3.84, fetched_at=0.0
+    )
+    validator._chain_alpha_tao = lambda subtensor: 0.0067  # feed 3x off
+    assert validator.run_cycle() == "skip"
+    assert subtensor.set_weights_calls == []

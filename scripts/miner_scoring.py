@@ -20,6 +20,7 @@ class SkipReason(enum.Enum):
     OWNER_UNRESOLVED = "owner_unresolved"
     IDENTITY_VIOLATION = "identity_violation"
     RANCHER_UNAVAILABLE = "rancher_unavailable"
+    PRICE_UNAVAILABLE = "price_unavailable"
     UNEXPECTED_RUNTIME = "unexpected_runtime"
 
 
