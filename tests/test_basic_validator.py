@@ -90,6 +90,9 @@ BASE_ENV = {
     # Pinned TEST card (cheapest class $2 drives the debug node price);
     # the production default card is asserted in its own tests.
     "KUBETEE_GPU_USD_PRICES": "H100=2.00,H200=2.34,B200=4.34,B300=5.34",
+    # Single chain clock: tempo=1 makes every fake block a new epoch so
+    # run_forever cycles each iteration; epoch gating has dedicated tests.
+    "KUBETEE_TEMPO_BLOCKS": "1",
 }
 
 
@@ -1747,3 +1750,43 @@ def test_default_usd_card_is_the_owner_decision():
         "B200": 6.50,
         "B300": 8.00,
     }
+
+
+# ---------------------------------------------------------------------------
+# Single chain clock: one cycle per epoch.
+# ---------------------------------------------------------------------------
+
+
+def test_one_cycle_per_epoch_on_the_chain_clock():
+    """tempo=10: the loop cycles once per epoch (in its final stretch) and
+    idles through mid-epoch ticks — no per-tick weight submissions."""
+    config = ValidatorConfig.from_env(make_env(KUBETEE_TEMPO_BLOCKS="10"))
+    clusters, nodes = active_bob_cluster()
+    sleep, sleep_calls = stop_after(30)
+    validator, subtensor, *_ = build_validator(
+        config=config,
+        rancher=FakeRancher(clusters=clusters, nodes_by_cluster=nodes),
+        sleep=sleep,
+    )
+    with pytest.raises(_StopLoop):
+        validator.run_forever()
+    # 30 ticks with the fake head advancing ~1 block per tick and one extra
+    # read inside each executed cycle: expect ~2-3 epochs' worth of
+    # submissions, definitely far fewer than 30.
+    assert 1 <= len(subtensor.set_weights_calls) <= 4
+    assert len(sleep_calls) == 30
+
+
+def test_same_epoch_never_cycles_twice():
+    config = ValidatorConfig.from_env(make_env(KUBETEE_TEMPO_BLOCKS="1000"))
+    clusters, nodes = active_bob_cluster()
+    sleep, sleep_calls = stop_after(10)
+    validator, subtensor, *_ = build_validator(
+        config=config,
+        rancher=FakeRancher(clusters=clusters, nodes_by_cluster=nodes),
+        sleep=sleep,
+    )
+    with pytest.raises(_StopLoop):
+        validator.run_forever()
+    # heads 100..109 sit mid-epoch for tempo=1000 -> no submission at all
+    assert subtensor.set_weights_calls == []

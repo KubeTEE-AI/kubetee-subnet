@@ -215,6 +215,7 @@ class ValidatorConfig:
     rancher_ca_file: str | None
     metrics_port: int
     metrics_addr: str
+    tempo_blocks_override: int | None
     scoring: ScoringConfig
     scoring_state_file: str
     gpu_usd_prices: dict
@@ -329,12 +330,10 @@ class ValidatorConfig:
         rancher_token = require("RANCHER_BEARER_TOKEN")
         rancher_ca_file = (env.get("RANCHER_CA_FILE") or "").strip() or None
 
-        probation_default = (
-            3 if validation_profile is ValidationProfile.DEBUG else 60
-        )
-        probation_cycles = parse_int(
-            "KUBETEE_PROBATION_CYCLES", probation_default, 0
-        )
+        # Single chain clock: one cycle == one epoch, so the probation gate
+        # is counted in EPOCHS (default 1 ~= the old one-hour intent).
+        probation_cycles = parse_int("KUBETEE_PROBATION_CYCLES", 1, 0)
+        tempo_override = parse_int("KUBETEE_TEMPO_BLOCKS", 0, 0)
         tenure_bonus = parse_float("KUBETEE_TENURE_BONUS", 0.2, 0.0)
         tenure_days = parse_float("KUBETEE_TENURE_DAYS", 7.0, 0.1)
         gpu_weights = dict(DEFAULT_GPU_WEIGHTS)
@@ -427,6 +426,7 @@ class ValidatorConfig:
             metrics_addr=(
                 env.get("KUBETEE_METRICS_ADDR") or "0.0.0.0"
             ).strip(),
+            tempo_blocks_override=tempo_override or None,
             scoring=ScoringConfig(
                 probation_cycles=probation_cycles,
                 tenure_bonus=tenure_bonus,
@@ -545,6 +545,8 @@ class BasicValidator:
             )
             scoring_engine.load(bootstrap_earning=set())
         self._scoring_engine = scoring_engine
+        self._tempo_blocks: int | None = config.tempo_blocks_override
+        self._last_cycled_epoch: int | None = None
         if price_provider is None:
             price_provider = self._build_price_provider(config)
         self._price_provider = price_provider
@@ -1033,13 +1035,66 @@ class BasicValidator:
         )
         while True:
             try:
-                self.run_cycle()
+                if self._epoch_due():
+                    self.run_cycle()
+                    self._sleep(self._config.poll_seconds)
+                    continue
             # The process liveness contract intentionally guards every cycle.
             # pylint: disable-next=broad-exception-caught
             except Exception:  # never exit on a runtime error (D14)
                 self._log.error("unexpected cycle error; loop continues")
                 self._record_skip(SkipReason.UNEXPECTED_RUNTIME)
             self._sleep(self._config.poll_seconds)
+
+    # -- single chain clock (one cycle per epoch) ------------------------------
+
+    _BLOCK_SECONDS = 12.0
+
+    def _resolve_tempo(self, subtensor) -> int | None:
+        if self._tempo_blocks is not None:
+            return self._tempo_blocks
+        try:
+            raw = subtensor.query(
+                ("SubtensorModule", "Tempo"), params=[self._config.netuid]
+            )
+            tempo = int(getattr(raw, "value", raw))
+        # Chain read is retried next iteration; the loop never dies (D14).
+        except Exception:  # pylint: disable=broad-exception-caught
+            self._log.warning("tempo read failed; retrying next tick")
+            return None
+        if tempo <= 0:
+            return None
+        self._tempo_blocks = tempo
+        self._log.info("chain clock resolved", extra={"tempo_blocks": tempo})
+        return tempo
+
+    def _epoch_due(self) -> bool:
+        """One cycle per chain epoch: true when the current epoch has not
+        been cycled yet and the head sits in the final stretch of it (so the
+        submitted weights are the standing ones at settlement)."""
+        subtensor = self._ensure_subtensor()
+        tempo = self._resolve_tempo(subtensor)
+        if tempo is None:
+            return False
+        if tempo <= 1:
+            # Degenerate clock (tests / fast localnets): every tick is due.
+            return True
+        try:
+            head = subtensor.block()
+        # Transient chain failure: try again next tick, never crash.
+        except Exception:  # pylint: disable=broad-exception-caught
+            self._log.warning("head read failed; retrying next tick")
+            self._chain_dirty = True
+            return False
+        phase = (head + self._config.netuid + 1) % (tempo + 1)
+        epoch_index = (head + self._config.netuid + 1) // (tempo + 1)
+        blocks_until = (tempo + 1) - phase
+        lead = max(1, min(15, tempo // 4))
+        self._metrics.record_epoch_position(epoch_index, blocks_until)
+        if self._last_cycled_epoch == epoch_index or blocks_until > lead:
+            return False
+        self._last_cycled_epoch = epoch_index
+        return True
 
 
 def _bootstrap_earning_from_chain(

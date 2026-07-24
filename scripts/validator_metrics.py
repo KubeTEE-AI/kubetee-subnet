@@ -269,6 +269,16 @@ class ValidatorMetrics:
             "Miner-bucket alpha per payout window used for the share",
             registry=self.registry,
         )
+        self._epoch_index = Gauge(
+            "kubetee_epoch_index",
+            "Current chain epoch index for this netuid",
+            registry=self.registry,
+        )
+        self._epoch_blocks_until = Gauge(
+            "kubetee_epoch_blocks_until_next",
+            "Blocks remaining until the next epoch boundary",
+            registry=self.registry,
+        )
 
         self._consecutive_count = 0
         self._in_degraded = False
@@ -383,6 +393,12 @@ class ValidatorMetrics:
         self._cycles_total.labels(outcome=outcome).inc()
 
     # -- exposition ------------------------------------------------------------
+
+    def record_epoch_position(
+        self, epoch_index: int, blocks_until: int
+    ) -> None:
+        self._epoch_index.set(epoch_index)
+        self._epoch_blocks_until.set(blocks_until)
 
     def record_pricing(
         self, quote, dynamic_share: float, bucket: float
