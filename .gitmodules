@@ -1,0 +1,5 @@
+[submodule "subtensor"]
+	path = subtensor
+	url = https://github.com/RaoFoundation/subtensor.git
+	branch = main
+	shallow = true
