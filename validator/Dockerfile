@@ -1,7 +1,7 @@
 # KubeTEE subnet-owner validator image.
 # Build context is the REPO ROOT so the vendored bittensor SDK is reachable:
 #   docker build -f validator/Dockerfile .
-FROM python:3.13-slim AS base
+FROM python:3.14-slim AS base
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
