@@ -1,0 +1,66 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kubetee-validator"
+version = "0.1.0"
+description = "KubeTEE AI (SN90) subnet-owner Bittensor validator"
+readme = "README.md"
+requires-python = ">=3.13"
+license = { text = "MIT" }
+authors = [
+    { name = "Pierre", email = "pierre@kubetee.ai" },
+]
+keywords = [
+    "bittensor",
+    "subnet",
+    "confidential-computing",
+    "tee",
+    "kata",
+    "coco",
+    "validator",
+    "decentralized",
+    "gpu",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Security :: Cryptography",
+    "Topic :: System :: Distributed Computing",
+]
+dependencies = [
+    "bittensor @ file:./subtensor/sdk/python",
+    "httpx>=0.27",
+    "prometheus-client>=0.20",
+]
+
+[project.urls]
+Homepage = "https://github.com/KubeTEE-AI/kubetee-subnet"
+Repository = "https://github.com/KubeTEE-AI/kubetee-subnet"
+Documentation = "https://github.com/KubeTEE-AI/kubetee-subnet/tree/main/docs"
+"Bug Tracker" = "https://github.com/KubeTEE-AI/kubetee-subnet/issues"
+Changelog = "https://github.com/KubeTEE-AI/kubetee-subnet/releases"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "black>=24.0",
+]
+
+# The `validator/` directory is a flat unit of bare-import modules, not an
+# importable package (no __init__.py), so there is nothing to install from it
+# here; the SDK is the only packaged dependency. The Dockerfile copies the
+# validator modules directly.
+[tool.setuptools]
+py-modules = []
+
+[tool.black]
+line-length = 79
+
+[tool.pytest.ini_options]
+testpaths = ["validator/tests"]

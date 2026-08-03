@@ -1,0 +1,24 @@
+# Docker build context is the repo root (docker build -f validator/Dockerfile .)
+# This file MUST sit at the context root — validator/.dockerignore is ineffective
+# for the documented build and is kept only as a no-op.
+.git
+.github
+.gitmodules
+.gitignore
+subtensor/.git
+kubetee_subnet.egg-info/
+.pytest_cache
+docs/
+README.md
+CLAUDE.md
+.markdownlint.json
+LICENSE
+SECURITY.md
+CONTRIBUTING.md
+CODE_OF_CONDUCT.md
+pyproject.toml
+**/__pycache__/
+**/*.pyc
+**/.env
+**/.env.*
+!validator/.env.example

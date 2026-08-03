@@ -1,0 +1,79 @@
+# KubeTEE subnet validator — docker-compose
+#
+# Works for BOTH the subnet-owner validator AND third-party (reader) validators.
+# The mode is selected by the .env file (see .env.example in this directory):
+#
+#   OWNER  (subnet-owner): RANCHER_URL=<rancher api> + RANCHER_BEARER_TOKEN=<token>
+#                          + Hippius keys -> also serves the proxy on :9101
+#   READER (third-party):  RANCHER_URL=https://validator.kubetee.ai
+#                          (no RANCHER_BEARER_TOKEN) -> uses the proxy
+#
+# Usage (from this directory):
+#   1. cp .env.example .env   # then edit .env and fill in the secrets
+#   2. docker compose up -d
+#   3. docker compose logs -f
+#
+# The image is public (ghcr.io/kubetee-ai/kubetee-validator:v1) — no
+# imagePullSecret is needed once the kubetee-subnet repo is public.
+#
+# Auto-update: Watchtower checks ghcr every hour for a new v1.x.y image.
+# The validator is pinned to the major tag "v1" (not "latest" and not a
+# specific patch), so it auto-upgrades to the latest minor/patch release
+# within v1 but NEVER crosses to a breaking v2. To roll back, pin the
+# validator image to a specific tag (e.g. v1.0.0) and stop watchtower:
+#   docker compose stop watchtower
+#   docker compose pull validator && docker compose up -d validator
+#
+# Dry-run mode (no set_weights, single cycle):
+#   docker compose run --rm -e DRY_RUN=1 -e ONCE=1 validator
+
+services:
+  validator:
+    image: ghcr.io/kubetee-ai/kubetee-validator:v1
+    container_name: kubetee-validator
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "9100:9100"   # Prometheus metrics
+      - "9101:9101"   # Rancher proxy (subnet-owner only; readers don't serve)
+    # The image runs as non-root user `kubetee` (uid 10001) — no root needed.
+    labels:
+      # Opt-in for Watchtower auto-update (only this container, not others
+      # on the host). Watchtower runs with WATCHTOWER_LABEL_ENABLE=true so
+      # unlabeled containers are never touched.
+      - "com.centurylinklabs.watchtower.enable=true"
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:9100/"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # Watchtower — auto-updates the validator to the latest v1.x.y image.
+  # Checks every hour, removes old images, only touches the labeled
+  # validator container. Self-excluded from updates.
+  watchtower:
+    image: containrrr/watchtower:latest
+    container_name: kubetee-watchtower
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      # Only update containers with the enable=true label (opt-in mode).
+      - WATCHTOWER_LABEL_ENABLE=true
+      # Check for new images every hour (3600s). Adjust with
+      # WATCHTOWER_POLL_INTERVAL in .env if you want a different cadence.
+      - WATCHTOWER_POLL_INTERVAL=${WATCHTOWER_POLL_INTERVAL:-3600}
+      # Remove old images after update (keep the disk clean).
+      - WATCHTOWER_CLEANUP=true
+      # Rolling restart — update one container at a time, graceful.
+      - WATCHTOWER_ROLLING_RESTART=true
+      # Stop timeout — give the validator 60s to finish its current cycle
+      # before Watchtower force-kills it (the cycle loop checks for
+      # SIGTERM and exits between epochs).
+      - WATCHTOWER_TIMEOUT=60s
+    labels:
+      # Never let Watchtower update itself — manual `docker compose pull
+      # watchtower && docker compose up -d watchtower` only.
+      - "com.centurylinklabs.watchtower.enable=false"

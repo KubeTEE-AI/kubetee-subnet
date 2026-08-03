@@ -1,0 +1,99 @@
+name: Release validator image
+
+on:
+  push:
+    tags: ["v*"]
+    branches:
+      - main
+    paths:
+      - "validator/**"
+      - "subtensor/sdk/python/**"
+      - ".github/workflows/release-image.yml"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Image tag to publish (e.g. v3)"
+        required: true
+        default: "v3"
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-push:
+    name: build & push (amd64 + arm64)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: true
+
+      - name: Resolve image tags
+        id: tag
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          # All values come from trusted GitHub context (env), not raw
+          # interpolation in the shell. The shell reads them via $VAR.
+          if [ "$EVENT_NAME" = "push" ] && [[ "$REF_NAME" == v* ]]; then
+            TAG="$REF_NAME"
+          elif [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            # Validate the input tag is a simple alphanumeric+dotted string
+            # (reject anything with shell metacharacters)
+            if [[ "$INPUT_TAG" =~ ^[a-zA-Z0-9._-]+$ ]]; then
+              TAG="$INPUT_TAG"
+            else
+              echo "::error::invalid tag (must match [a-zA-Z0-9._-]+)"
+              exit 1
+            fi
+          else
+            TAG="sha-$(git rev-parse --short HEAD)"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+          # For semver tags (v1.2.3), also push the major (v1) and minor
+          # (v1.2) tags so Watchtower can track v1 and auto-upgrade within
+          # the major. Non-semver tags (sha-xxx, v3, etc.) only push themselves.
+          TAGS="ghcr.io/kubetee-ai/kubetee-validator:$TAG"
+          if [[ "$TAG" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            MAJOR="${BASH_REMATCH[1]}"
+            MINOR="${BASH_REMATCH[2]}"
+            TAGS="$TAGS
+          ghcr.io/kubetee-ai/kubetee-validator:v$MAJOR
+          ghcr.io/kubetee-ai/kubetee-validator:v$MAJOR.$MINOR"
+          fi
+          TAGS="$TAGS
+          ghcr.io/kubetee-ai/kubetee-validator:latest"
+          # Write as a multiline output for the build-push step
+          {
+            echo "tags<<EOF"
+            echo "$TAGS"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Set up QEMU (multi-arch)
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to ghcr.io
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GHCR_PAT }}
+
+      - name: Build & push multi-arch image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: validator/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.tag.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
