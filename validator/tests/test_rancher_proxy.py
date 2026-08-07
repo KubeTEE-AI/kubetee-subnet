@@ -308,6 +308,46 @@ def test_unknown_hotkey_rejected():
     assert ok is False
 
 
+def test_miner_without_validator_permit_rejected():
+    """A registered miner (is_validator=False) must NOT access the proxy."""
+
+    class MinerOnlyChain:
+        def metagraph(self, netuid):
+            return [
+                Miner(uid=0, hotkey=HOTKEY_A, is_validator=False),
+                Miner(uid=1, hotkey="5Other", is_validator=True),
+            ]
+
+    ts = int(time.time())
+    msg = f"/v3/clusters\n\n{ts}".encode()
+    ok = rancher_proxy._verify_hotkey_with_msg(
+        MinerOnlyChain(),
+        NETUID,
+        HOTKEY_A,  # registered but is_validator=False
+        "aa" * 64,
+        str(ts),
+        msg,
+        LOG,
+    )
+    assert ok is False
+
+
+def test_validator_with_permit_accepted():
+    """A registered validator (is_validator=True) MUST pass the check."""
+    ts = int(time.time())
+    msg = f"/v3/clusters\n\n{ts}".encode()
+    ok = rancher_proxy._verify_hotkey_with_msg(
+        FakeChain(),  # HOTKEY_A is_validator=True
+        NETUID,
+        HOTKEY_A,
+        "aa" * 64,
+        str(ts),
+        msg,
+        LOG,
+    )
+    assert ok is True
+
+
 def test_expired_timestamp_rejected():
     ts = int(time.time()) - 120
     msg = f"/v3/clusters\n{ts}".encode()

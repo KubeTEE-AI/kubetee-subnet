@@ -235,8 +235,17 @@ def _verify_hotkey_with_msg(
     except Exception as exc:  # noqa: BLE001 - fail-closed on chain errors
         log.warning("proxy: metagraph read failed: %s", exc)
         return False
-    known = {m.hotkey for m in miners}
-    if hotkey not in known:
+    # The hotkey must be registered AND have a validator permit (1,000+ TAO
+    # stake, top 64 by stake weight). Miners without a validator permit are
+    # rejected — the proxy is for validators only.
+    miner = next((m for m in miners if m.hotkey == hotkey), None)
+    if miner is None:
+        return False
+    if not miner.is_validator:
+        log.info(
+            "proxy 403: hotkey %s is not a validator (no validator_permit)",
+            _short_hotkey(hotkey),
+        )
         return False
     try:
         sig = bytes.fromhex(signature_hex.strip())
