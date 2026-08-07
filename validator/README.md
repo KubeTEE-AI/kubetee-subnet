@@ -171,6 +171,8 @@ Enforcement is at three layers: exact path match, GET-only, query param allowlis
 
 **Auth**: the reader signs `<path>\n<query>\n<ts>` with its hotkey private key (sr25519). The proxy verifies the signature using only the public SS58 address (from the live metagraph) — it never sees the reader's private key.
 
+**Eligibility**: the proxy only accepts hotkeys that are registered on the subnet **and** have `validator_permit=True` in the live metagraph. Miners (no permit) are always rejected with **403**.
+
 **Reader requirement**: Cloudflare bot-fight mode on `kubetee.ai` blocks the default Python urllib User-Agent (error 1010). Reader validators must set a real `User-Agent` header (the `RancherClient` does this automatically — `kubetee-validator/0.1`).
 
 Every proxy request is logged:
