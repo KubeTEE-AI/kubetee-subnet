@@ -26,6 +26,7 @@ import urllib.parse
 import urllib.request
 
 from config import Config
+from version import validator_version
 
 
 class RancherEvidenceError(RuntimeError):
@@ -36,12 +37,11 @@ _HOTKEY_LABEL = "kubetee.ai/hotkey"
 _HOTKEY_ALIAS = "kubetee.ai/miner-hotkey"
 _BAN_LABEL = "kubetee.ai/ban"
 
-_USER_AGENT = "kubetee-validator/0.1"
-
-# Reader-mode auth headers (mirror the proxy's expected header names).
+# Reader-mode auth / identity headers (mirror the proxy's expected names).
 _HK_HEADER = "BT-Validator-Hotkey"
 _SIG_HEADER = "BT-Validator-Signature"
 _TS_HEADER = "BT-Validator-Ts"
+_VER_HEADER = "BT-Validator-Version"
 
 
 def hotkey_of(cluster: dict) -> str:
@@ -105,6 +105,7 @@ class RancherClient:
             _HK_HEADER: self._keypair.ss58_address,
             _SIG_HEADER: signature,
             _TS_HEADER: ts,
+            _VER_HEADER: validator_version(),
         }
 
     def _get(self, path_and_query: str) -> dict:
@@ -114,9 +115,10 @@ class RancherClient:
         path = parsed.path
         query = parsed.query
         url = f"{self._base}{path_and_query}"
+        ver = validator_version()
         headers = {
             "Accept": "application/json",
-            "User-Agent": _USER_AGENT,
+            "User-Agent": f"kubetee-validator/{ver}",
         }
         headers.update(self._auth_headers(path, query))
         request = urllib.request.Request(

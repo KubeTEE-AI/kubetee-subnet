@@ -11,6 +11,11 @@ class ConfigError(RuntimeError):
     """Raised when required configuration is missing or malformed."""
 
 
+# SN90 owner staging miner — hybrid TDX/non-CC GPUs count for payout.
+# Hardcoded so every validator (owner + readers) scores UID 56 the same way.
+OWNER_MINER_UID = 56
+
+
 def _require(name: str) -> str:
     value = os.environ.get(name, "").strip()
     if not value:
@@ -91,9 +96,7 @@ class Config:
     endpoint: str
     hotkey_seed: str
     owner_uid: int
-    owner_miner_uid: (
-        int | None
-    )  # subnet-owner staging miner allowed hybrid posture
+    owner_miner_uid: int  # hardcoded OWNER_MINER_UID (hybrid posture for SN90)
     rancher_url: str
     rancher_token: str
     rancher_ca_file: str
@@ -129,16 +132,13 @@ class Config:
 
 def load_config() -> Config:
     """Load and validate configuration; raise ConfigError on any problem."""
-    owner_miner_uid_raw = _get_int("KUBETEE_OWNER_MINER_UID", -1)
     return Config(
         netuid=_require_int("SUBNET_NETUID"),
         network=_optional("BT_NETWORK", "finney") or "finney",
         endpoint=_optional("SUBTENSOR_ENDPOINT"),
         hotkey_seed=_require("VALIDATOR_HOTKEY_SEED"),
         owner_uid=_get_int("KUBETEE_OWNER_UID", 0),
-        owner_miner_uid=(
-            owner_miner_uid_raw if owner_miner_uid_raw >= 0 else None
-        ),
+        owner_miner_uid=OWNER_MINER_UID,
         rancher_url=_require("RANCHER_URL").rstrip("/"),
         rancher_token=_optional("RANCHER_BEARER_TOKEN"),
         rancher_ca_file=_optional("RANCHER_CA_FILE"),

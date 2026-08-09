@@ -99,9 +99,26 @@ def test_reader_mode_sends_hotkey_signed_headers():
     assert len(headers["BT-Validator-Signature"]) == 128
     # Timestamp is a string of digits (unix seconds)
     assert headers["BT-Validator-Ts"].isdigit()
+    # Client version advertised for proxy logs / future min-version gate
+    assert headers["BT-Validator-Version"]
     # No Authorization header in reader mode
     assert "Authorization" not in headers
 
+
+def test_reader_mode_version_header_from_module(monkeypatch):
+    """BT-Validator-Version mirrors version.validator_version()."""
+    from version import __version__
+
+    kp = FakeKeypair()
+    cfg = FakeConfig("https://validator.kubetee.ai", "")
+    client = RancherClient(cfg, keypair=kp)
+    headers = client._auth_headers("/v3/clusters", "")
+    assert headers["BT-Validator-Version"] == __version__
+
+    monkeypatch.setenv("KUBETEE_VALIDATOR_VERSION", "v9.8.7")
+    # validator_version() reads env at call time
+    headers2 = client._auth_headers("/v3/clusters", "")
+    assert headers2["BT-Validator-Version"] == "9.8.7"
 
 def test_reader_mode_signature_covers_path_query_ts():
     """The signed message must be `<path>\n<query>\n<ts>` — verify the format

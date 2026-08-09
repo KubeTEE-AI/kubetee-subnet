@@ -30,18 +30,26 @@ import urllib.parse
 # are only used at server-startup time (passed in by validator.py:main).
 from typing import TYPE_CHECKING
 
+from version import version_at_least
+
 if TYPE_CHECKING:
     from chain_state import ChainState
     from rancher_client import RancherClient
 
 
-# Hotkey auth headers (set by the reader validator on every request).
+# Hotkey auth / identity headers (set by the reader validator on every request).
 _HK_HEADER = "BT-Validator-Hotkey"
 _SIG_HEADER = "BT-Validator-Signature"
 _TS_HEADER = "BT-Validator-Ts"
+_VER_HEADER = "BT-Validator-Version"
 
 # Replay protection window (seconds).
 _TS_WINDOW = 60
+
+# Optional minimum reader version (semver). Empty = accept any / missing
+# version (current default — logging only). Set via env on the owner
+# validator when ready to reject deprecated clients, e.g. "1.0.1".
+_MIN_VERSION_ENV = "KUBETEE_PROXY_MIN_VERSION"
 
 # Allowlist: (path, required_query, optional_query). Anything not in this
 # table is rejected at the path layer before any upstream call.
@@ -170,22 +178,35 @@ class _ProxyHandler(http.server.BaseHTTPRequestHandler):
         auth_msg = (
             f"{path}\n{urllib.parse.urlencode(clean_query)}\n{ts_raw}"
         ).encode()
+        client_version = (self.headers.get(_VER_HEADER, "") or "").strip()
         if not _verify_hotkey_with_msg(
             srv.chain, srv.netuid, hotkey, sig_hex, ts_raw, auth_msg, srv.log
         ):
             srv.log.info(
-                "proxy 403: hotkey auth failed hotkey=%s path=%s",
+                "proxy 403: hotkey auth failed hotkey=%s version=%s path=%s",
+                _short_hotkey(hotkey),
+                client_version or "-",
+                path,
+            )
+            _json_response(self, _FORBIDDEN, b'{"error":"forbidden"}')
+            return
+
+        if not _client_version_allowed(client_version, srv.log):
+            srv.log.info(
+                "proxy 403: deprecated version=%s hotkey=%s path=%s",
+                client_version or "-",
                 _short_hotkey(hotkey),
                 path,
             )
             _json_response(self, _FORBIDDEN, b'{"error":"forbidden"}')
             return
 
-        # Log the authenticated query: who asked for what.
+        # Log the authenticated query: who asked for what (+ client version).
         query_str = urllib.parse.urlencode(clean_query) if clean_query else "-"
         srv.log.info(
-            "proxy query: hotkey=%s path=%s query=%s",
+            "proxy query: hotkey=%s version=%s path=%s query=%s",
             _short_hotkey(hotkey),
+            client_version or "-",
             path,
             query_str,
         )
@@ -203,12 +224,40 @@ class _ProxyHandler(http.server.BaseHTTPRequestHandler):
         body = json.dumps({"data": payload}).encode()
         _json_response(self, 200, body)
         srv.log.info(
-            "proxy 200: hotkey=%s path=%s items=%d bytes=%d",
+            "proxy 200: hotkey=%s version=%s path=%s items=%d bytes=%d",
             _short_hotkey(hotkey),
+            client_version or "-",
             path,
             len(payload),
             len(body),
         )
+
+
+def _min_client_version() -> str:
+    """Configured minimum reader version, or empty string (no gate)."""
+    import os  # noqa: PLC0415 - keep module import light for unit tests
+
+    return os.environ.get(_MIN_VERSION_ENV, "").strip()
+
+
+def _client_version_allowed(client_version: str, log: logging.Logger) -> bool:
+    """Return False when a minimum version is configured and the client is older.
+
+    Missing / unparseable client versions fail the gate only when a minimum is
+    set (so we can force upgrades later without breaking today's clients while
+    ``KUBETEE_PROXY_MIN_VERSION`` is unset).
+    """
+    minimum = _min_client_version()
+    if not minimum:
+        return True
+    ok = version_at_least(client_version, minimum)
+    if not ok:
+        log.info(
+            "proxy: client version %r below minimum %r",
+            client_version or "(missing)",
+            minimum,
+        )
+    return ok
 
 
 def _verify_hotkey_with_msg(

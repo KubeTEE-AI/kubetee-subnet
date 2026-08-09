@@ -116,14 +116,17 @@ def _build_handler(method, path, headers=None, server=None):
     return handler, status, body_chunks, sent_headers
 
 
-def _auth_headers(path, hotkey=HOTKEY_A, ts=None):
-    """Build the three BT-Validator-* headers with a deterministic ts."""
+def _auth_headers(path, hotkey=HOTKEY_A, ts=None, version="1.0.0"):
+    """Build the BT-Validator-* headers with a deterministic ts + version."""
     ts = ts if ts is not None else int(time.time())
-    return {
+    headers = {
         "BT-Validator-Hotkey": hotkey,
         "BT-Validator-Signature": "aa" * 64,
         "BT-Validator-Ts": str(ts),
     }
+    if version is not None:
+        headers["BT-Validator-Version"] = version
+    return headers
 
 
 # --- allowlist tests (the protection) ---------------------------------------
@@ -451,3 +454,51 @@ def test_allowlist_only_two_endpoints():
         "/v3/clusters",
         "/v3/nodes",
     }
+
+
+# --- client version gate -----------------------------------------------------
+
+
+def test_missing_version_allowed_when_no_minimum(monkeypatch):
+    """Unset KUBETEE_PROXY_MIN_VERSION → accept missing BT-Validator-Version."""
+    monkeypatch.delenv("KUBETEE_PROXY_MIN_VERSION", raising=False)
+    h, status, _, _ = _build_handler(
+        "GET",
+        "/v3/clusters",
+        _auth_headers("/v3/clusters", version=None),
+    )
+    rancher_proxy._ProxyHandler.do_GET(h)
+    assert status[0] == 200
+
+
+def test_old_version_rejected_when_minimum_set(monkeypatch):
+    monkeypatch.setenv("KUBETEE_PROXY_MIN_VERSION", "1.0.1")
+    h, status, _, _ = _build_handler(
+        "GET",
+        "/v3/clusters",
+        _auth_headers("/v3/clusters", version="1.0.0"),
+    )
+    rancher_proxy._ProxyHandler.do_GET(h)
+    assert status[0] == 403
+
+
+def test_new_enough_version_allowed_when_minimum_set(monkeypatch):
+    monkeypatch.setenv("KUBETEE_PROXY_MIN_VERSION", "1.0.1")
+    h, status, _, _ = _build_handler(
+        "GET",
+        "/v3/clusters",
+        _auth_headers("/v3/clusters", version="1.0.1"),
+    )
+    rancher_proxy._ProxyHandler.do_GET(h)
+    assert status[0] == 200
+
+
+def test_missing_version_rejected_when_minimum_set(monkeypatch):
+    monkeypatch.setenv("KUBETEE_PROXY_MIN_VERSION", "1.0.0")
+    h, status, _, _ = _build_handler(
+        "GET",
+        "/v3/clusters",
+        _auth_headers("/v3/clusters", version=None),
+    )
+    rancher_proxy._ProxyHandler.do_GET(h)
+    assert status[0] == 403

@@ -97,7 +97,9 @@ A reader validator:
 - Does **not** publish to S3 (no Hippius keys)
 - Does **not** run the Targon clamp (leaves `KUBETEE_TARGON_PAYOUT_ENABLED=false`)
 
-A reader needs only: a valid Bittensor hotkey registered on SN90 + a Taostats API key. No Rancher account, no manual onboarding.
+A reader needs only: a valid Bittensor hotkey registered on SN90 with `validator_permit=True` + a Taostats API key. No Rancher account, no manual onboarding.
+
+The owner staging miner (UID **56**) hybrid/non-CC GPU exception is **hardcoded** in `config.py` (`OWNER_MINER_UID = 56`) so every validator scores the same GPU inventory — there is no env var to set.
 
 ### Owner mode (subnet-owner only)
 
@@ -120,7 +122,6 @@ See [`.env.example`](./.env.example) for the full list with inline comments. Sum
 | `RANCHER_BEARER_TOKEN` | owner only | token | **empty** | Rancher API key (owner) / empty (reader uses proxy) |
 | `TAOSTATS_API_KEY` | yes | key | key | TAO/USD price feed |
 | `KUBETEE_OWNER_UID` | no | 0 | 0 | UID receiving the recycle-to-UID weight |
-| `KUBETEE_OWNER_MINER_UID` | owner only | 56 | — | Staging miner allowed hybrid posture |
 | `KUBETEE_TARGON_PAYOUT_ENABLED` | no | true | false | Targon supply-side clamp |
 | `KUBETEE_HIPPIUS_ACCESS_KEY` | owner only | key | — | S3 publish (publisher role) |
 | `KUBETEE_HIPPIUS_SECRET_KEY` | owner only | key | — | S3 publish (publisher role) |
@@ -173,12 +174,14 @@ Enforcement is at three layers: exact path match, GET-only, query param allowlis
 
 **Eligibility**: the proxy only accepts hotkeys that are registered on the subnet **and** have `validator_permit=True` in the live metagraph. Miners (no permit) are always rejected with **403**.
 
-**Reader requirement**: Cloudflare bot-fight mode on `kubetee.ai` blocks the default Python urllib User-Agent (error 1010). Reader validators must set a real `User-Agent` header (the `RancherClient` does this automatically — `kubetee-validator/0.1`).
+**Client version**: every reader request includes `BT-Validator-Version` (and `User-Agent: kubetee-validator/<ver>`). The proxy logs it on every query / 200 / 403. To reject deprecated clients later, set `KUBETEE_PROXY_MIN_VERSION` on the **owner** validator (e.g. `1.0.1`); unset means logging only (missing versions still allowed).
+
+**Reader requirement**: Cloudflare bot-fight mode on `kubetee.ai` blocks the default Python urllib User-Agent (error 1010). `RancherClient` sets `User-Agent: kubetee-validator/<version>` automatically.
 
 Every proxy request is logged:
 ```
-proxy query: hotkey=5EKt…STEE path=/v3/clusters query=limit=1000
-proxy 200: hotkey=5EKt…STEE path=/v3/clusters items=4 bytes=35138
+proxy query: hotkey=5EKt…STEE version=1.0.2 path=/v3/clusters query=limit=1000
+proxy 200: hotkey=5EKt…STEE version=1.0.2 path=/v3/clusters items=4 bytes=35138
 ```
 
 ## Metrics

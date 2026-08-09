@@ -206,20 +206,13 @@ class Validator:
                 nodes_by_cluster,
                 self.rancher.cluster_id,
             )
-            if (
-                not verdict.ready
-                and cfg.owner_miner_uid is not None
-                and miner.uid == cfg.owner_miner_uid
-            ):
+            if not verdict.ready and miner.uid == cfg.owner_miner_uid:
                 log.info(
                     "owner staging miner uid=%d override: NOT ready -> ready",
                     miner.uid,
                 )
                 verdict = dataclasses.replace(verdict, ready=True)
-            include_tdx_non_cc = (
-                cfg.owner_miner_uid is not None
-                and miner.uid == cfg.owner_miner_uid
-            )
+            include_tdx_non_cc = miner.uid == cfg.owner_miner_uid
             gpu_class, workers, breakdown = self._miner_gpu_posture(
                 miner.hotkey,
                 clusters,

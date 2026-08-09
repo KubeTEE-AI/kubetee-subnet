@@ -53,6 +53,8 @@ jobs:
             TAG="sha-$(git rev-parse --short HEAD)"
           fi
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          # Strip leading v for Dockerfile ARG VERSION / BT-Validator-Version.
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
 
           # For semver tags (v1.2.3), also push the major (v1) and minor
           # (v1.2) tags so Watchtower can track v1 and auto-upgrade within
@@ -95,5 +97,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.tag.outputs.tags }}
+          build-args: |
+            VERSION=${{ steps.tag.outputs.version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
