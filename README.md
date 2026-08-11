@@ -145,8 +145,9 @@ This README documents both what runs in the KubeTEE infrastructure and what is d
 | **Miner&nbsp;deposit** | 100 TAO gate **measured, not enforced** | On-chain collateral bonding ([Phase 1](#phase-1--expansion)) |
 | **Payments** | Alpha / TAO at a resources price per hour | USDC-on-BASE billing ([Phase 2](#phase-2--paid-jobs)) |
 | **LiteLLM&nbsp;gateway** | `llm.kubetee.ai` — OpenAI-compatible inference plus virtual keys, budgets, rate limits, and spend tracking | Run inside a Kata + CoCo TEE pod with TLS terminated in-guest; wire `/mcp` and `/a2a` surfaces and the fine-tuning / batch endpoints through to Armada; KubeTEE as an upstream LiteLLM **provider** |
-| **Inference&nbsp;models** | **Live on the staging cluster:** Kimi-K3, GLM-5.2, DeepSeek-V4-Flash-0731, MiMo-V2.5. Inference running in the KubeTEE multi-cluster is prioritized for AI workloads deployed in the KubeTEE multi-cluster — KubeTEE does **not** offer inference to the general public directly. **SN28 (SayGM) is the exclusive provider to the general public** — SN28 added KubeTEE as a provider, onboarding before Aug 15 as the first demand channel | Expand the confidential model catalogue (more GPU classes, embedding/judge/retrieval models); SN28 routing through the cluster with priority billing |
+| **Inference&nbsp;models** | **Live on the staging cluster:** Kimi-K3, GLM-5.2, DeepSeek-V4-Flash-0731 — available through `llm.kubetee.ai`. **SN28 (SayGM) integration in progress** (KubeTEE onboarded as a provider before Aug 15) — a demand channel, **not** an exclusive public-inference path | Expand the confidential model catalogue (more GPU classes, embedding/judge/retrieval models); additional demand channels as needed |
 | **Jobs&nbsp;MCP&nbsp;server** | — | **Not developed yet** — agent- and chat-driven job deployment at `llm.kubetee.ai/mcp` ([Phase 1](#phase-1--expansion)) |
+| **Albedo&nbsp;SN97&nbsp;eval&nbsp;PoC** | **Live on staging:** competitive-distillation king-of-the-hill evals (always-on king `/v1/*` + challenger Job + shared judge → LiteLLM) on `na-us-oakland-56`; successful 100-sample run 2026-08-09 — [SN97-ALBEDO-POC.md](./docs/SN97-ALBEDO-POC.md) | Register king in LiteLLM for inference; Armada submit; confidential eval path; split gen vs score Jobs |
 
 ---
 
@@ -370,7 +371,7 @@ Given the NIM Operator's current Kata/CoCo limitations, KubeTEE's thesis is that
 | Data Designer | [Orion SN27](https://github.com/SILX-LABS/Orion) | Decentralized data discovery / generation / curation with on-chain quality validation |
 | Customizer (fine-tuning) | [Gradients SN56](https://www.gradients.io/) | AutoML tournaments — open-source SFT/DPO/GRPO training scripts |
 | Customizer (RL/reasoning) | [Affine SN120](https://www.affine.io/) | Incentivized RL "reason mining" — challenger-vs-champion duels |
-| Customizer (coding agents) | [Albedo SN97](https://github.com/unarbos/distil) | Competitive model distillation — miners distill a large teacher (Kimi-K2.6) into ≤33B student models, scored by KL divergence. **Active KubeTEE PoC**: king-of-the-hill GPU evals run as Armada jobs on the staging cluster (see `albedo/kubetee/` in the monorepo) |
+| Customizer (distillation) + Evaluator + Inference | [Albedo SN97](https://github.com/unarbos/distil) ([albedo](https://github.com/unarbos/albedo)) | Competitive **model distillation** (not coding agents): miners compress a large teacher into ≤33B students; validators run king-of-the-hill duels on a multi-axis composite; the reigning king is a reusable open checkpoint ([chat.arbos.life](https://chat.arbos.life) upstream). **Active KubeTEE SN90 PoC**: always-on king Deployment already exposes OpenAI-compatible `/v1/*` on-cluster — wire it into LiteLLM as an inference backend alongside GLM/Kimi/DeepSeek; eval Jobs + public Hippius artifacts — [SN97-ALBEDO-POC.md](./docs/SN97-ALBEDO-POC.md) · [upstream PR](https://github.com/unarbos/albedo/pull/4) |
 | Retriever / RAG | [Desearch SN22](https://desearch.ai/) | Decentralized real-time web + X/Twitter search for AI agents |
 | Video Search & Summarization | [Score SN44](https://github.com/score-technologies/turbovision) | Decentralized computer vision — object detection, tracking, structured annotations |
 | Inference + distributed training | [Chutes SN64](https://chutes.ai/) / Parallax | Serverless inference + decentralized MoE training (already fully TEE-only) |
@@ -497,9 +498,7 @@ Confidential compute reaches consumers through three front doors, in decreasing 
 
 ### LiteLLM Gateway — the multi-service front door
 
-[LiteLLM](https://github.com/BerriAI/litellm) is an open-source **LLM gateway**, and calling it an "inference proxy" undersells it: a single deployment terminates **three protocol surfaces** — `/v1/chat/completions` for models, `/mcp` for tool servers, and `/a2a` for agent-to-agent invocation — behind one auth, budget, and audit layer ([deployment architecture](https://docs.litellm.ai/docs/mcp_deployment)). KubeTEE runs it at **`llm.kubetee.ai`** as the internal gateway for the Factory — the surfaces map onto confidential services as follows:
-
-> **Inference is not offered to the general public through this gateway.** KubeTEE's inference models (Kimi-K3, GLM-5.2, DeepSeek-V4-Flash-0731, MiMo-V2.5) run inside the KubeTEE multi-cluster and are **prioritized for AI workloads deployed in the KubeTEE multi-cluster**. The general-public inference path goes through **SN28 (SayGM)**, which is the exclusive provider to the general public — SN28 routes to KubeTEE's confidential compute as a first-class backend. The LiteLLM gateway serves the KubeTEE-internal consumers: AI workloads, agents, and pipelines deployed in the multi-cluster.
+[LiteLLM](https://github.com/BerriAI/litellm) is an open-source **LLM gateway**, and calling it an "inference proxy" undersells it: a single deployment terminates **three protocol surfaces** — `/v1/chat/completions` for models, `/mcp` for tool servers, and `/a2a` for agent-to-agent invocation — behind one auth, budget, and audit layer ([deployment architecture](https://docs.litellm.ai/docs/mcp_deployment)). KubeTEE runs it at **`llm.kubetee.ai`** as the gateway for the Factory — the surfaces map onto confidential services as follows:
 
 | LiteLLM surface | What it does | KubeTEE mapping |
 |-----------------|--------------|-----------------|
@@ -626,11 +625,10 @@ Full detail — the chain primitive, Alpha conversion, grace/recovery, `btcli` c
 - [x] Kata debug mode on the staging TEE lane — guest boot logs, agent debug, and debug console for diagnosing confidential failures; staging-only because it changes the attestation measurement
 - [ ] Validator runs in a TEE (Kata + CoCo) on the control plane; CoCo attestation proves the validator code is unmodified
 - [x] [Attestation-gated TLS](./docs/NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md#2-attestation-gated-tls-between-services) on the served backend (Kata runtime deployed) — in-guest keypairs, certificates issued only against a valid TDX quote verified through Intel Trust Authority, ingress on TLS passthrough, termination inside the guest
-- [ ] **Confidential model catalogue for SN28 (SayGM — a Bittensor inference subnet that routes to a catalogue of served models) with priority in Cluster jobs** — SN28 added KubeTEE as a provider (onboarding before Aug 15 as the first demand channel). **KubeTEE does not offer inference to the general public directly; SN28 (SayGM) is the exclusive provider to the general public.** Inference running in the KubeTEE multi-cluster is prioritized for AI workloads deployed in the KubeTEE multi-cluster. Stand up a TEE-served model line-up behind the SN28 router, every model published in all three [serving configurations](#serving-configurations--every-job-requires-fast-inference) and billed at the below market of Openrouter prices per token (a demand channel, **not** a discounted reseller tier — see [Payment methods](#payment-methods)):
+- [ ] **Confidential model catalogue + SN28 (SayGM) integration** — stand up a TEE-served model line-up on `llm.kubetee.ai` and behind the SN28 router (SN28 added KubeTEE as a provider, onboarding before Aug 15). SN28 is a first-class demand channel, **not** the exclusive path to public inference — KubeTEE may also serve the public (and other partners) directly. Every model published in all three [serving configurations](#serving-configurations--every-job-requires-fast-inference) and billed at the below market of Openrouter prices per token (a demand channel, **not** a discounted reseller tier — see [Payment methods](#payment-methods)):
   - [ ] **Kimi-K3** — B300 nodes
   - [x] **GLM-5.2** — B200 nodes
   - [x] **DeepSeek-V4-Flash-0731** — B200/H200 nodes
-  - [x] **MiMo-V2.5** — H100 nodes
   - [ ] **SOTA embedding model**
   - [ ] **Specialised models for vectorization, LLM-as-judge, and document retrieval** — served through [NeMo Microservices](#nvidia-nemo-microservices-bittensor-subnet-integrations--bitsec-sn60) (NeMo Retriever + Evaluator)
 - [ ] Deploy 2 US clusters (one hotkey each, each cluster's nodes co-located in a single DC — one West Coast, one East Coast)
@@ -646,6 +644,13 @@ Full detail — the chain primitive, Alpha conversion, grace/recovery, `btcli` c
 - [ ] Competitive pricing, supply side: implement the live Targon (SN4) payout feed to clamp the GPU price card (one publisher, all validators read), and the per-GPU price paid to miners
 - [ ] Competitive pricing, demand side: scrape Lium (SN51) / Chutes (SN64) price feeds, compute per-class target price, score miners on price competitiveness
 - [ ] Confidential job templates — NeMo / NIM / Blueprint, for subnet owners and approved integrators
+- [x] **[Albedo SN97 competitive-distillation eval PoC](./docs/SN97-ALBEDO-POC.md)** (KubeTEE SN90 hosting SN97 king-of-the-hill duels — not coding agents) — split topology on staging: `dataset-prep` + always-on king (4× H200, OpenAI `/v1/*`) + challenger `batch/v1` Job + shared judge → LiteLLM; first successful 100-sample duel 2026-08-09 ([artifacts](./docs/SN97-ALBEDO-POC.md#latest-successful-run-2026-08-09), [upstream PR](https://github.com/unarbos/albedo/pull/4))
+  - [ ] **Serve the reigning king via LiteLLM** — register `albedo-king.albedo-poc.svc.cluster.local:8000/v1` (same pattern as GLM/Kimi/DeepSeek) so internal workloads and `llm.kubetee.ai` can call the distilled champion; respect `king_changing` 503s and shared capacity with eval Jobs
+  - [ ] Armada `JobSubmitRequest` path for Denrite’s dispatcher (today: direct `kubectl apply`)
+  - [ ] Confidential eval + confidential king serve (`kata-qemu-nvidia-gpu-tdx-runtime-rs` + `kata-direct`)
+  - [ ] Split generation vs scoring Jobs — free challenger GPUs before HTTP judge scoring / S3 upload
+  - [ ] Production Albedo eval image (baked code + deps; staging still git-clones into `vllm/vllm-openai`)
+  - [ ] Denrite real dispatcher integration (king change protocol already returns `king_changing` / `king_changed`)
 
 ### Phase 1 — Expansion
 
@@ -690,6 +695,7 @@ Full detail — the chain primitive, Alpha conversion, grace/recovery, `btcli` c
 - [Tokenomics — Utility Token & DePIN Model](./docs/TOKENOMICS.md) — recycle vs burn, securities posture, cross-subnet consumption loop, DePIN subsidy trajectory
 - [Competitive Pricing & Miner Scoring](./docs/COMPETITIVE-PRICING.md) — pricing SN90 against Targon/Lium/Chutes and how price becomes weights
 - [NeMo Microservices, Subnet Integrations & BitSec SN60](./docs/NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md) — attestation-gated TLS, NIM Operator Kata/CoCo limits, SOTA Bittensor subnet substitutes per NeMo layer, and the BitSec security gate
+- [Albedo SN97 Eval PoC (KubeTEE SN90)](./docs/SN97-ALBEDO-POC.md) — competitive distillation king-of-the-hill evals + LiteLLM king-serve opportunity: architecture, latest run metrics/artifacts, follow-ups
 - [Release & Versioning](./RELEASE-AND-VERSIONING.md) — semantic versioning scheme, image tag mapping, release procedure
 
 ### External Resources

@@ -2,7 +2,7 @@
 
 This document is the full analysis behind the README [Tokenomics — Utility Token & DePIN Model](../README.md#tokenomics--utility-token--depin-model) section. It covers the economic design of SN90 (KubeTEE) Alpha: recycle vs burn, securities posture, the cross-subnet consumption loop, the vertically-split corporate structure, and the DePIN subsidy trajectory.
 
-> **Not legal advice.** The securities analysis below is engineering design rationale, not legal advice. Run the royalty-base carve-out and related-party structure past Cyprus counsel before the first sale.
+> **Not legal advice.** The securities analysis below is engineering design rationale, not legal advice.
 
 ---
 
