@@ -29,7 +29,11 @@ The general rule: any encryption layer whose keys are managed by the host fails 
 
 TLS is terminated **inside** the guest, so cleartext exists only in encrypted guest memory. The `report_data` binding in step 2 is what makes a certificate *mean* "this key lives inside an attested TEE" — without it a quote proves a TEE exists somewhere, not that the request entered it.
 
+**RA-TLS on the public hop.** Grey-cloud DNS plus Traefik TLS passthrough is ordinary TLS into the LiteLLM guest (`kata-qemu-tdx-runtime-rs`). Clients that attest the terminator bind the TLS public key into TDX `report_data` (RA-TLS) and verify the quote through Trustee + Intel Trust Authority. If an L7 relay returns to the path, OHTTP+SKR is the attested relay design; the current path is DNS-only + passthrough, so RA-TLS is the client-attested hop.
+
 Inference servers generally cannot enforce client certificates themselves — SGLang has no way to make its HTTP server *require* one — so the attested terminator runs as a second container in the **same** Kata guest, requiring an attested client certificate on the way in and forwarding to the model server over guest loopback. Keeping the terminator inside the CVM is deliberate: everything in the guest is inside the TCB that has to be measured and published, which argues for the smallest possible proxy rather than a full service-mesh sidecar.
+
+Optional later: native TLS from the LiteLLM guest to NIM guests on miner clusters (same RA-TLS pattern, private hostnames, private CA).
 
 ---
 

@@ -3,13 +3,15 @@
 > **Scope.** This document explains why running an AI tech stack inside a Trusted Execution
 > Environment is materially harder than running the same stack on a normal container runtime,
 > why KubeTEE's Early Access staging cluster is deliberately **hybrid** (non-TEE nodes alongside
-> TEE nodes, with Kata Containers in **debug mode**), and the **CI/CD promotion pipeline** a
+> TEE nodes, with a **`…-debug` RuntimeClass** for qualification), and the **CI/CD promotion pipeline** a
 > workload must pass before it is allowed onto a production miner cluster.
 >
-> **Status.** The hybrid staging cluster and the debug-mode staging runtime exist today. The
-> promotion pipeline is described here as the Early Access operating model; its automation
-> (gate enforcement, per-revision re-runs, published gate results) is a Phase 0/1 roadmap item
-> and is **not** wired into validator weights. See [Roadmap](../README.md#roadmap).
+> **Status.** The hybrid staging cluster exists today. Production RuntimeClasses
+> (`kata-qemu-tdx-runtime-rs`, `kata-qemu-nvidia-gpu-tdx-runtime-rs`) run with guest debug off.
+> A `…-debug` class is the staging qualification and incident-repro path. Trustee allowlists
+> production measurements only. Pipeline automation (gate enforcement, per-revision re-runs,
+> published gate results) is a Phase 0/1 roadmap item and is **not** wired into validator
+> weights. See [Roadmap](../README.md#roadmap).
 
 ---
 
@@ -229,7 +231,8 @@ the same storage, networking, and monitoring:
 | Lane | Node class | Runtime class | Purpose |
 |------|-----------|---------------|---------|
 | Non-TEE | H100 GPU node, `cc.mode=off` | `nvidia` | Functional and performance baseline |
-| TEE | H200 (HGX Hopper) and B200 (HGX Blackwell), Intel TDX | `kata-qemu-nvidia-gpu-tdx-runtime-rs` | Confidential execution under debug |
+| TEE (production) | H200 (HGX Hopper) and B200 (HGX Blackwell), Intel TDX | `kata-qemu-nvidia-gpu-tdx-runtime-rs`, `kata-qemu-tdx-runtime-rs` | Confidential execution, guest debug off |
+| TEE (debug) | Same TDX nodes | `…-debug` RuntimeClass | Staging qualification and incident repro |
 
 **Why both lanes must be in the same cluster.** Section 1 is a list of ways a workload can fail
 for TEE-specific reasons while looking like an application bug. Without a reference lane, an
@@ -253,18 +256,20 @@ both lanes on the same hardware generation with the same job.
 
 ## 3. Kata debug mode in staging
 
-The TEE lane of the staging cluster runs Kata Containers with **debug mode enabled**, which is
-the direct answer to the observability collapse in
-[1.7](#17-observability-collapses-by-design). In Kata terms this means `enable_debug = true` in
-the `[runtime]`, `[hypervisor.*]`, and `[agent.kata]` configuration sections — which promotes
-component log filters to `debug`, adds guest-kernel and agent debug parameters, and surfaces
-guest boot output and the hypervisor command line in the host journal — and, when a live guest
-shell is needed, `debug_console_enabled = true` in `[agent.kata]`, which starts a shell in the
-guest reachable over VSOCK via `kata-runtime exec`.
+Guest debug is **not** left on for production RuntimeClasses. Oakland kata-deploy ships
+`debug: false` so `kata-qemu-tdx-runtime-rs` and `kata-qemu-nvidia-gpu-tdx-runtime-rs` have a
+stable measurement Trustee can allowlist.
 
-Concretely, this is what turns "the pod is in `StartError` and I cannot see why" into a readable
-guest boot log — which is how the fabric-manager panic and the CDI resolution failure in
+Staging qualification and incident repro use a **`…-debug` RuntimeClass** (guest debug on:
+`enable_debug = true` in `[runtime]`, `[hypervisor.*]`, and `[agent.kata]`, plus
+`debug_console_enabled = true` when a live guest shell is needed). That is the direct answer
+to the observability collapse in [1.7](#17-observability-collapses-by-design). Concretely, this
+is what turns "the pod is in `StartError` and I cannot see why" into a readable guest boot log
+— which is how the fabric-manager panic and the CDI resolution failure in
 [1.2](#12-gpu-passthrough-and-multi-gpu-topology) were actually diagnosed.
+
+Guest debug is boot-time. Running pods keep the old sandbox until a **graceful** recreate.
+Never `kubectl delete --force --grace-period=0` on Kata/CC pods.
 
 ### Why this cannot go to production
 
@@ -287,6 +292,12 @@ against production measurements" is therefore itself a promotion gate**, not a d
 detail — and it is the reason a workload's final validation must happen on a non-debug TEE
 configuration before it is trusted with real data.
 
+The public inference path follows the same rule. `llm.kubetee.ai` is Cloudflare DNS-only (grey
+cloud) to oakland node IPs. LiteLLM runs in `kata-qemu-tdx-runtime-rs`. Traefik TLS passthrough
+forwards records into the guest. Trustee allowlists production RuntimeClass measurements.
+Clients that attest the terminator use RA-TLS (TLS public key in TDX `report_data`); see
+[attestation-gated TLS](./NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md#2-attestation-gated-tls-between-services).
+
 ---
 
 ## 4. The CI/CD promotion pipeline
@@ -300,8 +311,8 @@ flowchart LR
     WL["AI workload<br/>job template, image, IaC"]
     S0["Stage 0 — Security gate<br/>BitSec SN60 analysis"]
     S1["Stage 1 — Non-TEE lane<br/>subnet-owner staging cluster<br/>runtimeClass: nvidia"]
-    S2["Stage 2 — TEE debug lane<br/>subnet-owner staging cluster<br/>kata-qemu-nvidia-gpu-tdx-runtime-rs<br/>debug ON"]
-    S3["Stage 3 — Production TEE<br/>miner clusters<br/>debug OFF, attestation enforced"]
+    S2["Stage 2 — TEE debug lane<br/>subnet-owner staging cluster<br/>…-debug RuntimeClass"]
+    S3["Stage 3 — Production TEE<br/>miner clusters<br/>debug off, Trustee allowlist"]
     Fix["Remediate and resubmit"]
 
     WL --> S0
@@ -334,11 +345,11 @@ Runs on the staging cluster's non-TEE node. Exit criteria:
 A failure here is an application, image, or job-template problem. It is deliberately **not**
 diagnosed against the TEE.
 
-### Stage 2 — TEE debug lane (staging, confidential runtime, debug on)
+### Stage 2 — TEE debug lane (staging, `…-debug` RuntimeClass)
 
 The identical job spec, changed only in runtime class and the TEE-specific configuration it
-requires. This is where every failure class in section 1 is expected to surface, and where debug
-mode makes them diagnosable. Exit criteria:
+requires. This is where every failure class in section 1 is expected to surface, and where the
+debug RuntimeClass makes them diagnosable. Exit criteria:
 
 - The sandbox boots and the container starts under the confidential runtime class.
 - **GPU topology is correct in-guest** — for multi-GPU jobs, NVLink is present rather than a
@@ -354,14 +365,15 @@ mode makes them diagnosable. Exit criteria:
 
 ### Stage 3 — Production TEE (miner clusters)
 
-The final configuration change is the one that cannot be validated anywhere else: **debug off**.
-Exit criteria:
+The final configuration change is the one that cannot be validated anywhere else: **guest debug
+off on the production RuntimeClass**, with Trustee allowlisting those measurements. Exit criteria:
 
-- Debug and the debug console are **disabled**.
+- Production classes (`kata-qemu-tdx-runtime-rs`, `kata-qemu-nvidia-gpu-tdx-runtime-rs`) have
+  guest debug and the debug console **disabled**.
 - Attestation succeeds against **production measurements** — necessarily re-verified here,
-  because Stage 2's debug configuration changes the measurement
+  because Stage 2's debug RuntimeClass changes the measurement
   ([section 3](#3-kata-debug-mode-in-staging)).
-- The job runs to completion on a production miner cluster under the non-debug confidential
+- The job runs to completion on a production miner cluster under the production confidential
   runtime.
 
 Only after Stage 3 may a workload be published as an Armada job template available to the
@@ -390,8 +402,8 @@ Specifically, miners should note:
   exists so that *workloads* can be qualified before they reach miner infrastructure. A miner
   adding non-TEE nodes gains nothing — non-TEE capacity is not confidential capacity and is not
   what the subnet scores.
-- **Miners do not run debug mode.** Production clusters run the non-debug confidential runtime,
-  for the attestation reasons in [section 3](#3-kata-debug-mode-in-staging).
+- **Miners run production RuntimeClasses with guest debug off.** Trustee allowlists those
+  measurements only, for the attestation reasons in [section 3](#3-kata-debug-mode-in-staging).
 - **The promotion burden is on the workload, not the miner.** Stages 0 through 2 qualify a job
   template. Miners provide attested confidential capacity and execute jobs that have already
   passed those gates.

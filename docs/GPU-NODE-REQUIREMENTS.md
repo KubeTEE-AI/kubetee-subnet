@@ -208,6 +208,19 @@ dmesg | grep -i "AMD-Vi"
 
 ---
 
+## Production RuntimeClass (MANDATORY)
+
+Miner GPU nodes run confidential workloads with **guest debug off**. Production classes:
+
+| `runtimeClassName` | Workload |
+|--------------------|----------|
+| `kata-qemu-nvidia-gpu-tdx-runtime-rs` | GPU TEE (NIM / SGLang) |
+| `kata-qemu-tdx-runtime-rs` | CPU-only TDX (gateway-class) |
+
+Trustee/KBS allowlists measurements from those classes only. A `…-debug` RuntimeClass is the staging qualification and incident-repro path; miner clusters stay on production classes.
+
+---
+
 ## GPU Software (Managed by GPU Operator)
 
 **⚠️ CRITICAL - Clean Ubuntu Installation Required**
