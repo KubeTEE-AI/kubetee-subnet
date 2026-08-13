@@ -25,7 +25,7 @@ DEFAULT_USD_CARD: dict[str, float] = {
     "H200": 5.50,
     "B200": 8.00,
     "B300": 10.00,
-    "RTX6000": 3.00,
+    "RTX6000": 2.50,
 }
 
 CACHE_PATH = os.environ.get(

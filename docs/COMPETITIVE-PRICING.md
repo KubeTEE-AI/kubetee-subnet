@@ -73,7 +73,7 @@ The Targon stats API returns each miner's per-epoch emission **payout** by `comp
 The payout is in TAO emission units per epoch; the validator normalizes to a per-GPU-hour figure at runtime using the current TAO price and epoch length. The **durable signal is the relative ranking**, which tracks the confidential-compute market's valuation of newer / higher-memory GPUs: B300 pays ~2.7× H100 per card, B200 ~2.2× H100, H200 ~1.17× H100. Two H200 variants appear (`TDX-HOPPER` GPU-passthrough vs `TDX-VM` virtualized) at near-identical payout (~28), so Targon prices the GPU model, not the virtualization mode. SN90's per-8-card-node emission must sit in this band — paying an 8-card H100 node roughly what Targon pays it (~24), an 8-card B200 node roughly ~52, an 8-card B300 node roughly ~64 — or miners migrate to SN4. In the design, the validator's `targon_payout_per_gpuhr[c]` input (see [formula](#the-target-price-formula-design)) is read live from this endpoint each epoch rather than hardcoded.
 
 > **This is to be read live.** The committed `DEFAULT_USD_CARD` —
-> H100 $4.00, H200 $5.50, B200 $8.00, B300 $10.00, RTX6000 $3.00 per GPU-hour —
+> H100 $4.00, H200 $5.50, B200 $8.00, B300 $10.00, RTX6000 $2.50 per GPU-hour —
 > is the **target max**. With the Targon payout feed enabled, the validator will pull
 > the numbers above from `stats.targon.com` each hour and let them clamp the
 > card downward. See the next section.
@@ -149,7 +149,7 @@ class inside `[0.8x, 1.25x]` of the **compiled-in** `DEFAULT_USD_CARD`:
 | H200 | $5.50 | $4.40 – $6.875 |
 | B200 | $8.00 | $6.40 – $10.00 |
 | B300 | $10.00 | $8.00 – $12.50 |
-| RTX6000 | $3.00 | $2.40 – $3.75 |
+| RTX6000 | $2.50 | $2.00 – $3.125 |
 
 The compiled-in card stays the trust root; it just stopped being the value. A
 hostile object can retune pay within the band but cannot zero it or mint
