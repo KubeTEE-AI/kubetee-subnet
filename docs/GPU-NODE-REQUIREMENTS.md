@@ -135,7 +135,7 @@ lspci -nn | grep -i nvidia | awk -F'[][]' '{print $2}' | sort -u
 - **[NVIDIA DGX H100/H200 Firmware Update Guide](https://docs.nvidia.com/dgx/dgxh100-fw-update-guide/)**
 - For HGX B200/B300 systems, follow your OEM/HGX firmware update procedure (BIOS/BMC, GPU firmware, PCIe switches and retimers)
 
-**Confidential Computing firmware compatibility** (authoritative source: **[NVIDIA Secure AI Compatibility Matrix](https://www.nvidia.com/en-us/data-center/solutions/confidential-computing/secure-ai-compatibility-matrix/)**):
+**Confidential Computing firmware compatibility** (authoritative source: **[NVIDIA Trusted Computing Solutions — Guides](https://docs.nvidia.com/nvtrust/index.html#guides)**, including the Secure AI Compatibility Matrix):
 
 The Compatibility Matrix is the source of truth for supported **GPU + VBIOS + CUDA driver + Confidential Computing mode** combinations (and RIM / VBIOS_RIM status). The node operator is responsible for the **GPU VBIOS** and **CC mode** (firmware/BIOS level); the **CUDA driver** is deployed by the GPU Operator after registration. Before registering a node, confirm your GPU's **VBIOS** and chosen **CC mode** (Protected PCIe / CC-Aux / APM) are listed as supported, and that the matrix's supported **CUDA driver** version matches what the GPU Operator will deploy. Key guidance from NVIDIA:
 - **Protected PCIe (PPCIe) mode** — use **HGX Hopper FW 1.7.0**; avoid HGX Hopper FW 1.6.0, which has a known issue that can cause the GPU to fall off the bus during boot when PPCIe is enabled.
@@ -245,8 +245,8 @@ Because the GPU Operator owns the GPU software stack, the node must start from a
 
 | Disk | Minimum Size | Purpose |
 |------|--------------|---------|
-| **OS Disk** | **3 TB** | System + `/var/lib/longhorn/` |
-| **Data Disk** | **21 TB** | Raw block device with no filesystem |
+| **OS Disk** | **1 TB** | System + `/var/lib/longhorn/` |
+| **Data Disk** | **14 TB** | Raw block device with no filesystem |
 
 **Both disks are REQUIRED for GPU nodes** due to:
 - Large AI/ML models
@@ -296,28 +296,6 @@ uname -r         # Should show: 7.0.0-27-generic or newer
 # 9. Verify a clean baseline (no pre-existing NVIDIA stack)
 which nvidia-smi  # Should return: not found (GPU Operator installs it later)
 which nvcc        # Should return: not found
-```
-
-### After Registration (From Management Cluster)
-
-```bash
-# 1. Verify node joined
-kubectl get nodes
-
-# 2. Check node IPs
-kubectl get node <node-name> -o wide
-
-# 3. Label node for GPU passthrough
-kubectl label node <node-name> nvidia.com/gpu.workload.config=vm-passthrough
-
-# 4. Verify GPU Operator is running
-kubectl get pods -n gpu-operator-system
-
-# 5. Wait for drivers to install (5-15 minutes)
-
-# 6. Verify GPU resources
-kubectl describe node <node-name> | grep nvidia.com/gpu
-# Should show: nvidia.com/gpu: 8
 ```
 
 ---
@@ -468,7 +446,7 @@ See [Node Registration](NODE-REGISTRATION.md) for the RKE2 node registration com
 ### Official Documentation
 
 - **[NVIDIA DGX H100/H200 Firmware Update Guide](https://docs.nvidia.com/dgx/dgxh100-fw-update-guide/)** - MANDATORY reading for firmware updates
-- **[NVIDIA Secure AI Compatibility Matrix](https://www.nvidia.com/en-us/data-center/solutions/confidential-computing/secure-ai-compatibility-matrix/)** - Supported GPU + VBIOS + CUDA driver + Confidential Computing mode combinations (source of truth for CC firmware compatibility)
+- **[NVIDIA Trusted Computing Solutions — Guides](https://docs.nvidia.com/nvtrust/index.html#guides)** — Secure AI Compatibility Matrix and related CC guides (GPU + VBIOS + CUDA driver + Confidential Computing mode; source of truth for CC firmware compatibility)
 - **[NODE-REGISTRATION.md](NODE-REGISTRATION.md)** - Complete registration guide
 
 ### KubeTEE Documentation
