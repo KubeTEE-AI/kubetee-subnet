@@ -30,6 +30,7 @@
 - [2. The hybrid staging cluster](#2-the-hybrid-staging-cluster)
 - [3. Kata debug mode in staging](#3-kata-debug-mode-in-staging)
 - [4. The CI/CD promotion pipeline](#4-the-cicd-promotion-pipeline)
+  - [Stage 0 — Security gate](#stage-0--security-gate)
 - [5. What this means for miners](#5-what-this-means-for-miners)
 - [References](#references)
 
@@ -309,7 +310,7 @@ strictly closer to production than the one before it.
 ```mermaid
 flowchart LR
     WL["AI workload<br/>job template, image, IaC"]
-    S0["Stage 0 — Security gate<br/>BitSec SN60 analysis"]
+    S0["Stage 0 — Security gate<br/>SAST, Trustee secrets, image CVE, IaC"]
     S1["Stage 1 — Non-TEE lane<br/>subnet-owner staging cluster<br/>runtimeClass: nvidia"]
     S2["Stage 2 — TEE debug lane<br/>subnet-owner staging cluster<br/>…-debug RuntimeClass"]
     S3["Stage 3 — Production TEE<br/>miner clusters<br/>debug off, Trustee allowlist"]
@@ -327,11 +328,26 @@ flowchart LR
 
 ### Stage 0 — Security gate
 
-BitSec SN60 analysis of the workload's code, container image, and deploying IaC/Helm values. A
-workload proceeds only with no unresolved critical or high-severity findings. This stage is a
-**design concept** — see
-[BitSec SN60 — Security Gate](../README.md#bitsec-sn60--security-gate-for-ai-workload-promotion)
-for the proposed rules, which are provisional.
+Supply-chain CI on the artifacts that get promoted: job templates, serving glue, container
+images, and deploying IaC/Helm/Fleet values. A workload proceeds only with no unresolved
+critical or high-severity findings. This stage is **designed, not yet automated**.
+
+| Check | Tools (examples) | What it covers |
+|-------|------------------|----------------|
+| SAST | CodeQL, Semgrep | Job templates, serving glue, subnet-integration code |
+| Secrets | **CoCo Trustee / KBS** | Secrets and image-decryption keys live in Trustee; released only to a guest that attests ([1.6](#16-secrets-and-images)). Stage 0 fails if credentials appear in Git, Helm values, or image layers — those belong in Trustee, not in the artifact |
+| SCA + image CVE | Trivy, Grype | The container image that will run under Kata |
+| IaC / Helm / Fleet policy | Checkov, kube-linter, Kyverno | Manifests and values that deploy the workload |
+| Image provenance | cosign, digest pins | The image is the one Git intended (Fleet already digest-pins) |
+
+Pass condition: no unresolved critical/high findings; production has no sign-off bypass for
+those severities. Re-runs from Stage 0 on any revision — image tag, job template, guest image,
+or driver version.
+
+This is **not** [BitSec SN60](https://bitsec.ai/). SN60 is a winner-take-all contest that scores
+miner-built Solidity audit agents against SCA-Bench; it has no per-revision scan API for
+Python, Helm, or container images. See
+[Stage 0 and why SN60 is not the gate](./NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md#6-stage-0--supply-chain-security-gate).
 
 ### Stage 1 — Non-TEE lane (staging, `nvidia`)
 

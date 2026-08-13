@@ -1,6 +1,6 @@
-# NeMo Microservices, Bittensor Subnet Integrations & the BitSec Security Gate
+# NeMo Microservices, Bittensor Subnet Integrations & the Stage 0 Security Gate
 
-This document is the detailed reference behind the README [NVIDIA NeMo Microservices](../README.md#nvidia-nemo-microservices), [Bittensor Subnet Integrations](../README.md#bittensor-subnet-integrations-sota-confidential-ready), and [BitSec SN60](../README.md#bitsec-sn60--security-gate-for-ai-workload-promotion) sections. It covers: the NeMo stack on KubeTEE, the attestation-gated TLS protocol between services, the NVIDIA NIM Operator's experimental Kata/Dynamo support and its CoCo limitations, the SOTA Bittensor subnets that could replace or augment each NeMo layer inside a TEE, and the BitSec SN60 security gate design.
+This document is the detailed reference behind the README [NVIDIA NeMo Microservices](../README.md#nvidia-nemo-microservices--bittensor-subnet-integrations) and [Bittensor Subnet Integrations](../README.md#nvidia-nemo-microservices--bittensor-subnet-integrations) sections. It covers: the NeMo stack on KubeTEE, the attestation-gated TLS protocol between services, the NVIDIA NIM Operator's experimental Kata/Dynamo support and its CoCo limitations, the SOTA Bittensor subnets that could replace or augment each NeMo layer inside a TEE, and the Stage 0 supply-chain security gate (including why BitSec SN60 is not that gate).
 
 ---
 
@@ -85,38 +85,54 @@ Given the limitations above, KubeTEE's thesis is that **the Bittensor ecosystem 
 | SN64 | [Chutes](https://chutes.ai/) — Parallax (Jon Durbin) | Decentralized serverless inference + **Parallax** decentralized MoE training (surrogate experts, no all-to-all; ternary weights; Gated DeltaNet) across heterogeneous, non-colocated GPUs — within 0.6% of centralized baseline | Inference + distributed training | Chutes already runs a **fully TEE-only infrastructure stack**; Parallax trains frontier models on distributed confidential compute — a native fit for KubeTEE's decentralized TEE clusters |
 | SN75 | [Hippius](https://hippius.com/) | Decentralized cloud storage — S3-compatible + IPFS pinning; Arion engine (Reed-Solomon k=10/m=20, CRUSH placement, self-healing) | Persistent storage (solves CoCo's **ephemeral-data-only** limitation) | **Already ships Confidential Compute** (AMD SEV-SNP encrypted VMs); drop-in S3 endpoint replacing/augmenting encrypted Longhorn + object store |
 | SN118 | [Ditto](https://heyditto.ai/) | Open-source persistent memory / context layer for AI agents (Claude / Cursor / MCP); miners train the memory-retrieval "harness" | Agent memory / context management | Memory graph backed by confidential storage (e.g. Hippius) so agent context persists across confidential sessions |
-| SN60 | [Bitsec.ai](https://bitsec.ai/) | Decentralized AI security — miners submit autonomous security agents that find high/critical-severity exploits in codebases & smart contracts; validators run them in isolated Docker sandboxes and score against benchmark ground truths | **Security gate** (new layer — no NeMo equivalent) | Planned pre-promotion analysis for AI workloads before they reach staging/production on SN90 — design concept, to be detailed during integration (see [BitSec SN60](#6-bitsec-sn60--security-gate-for-ai-workload-promotion) below) |
 
 KubeTEE treats this as an **open set**: any Bittensor subnet with a SOTA, verifiable solution for a NeMo stack layer — data, training, retrieval, inference, storage, agent memory, or evaluation — is a potential partnership and candidate integration, with the workload adapted to run inside `kata-qemu-nvidia-gpu-tdx` / `kata-qemu-tdx` and its outputs attested and persisted on confidential storage. This is the Bittensor-native path to a confidential AI Factory that is **not locked to a single vendor's experimental stack**, and it is the concrete way KubeTEE could "work with the ecosystem" rather than waiting on the NIM Operator's CoCo roadmap.
 
+[BitSec SN60](https://bitsec.ai/) is **not** in this table. It is not a NeMo-layer substitute and it is not the Stage 0 promotion gate — see [§6](#6-stage-0--supply-chain-security-gate).
+
 ---
 
-## 6. BitSec SN60 — Security Gate for AI Workload Promotion
+## 6. Stage 0 — Supply-Chain Security Gate
 
-> 🧪 **Status: design concept**. The gate rules, thresholds, and tooling below are provisional and will be hardened during integration — a Phase 1 item.
+> **Status: designed, not yet automated.** Gate rules below are the intended Stage 0 of the [CI/CD promotion pipeline](./TEE-DEPLOYMENT-AND-CICD.md#4-the-cicd-promotion-pipeline). Automation is a Phase 0/1 item.
 
-[Bitsec.ai (SN60)](https://bitsec.ai/) is a decentralized security subnet: miners submit autonomous AI security agents that scan codebases and smart contracts for **high- and critical-severity** vulnerabilities, and validators run those agents in isolated, resource-limited Docker sandboxes, scoring them against benchmark ground truths (SCA-Bench / Smart Contract Audit Benchmark). BitSec already audits other Bittensor subnets' incentive mechanisms and smart-contract code (findings published as critical / high / medium), so it is a natural, verifiable security layer for SN90.
-
-In this design, KubeTEE would use BitSec SN60 as a **mandatory security gate** that an AI workload must pass **before it is promoted to staging or production** clusters on SN90. The gate sits in front of the staging→production pipeline, not inside it:
+Stage 0 sits in front of the staging→production lanes. It scans the workload's **code, container image, and deploying IaC** — not the confidential data the workload will process in production — so the production TEE boundary stays intact.
 
 ```mermaid
 flowchart LR
-    WL["AI workload<br/>(NeMo/NIM/Blueprint job,<br/>subnet-integrated flow, or container image)"] -->|"submit source / image / IaC"| BS["BitSec SN60<br/>security agent analysis"]
-    BS -->|"critical/high findings"| Fix["Remediate & resubmit"]
-    Fix --> BS
-    BS -->|"clean report (no critical/high, attested)"| Stg["Staging cluster (SN90)<br/>Kata + CoCo TEE"]
-    Stg -->|"staging validation + attestation + uptime"| Prod["Production cluster (SN90)<br/>multi-cluster, one hotkey / DC"]
-    BS -.->|"report published"| Audit["On-chain audit trail<br/>(verifiable)"]
+    WL["AI workload<br/>(job template, image, Helm/IaC)"] -->|"CI on source + image + manifests"| S0["Stage 0<br/>SAST, Trustee secrets, CVE, IaC, provenance"]
+    S0 -->|"critical/high findings"| Fix["Remediate and resubmit"]
+    Fix --> S0
+    S0 -->|"clean report"| S1["Stage 1 — Non-TEE lane"]
+    S1 --> S2["Stage 2 — TEE debug"]
+    S2 --> S3["Stage 3 — Production TEE"]
 ```
 
-**Proposed gate rules (design, subject to change during integration):**
-- **Scope** — BitSec analyzes the workload's code (job template, model-serving code, subnet-integration glue, any on-chain/smart-contract code) and the container image it runs, plus the IaC/Helm values that deploy it.
-- **Pass condition** — a workload is promoted to staging only with a **clean BitSec report** (no unresolved critical or high-severity findings). Findings are either remediated and resubmitted, or accepted as a documented risk with owner sign-off (production requires the clean report — no sign-off bypass for critical/high).
-- **Verifiable** — the BitSec report is published and referenceable (BitSec posts summaries on X and detailed findings on its site), so the security posture of every workload running on SN90 is auditable, not claimed.
-- **Re-run on change** — any material change to the workload (new image tag, new job template, new subnet integration) re-triggers the gate; promotion is per-revision, not once-and-done.
-- **Confidentiality** — the gate runs on the workload's *code/image*, not on the confidential *data* it will process in production, so running BitSec does not require exposing production data or TEE contents. The analysis itself can run inside a KubeTEE TEE pod when the code under review is itself sensitive.
+**Gate rules:**
+- **Scope** — job templates, model-serving / subnet-integration glue, the container image that will run under Kata, and the IaC/Helm/Fleet values that deploy it.
+- **Checks** — SAST (CodeQL, Semgrep); **secrets in CoCo Trustee / KBS** (attestation-gated release into the guest — not Kubernetes Secrets, not Git); SCA + image CVE (Trivy, Grype); IaC/Helm/Fleet policy (Checkov, kube-linter, Kyverno); image provenance (cosign / digest pins — Fleet already digest-pins). Stage 0 fails if credentials appear in Git, Helm values, or image layers.
+- **Pass condition** — no unresolved critical or high-severity findings. Findings are remediated and resubmitted, or accepted as documented risk with owner sign-off. Production has no sign-off bypass for critical/high.
+- **Re-run on change** — a new image tag, job template, guest image, or driver version re-triggers Stage 0. Promotion is per-revision, not once-and-done.
+- **Confidentiality** — the gate never sees production TEE contents or Trustee-held secrets. Scanners run in CI against source and image artifacts; the guest fetches secrets from Trustee only after it attests.
 
-**Why a gate, not a scanner inside the cluster:** production SN90 clusters run confidential workloads under Kata + CoCo with attested, encrypted memory. A security agent *inside* the TEE would either see confidential data (breaking the trust boundary) or see nothing useful. Putting BitSec **before** promotion keeps the security analysis where it belongs — on the code/image, pre-deployment — and keeps the production TEE boundary intact. This is the Bittensor-native equivalent of a CI security stage, decentralized and incentivized via SN60.
+**Why a gate, not a scanner inside the cluster:** production SN90 clusters run confidential workloads under Kata + CoCo with attested, encrypted memory. A security agent *inside* the TEE would either see confidential data (breaking the trust boundary) or see nothing useful.
+
+### Why BitSec SN60 is not the gate
+
+[Bitsec.ai (SN60)](https://bitsec.ai/) was previously listed as this Stage 0. A review of the live code ([Bitsec-AI/sandbox](https://github.com/Bitsec-AI/sandbox), [docs.bitsec.ai](https://docs.bitsec.ai/)) shows it does not fit:
+
+| KubeTEE Stage 0 needs | What SN60 actually is |
+|-----------------------|------------------------|
+| Call a scanner from CI with a workload artifact | Miners submit `agent.py`; there is no customer scan API for a Helm chart or image |
+| Python serving code, Fleet YAML, Helm, container layers | Agents are scored on [SCA-Bench](https://github.com/scabench-org/scabench); docs limit scope to **Solidity** smart contracts. The baseline agent only discovers `*.sol` / `*.vy` / `*.cairo` / `*.rs` / `*.move` |
+| Per-revision, minutes-scale pass/fail | Winner-take-all **rounds** (minimum winning period ≥ 3 days); 3 runs × N validators × 4 projects, 30-minute Docker sandboxes |
+| Fail-closed evidence that *this* revision is clean | Scoring is "did the agent rediscover *known* benchmark vulns?" Binary 1.0/0.0 per codebase. Stated SOTA is **<10%** with GPT-5 — absence of findings is not evidence |
+| Keep workload source private | After the submission window, agent code, scores, and eval logs become **public** |
+| TEE-compatible analysis | Validators run **plain Docker**; inference is Chutes/OpenRouter via BitSec's proxy; validators must be manually activated by the BitSec team |
+
+"Bitsec Scanner" / "Bitsec Hunter" remain **roadmap** applications on the older [Bitsec-AI/subnet](https://github.com/Bitsec-AI/subnet) README (last push 2025-08-28). They are not a shipping CI product.
+
+**Optional later partnership (kept out of the promotion pipeline):** BitSec already publishes one-off audits of other subnets' incentive mechanisms (`subnet-reports` / `audit-reports`). That is a reasonable ask for a **one-time review of SN90 validator/incentive code**. It is not a per-revision gate on AI workloads.
 
 ---
 
@@ -126,4 +142,5 @@ flowchart LR
 - [NVIDIA NIM Operator](https://docs.nvidia.com/nim-operator/latest/) — [Kata Sandbox (Experimental)](https://docs.nvidia.com/nim-operator/latest/kata-sandbox.html) | [Dynamo (Experimental)](https://docs.nvidia.com/nim-operator/latest/dynamo.html) | [Release Notes](https://docs.nvidia.com/nim-operator/latest/release-notes.html)
 - [NVIDIA Confidential Containers Reference Architecture](https://docs.nvidia.com/datacenter/cloud-native/confidential-containers/latest/overview.html)
 - [Intel Trust Authority](https://www.intel.com/content/www/us/en/security/trust-authority.html)
-- Bittensor subnets: [Gradients SN56](https://www.gradients.io/) · [Affine SN120](https://www.affine.io/) · [Albedo SN97](https://github.com/unarbos/distil) · [Orion SN27](https://github.com/SILX-LABS/Orion) · [Desearch SN22](https://desearch.ai/) · [Score SN44](https://github.com/score-technologies/turbovision) · [Chutes SN64](https://chutes.ai/) · [Hippius SN75](https://hippius.com/) · [Ditto SN118](https://heyditto.ai/) · [Bitsec.ai SN60](https://bitsec.ai/)
+- [Bitsec-AI/sandbox](https://github.com/Bitsec-AI/sandbox) · [docs.bitsec.ai](https://docs.bitsec.ai/) — SN60 is a Solidity-agent contest, not Stage 0
+- Bittensor subnets: [Gradients SN56](https://www.gradients.io/) · [Affine SN120](https://www.affine.io/) · [Albedo SN97](https://github.com/unarbos/distil) · [Orion SN27](https://github.com/SILX-LABS/Orion) · [Desearch SN22](https://desearch.ai/) · [Score SN44](https://github.com/score-technologies/turbovision) · [Chutes SN64](https://chutes.ai/) · [Hippius SN75](https://hippius.com/) · [Ditto SN118](https://heyditto.ai/)

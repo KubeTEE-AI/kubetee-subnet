@@ -81,7 +81,7 @@ As a member of the [Confidential Computing Consortium (CCC)](https://confidentia
   - [Early Access Topology](#early-access-topology)
 - [Supported AI Workloads (Job Types)](#supported-ai-workloads-job-types)
   - [Serving Configurations](#serving-configurations--every-job-requires-fast-inference)
-  - [NVIDIA NeMo Microservices, Subnet Integrations & BitSec SN60](#nvidia-nemo-microservices-bittensor-subnet-integrations--bitsec-sn60) — attestation-gated TLS, NIM Operator Kata/CoCo limits, SOTA Bittensor subnet substitutes, BitSec security gate
+  - [NVIDIA NeMo Microservices & Bittensor Subnet Integrations](#nvidia-nemo-microservices--bittensor-subnet-integrations) — attestation-gated TLS, NIM Operator Kata/CoCo limits, SOTA Bittensor subnet substitutes, Stage 0 supply-chain CI
 - [Subnet Economics](#subnet-economics)
   - [Incentive Mechanism: Infrastructure](#incentive-mechanism-infrastructure-early-access)
   - [Payment methods](#payment-methods)
@@ -122,7 +122,7 @@ KubeTEE is in **Early Access**. The first deployment targets **two clusters in t
 - Standing up the Armada multi-cluster batch scheduler across miner clusters
 - Running confidential AI jobs in Kata + CoCo TEE pods
 - A **hybrid staging cluster** operated by Pierre as the subnet-owner staging miner — non-TEE GPU nodes (`runtimeClassName: nvidia`) alongside Intel TDX GPU nodes. The non-TEE lane is the functional and performance baseline; a `…-debug` RuntimeClass is the staging qualification and incident-repro path. Production classes on miner clusters (and the LiteLLM / NIM path on oakland) run with guest debug off — see [Deploying in a TEE: The Engineering Challenge](#deploying-in-a-tee-the-engineering-challenge)
-- A **CI/CD promotion pipeline** every workload passes before it reaches a production miner cluster: security gate → non-TEE lane → TEE debug lane → production TEE with debug off and attestation enforced (see [CI/CD — Promotion Pipeline](#cicd--promotion-pipeline))
+- A **CI/CD promotion pipeline** every workload passes before it reaches a production miner cluster: supply-chain CI → non-TEE lane → TEE debug lane → production TEE with debug off and attestation enforced (see [CI/CD — Promotion Pipeline](#cicd--promotion-pipeline))
 - The **validator incentive mechanism**: scoring miners on TEE attestation, Armada job success, uptime, and **competitive pricing** against the other compute subnets (Targon, Lium, Chutes)
 - **Emissions + Alpha/TAO paid jobs** — the supply and demand sides of a single mechanism (see [Subnet Economics](#subnet-economics))
 
@@ -136,7 +136,7 @@ This README documents both what runs in the KubeTEE infrastructure and what is d
 | **Service&nbsp;transport** | Grey-cloud DNS + Traefik TLS passthrough into the LiteLLM TDX guest. [Attestation-gated TLS](./docs/NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md#2-attestation-gated-tls-between-services) (RA-TLS: TLS public key in TDX `report_data`, Trustee + Intel Trust Authority) is the client-attested hop on top of that path | Native TLS from the LiteLLM guest to NIM guests on miner clusters |
 | **Staging&nbsp;lanes** | Hybrid subnet-owner staging cluster — non-TEE baseline lane (`nvidia`) + production TEE classes (guest debug off) + `…-debug` class for qualification and incident repro | — |
 | **CI/CD&nbsp;promotion** | Both staging lanes exist | Gate automation, per-revision enforcement, published gate results |
-| **Security&nbsp;gate** | — | BitSec SN60 analysis — design concept only |
+| **Security&nbsp;gate** | — | Stage 0 supply-chain CI (SAST, Trustee/KBS secrets, image CVE, IaC/Helm policy, image provenance) — design, not yet automated |
 | **Validator&nbsp;scoring** | **v1 live on Finney:** binary infrastructure-readiness gate (hotkey binding, Rancher readiness, HA topology, capacity, 8-GPU passthrough, confidential runtime handler) + USD-denominated compensation pricing via Taostats + Targon SN4 supply-side clamp + [KubeTEE Validator/Miners Dashboard](https://s3.hippius.com/kubetee-validator/index.html) (hosted on Hippius) | `PROBATION`→`EARNING` state machine; fresh TEE attestation, Armada job metrics, serving probes, workload identity |
 | **Validator&nbsp;pricing** | **v1 live:** Taostats compensation feed (`api/dtao/pool/latest/v1`) + Targon SN4 payout feed (`stats.targon.com/api/miners`) + per-GPU price card (H100 $3 / H200 $3.50 / B200 $6.50 / B300 $8 /GPU/hr); one `set_weights` per epoch with rate-limit cooldown | Lium / Chutes demand-side scrape, per-job-class target price, price-competitiveness weighting |
 | **Validator&nbsp;runtime** | **v1 live:** flat self-contained Python unit (12 modules, 35 tests) running as a container on the operator's machine; sets weights once per epoch | Run inside a Kata + CoCo TEE pod on the control plane with CoCo remote attestation (the referee itself attested) |
@@ -186,12 +186,12 @@ This is the model: hit the failure in production, isolate it against a reference
 
 ## CI/CD — Promotion Pipeline
 
-Because a workload can pass on a container runtime and fail in a TEE for any of the reasons above, workloads are promoted through **three lanes**, each closer to production than the last, in front of the existing [BitSec SN60 security gate](./docs/NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md#6-bitsec-sn60--security-gate-for-ai-workload-promotion):
+Because a workload can pass on a container runtime and fail in a TEE for any of the reasons above, workloads are promoted through **three lanes**, each closer to production than the last, in front of a [Stage 0 supply-chain security gate](./docs/TEE-DEPLOYMENT-AND-CICD.md#stage-0--security-gate):
 
 ```mermaid
 flowchart LR
     WL["AI workload<br/>job template, image, IaC"]
-    S0["Stage 0 — Security gate<br/>BitSec SN60"]
+    S0["Stage 0 — Security gate<br/>SAST, Trustee secrets, image CVE, IaC"]
     S1["Stage 1 — Non-TEE lane<br/>subnet-owner staging cluster<br/>runtimeClass: nvidia"]
     S2["Stage 2 — TEE debug lane<br/>subnet-owner staging cluster<br/>…-debug RuntimeClass"]
     S3["Stage 3 — Production TEE<br/>miner clusters<br/>debug off, Trustee allowlist"]
@@ -207,7 +207,7 @@ flowchart LR
     S2 -->|"TEE delta accepted"| S3
 ```
 
-The four stages — security gate → non-TEE baseline lane → TEE debug lane (`…-debug` RuntimeClass) → production TEE (guest debug off, Trustee allowlist) — each with its exit criteria, are specified in [the full pipeline spec](./docs/TEE-DEPLOYMENT-AND-CICD.md#4-the-cicd-promotion-pipeline). Promotion is **per-revision, not once-and-done**: a new image tag, job template, guest image, or driver version re-triggers the pipeline from Stage 0, because the stack underneath a workload can change without the workload changing at all.
+The four stages — supply-chain CI → non-TEE baseline lane → TEE debug lane (`…-debug` RuntimeClass) → production TEE (guest debug off, Trustee allowlist) — each with its exit criteria, are specified in [the full pipeline spec](./docs/TEE-DEPLOYMENT-AND-CICD.md#4-the-cicd-promotion-pipeline). Promotion is **per-revision, not once-and-done**: a new image tag, job template, guest image, or driver version re-triggers the pipeline from Stage 0, because the stack underneath a workload can change without the workload changing at all.
 
 > **Status:** both staging lanes exist; gate automation and Stage 0 do not — see [What Ships Today](#what-ships-today) and [the full pipeline spec](./docs/TEE-DEPLOYMENT-AND-CICD.md#4-the-cicd-promotion-pipeline).
 
@@ -271,7 +271,7 @@ Armada addresses Kubernetes batch limitations that matter for the Factory: singl
 #### Data Protection
 - **Rancher Longhorn**: Encrypted Storage with 3 Replicas
 - Encrypted Container Repository
-- External Secrets Manager (CoCo KBS/Trustee)
+- **CoCo Trustee / KBS** — secrets and image-decryption keys are released only to an attested guest (not Kubernetes Secrets, not Git)
 
 #### Monitoring & Audit
 - Prometheus Metrics
@@ -360,7 +360,7 @@ No single operating point serves an agentic tool-calling loop and a heavy-contex
 
 A consumer picks the configuration alongside the model at submission. Because the choice determines how much hardware the job occupies and for how long, it is the main lever a consumer has over the resources price per hour (see [Subnet Economics](#subnet-economics) and [Jobs MCP Server](#jobs-mcp-server)).
 
-### NVIDIA NeMo Microservices, Bittensor Subnet Integrations & BitSec SN60
+### NVIDIA NeMo Microservices & Bittensor Subnet Integrations
 
 [NVIDIA NeMo Microservices](https://docs.nvidia.com/nemo/microservices/latest/about/index.html) (Customizer, Evaluator, Guardrails, Retriever, model endpoints) run as **cluster-resident services** that scheduled Armada jobs call inside the confidential boundary — shared HA per cluster, amortized across jobs. Service-to-service traffic uses **attestation-gated TLS** (in-guest keypairs, certificates issued only against a valid TDX quote, verified through Intel Trust Authority, terminated inside the guest) — not cert-manager, not a service mesh, not host-level encryption, because the host is the adversary. The NVIDIA NIM Operator has **experimental** Kata sandbox + Dynamo support, but KubeTEE runs the **stable** `kata-qemu-nvidia-gpu-tdx` runtime classes instead and is working with NVIDIA to graduate the experimental paths (Phase 3).
 
@@ -377,13 +377,12 @@ Given the NIM Operator's current Kata/CoCo limitations, KubeTEE's thesis is that
 | Inference + distributed training | [Chutes SN64](https://chutes.ai/) / Parallax | Serverless inference + decentralized MoE training (already fully TEE-only) |
 | Persistent storage | [Hippius SN75](https://hippius.com/) | S3-compatible + IPFS pinning (already ships AMD SEV-SNP CC) |
 | Agent memory / context | [Ditto SN118](https://heyditto.ai/) | Open-source persistent memory layer for AI agents (Claude / Cursor / MCP) |
-| Security gate (new layer) | [BitSec SN60](https://bitsec.ai/) | Decentralized AI security — autonomous agents find high/critical exploits |
 
-This is an **open set**: any Bittensor subnet with a SOTA, verifiable solution for a NeMo stack layer is a candidate. The full table with SOTA roles, confidential-computing fit, and the "could replace/augment" mapping: [NeMo Microservices, Bittensor Subnet Integrations & the BitSec Security Gate](./docs/NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md#5-bittensor-subnet-integrations-sota-confidential-ready).
+This is an **open set**: any Bittensor subnet with a SOTA, verifiable solution for a NeMo stack layer is a candidate. The full table with SOTA roles, confidential-computing fit, and the "could replace/augment" mapping: [NeMo Microservices & Bittensor Subnet Integrations](./docs/NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md#5-bittensor-subnet-integrations-sota-confidential-ready).
 
-[BitSec SN60](https://bitsec.ai/) is a **mandatory security gate** (design concept, Phase 1): an AI workload must pass a clean BitSec report (no unresolved critical/high findings on code, image, and IaC) **before** promotion to staging or production — the Bittensor-native equivalent of a CI security stage, decentralized and incentivized via SN60.
+**Stage 0 is ordinary supply-chain CI**, not a Bittensor subnet. Workloads are gated on SAST, image CVE/SCA, IaC/Helm policy, and image provenance before they reach the non-TEE lane. **Secrets live in CoCo Trustee / KBS** and are released only to an attested guest — they are not Kubernetes Secrets and must not appear in Git, Helm, or image layers ([Stage 0](./docs/TEE-DEPLOYMENT-AND-CICD.md#stage-0--security-gate), [secrets and images](./docs/TEE-DEPLOYMENT-AND-CICD.md#16-secrets-and-images)). [BitSec SN60](https://bitsec.ai/) is a Solidity-agent contest scored on SCA-Bench; it does **not** fit that gate. An optional later partnership is a one-time audit of SN90 validator/incentive code, kept out of the promotion pipeline — [why SN60 is not the gate](./docs/NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md#6-stage-0--supply-chain-security-gate).
 
-Full detail — the attestation-gated TLS protocol, the NIM Operator experimental paths and Kata/CoCo limitations, the 10-subnet integrations table, and the BitSec SN60 gate rules + mermaid: [NeMo Microservices, Bittensor Subnet Integrations & the BitSec Security Gate](./docs/NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md).
+Full detail — the attestation-gated TLS protocol, the NIM Operator experimental paths and Kata/CoCo limitations, the subnet integrations table, and the Stage 0 gate: [NeMo Microservices & Bittensor Subnet Integrations](./docs/NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md).
 
 ---
 
@@ -632,10 +631,10 @@ Full detail — the chain primitive, Alpha conversion, grace/recovery, `btcli` c
   - [x] **GLM-5.2** — B200 nodes
   - [x] **DeepSeek-V4-Flash-0731** — B200/H200 nodes
   - [ ] **SOTA embedding model**
-  - [ ] **Specialised models for vectorization, LLM-as-judge, and document retrieval** — served through [NeMo Microservices](#nvidia-nemo-microservices-bittensor-subnet-integrations--bitsec-sn60) (NeMo Retriever + Evaluator)
+  - [ ] **Specialised models for vectorization, LLM-as-judge, and document retrieval** — served through [NeMo Microservices](#nvidia-nemo-microservices--bittensor-subnet-integrations) (NeMo Retriever + Evaluator)
 - [ ] Deploy 2 US clusters (one hotkey each, each cluster's nodes co-located in a single DC — one West Coast, one East Coast)
 - [ ] Armada Server Multi-cluster Scheduler on the subnet-owner control plane; Armada Executor on each miner cluster
-- [ ] Automate the CI/CD promotion pipeline — enforce the four stages (security gate → non-TEE baseline → TEE debug → production TEE with debug off and attestation verified), re-run per revision, and publish gate results (see [CI/CD — Promotion Pipeline](#cicd--promotion-pipeline))
+- [ ] Automate the CI/CD promotion pipeline — enforce the four stages (supply-chain CI → non-TEE baseline → TEE debug → production TEE with debug off and attestation verified), re-run per revision, and publish gate results (see [CI/CD — Promotion Pipeline](#cicd--promotion-pipeline))
 - [ ] Binary Infrastructure validator gate (hotkey binding identity, Rancher readiness, HA, capacity, GPU/runtime wiring)
 - [ ] Extend scoring with fresh TEE attestation, Armada job metrics, serving probes, workload identity, and KeyLease freshness
 - [ ] KubeTEE-hosted validator offering: KubeTEE runs the validator code in a KubeTEE confidential cluster for operators without their own TEE infrastructure
@@ -665,7 +664,7 @@ Full detail — the chain primitive, Alpha conversion, grace/recovery, `btcli` c
 - [ ] Validator scoring expansion: TEE attestation + Armada job metrics + infrastructure health (replacing the Early Access liveness stand-in)
 - [ ] Apache Airflow + Metaflow Armada connectors — multi-step confidential pipelines (see [Workflow Orchestration](./docs/WORKFLOW-ORCHESTRATION.md))
 - [ ] Jobs MCP server — deploy confidential jobs from an autonomous agent, a human chat client, or a pipeline orchestrator: browse templates, quote, submit to Armada, and track status and attestation; quoting grounded in the Phase 0 [Competitive Pricing](./docs/COMPETITIVE-PRICING.md) target price (see [Jobs MCP Server](#jobs-mcp-server))
-- [ ] BitSec SN60 security gate — mandatory AI-workload security analysis (code/image/IaC) before promotion to staging/production (see [BitSec SN60 — Security Gate](./docs/NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md#6-bitsec-sn60--security-gate-for-ai-workload-promotion))
+- [ ] Optional [BitSec SN60](https://bitsec.ai/) one-time audit of SN90 validator/incentive code — a partnership, **not** the promotion-pipeline Stage 0 gate (see [why SN60 is not the gate](./docs/NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md#why-bitsec-sn60-is-not-the-gate))
 - [ ] Build documentation website
 
 ### Phase 2 — Paid Jobs
@@ -696,7 +695,7 @@ Full detail — the chain primitive, Alpha conversion, grace/recovery, `btcli` c
 - [Workflow Orchestration — Airflow & Metaflow](./docs/WORKFLOW-ORCHESTRATION.md) — orchestrating multi-step confidential pipelines on Armada
 - [Tokenomics — Utility Token & DePIN Model](./docs/TOKENOMICS.md) — recycle vs burn, securities posture, cross-subnet consumption loop, DePIN subsidy trajectory
 - [Competitive Pricing & Miner Scoring](./docs/COMPETITIVE-PRICING.md) — pricing SN90 against Targon/Lium/Chutes and how price becomes weights
-- [NeMo Microservices, Subnet Integrations & BitSec SN60](./docs/NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md) — attestation-gated TLS, NIM Operator Kata/CoCo limits, SOTA Bittensor subnet substitutes per NeMo layer, and the BitSec security gate
+- [NeMo Microservices & Bittensor Subnet Integrations](./docs/NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md) — attestation-gated TLS, NIM Operator Kata/CoCo limits, SOTA Bittensor subnet substitutes per NeMo layer, and the Stage 0 supply-chain security gate
 - [Albedo SN97 Eval PoC (KubeTEE SN90)](./docs/SN97-ALBEDO-POC.md) — competitive distillation king-of-the-hill evals + LiteLLM king-serve opportunity: architecture, latest run metrics/artifacts, follow-ups
 - [Release & Versioning](./RELEASE-AND-VERSIONING.md) — semantic versioning scheme, image tag mapping, release procedure
 
