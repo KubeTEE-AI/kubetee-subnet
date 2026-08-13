@@ -147,7 +147,7 @@ This README documents both what runs in the KubeTEE infrastructure and what is d
 | **LiteLLM&nbsp;gateway** | `llm.kubetee.ai` — OpenAI-compatible inference plus virtual keys, budgets, rate limits, and spend tracking. Cloudflare DNS-only (grey cloud) to oakland node IPs. LiteLLM runs in `kata-qemu-tdx-runtime-rs`; Traefik TLS passthrough terminates in the guest. Trustee allowlists production RuntimeClass measurements. Inference backends are in-cluster NIM on the staging cluster; miner clusters are extra `api_base` rows under the same `model_name`. | Wire `/mcp` and `/a2a` surfaces and the fine-tuning / batch endpoints through to Armada; KubeTEE as an upstream LiteLLM **provider**; RA-TLS so clients attest the terminator |
 | **Inference&nbsp;models** | **Live on the staging cluster:** Kimi-K3, GLM-5.2, DeepSeek-V4-Flash-0731 — available through `llm.kubetee.ai`. **SN28 (SayGM) integration in progress** (KubeTEE onboarded as a provider before Aug 15) — a demand channel, **not** an exclusive public-inference path | Expand the confidential model catalogue (more GPU classes, embedding/judge/retrieval models); additional demand channels as needed |
 | **Jobs&nbsp;MCP&nbsp;server** | — | **Not developed yet** — agent- and chat-driven job deployment at `llm.kubetee.ai/mcp` ([Phase 1](#phase-1--expansion)) |
-| **Albedo&nbsp;SN97&nbsp;eval&nbsp;PoC** | **Live on staging:** competitive-distillation king-of-the-hill evals (always-on king `/v1/*` + challenger Job + shared judge → LiteLLM) on `na-us-oakland-56`; successful 100-sample run 2026-08-09 — [SN97-ALBEDO-POC.md](./docs/SN97-ALBEDO-POC.md) | Register king in LiteLLM for inference; Armada submit; confidential eval path; split gen vs score Jobs |
+| **Albedo&nbsp;SN97&nbsp;eval&nbsp;PoC** | **Parked (2026-08-13).** 100-sample king-of-the-hill eval succeeded 2026-08-09 on `na-us-oakland-56`. Revisit when Armada + CoCo Trustee are the complete job flow so upstream SN97 deploys **without modifications or architecture changes** — [SN97-ALBEDO-POC.md](./docs/SN97-ALBEDO-POC.md) | Complete Armada + Trustee, then deploy unmodified Albedo / Denrite |
 
 ---
 
@@ -371,7 +371,7 @@ Given the NIM Operator's current Kata/CoCo limitations, KubeTEE's thesis is that
 | Data Designer | [Orion SN27](https://github.com/SILX-LABS/Orion) | Decentralized data discovery / generation / curation with on-chain quality validation |
 | Customizer (fine-tuning) | [Gradients SN56](https://www.gradients.io/) | AutoML tournaments — open-source SFT/DPO/GRPO training scripts |
 | Customizer (RL/reasoning) | [Affine SN120](https://www.affine.io/) | Incentivized RL "reason mining" — challenger-vs-champion duels |
-| Customizer (distillation) + Evaluator + Inference | [Albedo SN97](https://github.com/unarbos/distil) ([albedo](https://github.com/unarbos/albedo)) | Competitive **model distillation** (not coding agents): miners compress a large teacher into ≤33B students; validators run king-of-the-hill duels on a multi-axis composite; the reigning king is a reusable open checkpoint ([chat.arbos.life](https://chat.arbos.life) upstream). **Active KubeTEE SN90 PoC**: always-on king Deployment already exposes OpenAI-compatible `/v1/*` on-cluster — wire it into LiteLLM as an inference backend alongside GLM/Kimi/DeepSeek; eval Jobs + public Hippius artifacts — [SN97-ALBEDO-POC.md](./docs/SN97-ALBEDO-POC.md) · [upstream PR](https://github.com/unarbos/albedo/pull/4) |
+| Customizer (distillation) + Evaluator + Inference | [Albedo SN97](https://github.com/unarbos/distil) ([albedo](https://github.com/unarbos/albedo)) | Competitive **model distillation** (not coding agents): miners compress a large teacher into ≤33B students; validators run king-of-the-hill duels on a multi-axis composite; the reigning king is a reusable open checkpoint ([chat.arbos.life](https://chat.arbos.life) upstream). **PoC parked 2026-08-13** after a successful 100-sample run (2026-08-09); revisit when Armada + CoCo Trustee can run **unmodified** SN97 — [SN97-ALBEDO-POC.md](./docs/SN97-ALBEDO-POC.md) · [upstream PR](https://github.com/unarbos/albedo/pull/4) |
 | Retriever / RAG | [Desearch SN22](https://desearch.ai/) | Decentralized real-time web + X/Twitter search for AI agents |
 | Video Search & Summarization | [Score SN44](https://github.com/score-technologies/turbovision) | Decentralized computer vision — object detection, tracking, structured annotations |
 | Inference + distributed training | [Chutes SN64](https://chutes.ai/) / Parallax | Serverless inference + decentralized MoE training (already fully TEE-only) |
@@ -645,13 +645,8 @@ Full detail — the chain primitive, Alpha conversion, grace/recovery, `btcli` c
 - [ ] Competitive pricing, supply side: implement the live Targon (SN4) payout feed to clamp the GPU price card (one publisher, all validators read), and the per-GPU price paid to miners
 - [ ] Competitive pricing, demand side: scrape Lium (SN51) / Chutes (SN64) price feeds, compute per-class target price, score miners on price competitiveness
 - [ ] Confidential job templates — NeMo / NIM / Blueprint, for subnet owners and approved integrators
-- [x] **[Albedo SN97 competitive-distillation eval PoC](./docs/SN97-ALBEDO-POC.md)** (KubeTEE SN90 hosting SN97 king-of-the-hill duels — not coding agents) — split topology on staging: `dataset-prep` + always-on king (4× H200, OpenAI `/v1/*`) + challenger `batch/v1` Job + shared judge → LiteLLM; first successful 100-sample duel 2026-08-09 ([artifacts](./docs/SN97-ALBEDO-POC.md#latest-successful-run-2026-08-09), [upstream PR](https://github.com/unarbos/albedo/pull/4))
-  - [ ] **Serve the reigning king via LiteLLM** — register `albedo-king.albedo-poc.svc.cluster.local:8000/v1` (same pattern as GLM/Kimi/DeepSeek) so internal workloads and `llm.kubetee.ai` can call the distilled champion; respect `king_changing` 503s and shared capacity with eval Jobs
-  - [ ] Armada `JobSubmitRequest` path for Denrite’s dispatcher (today: direct `kubectl apply`)
-  - [ ] Confidential eval + confidential king serve (`kata-qemu-nvidia-gpu-tdx-runtime-rs` + `kata-direct`)
-  - [ ] Split generation vs scoring Jobs — free challenger GPUs before HTTP judge scoring / S3 upload
-  - [ ] Production Albedo eval image (baked code + deps; staging still git-clones into `vllm/vllm-openai`)
-  - [ ] Denrite real dispatcher integration (king change protocol already returns `king_changing` / `king_changed`)
+- [x] **[Albedo SN97 competitive-distillation eval PoC](./docs/SN97-ALBEDO-POC.md)** (KubeTEE SN90 hosting SN97 king-of-the-hill duels — not coding agents) — **parked 2026-08-13**. First successful 100-sample duel 2026-08-09 ([artifacts](./docs/SN97-ALBEDO-POC.md#latest-successful-run-2026-08-09), [upstream PR](https://github.com/unarbos/albedo/pull/4)). Do not extend the KubeTEE-specific split topology.
+  - [ ] **Revisit when Armada + CoCo Trustee are complete** — deploy upstream Albedo / Denrite **without modifications or architecture changes** (Armada `JobSubmitRequest` + attested `kata-qemu-nvidia-gpu-tdx-runtime-rs` / `kata-direct` + Trustee secrets). The parked fork’s LiteLLM king-register / split-gen-score / custom judge-api items are **not** the revisit path.
 
 ### Phase 1 — Expansion
 
@@ -696,7 +691,7 @@ Full detail — the chain primitive, Alpha conversion, grace/recovery, `btcli` c
 - [Tokenomics — Utility Token & DePIN Model](./docs/TOKENOMICS.md) — recycle vs burn, securities posture, cross-subnet consumption loop, DePIN subsidy trajectory
 - [Competitive Pricing & Miner Scoring](./docs/COMPETITIVE-PRICING.md) — pricing SN90 against Targon/Lium/Chutes and how price becomes weights
 - [NeMo Microservices & Bittensor Subnet Integrations](./docs/NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md) — attestation-gated TLS, NIM Operator Kata/CoCo limits, SOTA Bittensor subnet substitutes per NeMo layer, and the Stage 0 supply-chain security gate
-- [Albedo SN97 Eval PoC (KubeTEE SN90)](./docs/SN97-ALBEDO-POC.md) — competitive distillation king-of-the-hill evals + LiteLLM king-serve opportunity: architecture, latest run metrics/artifacts, follow-ups
+- [Albedo SN97 Eval PoC (KubeTEE SN90)](./docs/SN97-ALBEDO-POC.md) — parked 2026-08-13; 100-sample proof + artifacts; revisit when Armada + CoCo Trustee can run unmodified SN97
 - [Release & Versioning](./RELEASE-AND-VERSIONING.md) — semantic versioning scheme, image tag mapping, release procedure
 
 ### External Resources

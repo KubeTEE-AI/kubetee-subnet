@@ -1,8 +1,10 @@
 # Albedo (SN97) King-of-the-Hill Eval — KubeTEE SN90 PoC
 
-KubeTEE **SN90** runs [Albedo / Denrite (SN97)](https://github.com/unarbos/albedo) king-of-the-hill GPU evaluations on the subnet-owner staging cluster (`na-us-oakland-56`). This is an **active PoC**: a successful 100-sample end-to-end run landed 2026-08-09. Upstream PR: [unarbos/albedo#4](https://github.com/unarbos/albedo/pull/4). Full architecture and ops notes live in the Albedo fork: [`kubetee/PLAN.md`](https://github.com/KubeTEE-AI-Blueprints/albedo/blob/kubetee-poc/kubetee/PLAN.md).
+**Parked (2026-08-13).** Revisit when the **complete KubeTEE job flow** is live — [Armada](https://armadaproject.io/) submit/execute across miner clusters **and** [CoCo Trustee](https://github.com/confidential-containers/trustee) (KBS) attestation-gated secrets — so [Albedo / Denrite (SN97)](https://github.com/unarbos/albedo) can be deployed **without modifications or architecture changes**.
 
-Albedo remains **Bittensor SN97**; KubeTEE is **SN90**. The PoC is SN90 infrastructure hosting SN97-style evals.
+A successful 100-sample end-to-end run landed **2026-08-09** on `na-us-oakland-56`. That run proved SN90 can host SN97-style king-of-the-hill GPU evals. It used a **KubeTEE-specific** split topology (`kubectl apply` Jobs, always-on king, shared judge-api). That path is **not** the target. The target is upstream Albedo as-is on the finished platform.
+
+Albedo remains **Bittensor SN97**; KubeTEE is **SN90**. Upstream PR from the PoC: [unarbos/albedo#4](https://github.com/unarbos/albedo/pull/4). PoC-era architecture notes: [`kubetee/PLAN.md`](https://github.com/KubeTEE-AI-Blueprints/albedo/blob/kubetee-poc/kubetee/PLAN.md).
 
 **What Albedo is (and is not):** SN97 is competitive **model distillation** — miners compress a large teacher into smaller open students (≤33B), validators score **king-of-the-hill** duels on a multi-axis composite, and the reigning king is published for reuse ([distil.arbos.life](https://distil.arbos.life), [chat.arbos.life](https://chat.arbos.life)). It is **not** a coding-agent subnet. NeMo-layer fit: Customizer (distillation) + Evaluator (duels) + **Inference** (serve the king).
 
@@ -12,34 +14,48 @@ Albedo remains **Bittensor SN97**; KubeTEE is **SN90**. The PoC is SN90 infrastr
 
 | Integration | Why it fits | Status |
 |-------------|-------------|--------|
-| **King-of-the-hill GPU evals** | Challenger Jobs + shared judge on staging GPUs | **Live** (this PoC) |
-| **Public king inference (SN90 offer to Albedo / Distil)** | `albedo-king` already proxies OpenAI `/v1/*` to local vLLM (`king_serve.py`). Register in LiteLLM (`openai/<name>` → `http://albedo-king.albedo-poc.svc.cluster.local:8000/v1`) and publish for **public** use via SN90 capacity — including the **SN28 (SayGM) integration** (not exclusive; KubeTEE may also serve the public directly) — complementary to upstream [chat.arbos.life](https://chat.arbos.life). Offered in [unarbos/albedo#4](https://github.com/unarbos/albedo/pull/4) / `PLAN.md`. | **Offered — not registered yet** — Phase 0 follow-up |
-| **Public duel / checkpoint artifacts** | Hippius `sn97-albedo` public-read objects; open HF student checkpoints | **Live** for PoC runs |
-| **Armada-backed Denrite submit** | Denrite dispatcher → Armada `JobSubmitRequest` | Follow-up |
-| **Confidential king + eval** | Move king/challenger onto `kata-*` + `kata-direct` | Follow-up |
+| **King-of-the-hill GPU evals** | Challenger Jobs + shared judge on staging GPUs | **Parked** — 2026-08-09 PoC succeeded; do not extend the KubeTEE fork |
+| **Public king inference (SN90 offer to Albedo / Distil)** | PoC `albedo-king` proxied OpenAI `/v1/*` to local vLLM (`king_serve.py`). Registering that Service in LiteLLM is **not** the revisit path. Serve the king the way upstream Albedo already does, on Armada + Trustee. Offered in [unarbos/albedo#4](https://github.com/unarbos/albedo/pull/4) / `PLAN.md`. | **Parked** |
+| **Public duel / checkpoint artifacts** | Hippius `sn97-albedo` public-read objects; open HF student checkpoints | **Recorded** (PoC run artifacts below) |
+| **Armada-backed Denrite submit** | Denrite dispatcher → Armada `JobSubmitRequest` with **unmodified** SN97 code | **Revisit gate** (with Trustee) |
+| **Confidential king + eval** | `kata-qemu-nvidia-gpu-tdx-runtime-rs` + `kata-direct` + Trustee-released secrets | **Revisit gate** (with Armada) |
 
-**LiteLLM caveats when serving the king:**
-- During king reload, `/ready` and `/v1/*` return **503** with `fault_code=king_changing` — gateway clients must retry / fail soft (same as eval Jobs).
-- King GPUs are shared with challenger capacity planning (king holds 4× H200 on `am-h200-25`); heavy chat traffic competes with duel load.
-- Today the king is non-CC staging; TEE serve is a later step on the same OpenAI surface.
+**PoC-era LiteLLM notes (king Service — not the revisit path):**
+- During king reload, `/ready` and `/v1/*` returned **503** with `fault_code=king_changing` — clients had to retry / fail soft.
+- King GPUs were shared with challenger capacity (king held 4× H200 on `am-h200-25`).
+- The PoC king was non-CC staging. Confidential serve is in the revisit gate (Trustee + `kata-*`), via unmodified Albedo — not by registering this Service in LiteLLM.
 
 ---
+
+## Revisit gate
+
+Do **not** continue the KubeTEE-forked PoC (custom `king_serve.py`, `albedo-judge-api`, `batch/v1` `kubectl apply`, split king/challenger topology) as the production path. Those were scaffolding to prove GPU evals on SN90.
+
+**Resume SN97 on KubeTEE when all of the following are true:**
+
+1. **Armada** control plane + executor can submit and run confidential GPU jobs on staging (Denrite’s dispatcher targets Armada; no KubeTEE-only eval architecture).
+2. **CoCo Trustee (KBS)** releases secrets only to attested Kata guests (`kata-qemu-nvidia-gpu-tdx-runtime-rs`, `kata-direct` as needed).
+3. An **upstream Albedo / Denrite** image and job spec can be submitted through that flow **unchanged** — no SN97 code fork, no KubeTEE-only split topology.
+
+Until then, this document is the record of the 2026-08-09 proof and the public artifacts.
 
 ## Status
 
 | Item | State |
 |------|--------|
-| Split topology (dataset + always-on king + challenger Job) | **Live** on `na-us-oakland-56` |
-| Shared judge → in-cluster LiteLLM (`z-ai/glm-5.2`, …) | **Live** |
-| Submission path | Direct `kubectl apply` of a `batch/v1` Job (**not Armada yet**) |
-| Staging eval image | `vllm/vllm-openai` + git clone / `pip install` at Job start |
-| Production eval image | Final Albedo Docker image (baked code + deps) — planned |
-| Confidential eval (`kata-*` + `kata-direct`) | Follow-up (CC path already validated by other GLM/Qwen serves) |
-| Armada `JobSubmitRequest` for Denrite dispatcher | Follow-up |
+| PoC (KubeTEE-specific split topology) | **Parked** 2026-08-13 |
+| 100-sample end-to-end duel | **Succeeded** 2026-08-09 (artifacts below) |
+| Submission path used in PoC | Direct `kubectl apply` of a `batch/v1` Job — **not** the revisit path |
+| Staging eval image used in PoC | `vllm/vllm-openai` + git clone / `pip install` at Job start |
+| Target at revisit | Unmodified Albedo Docker image + Denrite submit via Armada + Trustee |
+| Confidential eval (`kata-*` + `kata-direct` + Trustee) | **Blocked** on complete KubeTEE flow |
+| Armada `JobSubmitRequest` for Denrite dispatcher | **Blocked** on complete KubeTEE flow |
 
 ---
 
-## Architecture (split topology)
+## Architecture used in the PoC (historical — not the revisit target)
+
+The topology below is what ran on 2026-08-09. Keep it as evidence. Do **not** evolve it into the production SN97 integration; revisit deploys upstream Albedo without this split.
 
 Namespace: `albedo-poc` on context `na-us-oakland-56-direct`.
 
@@ -69,7 +85,7 @@ flowchart LR
 
 **Dataset pin (apple-to-apple):** subsequent evals load the exact 100 `sample_ids` from Denrite reference [`request.json`](https://github.com/KubeTEE-AI-Blueprints/albedo/blob/kubetee-poc/kubetee/compare/reference-ca530856-ffa8-4e66-9175-7400e829e8c0/request.json) (`manifest_hash` `e3cff617…`, same corpus as `albedo-poc-dataset-config`). The first PoC run (`7e09f071-…`) used seed `kubetee-poc` only and had **0** sample overlap with that reference — scores are not directly comparable until a re-run with the pin.
 
-**Why not Armada (yet):** PoC submits with `kubectl apply -f kubetee/deploy/eval.yaml`. `deploy/armada-job-template.yaml` is kept as the future Denrite submit shape. No Denrite docker-compose, Postgres queue, or chain resolution inside KubeTEE — only king/challenger model refs + eval/submission IDs.
+**Why the PoC skipped Armada:** the 2026-08-09 run submitted with `kubectl apply -f kubetee/deploy/eval.yaml` because Armada + Trustee were not yet the complete job flow. `deploy/armada-job-template.yaml` in the fork was a sketch only. At revisit, Denrite submits through Armada with **unmodified** SN97 — no KubeTEE-side king/challenger split required.
 
 ---
 
@@ -107,13 +123,13 @@ Reference Denrite shape (not this run): [detail UI](https://pub-e2a73e9642e74a2e
 
 After multi-turn generation, the challenger Job closes local vLLM (`VllmProcessGenerator.close()` → EngineCore SIGTERM) and then runs HTTP scoring + S3 upload **while still holding `nvidia.com/gpu: 4`**. Scoring itself needs no eval-pod GPUs (judge-api / LiteLLM only).
 
-**Planned improvement:** checkpoint durable gen outputs (+ `request` / `category_prep_id`) → exit the GPU Job → CPU-only score Job. Requires a score-from-artifacts entrypoint (today `generated-samples` is uploaded only after scoring). Tracked as follow-up #6 in [`PLAN.md`](https://github.com/KubeTEE-AI-Blueprints/albedo/blob/kubetee-poc/kubetee/PLAN.md#follow-ups-after-poc-success).
+**PoC observation only:** a split gen-then-score Job would free GPUs sooner, but do **not** invent that in the KubeTEE fork. At revisit, use whatever upstream Albedo already ships. Noted in [`PLAN.md`](https://github.com/KubeTEE-AI-Blueprints/albedo/blob/kubetee-poc/kubetee/PLAN.md#follow-ups-after-poc-success) follow-up #6.
 
 ---
 
-## How to re-run (ops sketch)
+## How the PoC was run (historical — do not extend)
 
-Manifests and secrets live in the Albedo `kubetee-poc` branch — not in this subnet repo. From the monorepo (or a checkout of [KubeTEE-AI-Blueprints/albedo](https://github.com/KubeTEE-AI-Blueprints/albedo) `@kubetee-poc`):
+Manifests and secrets live in the Albedo `kubetee-poc` branch — not in this subnet repo. The steps below reproduce the **parked** fork, not the revisit target. From a checkout of [KubeTEE-AI-Blueprints/albedo](https://github.com/KubeTEE-AI-Blueprints/albedo) `@kubetee-poc`:
 
 1. Apply out-of-band Secret (`deploy/secret-template.yaml` shape — never commit secrets).
 2. `kubectl apply -f kubetee/deploy/dataset-prep.yaml` (once / on hash bump).
@@ -125,14 +141,16 @@ Context: `na-us-oakland-56-direct`. Details: [`PLAN.md` → Run the PoC](https:/
 
 ---
 
-## Follow-ups (summary)
+## Follow-ups (superseded by the revisit gate)
 
-1. Armada submit API for Denrite’s dispatcher  
-2. King warm-cache on the model-cache PVC  
-3. Keep LiteLLM backends aligned with Albedo’s hardcoded `JUDGE_MODELS`  
-4. Confidential eval (`kata-qemu-nvidia-gpu-tdx-runtime-rs` + `kata-direct`)  
-5. Denrite real dispatcher integration  
-6. Split generation vs scoring Jobs (free challenger GPUs sooner)
+The items below were the PoC’s next steps. They are **not** the current workstream. At revisit, deploy unmodified SN97 on Armada + Trustee instead of finishing this list on the KubeTEE fork:
+
+1. Armada submit API for Denrite’s dispatcher — **now part of the revisit gate**
+2. King warm-cache on the model-cache PVC
+3. Keep LiteLLM backends aligned with Albedo’s hardcoded `JUDGE_MODELS`
+4. Confidential eval (`kata-qemu-nvidia-gpu-tdx-runtime-rs` + `kata-direct`) — **now part of the revisit gate** (with Trustee)
+5. Denrite real dispatcher integration — **now part of the revisit gate**
+6. Split generation vs scoring Jobs (free challenger GPUs sooner) — only if upstream Albedo already works that way; do not invent it in a KubeTEE fork
 
 ---
 
@@ -140,7 +158,7 @@ Context: `na-us-oakland-56-direct`. Details: [`PLAN.md` → Run the PoC](https:/
 
 | Resource | URL |
 |----------|-----|
-| Albedo PLAN (authoritative) | https://github.com/KubeTEE-AI-Blueprints/albedo/blob/kubetee-poc/kubetee/PLAN.md |
+| Albedo PLAN (PoC-era fork notes) | https://github.com/KubeTEE-AI-Blueprints/albedo/blob/kubetee-poc/kubetee/PLAN.md |
 | Upstream PR | https://github.com/unarbos/albedo/pull/4 |
 | Albedo / Distil | https://github.com/unarbos/distil · https://github.com/unarbos/albedo |
 | NeMo / subnet integration table | [NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md](./NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md#5-bittensor-subnet-integrations-sota-confidential-ready) |
