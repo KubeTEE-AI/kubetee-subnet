@@ -72,7 +72,7 @@ As a member of the [Confidential Computing Consortium (CCC)](https://confidentia
   - [What Ships Today](#what-ships-today)
 - [The Confidential Compute Challenge: Problems We Solve](#the-confidential-compute-challenge-problems-we-solve)
 - [Deploying in a TEE: The Engineering Challenge](#deploying-in-a-tee-the-engineering-challenge)
-- [CI/CD — Promotion Pipeline](#cicd--promotion-pipeline)
+- [Debugging on the staging cluster](#debugging-on-the-staging-cluster)
 - [Architecture](#architecture)
   - [Confidential Computing (Kata + CoCo)](#confidential-computing-kata--coco)
   - [Infrastructure](#infrastructure) — RKE2 HA, Armada batch scheduling
@@ -109,7 +109,7 @@ As a member of the [Confidential Computing Consortium (CCC)](https://confidentia
 
 KubeTEE AI Factory provides Enterprise-Grade Confidential Computing for AI batch jobs on a Decentralized Multi-Cluster Kubernetes RKE2 infrastructure. Jobs are submitted to Armada queues and scheduled across miner clusters, executing inside Trusted Execution Environments (TEE) so that data and models are protected **at rest, in transit, and in use** — and never leave the confidential computing boundary.
 
-Each miner cluster is identified by a permanent Bittensor **hotkey/coldkey** pair. Armada dispatches batch jobs to these clusters as Kubernetes pods; the pods run under a confidential `runtimeClassName` so the workload is hardware-isolated and attested. Production classes are **`kata-qemu-nvidia-gpu-tdx-runtime-rs`** (GPU TEE) and **`kata-qemu-tdx-runtime-rs`** (CPU-only TEE), guest debug off, with `nvidia` reserved for the non-confidential staging baseline lane and a `…-debug` class for staging qualification and incident repro. CoCo + Trustee/KBS provide remote attestation so unmodified containers run inside the TEE.
+Each miner cluster is identified by a permanent Bittensor **hotkey/coldkey** pair. Armada dispatches batch jobs to these clusters as Kubernetes pods; the pods run under a confidential `runtimeClassName` so the workload is hardware-isolated and attested. TEE classes are **`kata-qemu-nvidia-gpu-tdx-runtime-rs`** (GPU) and **`kata-qemu-tdx-runtime-rs`** (CPU-only). Every node on the **staging cluster** is TEE CC capable. Kata guest debug is **off**; CoCo Trustee attests those guests. For diagnostics, CC can be turned **off** on a staging node, and guest debug can be enabled **per pod**; Trustee attests only when debug is off.
 
 The RKE2 baseline is **[FIPS-140-2 validated](https://docs.rke2.io/security/fips_support)** today; FIPS-140-3 is a [Phase 3](#phase-3--job-type-growth) target. Both are referred to below simply as the FIPS-validated baseline.
 
@@ -121,8 +121,7 @@ KubeTEE is in **Early Access**. The first deployment targets **two clusters in t
 
 - Standing up the Armada multi-cluster batch scheduler across miner clusters
 - Running confidential AI jobs in Kata + CoCo TEE pods
-- A **hybrid staging cluster** operated by Pierre as the subnet-owner staging miner — non-TEE GPU nodes (`runtimeClassName: nvidia`) alongside Intel TDX GPU nodes. The non-TEE lane is the functional and performance baseline; a `…-debug` RuntimeClass is the staging qualification and incident-repro path. Production classes on miner clusters (and the LiteLLM / NIM path on oakland) run with guest debug off — see [Deploying in a TEE: The Engineering Challenge](#deploying-in-a-tee-the-engineering-challenge)
-- A **CI/CD promotion pipeline** every workload passes before it reaches a production miner cluster: supply-chain CI → non-TEE lane → TEE debug lane → production TEE with debug off and attestation enforced (see [CI/CD — Promotion Pipeline](#cicd--promotion-pipeline))
+- A **staging cluster** operated by Pierre as the subnet-owner staging miner — all nodes are TEE CC capable. Workloads run on miner clusters; if a workload fails, it can be targeted at staging for debug. Kata guest debug is **off**; CoCo Trustee attests those guests. CC can be turned off on a staging node for debug; guest debug can be enabled per pod. See [Debugging on the staging cluster](#debugging-on-the-staging-cluster)
 - The **validator incentive mechanism**: scoring miners on TEE attestation, Armada job success, uptime, and **competitive pricing** against the other compute subnets (Targon, Lium, Chutes)
 - **Emissions + Alpha/TAO paid jobs** — the supply and demand sides of a single mechanism (see [Subnet Economics](#subnet-economics))
 
@@ -134,9 +133,8 @@ This README documents both what runs in the KubeTEE infrastructure and what is d
 |------|--------------------|--------------------|
 | **Confidential&nbsp;runtime** | Kata + CoCo TEE runtime classes on TDX H200/B200 nodes | AMD SEV-SNP multi-arch + RTX 5000 Pro Server Edition testing ([Phase 1](#phase-1--expansion)) |
 | **Service&nbsp;transport** | Grey-cloud DNS + Traefik TLS passthrough into the LiteLLM TDX guest. [Attestation-gated TLS](./docs/NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md#2-attestation-gated-tls-between-services) (RA-TLS: TLS public key in TDX `report_data`, Trustee + Intel Trust Authority) is the client-attested hop on top of that path | Native TLS from the LiteLLM guest to NIM guests on miner clusters |
-| **Staging&nbsp;lanes** | Hybrid subnet-owner staging cluster — non-TEE baseline lane (`nvidia`) + production TEE classes (guest debug off) + `…-debug` class for qualification and incident repro | — |
-| **CI/CD&nbsp;promotion** | Both staging lanes exist | Gate automation, per-revision enforcement, published gate results |
-| **Security&nbsp;gate** | — | Stage 0 supply-chain CI (SAST, Trustee/KBS secrets, image CVE, IaC/Helm policy, image provenance) — design, not yet automated |
+| **Staging&nbsp;cluster** | Subnet-owner staging cluster — every node is TEE CC capable. Debug target if a workload fails. Kata **guest debug off**; CoCo Trustee attests those guests. CC can be turned off on a node for debug; guest debug can be enabled per pod. | — |
+| **Security&nbsp;gate** | — | Supply-chain CI (SAST, Trustee/KBS secrets, image CVE, IaC/Helm policy, image provenance) — design, not yet automated |
 | **Validator&nbsp;scoring** | **v1 live on Finney:** binary infrastructure-readiness gate (hotkey binding, Rancher readiness, HA topology, capacity, 8-GPU passthrough, confidential runtime handler) + USD-denominated compensation pricing via Taostats + Targon SN4 supply-side clamp + [KubeTEE Validator/Miners Dashboard](https://s3.hippius.com/kubetee-validator/index.html) (hosted on Hippius) | `PROBATION`→`EARNING` state machine; fresh TEE attestation, Armada job metrics, serving probes, workload identity |
 | **Validator&nbsp;pricing** | **v1 live:** Taostats compensation feed (`api/dtao/pool/latest/v1`) + Targon SN4 payout feed (`stats.targon.com/api/miners`) + per-GPU price card (H100 $3 / H200 $3.50 / B200 $6.50 / B300 $8 /GPU/hr); one `set_weights` per epoch with rate-limit cooldown | Lium / Chutes demand-side scrape, per-job-class target price, price-competitiveness weighting |
 | **Validator&nbsp;runtime** | **v1 live:** flat self-contained Python unit (12 modules, 35 tests) running as a container on the operator's machine; sets weights once per epoch | Run inside a Kata + CoCo TEE pod on the control plane with CoCo remote attestation (the referee itself attested) |
@@ -144,7 +142,7 @@ This README documents both what runs in the KubeTEE infrastructure and what is d
 | **Miner&nbsp;onboarding** | KubeTEE applies the hotkey binding | Permissionless self-service ([Phase 1](#phase-1--expansion)) |
 | **Miner&nbsp;deposit** | 100 TAO gate **measured, not enforced** | On-chain collateral bonding ([Phase 1](#phase-1--expansion)) |
 | **Payments** | Alpha / TAO at a resources price per hour | USDC-on-BASE billing ([Phase 2](#phase-2--paid-jobs)) |
-| **LiteLLM&nbsp;gateway** | `llm.kubetee.ai` — OpenAI-compatible inference plus virtual keys, budgets, rate limits, and spend tracking. Cloudflare DNS-only (grey cloud) to oakland node IPs. LiteLLM runs in `kata-qemu-tdx-runtime-rs`; Traefik TLS passthrough terminates in the guest. Trustee allowlists production RuntimeClass measurements. Inference backends are in-cluster NIM on the staging cluster; miner clusters are extra `api_base` rows under the same `model_name`. | Wire `/mcp` and `/a2a` surfaces and the fine-tuning / batch endpoints through to Armada; KubeTEE as an upstream LiteLLM **provider**; RA-TLS so clients attest the terminator |
+| **LiteLLM&nbsp;gateway** | `llm.kubetee.ai` — OpenAI-compatible inference plus virtual keys, budgets, rate limits, and spend tracking. Cloudflare DNS-only (grey cloud) to oakland node IPs. LiteLLM runs in `kata-qemu-tdx-runtime-rs` with guest debug off; Traefik TLS passthrough terminates in the guest. CoCo Trustee attests the guest. Inference backends are in-cluster NIM on the staging cluster; miner clusters are extra `api_base` rows under the same `model_name`. | Wire `/mcp` and `/a2a` surfaces and the fine-tuning / batch endpoints through to Armada; KubeTEE as an upstream LiteLLM **provider**; RA-TLS so clients attest the terminator |
 | **Inference&nbsp;models** | **Live on the staging cluster:** Kimi-K3, GLM-5.2, DeepSeek-V4-Flash-0731 — available through `llm.kubetee.ai`. **SN28 (SayGM) integration in progress** (KubeTEE onboarded as a provider before Aug 15) — a demand channel, **not** an exclusive public-inference path | Expand the confidential model catalogue (more GPU classes, embedding/judge/retrieval models); additional demand channels as needed |
 | **Jobs&nbsp;MCP&nbsp;server** | — | **Not developed yet** — agent- and chat-driven job deployment at `llm.kubetee.ai/mcp` ([Phase 1](#phase-1--expansion)) |
 | **Albedo&nbsp;SN97&nbsp;eval&nbsp;PoC** | **Parked (2026-08-13).** 100-sample king-of-the-hill eval succeeded 2026-08-09 on `na-us-oakland-56`. Revisit when Armada + CoCo Trustee are the complete job flow so upstream SN97 deploys **without modifications or architecture changes** — [SN97-ALBEDO-POC.md](./docs/SN97-ALBEDO-POC.md) | Complete Armada + Trustee, then deploy unmodified Albedo / Denrite |
@@ -163,16 +161,16 @@ Organizations running sensitive AI workloads — training, fine-tuning, inferenc
 
 ## Deploying in a TEE: The Engineering Challenge
 
-The section above is why customers need confidential compute. This one is why it is hard to build — and why Early Access runs a hybrid staging cluster and a promotion pipeline instead of deploying straight to production.
+The section above is why customers need confidential compute. This one is why it is hard to build — and why Early Access keeps a CC-capable staging cluster as a **debug target** when a workload fails, rather than a required promotion workflow.
 
 **A confidential pod is a virtual machine with an encrypted, attested memory boundary, not a namespaced process on the host.** Every assumption a Kubernetes workload makes about devices, storage, resources, startup time, and debuggability is renegotiated at that boundary — multi-GPU/NVSwitch passthrough, guest-vs-pod sizing, cold start, storage semantics, observability, destructive failures, and version-coupled stacks. Each has been hit bringing up this stack, and most have an upstream issue attached.
 
 Two consequences follow directly, and they shape Early Access:
 
-1. **A reference lane is required to diagnose anything.** Without an identical non-TEE run to compare against, an operator cannot tell "the workload is broken" from "the TEE path is broken" — different owners, different fixes. Hence the hybrid staging cluster.
-2. **Debuggability must be bought explicitly, and cannot be bought in production.** Kata debug mode restores guest visibility, but upstream CoCo documentation is explicit that it *changes the attestation evidence and the launch measurement*. A debug-enabled guest cannot serve as an attestation reference — so debug is a staging tool, and "debug off, attestation verified" is itself a promotion gate.
+1. **CC can be turned off on a staging node for debug.** Every staging node is TEE CC capable. Turning CC off (or guest debug on for a pod) is a diagnostic choice so an operator can tell "the workload is broken" from "the TEE path is broken."
+2. **Guest debug is off by default so CoCo Trustee can attest the guest.** Turning debug on for a pod is a diagnostic choice: that guest is then not attested. Staging and miner TEE pods run with debug off unless an operator enables it on that pod.
 
-Full detail — every failure class, the hybrid-cluster rationale, and the debug-mode trade-off: [Deploying in a TEE — The Engineering Challenge and the CI/CD Promotion Pipeline](./docs/TEE-DEPLOYMENT-AND-CICD.md).
+More on staging as a debug target: [Deploying in a TEE — Challenge and debugging](./docs/TEE-DEPLOYMENT-AND-CICD.md).
 
 ### Example: Upstream Participation — kata-containers #13535
 
@@ -180,36 +178,23 @@ KubeTEE does not just consume upstream projects; it hardens them and reports wha
 
 While bringing up a 2.5 TB Kimi-K3 inference pod (8× B300 GPU passthrough) under `kata-qemu-nvidia-gpu-tdx-runtime-rs`, the sandbox hung at boot and hit the 1200s `create_container` timeout before the guest kernel even started. Root cause: the `OVMF.inteltdx.fd` shipped in **kata-deploy v4.0.0** performs **eager memory acceptance** for Intel TDX guests — spending all its time in `TDCALL [TDG.MEM.PAGE.ACCEPT]` for large-memory VMs. The distro `ovmf-inteltdx` (Ubuntu, with lazy-accept enabled by `PcdLazyAcceptPartialMemorySize=512`) booted the same 512 GB TDX VM in under 15 seconds. KubeTEE filed the issue with full evidence (serial logs, kata config, kernel `CONFIG_UNACCEPTED_MEMORY=y`), root-cause analysis (Config-A vs Config-B build, PCD defaults), and three proposed solutions — [kata-containers#13535](https://github.com/kata-containers/kata-containers/issues/13535).
 
-This is the model: hit the failure in production, isolate it against a reference lane (the non-TEE baseline + the distro OVMF comparison), file it upstream with a reproducible root cause and a fix proposal, and carry a local workaround until the upstream fix lands. KubeTEE maintains a fork branch (`ovmf-tdx-bump-202605`) with a pre-built Config-B OVMF from `edk2-stable202605` and a reproducible build script for pipeline testing.
+This is the model: hit the failure in production, isolate it (CC off on a staging node for debug, plus the distro OVMF comparison), file it upstream with a reproducible root cause and a fix proposal, and carry a local workaround until the upstream fix lands. KubeTEE maintains a fork branch (`ovmf-tdx-bump-202605`) with a pre-built Config-B OVMF from `edk2-stable202605` and a reproducible build script for pipeline testing.
 
 ---
 
-## CI/CD — Promotion Pipeline
+## Debugging on the staging cluster
 
-Because a workload can pass on a container runtime and fail in a TEE for any of the reasons above, workloads are promoted through **three lanes**, each closer to production than the last, in front of a [Stage 0 supply-chain security gate](./docs/TEE-DEPLOYMENT-AND-CICD.md#stage-0--security-gate):
+Workloads run on **miner clusters** (CC on, guest debug off; CoCo Trustee attests). There is no required staging promotion workflow.
+
+If a workload fails, it can be targeted at the **staging cluster** for diagnostics. Every staging node is TEE CC capable. CC can be turned off on a node for debug, and guest debug can be enabled **per pod**. Trustee attests only when debug is off.
 
 ```mermaid
 flowchart LR
-    WL["AI workload<br/>job template, image, IaC"]
-    S0["Stage 0 — Security gate<br/>SAST, Trustee secrets, image CVE, IaC"]
-    S1["Stage 1 — Non-TEE lane<br/>subnet-owner staging cluster<br/>runtimeClass: nvidia"]
-    S2["Stage 2 — TEE debug lane<br/>subnet-owner staging cluster<br/>…-debug RuntimeClass"]
-    S3["Stage 3 — Production TEE<br/>miner clusters<br/>debug off, Trustee allowlist"]
-    Fix["Remediate and resubmit"]
-
-    WL --> S0
-    S0 -->|"critical/high findings"| Fix
-    S1 -->|"functional failure"| Fix
-    S2 -->|"TEE-attributable failure"| Fix
-    Fix --> S0
-    S0 -->|"clean report"| S1
-    S1 -->|"baseline recorded"| S2
-    S2 -->|"TEE delta accepted"| S3
+    Jobs["AI workload"] --> Miners["Miner clusters<br/>CC on, guest debug off<br/>CoCo Trustee attests"]
+    Jobs -.->|"on failure, debug"| Staging["Staging cluster<br/>CC-capable; CC off and<br/>per-pod guest debug available"]
 ```
 
-The four stages — supply-chain CI → non-TEE baseline lane → TEE debug lane (`…-debug` RuntimeClass) → production TEE (guest debug off, Trustee allowlist) — each with its exit criteria, are specified in [the full pipeline spec](./docs/TEE-DEPLOYMENT-AND-CICD.md#4-the-cicd-promotion-pipeline). Promotion is **per-revision, not once-and-done**: a new image tag, job template, guest image, or driver version re-triggers the pipeline from Stage 0, because the stack underneath a workload can change without the workload changing at all.
-
-> **Status:** both staging lanes exist; gate automation and Stage 0 do not — see [What Ships Today](#what-ships-today) and [the full pipeline spec](./docs/TEE-DEPLOYMENT-AND-CICD.md#4-the-cicd-promotion-pipeline).
+Supply-chain CI (SAST, Trustee secrets, image CVE, IaC) is designed, not yet automated — see [the security gate](./docs/NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md#6-stage-0--supply-chain-security-gate). Detail: [Deploying in a TEE](./docs/TEE-DEPLOYMENT-AND-CICD.md).
 
 ---
 
@@ -223,7 +208,7 @@ The four stages — supply-chain CI → non-TEE baseline lane → TEE debug lane
 - Intel TDX/SGX
 - NVIDIA Hopper/Blackwell/Vera Rubin
 
-Confidential jobs execute under the production TEE runtime classes introduced in the [Overview](#overview) — see [Armada Multi-Cluster Batch Scheduling](#armada-multi-cluster-batch-scheduling) for how they are scheduled.
+Confidential jobs execute under the TEE runtime classes in the [Overview](#overview). On staging, every node is TEE CC capable; Kata guest debug is off and CoCo Trustee attests those guests. CC can be turned off on a staging node for debug. See [Armada Multi-Cluster Batch Scheduling](#armada-multi-cluster-batch-scheduling) for how they are scheduled.
 
 ### Infrastructure
 
@@ -255,8 +240,8 @@ Confidential jobs execute under the production TEE runtime classes introduced in
 **Confidentiality of the scheduler itself** is a second step, not part of the initial install. Phase 0 stands Armada up; [Phase 1](#phase-1--expansion) moves the Server and Executors into Kata + CoCo TEE pods and puts [attestation-gated TLS](./docs/NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md#2-attestation-gated-tls-between-services) on the Server-to-Executor control channel, so a scheduler will not dispatch to an executor that cannot attest and an executor will not accept work from an unattested scheduler. Until then the scheduler is trusted infrastructure while the *jobs* it dispatches are already confidential.
 
 **Confidential execution**:
-- Jobs land on nodes with a confidential `runtimeClassName` — `kata-qemu-nvidia-gpu-tdx-runtime-rs` for Intel TDX + NVIDIA GPU passthrough, `kata-qemu-tdx-runtime-rs` for CPU-only TDX, `nvidia` for the non-confidential staging lane
-- **CoCo + Trustee/KBS** handle remote attestation, so the job image needs no modification to run confidentially
+- Jobs land on nodes with a confidential `runtimeClassName` — `kata-qemu-nvidia-gpu-tdx-runtime-rs` for Intel TDX + NVIDIA GPU passthrough, `kata-qemu-tdx-runtime-rs` for CPU-only TDX. On staging, CC can be turned off on a node for debug.
+- **CoCo + Trustee/KBS** handle remote attestation when guest debug is off, so the job image needs no modification to run confidentially. Debug can be enabled per pod for diagnostics.
 
 Armada addresses Kubernetes batch limitations that matter for the Factory: single-cluster scaling limits, etcd throughput ceilings, and the lack of fair-use / gang scheduling in the default kube-scheduler.
 
@@ -271,7 +256,7 @@ Armada addresses Kubernetes batch limitations that matter for the Factory: singl
 #### Data Protection
 - **Rancher Longhorn**: Encrypted Storage with 3 Replicas
 - Encrypted Container Repository
-- **CoCo Trustee / KBS** — secrets and image-decryption keys are released only to an attested guest (not Kubernetes Secrets, not Git)
+- **CoCo Trustee / KBS** — secrets and image-decryption keys are released only to an attested guest (guest debug off). Not Kubernetes Secrets, not Git.
 
 #### Monitoring & Audit
 - Prometheus Metrics
@@ -310,9 +295,8 @@ flowchart LR
         Validator["Validator\nweights + emissions"]
         ArmadaServer["Armada Server\nscheduler + queues\nPulsar/Redis/Postgres"]
     end
-    subgraph staging["KubeTEE Hybrid Staging Cluster — subnet-owner"]
-        NodeNonTEE["Non-TEE GPU node\nruntimeClass: nvidia\nbaseline lane"]
-        NodeTEE["TDX GPU nodes (H200 / B200)<br/>kata-qemu-nvidia-gpu-tdx-runtime-rs<br/>guest debug off; …-debug for repro"]
+    subgraph staging["KubeTEE Staging Cluster — subnet-owner"]
+        NodeTEE["CC-capable TDX GPU nodes (H200 / B200)<br/>kata-qemu-nvidia-gpu-tdx-runtime-rs<br/>guest debug off; Trustee attests<br/>CC can be turned off for debug"]
     end
     subgraph clusterA["Miner Cluster A — 1 hotkey, 1 DC (USA)"]
         ExecA["Armada Executor"]
@@ -323,10 +307,7 @@ flowchart LR
         NodeB["GPU nodes\nkata-qemu-nvidia-gpu-tdx-runtime-rs\nguest debug off"]
     end
     Client["Job Submitter\nNeMo/NIM/Blueprint job"] -->|submit| ArmadaServer
-    Client -.->|"qualify workload first"| NodeNonTEE
-    NodeNonTEE -.->|"baseline recorded"| NodeTEE
-    NodeTEE == "promote: debug off,\nattestation enforced" ==> clusterA
-    NodeTEE == "promote" ==> clusterB
+    Client -.->|"on failure, debug"| NodeTEE
     ArmadaServer -->|schedule| ExecA
     ArmadaServer -->|schedule| ExecB
     ExecA --> NodeA
@@ -338,7 +319,7 @@ flowchart LR
 
 > The **Validator** runs on the control plane inside a confidential Kata + CoCo TEE pod (see [Validator Runtime (TEE)](#validator-runtime-tee)). The **Armada Server** and **Executors** are drawn here as designed: they are stood up in [Phase 0](#phase-0--early-access-current) and move into TEE pods in [Phase 1](#phase-1--expansion) ([What Ships Today](#what-ships-today)).
 >
-> The **hybrid staging cluster** is KubeTEE's own — it is the only cluster with a non-TEE lane and the only one running Kata debug mode. Workloads are qualified there and promoted to production miner clusters, which are TEE-only with debug disabled. Miner clusters are **not** hybrid: see [For Miners (Infrastructure)](#for-miners-infrastructure) and [CI/CD — Promotion Pipeline](#cicd--promotion-pipeline).
+> The **staging cluster** is KubeTEE's own. Every node is TEE CC capable. It is a **debug target** if a workload fails — not a required promotion step. Kata guest debug is **off**; CoCo Trustee attests those guests. CC can be turned off on a staging node for debug; guest debug can be enabled per pod. Miner clusters keep CC on with guest debug off. See [For Miners (Infrastructure)](#for-miners-infrastructure) and [Debugging on the staging cluster](#debugging-on-the-staging-cluster).
 
 ---
 
@@ -380,7 +361,7 @@ Given the NIM Operator's current Kata/CoCo limitations, KubeTEE's thesis is that
 
 This is an **open set**: any Bittensor subnet with a SOTA, verifiable solution for a NeMo stack layer is a candidate. The full table with SOTA roles, confidential-computing fit, and the "could replace/augment" mapping: [NeMo Microservices & Bittensor Subnet Integrations](./docs/NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md#5-bittensor-subnet-integrations-sota-confidential-ready).
 
-**Stage 0 is ordinary supply-chain CI**, not a Bittensor subnet. Workloads are gated on SAST, image CVE/SCA, IaC/Helm policy, and image provenance before they reach the non-TEE lane. **Secrets live in CoCo Trustee / KBS** and are released only to an attested guest — they are not Kubernetes Secrets and must not appear in Git, Helm, or image layers ([Stage 0](./docs/TEE-DEPLOYMENT-AND-CICD.md#stage-0--security-gate), [secrets and images](./docs/TEE-DEPLOYMENT-AND-CICD.md#16-secrets-and-images)). [BitSec SN60](https://bitsec.ai/) is a Solidity-agent contest scored on SCA-Bench; it does **not** fit that gate. An optional later partnership is a one-time audit of SN90 validator/incentive code, kept out of the promotion pipeline — [why SN60 is not the gate](./docs/NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md#6-stage-0--supply-chain-security-gate).
+**Stage 0 is ordinary supply-chain CI**, not a Bittensor subnet. Workloads are gated on SAST, image CVE/SCA, IaC/Helm policy, and image provenance before they run on miner clusters. **Secrets live in CoCo Trustee / KBS** and are released only to an attested guest — they are not Kubernetes Secrets and must not appear in Git, Helm, or image layers ([supply-chain CI](./docs/TEE-DEPLOYMENT-AND-CICD.md#supply-chain-ci), [secrets and images](./docs/TEE-DEPLOYMENT-AND-CICD.md#secrets-and-images)). [BitSec SN60](https://bitsec.ai/) is a Solidity-agent contest scored on SCA-Bench; it does **not** fit that gate. An optional later partnership is a one-time audit of SN90 validator/incentive code, kept out of the CI gate — [why SN60 is not the gate](./docs/NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md#6-stage-0--supply-chain-security-gate).
 
 Full detail — the attestation-gated TLS protocol, the NIM Operator experimental paths and Kata/CoCo limitations, the subnet integrations table, and the Stage 0 gate: [NeMo Microservices & Bittensor Subnet Integrations](./docs/NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md).
 
@@ -403,13 +384,13 @@ The price itself is **competitive** (benchmarked against Targon/Lium/Chutes) and
 #### Staging vs Production
 
 **Staging Environment** (Subnet Owner):
-- Operated by the subnet-owner — hybrid staging cluster with a non-TEE baseline lane (`nvidia`), production TEE classes (guest debug off), and a `…-debug` RuntimeClass for qualification and incident repro (full rationale: [Deploying in a TEE](./docs/TEE-DEPLOYMENT-AND-CICD.md))
-- Test applications, infrastructure, upgrades, job validation; gateway to Production; community Staging jobs
+- Operated by the subnet-owner. Every node is TEE CC capable. Debug target if a workload fails — not a required promotion step. Kata guest debug is **off**; CoCo Trustee attests those guests. CC can be turned off on a node for debug; guest debug can be enabled per pod ([Deploying in a TEE](./docs/TEE-DEPLOYMENT-AND-CICD.md))
+- Test applications, infrastructure, upgrades; community Staging jobs
 
 **Production Environment** (Permissionless with minimum qualification and collaterals):
 - Multi-cluster — one per data center per miner hotkey
 - Must pass minimum requirements (hardware, HA topology, 8-GPU workers, passthrough wiring), TEE attestation, and infrastructure-readiness validation
-- **TEE-only, debug disabled**, attestation verified against production measurements
+- **TEE-only, Kata guest debug off**, CoCo Trustee attests
 - Verified accreditation — IP addresses and data center certifications/accreditations for regulated workloads
 
 ---
@@ -510,13 +491,13 @@ Confidential compute reaches consumers through three front doors, in decreasing 
 | [Guardrails](https://docs.litellm.ai/docs/adding_provider/generic_guardrail_api) | Policy enforcement across every endpoint above | Pre- and post-call policy on confidential traffic |
 | [Virtual keys, teams, orgs](https://docs.litellm.ai/docs/proxy/virtual_keys), hierarchical budgets, RPM limits, spend tracking | Multi-tenant governance — budgets inherit down the hierarchy and requests are blocked in real time when any level is exhausted | **The metering surface for Alpha/TAO billing** at the published resources price per hour (see [Subnet Economics](#subnet-economics)) |
 
-**The gateway itself runs inside a TEE.** LiteLLM runs under `kata-qemu-tdx-runtime-rs`. Cloudflare hosts DNS for `llm.kubetee.ai` as **grey cloud** (DNS-only) to the oakland node ExternalIPs. Cluster ingress is **TLS passthrough**: Traefik holds no private key and forwards TLS records into the guest, where an in-sandbox terminator decrypts onto LiteLLM loopback. From there the gateway speaks [attestation-gated TLS](./docs/NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md#2-attestation-gated-tls-between-services) to model services. A caller who verifies the gateway certificate against its TDX quote (RA-TLS: TLS public key in `report_data`) covers the terminator; Trustee allowlists production RuntimeClass measurements only.
+**The gateway itself runs inside a TEE.** LiteLLM runs under `kata-qemu-tdx-runtime-rs` with guest debug off. Cloudflare hosts DNS for `llm.kubetee.ai` as **grey cloud** (DNS-only) to the oakland node ExternalIPs. Cluster ingress is **TLS passthrough**: Traefik holds no private key and forwards TLS records into the guest, where an in-sandbox terminator decrypts onto LiteLLM loopback. From there the gateway speaks [attestation-gated TLS](./docs/NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md#2-attestation-gated-tls-between-services) to model services. CoCo Trustee attests the guest. A caller who verifies the gateway certificate against its TDX quote (RA-TLS: TLS public key in `report_data`) covers the terminator.
 
 When a miner cluster has a model, LiteLLM gets another row with the same `model_name` and that cluster's private `api_base`. `simple-shuffle` / `least-busy` uses capacity on every healthy backend.
 
 Two things follow. First, an internal workload or pipeline deployed in the KubeTEE multi-cluster adopts KubeTEE by changing a base URL — no KubeTEE-specific SDK, and the tools, agents, and fine-tuning jobs they already run keep working, only now inside a TEE. Second, KubeTEE contributes to LiteLLM upstream and is integrating as a **provider inside the open-source project**, so a LiteLLM deployment *someone else* operates (including SN28/SayGM) can route to KubeTEE confidential compute as a first-class backend rather than a hand-configured custom endpoint. Meeting consumers in the open-source platforms they already run is the distribution strategy; the gateway is not a KubeTEE-only walled garden.
 
-> **Status:** `llm.kubetee.ai` serves inference and multi-tenant governance (virtual keys, budgets, rate limits, spend tracking). Cloudflare is DNS-only (grey cloud). LiteLLM runs in `kata-qemu-tdx-runtime-rs` with Traefik TLS passthrough and in-guest termination. Trustee allowlists production RuntimeClass measurements. Remaining: RA-TLS so clients attest the terminator; native TLS from the LiteLLM guest to NIM guests; wiring `/mcp`, `/a2a`, and the fine-tuning and batch endpoints through to Armada; upstream provider integration. See [What Ships Today](#what-ships-today).
+> **Status:** `llm.kubetee.ai` serves inference and multi-tenant governance (virtual keys, budgets, rate limits, spend tracking). Cloudflare is DNS-only (grey cloud). LiteLLM runs in `kata-qemu-tdx-runtime-rs` with guest debug off, Traefik TLS passthrough, and in-guest termination. CoCo Trustee attests the guest. Remaining: RA-TLS so clients attest the terminator; native TLS from the LiteLLM guest to NIM guests; wiring `/mcp`, `/a2a`, and the fine-tuning and batch endpoints through to Armada; upstream provider integration. See [What Ships Today](#what-ships-today).
 
 ### Workflow Orchestration (Airflow & Metaflow)
 
@@ -590,7 +571,7 @@ public repository.
 
 > **Onboarding rate is demand-driven.** The rate at which KubeTEE onboards new miners is governed by demand-side consumption — production deployments that have been staged, measured, and incentivized. New miner capacity is added to match proven demand, not ahead of it, so emissions are not diluted by idle capacity.
 
-> **The hybrid staging cluster is not a template for miners.** KubeTEE operates one hybrid staging cluster with a non-TEE lane and Kata debug mode so that *workloads* can be qualified before they reach miner infrastructure — see [CI/CD — Promotion Pipeline](#cicd--promotion-pipeline). Miners do **not** run a non-TEE lane and do **not** run debug mode: non-TEE capacity is not confidential capacity and is not what the subnet scores, and debug mode changes the attestation measurement (see [Deploying in a TEE](#deploying-in-a-tee-the-engineering-challenge)). The promotion burden sits with the workload, not the miner — miners provide attested confidential capacity and execute jobs that have already passed the gates.
+> **The staging cluster is not a template for miners.** KubeTEE operates one staging cluster where every node is TEE CC capable. It is a **debug target** if a workload fails — not a required promotion step. CC can be turned off on a staging node for debug; guest debug can be enabled per pod. Kata guest debug is **off** by default; CoCo Trustee attests those guests. Miners keep CC on: capacity with CC off is not confidential capacity and is not what the subnet scores. Miners provide attested confidential capacity (debug off) and execute jobs.
 
 **Minimum For Staging Participation** — what the **miner** provides:
 
@@ -622,8 +603,8 @@ Full detail — the chain primitive, Alpha conversion, grace/recovery, `btcli` c
 ### Phase 0 — Early Access (Current)
 
 - [x] Kata + CoCo TEE runtime classes (`kata-qemu-nvidia-gpu-tdx`, `kata-qemu-tdx`)
-- [x] Hybrid staging cluster — non-TEE GPU node alongside TDX H200/B200 nodes, so every workload gets a functional and performance baseline before it is run confidentially (see [Deploying in a TEE](#deploying-in-a-tee-the-engineering-challenge))
-- [x] Kata debug mode on the staging TEE lane — guest boot logs, agent debug, and debug console for diagnosing confidential failures; staging-only because it changes the attestation measurement
+- [x] Staging cluster — every node is TEE CC capable (H200/B200). Debug target if a workload fails; CC can be turned off on a node for debug (see [Debugging on the staging cluster](#debugging-on-the-staging-cluster))
+- [x] Kata guest debug **off** on the staging cluster — CoCo Trustee attests those guests. Debug can be enabled per pod for diagnostics.
 - [ ] Validator runs in a TEE (Kata + CoCo) on the control plane; CoCo attestation proves the validator code is unmodified
 - [x] [Attestation-gated TLS](./docs/NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md#2-attestation-gated-tls-between-services) on the served backend (Kata runtime deployed) — in-guest keypairs, certificates issued only against a valid TDX quote verified through Intel Trust Authority, ingress on TLS passthrough, termination inside the guest
 - [ ] **Confidential model catalogue + SN28 (SayGM) integration** — stand up a TEE-served model line-up on `llm.kubetee.ai` and behind the SN28 router (SN28 added KubeTEE as a provider, onboarding before Aug 15). SN28 is a first-class demand channel, **not** the exclusive path to public inference — KubeTEE may also serve the public (and other partners) directly. Every model published in all three [serving configurations](#serving-configurations--every-job-requires-fast-inference) and billed at the below market of Openrouter prices per token (a demand channel, **not** a discounted reseller tier — see [Payment methods](#payment-methods)):
@@ -634,7 +615,7 @@ Full detail — the chain primitive, Alpha conversion, grace/recovery, `btcli` c
   - [ ] **Specialised models for vectorization, LLM-as-judge, and document retrieval** — served through [NeMo Microservices](#nvidia-nemo-microservices--bittensor-subnet-integrations) (NeMo Retriever + Evaluator)
 - [ ] Deploy 2 US clusters (one hotkey each, each cluster's nodes co-located in a single DC — one West Coast, one East Coast)
 - [ ] Armada Server Multi-cluster Scheduler on the subnet-owner control plane; Armada Executor on each miner cluster
-- [ ] Automate the CI/CD promotion pipeline — enforce the four stages (supply-chain CI → non-TEE baseline → TEE debug → production TEE with debug off and attestation verified), re-run per revision, and publish gate results (see [CI/CD — Promotion Pipeline](#cicd--promotion-pipeline))
+- [ ] Automate supply-chain CI (SAST, Trustee secrets, image CVE, IaC) and publish results (see [Debugging on the staging cluster](#debugging-on-the-staging-cluster))
 - [ ] Binary Infrastructure validator gate (hotkey binding identity, Rancher readiness, HA, capacity, GPU/runtime wiring)
 - [ ] Extend scoring with fresh TEE attestation, Armada job metrics, serving probes, workload identity, and KeyLease freshness
 - [ ] KubeTEE-hosted validator offering: KubeTEE runs the validator code in a KubeTEE confidential cluster for operators without their own TEE infrastructure
@@ -659,7 +640,7 @@ Full detail — the chain primitive, Alpha conversion, grace/recovery, `btcli` c
 - [ ] Validator scoring expansion: TEE attestation + Armada job metrics + infrastructure health (replacing the Early Access liveness stand-in)
 - [ ] Apache Airflow + Metaflow Armada connectors — multi-step confidential pipelines (see [Workflow Orchestration](./docs/WORKFLOW-ORCHESTRATION.md))
 - [ ] Jobs MCP server — deploy confidential jobs from an autonomous agent, a human chat client, or a pipeline orchestrator: browse templates, quote, submit to Armada, and track status and attestation; quoting grounded in the Phase 0 [Competitive Pricing](./docs/COMPETITIVE-PRICING.md) target price (see [Jobs MCP Server](#jobs-mcp-server))
-- [ ] Optional [BitSec SN60](https://bitsec.ai/) one-time audit of SN90 validator/incentive code — a partnership, **not** the promotion-pipeline Stage 0 gate (see [why SN60 is not the gate](./docs/NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md#why-bitsec-sn60-is-not-the-gate))
+- [ ] Optional [BitSec SN60](https://bitsec.ai/) one-time audit of SN90 validator/incentive code — a partnership, **not** the supply-chain CI gate (see [why SN60 is not the gate](./docs/NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md#why-bitsec-sn60-is-not-the-gate))
 - [ ] Build documentation website
 
 ### Phase 2 — Paid Jobs
@@ -686,7 +667,7 @@ Full detail — the chain primitive, Alpha conversion, grace/recovery, `btcli` c
 - [Cluster Naming Convention](./docs/CLUSTER_NAMING_CONVENTION.md) — `kubetee.ai/*` labels and Fleet GitOps targeting
 - [FIPS-140-3 Target](./docs/FIPS-140-3.md) — RKE2 + Kata + CoCo FIPS stack research
 - [Confidential Containers Certification](./docs/certification-confidential-containers.md) — CC standards and Kata runtime mapping
-- [Deploying in a TEE — Challenge & CI/CD](./docs/TEE-DEPLOYMENT-AND-CICD.md) — why TEE deployment is hard, the hybrid staging cluster, Kata debug mode, and the promotion pipeline
+- [Deploying in a TEE — Challenge & debugging](./docs/TEE-DEPLOYMENT-AND-CICD.md) — why TEE deployment is hard, staging as a debug target if a workload fails, Kata guest debug off, CoCo Trustee attestation
 - [Workflow Orchestration — Airflow & Metaflow](./docs/WORKFLOW-ORCHESTRATION.md) — orchestrating multi-step confidential pipelines on Armada
 - [Tokenomics — Utility Token & DePIN Model](./docs/TOKENOMICS.md) — recycle vs burn, securities posture, cross-subnet consumption loop, DePIN subsidy trajectory
 - [Competitive Pricing & Miner Scoring](./docs/COMPETITIVE-PRICING.md) — pricing SN90 against Targon/Lium/Chutes and how price becomes weights

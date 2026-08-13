@@ -99,7 +99,7 @@ A reader validator:
 
 A reader needs only: a valid Bittensor hotkey registered on SN90 with `validator_permit=True` + a Taostats API key. No Rancher account, no manual onboarding.
 
-The owner staging miner (UID **56**) hybrid/non-CC GPU exception is **hardcoded** in `config.py` (`OWNER_MINER_UID = 56`) so every validator scores the same GPU inventory — there is no env var to set.
+The owner staging miner (UID **56**) is CC-capable; CC can be turned off on a node for debug. That scoring exception is **hardcoded** in `config.py` (`OWNER_MINER_UID = 56`) so every validator scores the same GPU inventory — there is no env var to set.
 
 ### Owner mode (subnet-owner only)
 

@@ -208,16 +208,16 @@ dmesg | grep -i "AMD-Vi"
 
 ---
 
-## Production RuntimeClass (MANDATORY)
+## Kata guest debug and CoCo Trustee
 
-Miner GPU nodes run confidential workloads with **guest debug off**. Production classes:
+Miner GPU nodes and the subnet-owner **staging cluster** run Kata with **guest debug off**. CoCo Trustee attests those guests. Every staging node is TEE CC capable; CC can be turned off on a staging node for debug.
 
 | `runtimeClassName` | Workload |
 |--------------------|----------|
 | `kata-qemu-nvidia-gpu-tdx-runtime-rs` | GPU TEE (NIM / SGLang) |
 | `kata-qemu-tdx-runtime-rs` | CPU-only TDX (gateway-class) |
 
-Trustee/KBS allowlists measurements from those classes only. A `…-debug` RuntimeClass is the staging qualification and incident-repro path; miner clusters stay on production classes.
+Guest debug can be enabled **per pod** for diagnostics. Trustee attests only when debug is off.
 
 ---
 

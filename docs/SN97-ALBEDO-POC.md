@@ -34,7 +34,7 @@ Do **not** continue the KubeTEE-forked PoC (custom `king_serve.py`, `albedo-judg
 **Resume SN97 on KubeTEE when all of the following are true:**
 
 1. **Armada** control plane + executor can submit and run confidential GPU jobs on staging (Denrite’s dispatcher targets Armada; no KubeTEE-only eval architecture).
-2. **CoCo Trustee (KBS)** releases secrets only to attested Kata guests (`kata-qemu-nvidia-gpu-tdx-runtime-rs`, `kata-direct` as needed).
+2. **CoCo Trustee (KBS)** releases secrets only to attested Kata guests (`kata-qemu-nvidia-gpu-tdx-runtime-rs`, `kata-direct` as needed). Staging Kata guest debug is **off**; Trustee attests those guests. Debug can be enabled per pod for diagnostics.
 3. An **upstream Albedo / Denrite** image and job spec can be submitted through that flow **unchanged** — no SN97 code fork, no KubeTEE-only split topology.
 
 Until then, this document is the record of the 2026-08-09 proof and the public artifacts.

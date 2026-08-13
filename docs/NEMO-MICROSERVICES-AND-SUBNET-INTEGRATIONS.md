@@ -88,31 +88,29 @@ Given the limitations above, KubeTEE's thesis is that **the Bittensor ecosystem 
 
 KubeTEE treats this as an **open set**: any Bittensor subnet with a SOTA, verifiable solution for a NeMo stack layer — data, training, retrieval, inference, storage, agent memory, or evaluation — is a potential partnership and candidate integration, with the workload adapted to run inside `kata-qemu-nvidia-gpu-tdx` / `kata-qemu-tdx` and its outputs attested and persisted on confidential storage. This is the Bittensor-native path to a confidential AI Factory that is **not locked to a single vendor's experimental stack**, and it is the concrete way KubeTEE could "work with the ecosystem" rather than waiting on the NIM Operator's CoCo roadmap.
 
-[BitSec SN60](https://bitsec.ai/) is **not** in this table. It is not a NeMo-layer substitute and it is not the Stage 0 promotion gate — see [§6](#6-stage-0--supply-chain-security-gate).
 
 ---
 
 ## 6. Stage 0 — Supply-Chain Security Gate
 
-> **Status: designed, not yet automated.** Gate rules below are the intended Stage 0 of the [CI/CD promotion pipeline](./TEE-DEPLOYMENT-AND-CICD.md#4-the-cicd-promotion-pipeline). Automation is a Phase 0/1 item.
+> **Status: designed, not yet automated.** Gate rules below are supply-chain CI, not a staging promotion workflow. See [Deploying in a TEE](./TEE-DEPLOYMENT-AND-CICD.md#supply-chain-ci). Automation is a Phase 0/1 item.
 
-Stage 0 sits in front of the staging→production lanes. It scans the workload's **code, container image, and deploying IaC** — not the confidential data the workload will process in production — so the production TEE boundary stays intact.
+Stage 0 scans the workload's **code, container image, and deploying IaC** — not the confidential data the workload will process in production — so the production TEE boundary stays intact.
 
 ```mermaid
 flowchart LR
-    WL["AI workload<br/>(job template, image, Helm/IaC)"] -->|"CI on source + image + manifests"| S0["Stage 0<br/>SAST, Trustee secrets, CVE, IaC, provenance"]
+    WL["AI workload<br/>(job template, image, Helm/IaC)"] -->|"CI on source + image + manifests"| S0["Supply-chain CI<br/>SAST, Trustee secrets, CVE, IaC, provenance"]
     S0 -->|"critical/high findings"| Fix["Remediate and resubmit"]
     Fix --> S0
-    S0 -->|"clean report"| S1["Stage 1 — Non-TEE lane"]
-    S1 --> S2["Stage 2 — TEE debug"]
-    S2 --> S3["Stage 3 — Production TEE"]
+    S0 -->|"clean report"| Miners["Miner clusters<br/>CC on, guest debug off; Trustee attests"]
+    Miners -.->|"on failure, debug"| Staging["Staging cluster<br/>CC-capable; CC off / per-pod debug"]
 ```
 
 **Gate rules:**
 - **Scope** — job templates, model-serving / subnet-integration glue, the container image that will run under Kata, and the IaC/Helm/Fleet values that deploy it.
 - **Checks** — SAST (CodeQL, Semgrep); **secrets in CoCo Trustee / KBS** (attestation-gated release into the guest — not Kubernetes Secrets, not Git); SCA + image CVE (Trivy, Grype); IaC/Helm/Fleet policy (Checkov, kube-linter, Kyverno); image provenance (cosign / digest pins — Fleet already digest-pins). Stage 0 fails if credentials appear in Git, Helm values, or image layers.
 - **Pass condition** — no unresolved critical or high-severity findings. Findings are remediated and resubmitted, or accepted as documented risk with owner sign-off. Production has no sign-off bypass for critical/high.
-- **Re-run on change** — a new image tag, job template, guest image, or driver version re-triggers Stage 0. Promotion is per-revision, not once-and-done.
+- **Re-run on change** — a new image tag, job template, guest image, or driver version re-triggers Stage 0.
 - **Confidentiality** — the gate never sees production TEE contents or Trustee-held secrets. Scanners run in CI against source and image artifacts; the guest fetches secrets from Trustee only after it attests.
 
 **Why a gate, not a scanner inside the cluster:** production SN90 clusters run confidential workloads under Kata + CoCo with attested, encrypted memory. A security agent *inside* the TEE would either see confidential data (breaking the trust boundary) or see nothing useful.
@@ -132,7 +130,6 @@ flowchart LR
 
 "Bitsec Scanner" / "Bitsec Hunter" remain **roadmap** applications on the older [Bitsec-AI/subnet](https://github.com/Bitsec-AI/subnet) README (last push 2025-08-28). They are not a shipping CI product.
 
-**Optional later partnership (kept out of the promotion pipeline):** BitSec already publishes one-off audits of other subnets' incentive mechanisms (`subnet-reports` / `audit-reports`). That is a reasonable ask for a **one-time review of SN90 validator/incentive code**. It is not a per-revision gate on AI workloads.
 
 ---
 
