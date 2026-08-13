@@ -1,7 +1,8 @@
 """Targon (SN4) supply-side payout feed — FAIL-SOFT.
 
-Reads live per-card USD per GPU class from stats.targon.com/api/miners and
-clamps the committed GPU price card DOWNWARD only (never above the card),
+Reads live per-card USD per GPU class from stats.targon.com/api/miners
+(highest miner $/card in that class, not a weighted average) and clamps
+the committed GPU price card DOWNWARD only (never above the card),
 floored at `floor_frac x card` so a single Targon node cannot drag a class
 down. Degrades live -> last known (cached on disk) -> card, and never skips a
 cycle. Off by default; enabling it is a real pay change.
@@ -20,11 +21,11 @@ _TARGON_MINERS_URL = "https://stats.targon.com/api/miners"
 _USER_AGENT = "kubetee-validator/0.1"
 
 DEFAULT_USD_CARD: dict[str, float] = {
-    "H100": 3.00,
-    "H200": 3.50,
-    "B200": 6.50,
-    "B300": 8.00,
-    "RTX6000": 2.25,
+    "H100": 4.00,
+    "H200": 5.50,
+    "B200": 8.00,
+    "B300": 10.00,
+    "RTX6000": 3.00,
 }
 
 CACHE_PATH = os.environ.get(
@@ -45,22 +46,9 @@ def _gpu_class_of(compute_type: str) -> str | None:
     return None
 
 
-def fetch_live_per_card_usd() -> dict[str, float]:
-    """Live $/card/hour per GPU class (total payout / total cards)."""
-    request = urllib.request.Request(
-        _TARGON_MINERS_URL,
-        headers={"Accept": "application/json", "User-Agent": _USER_AGENT},
-        method="GET",
-    )
-    with urllib.request.urlopen(request, timeout=30) as response:
-        payload = json.loads(response.read())
-
-    miners = payload.get("data") if isinstance(payload, dict) else payload
-    if not isinstance(miners, list):
-        raise TargonFeedError("targon api/miners: unexpected payload")
-
-    payout_by_class: dict[str, float] = {}
-    cards_by_class: dict[str, float] = {}
+def _per_card_from_miners(miners: list) -> dict[str, float]:
+    """Highest miner $/card/hour per GPU class (not a weighted average)."""
+    per_card: dict[str, float] = {}
     for miner in miners:
         if not isinstance(miner, dict):
             continue
@@ -74,14 +62,28 @@ def fetch_live_per_card_usd() -> dict[str, float]:
             continue
         if cards <= 0 or payout <= 0:
             continue
-        payout_by_class[klass] = payout_by_class.get(klass, 0.0) + payout
-        cards_by_class[klass] = cards_by_class.get(klass, 0.0) + cards
+        rate = payout / cards
+        prev = per_card.get(klass)
+        if prev is None or rate > prev:
+            per_card[klass] = rate
+    return per_card
 
-    per_card: dict[str, float] = {}
-    for klass, total in payout_by_class.items():
-        cards = cards_by_class.get(klass, 0.0)
-        if cards > 0:
-            per_card[klass] = total / cards
+
+def fetch_live_per_card_usd() -> dict[str, float]:
+    """Live $/card/hour per GPU class (highest miner rate in that class)."""
+    request = urllib.request.Request(
+        _TARGON_MINERS_URL,
+        headers={"Accept": "application/json", "User-Agent": _USER_AGENT},
+        method="GET",
+    )
+    with urllib.request.urlopen(request, timeout=30) as response:
+        payload = json.loads(response.read())
+
+    miners = payload.get("data") if isinstance(payload, dict) else payload
+    if not isinstance(miners, list):
+        raise TargonFeedError("targon api/miners: unexpected payload")
+
+    per_card = _per_card_from_miners(miners)
     if not per_card:
         raise TargonFeedError("targon api/miners: no usable per-card data")
     return per_card

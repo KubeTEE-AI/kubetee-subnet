@@ -4,8 +4,9 @@ This document is the full design behind the README [Validator Scoring & Attestat
 
 > **Status — the Targon supply-side payout feed and the Taostats
 > compensation feed are implemented and live (v1).** The Bittensor validator
-> v1 reads `https://stats.targon.com/api/miners` each cycle, derives a
-> per-card USD figure per GPU class, and clamps the GPU price card downward
+> v1 reads `https://stats.targon.com/api/miners` each cycle, takes the
+> **highest** miner `$/card` per GPU class, and clamps the GPU price card downward
+> (fail-soft: live → cache → card). It also fetches TAO/USD from the
 > (fail-soft: live → cache → card). It also fetches TAO/USD from the
 > Taostats API and reads alpha→TAO directly from the on-chain metagraph
 > (`mg.price`, zero delay) to size the miner share in USD; a Taostats
@@ -71,9 +72,9 @@ The Targon stats API returns each miner's per-epoch emission **payout** by `comp
 
 The payout is in TAO emission units per epoch; the validator normalizes to a per-GPU-hour figure at runtime using the current TAO price and epoch length. The **durable signal is the relative ranking**, which tracks the confidential-compute market's valuation of newer / higher-memory GPUs: B300 pays ~2.7× H100 per card, B200 ~2.2× H100, H200 ~1.17× H100. Two H200 variants appear (`TDX-HOPPER` GPU-passthrough vs `TDX-VM` virtualized) at near-identical payout (~28), so Targon prices the GPU model, not the virtualization mode. SN90's per-8-card-node emission must sit in this band — paying an 8-card H100 node roughly what Targon pays it (~24), an 8-card B200 node roughly ~52, an 8-card B300 node roughly ~64 — or miners migrate to SN4. In the design, the validator's `targon_payout_per_gpuhr[c]` input (see [formula](#the-target-price-formula-design)) is read live from this endpoint each epoch rather than hardcoded.
 
-> **This is to be read live.** The committed `DEFAULT_GPU_USD_PRICES` card —
-> H100 $3.00, H200 $3.50, B200 $6.50, B300 $8.00 per GPU-hour — is the
-> **target max**. With the Targon payout feed enabled, the validator will pull
+> **This is to be read live.** The committed `DEFAULT_USD_CARD` —
+> H100 $4.00, H200 $5.50, B200 $8.00, B300 $10.00, RTX6000 $3.00 per GPU-hour —
+> is the **target max**. With the Targon payout feed enabled, the validator will pull
 > the numbers above from `stats.targon.com` each hour and let them clamp the
 > card downward. See the next section.
 
@@ -105,16 +106,16 @@ validator on the subnet.
 
 Targon lists several `compute_type` variants per GPU class at *different*
 payouts (`TDX-HOPPER-NVIDIA-H200` pays 3.50/card, `TDX-VM-NVIDIA-H200` pays
-3.16), so they must collapse into one number. The feed uses total payout over
-total cards — what the average card actually earns. With Targon's uniform
-8-card nodes that is identical to weighting by node count, and it stays
-correct if node sizes ever diverge.
+3.16), so they must collapse into one number. The feed takes the **highest**
+miner `$/card` in that class — what the best-paid SN4 node of that GPU type
+earns — then still clamps to `[floor_frac × card, card]`. A low-paying
+variant (e.g. TDX-VM) no longer pulls the class down.
 
 Two bounds then apply, both enforced in the payout-feed price derivation:
 
 - **Cap at the card.** The committed card is the target *max*: a live payout
   can only pull SN90 pay **down** toward SN4, never above it. If Targon raised
-  B300 to $10.00, SN90 would stay at $8.00.
+  B300 to $12.00, SN90 would stay at $10.00.
 - **Floor at `floor_frac x card`** (default 0.75, `KUBETEE_TARGON_PRICE_FLOOR_FRAC`).
   A class can be a single Targon node — B200 is exactly one today — so without
   a floor one miner could drag a whole class down. It doubles as the bound
@@ -140,14 +141,15 @@ snapshot is safe while unsigned *because the card bounds it*; shipping the card
 over that same unsigned channel would put the bound under the same control as the
 value it bounds, and `[floor_frac x card, card]` would stop meaning anything. So a
 published card is never trusted as-is — a `clamp_to_envelope` check holds every
-class inside `[0.8x, 1.25x]` of the **compiled-in** `DEFAULT_GPU_USD_PRICES`:
+class inside `[0.8x, 1.25x]` of the **compiled-in** `DEFAULT_USD_CARD`:
 
 | Class | Compiled-in | Published card may set |
 |-------|-------------|------------------------|
-| H100 | $3.00 | $2.40 – $3.75 |
-| H200 | $3.50 | $2.80 – $4.375 |
-| B200 | $6.50 | $5.20 – $8.125 |
-| B300 | $8.00 | $6.40 – $10.00 |
+| H100 | $4.00 | $3.20 – $5.00 |
+| H200 | $5.50 | $4.40 – $6.875 |
+| B200 | $8.00 | $6.40 – $10.00 |
+| B300 | $10.00 | $8.00 – $12.50 |
+| RTX6000 | $3.00 | $2.40 – $3.75 |
 
 The compiled-in card stays the trust root; it just stopped being the value. A
 hostile object can retune pay within the band but cannot zero it or mint
@@ -206,10 +208,12 @@ under a changed anchor.
 | B200 | 6.5000 | 6.50 | 6.5000 | — |
 | B300 | 8.0000 | 8.00 | 8.0000 | — |
 
-Only H200 moves, because it is the only class whose variants disagree: 7
-TDX-HOPPER nodes at 3.50 against 11 TDX-VM nodes at 3.16 average to 3.2922.
-Enabling the feed is therefore a **real pay cut for H200 miners**, which is
-the point — it is what SN4 actually pays them.
+Only H200 used to move under the old **average**, because it was the only
+class whose variants disagreed: 7 TDX-HOPPER nodes at 3.50 against 11 TDX-VM
+nodes at 3.16 averaged to 3.2922. The feed now takes the **highest** miner
+rate in the class (3.50 for that snapshot), so H200 sits at the card instead
+of a pay cut from TDX-VM nodes. Caps still apply: live above the card is
+clamped down.
 
 ### Failure behaviour
 
