@@ -168,11 +168,11 @@ A class with no usable live price falls back to the card, which covers both a
 
 ### Losing a source: fatal at startup, survivable afterwards
 
-Reading the card is **not** behind `KUBETEE_TARGON_PAYOUT_ENABLED`. That flag
-gates whether SN4's payouts may pull pay *down*; the card is what every
-validator prices with in the first place. Every validator therefore reads
-`price-card.json` on every cycle, and the degradation rules differ by *when*
-the failure happens:
+The Targon clamp is always on: SN4 payouts may pull pay *down* toward the
+live feed, floored at `KUBETEE_TARGON_PRICE_FLOOR_FRAC` of the card. The card
+is what every validator prices with in the first place. Every validator
+therefore reads `price-card.json` on every cycle, and the degradation rules
+differ by *when* the failure happens:
 
 | Situation | Behavior |
 |-----------|----------|

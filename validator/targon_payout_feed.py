@@ -4,8 +4,8 @@ Reads live per-card USD per GPU class from stats.targon.com/api/miners
 (highest miner $/card in that class, not a weighted average) and clamps
 the committed GPU price card DOWNWARD only (never above the card),
 floored at `floor_frac x card` so a single Targon node cannot drag a class
-down. Degrades live -> last known (cached on disk) -> card, and never skips a
-cycle. Off by default; enabling it is a real pay change.
+down. Always on. Degrades live -> last known (cached on disk) -> published
+(S3) -> card, and never skips a cycle.
 """
 
 from __future__ import annotations
@@ -120,7 +120,6 @@ class TargonPayoutFeed:
         config: Config,
         per_card_fetcher=fetch_live_per_card_usd,
     ) -> None:
-        self._enabled = config.targon_payout_enabled
         self._floor_frac = config.targon_floor_frac
         self._card = dict(DEFAULT_USD_CARD)
         self._card.update(config.usd_card_override)
@@ -135,9 +134,6 @@ class TargonPayoutFeed:
 
         Degrades live -> cache -> published (S3) -> card. Never raises (fail-soft).
         """
-        if not self._enabled:
-            return self.card(), "card"
-
         try:
             per_card = self._fetcher()
             _save_cache(per_card)

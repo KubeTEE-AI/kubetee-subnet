@@ -13,7 +13,7 @@ from __future__ import annotations
 import os
 import re
 
-__version__ = "1.1.0"
+__version__ = "1.1.1"
 
 _SEMVER_RE = re.compile(
     r"^v?(?P<major>\d+)\.(?P<minor>\d+)\.(?P<patch>\d+)"

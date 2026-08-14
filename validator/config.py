@@ -106,7 +106,6 @@ class Config:
     usd_card_override: dict[str, float]
     emission_usd_per_hour: float
     skip_rancher: bool
-    targon_payout_enabled: bool
     targon_floor_frac: float
     hippius_access_key: str
     hippius_secret_key: str
@@ -148,9 +147,6 @@ def load_config() -> Config:
         usd_card_override=_parse_usd_card(_optional("KUBETEE_GPU_USD_PRICES")),
         emission_usd_per_hour=_get_float("KUBETEE_EMISSION_USD_PER_HOUR", 0.0),
         skip_rancher=_get_bool("KUBETEE_SKIP_RANCHER", False),
-        targon_payout_enabled=_get_bool(
-            "KUBETEE_TARGON_PAYOUT_ENABLED", False
-        ),
         targon_floor_frac=_get_float("KUBETEE_TARGON_PRICE_FLOOR_FRAC", 0.75),
         hippius_access_key=_optional("KUBETEE_HIPPIUS_ACCESS_KEY"),
         hippius_secret_key=_optional("KUBETEE_HIPPIUS_SECRET_KEY"),

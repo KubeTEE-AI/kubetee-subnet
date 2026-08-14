@@ -95,7 +95,7 @@ A reader validator:
 - Signs each Rancher request with its **Bittensor hotkey** (sr25519) — the proxy verifies the signature against the live Finney metagraph and forwards to upstream Rancher
 - Does **not** serve the proxy (port 9101 is unused)
 - Does **not** publish to S3 (no Hippius keys)
-- Does **not** run the Targon clamp (leaves `KUBETEE_TARGON_PAYOUT_ENABLED=false`)
+- Runs the same Targon supply-side clamp as the owner (always on)
 
 A reader needs only: a valid Bittensor hotkey registered on SN90 with `validator_permit=True` + a Taostats API key. No Rancher account, no manual onboarding.
 
@@ -103,11 +103,11 @@ The owner staging miner (UID **56**) is CC-capable; CC can be turned off on a no
 
 ### Owner mode (subnet-owner only)
 
-The subnet-owner validator runs with additional credentials (`RANCHER_BEARER_TOKEN`, Hippius S3 keys, `KUBETEE_TARGON_PAYOUT_ENABLED=true`) that are **not published** — they are private to the subnet owner. The owner validator:
+The subnet-owner validator runs with additional credentials (`RANCHER_BEARER_TOKEN`, Hippius S3 keys) that are **not published** — they are private to the subnet owner. The owner validator:
 - Speaks **directly** to Rancher with the bearer token (GET-only, least-privilege GlobalRole)
 - **Serves the Rancher proxy** on port 9101 — third-party validators authenticate with their hotkey signature and the proxy injects the bearer token upstream
 - **Publishes** the price card, payout snapshot, and dashboard to Hippius S3
-- Runs the Targon supply-side clamp (pulls the GPU card down toward SN4 payouts)
+- Runs the same Targon supply-side clamp as readers (pulls the GPU card down toward SN4 payouts)
 
 ## Environment variables
 
@@ -122,7 +122,6 @@ See [`.env.example`](./.env.example) for the full list with inline comments. Sum
 | `RANCHER_BEARER_TOKEN` | owner only | token | **empty** | Rancher API key (owner) / empty (reader uses proxy) |
 | `TAOSTATS_API_KEY` | yes | key | key | TAO/USD price feed |
 | `KUBETEE_OWNER_UID` | no | 0 | 0 | UID receiving the recycle-to-UID weight |
-| `KUBETEE_TARGON_PAYOUT_ENABLED` | no | true | false | Targon supply-side clamp |
 | `KUBETEE_HIPPIUS_ACCESS_KEY` | owner only | key | — | S3 publish (publisher role) |
 | `KUBETEE_HIPPIUS_SECRET_KEY` | owner only | key | — | S3 publish (publisher role) |
 | `KUBETEE_PROXY_PORT` | no | 9101 | — | Proxy listen port (owner only) |
@@ -180,8 +179,8 @@ Enforcement is at three layers: exact path match, GET-only, query param allowlis
 
 Every proxy request is logged:
 ```
-proxy query: hotkey=5EKt…STEE version=1.0.2 path=/v3/clusters query=limit=1000
-proxy 200: hotkey=5EKt…STEE version=1.0.2 path=/v3/clusters items=4 bytes=35138
+proxy query: hotkey=5EKt…STEE version=1.1.1 path=/v3/clusters query=limit=1000
+proxy 200: hotkey=5EKt…STEE version=1.1.1 path=/v3/clusters items=4 bytes=35138
 ```
 
 ## Metrics

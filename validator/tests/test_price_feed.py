@@ -13,8 +13,7 @@ from price_card import clamp_to_envelope, parse_price_card
 
 
 class _Cfg:
-    def __init__(self, enabled=False, floor=0.75):
-        self.targon_payout_enabled = enabled
+    def __init__(self, floor=0.75):
         self.targon_floor_frac = floor
         self.usd_card_override = {}
         # PriceFeed fields
@@ -22,8 +21,8 @@ class _Cfg:
         self.netuid = 90
 
 
-def _feed(enabled=True, floor=0.75, fetcher=None):
-    return TargonPayoutFeed(_Cfg(enabled, floor), per_card_fetcher=fetcher)
+def _feed(floor=0.75, fetcher=None):
+    return TargonPayoutFeed(_Cfg(floor), per_card_fetcher=fetcher)
 
 
 def test_targon_live_uses_highest_per_card_not_average():
@@ -42,19 +41,9 @@ def test_targon_live_uses_highest_per_card_not_average():
     assert "H100" not in per_card
 
 
-def test_targon_disabled_uses_card():
-    effective, source = _feed(
-        enabled=False, fetcher=lambda: {"H100": 1.0}
-    ).effective_card()
-    assert effective == DEFAULT_USD_CARD
-    assert source == "card"
-
-
 def test_targon_live_clamps_downward_and_floors():
     live = {"H200": 1.0, "H100": 5.0}  # H200 way below, H100 above card
-    effective, source = _feed(
-        enabled=True, floor=0.75, fetcher=lambda: live
-    ).effective_card()
+    effective, source = _feed(floor=0.75, fetcher=lambda: live).effective_card()
     # H200 floor = 5.50*0.75 = 4.125 (live 1.0 is lifted to floor)
     assert effective["H200"] == pytest.approx(4.125)
     # H100 capped at card (live 5.0 pulled down to 4.0)
@@ -74,7 +63,7 @@ def test_targon_live_failure_falls_back_to_card(tmp_path, monkeypatch):
     def boom():
         raise TargonFeedError("no data")
 
-    effective, source = _feed(enabled=True, fetcher=boom).effective_card()
+    effective, source = _feed(fetcher=boom).effective_card()
     assert source == "card"
     assert effective == DEFAULT_USD_CARD
 
@@ -181,7 +170,7 @@ def test_targon_falls_back_to_published_payout(tmp_path, monkeypatch):
     def boom():
         raise TargonFeedError("no data")
 
-    feed = _feed(enabled=True, fetcher=boom)
+    feed = _feed(fetcher=boom)
     resolved, source = feed.resolve_per_card_usd()
     assert source == "published"
     assert resolved == {"H100": 2.9, "H200": 3.4}
@@ -204,7 +193,7 @@ def test_targon_published_fallback_skips_invalid_entries(
     def boom():
         raise TargonFeedError("no data")
 
-    feed = _feed(enabled=True, fetcher=boom)
+    feed = _feed(fetcher=boom)
     resolved, source = feed.resolve_per_card_usd()
     assert source == "published"
     assert resolved == {"H100": 2.9, "B300": 7.5}
@@ -220,7 +209,7 @@ def test_targon_published_failure_falls_to_card(tmp_path, monkeypatch):
     def boom():
         raise TargonFeedError("no data")
 
-    feed = _feed(enabled=True, fetcher=boom)
+    feed = _feed(fetcher=boom)
     resolved, source = feed.resolve_per_card_usd()
     assert source == "card"
     assert resolved == DEFAULT_USD_CARD
