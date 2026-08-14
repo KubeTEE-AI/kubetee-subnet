@@ -44,6 +44,11 @@ class ChainState:
         self._keypair = derive_hotkey_keypair(hotkey_seed)
 
     @property
+    def endpoint(self) -> str:
+        """Resolved websocket URL the SDK is actually using."""
+        return self._subtensor.endpoint
+
+    @property
     def hotkey_ss58(self) -> str:
         return self._keypair.ss58_address
 
@@ -190,8 +195,13 @@ class ChainState:
         """Set on-chain weights, signed by the hotkey keypair."""
         if not weights_by_uid:
             raise ValueError("weights_by_uid must not be empty")
-        bt.set_weights(
-            netuid,
-            weights_by_uid,
-            wallet=self._keypair,
+        # Use this instance's endpoint. bt.set_weights() defaults to
+        # network="finney" and opens a *second* client on the public pool,
+        # ignoring SUBTENSOR_ENDPOINT (readers with a private Finney node
+        # then hit entrypoint-finney / lite.chain / lite.sub.latent.to).
+        result = self._subtensor.execute(
+            bt.SetWeights(netuid=netuid, weights=weights_by_uid),
+            self._keypair,
+            retries=2,
         )
+        result.raise_for_failure()

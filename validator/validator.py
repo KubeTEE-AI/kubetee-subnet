@@ -662,9 +662,10 @@ class Validator:
 
     def run_forever(self) -> None:
         log.info(
-            "validator start netuid=%d network=%s publisher=%s dry_run=%s owner_uid=%d",
+            "validator start netuid=%d network=%s endpoint=%s publisher=%s dry_run=%s owner_uid=%d",
             self.config.netuid,
             self.config.network,
+            self.chain.endpoint,
             self.config.is_publisher,
             self.dry_run,
             self.config.owner_uid,

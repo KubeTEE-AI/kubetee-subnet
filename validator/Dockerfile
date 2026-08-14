@@ -1,11 +1,11 @@
 # KubeTEE subnet-owner validator image.
 # Build context is the REPO ROOT so the vendored bittensor SDK is reachable:
 #   docker build -f validator/Dockerfile .
-# Optional: --build-arg VERSION=1.1.1  (propagates to KUBETEE_VALIDATOR_VERSION
+# Optional: --build-arg VERSION=1.1.2  (propagates to KUBETEE_VALIDATOR_VERSION
 # and the BT-Validator-Version proxy header / User-Agent).
 FROM python:3.14-slim AS base
 
-ARG VERSION=1.1.1
+ARG VERSION=1.1.2
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \

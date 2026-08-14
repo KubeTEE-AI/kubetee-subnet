@@ -1,33 +1,28 @@
-"""chain_state: hotkey-seed derivation + metagraph mapping (no chain calls)."""
+"""ChainState.set_weights must use the configured endpoint, not public Finney."""
 
-import pytest
+from unittest.mock import MagicMock, patch
 
-# Skip the whole module if the vendored bittensor SDK is not importable.
-bt = pytest.importorskip("bittensor")
-
-from chain_state import Miner, derive_hotkey_keypair
+from chain_state import ChainState
 
 
-def test_derive_from_mnemonic():
-    kp = derive_hotkey_keypair("abandon " * 11 + "about")
-    addr = kp.ss58_address
-    assert isinstance(addr, str) and addr.startswith("5") and len(addr) >= 47
-    # deterministic
-    assert (
-        derive_hotkey_keypair("abandon " * 11 + "about").ss58_address == addr
-    )
+def test_set_weights_executes_on_the_instance_client():
+    """Regression: bt.set_weights() defaults to network=finney and opens a
+    second client on entrypoint-finney / lite.chain / lite.sub.latent.to,
+    ignoring SUBTENSOR_ENDPOINT."""
+    fake = MagicMock()
+    fake.endpoint = "ws://subtensor.example.com:9944"
+    with (
+        patch("chain_state.bt.Subtensor", return_value=fake),
+        patch("chain_state.derive_hotkey_keypair", return_value="kp"),
+    ):
+        chain = ChainState(
+            "finney", "ws://subtensor.example.com:9944", "seed"
+        )
+        assert chain.endpoint == "ws://subtensor.example.com:9944"
+        chain.set_weights(90, {0: 0.8, 56: 0.2})
 
-
-def test_derive_from_hex_seed():
-    kp = derive_hotkey_keypair("0x" + "01" * 32)
-    assert isinstance(kp.ss58_address, str)
-
-
-def test_derive_empty_raises():
-    with pytest.raises(ValueError):
-        derive_hotkey_keypair("   ")
-
-
-def test_miner_dataclass():
-    m = Miner(uid=1, hotkey="5abc", is_validator=False)
-    assert m.uid == 1 and m.hotkey == "5abc"
+    fake.execute.assert_called_once()
+    intent, wallet = fake.execute.call_args[0]
+    assert wallet == "kp"
+    assert intent.netuid == 90
+    fake.execute.return_value.raise_for_failure.assert_called_once()

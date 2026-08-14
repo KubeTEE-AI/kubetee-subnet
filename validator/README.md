@@ -179,8 +179,8 @@ Enforcement is at three layers: exact path match, GET-only, query param allowlis
 
 Every proxy request is logged:
 ```
-proxy query: hotkey=5EKt…STEE version=1.1.1 path=/v3/clusters query=limit=1000
-proxy 200: hotkey=5EKt…STEE version=1.1.1 path=/v3/clusters items=4 bytes=35138
+proxy query: hotkey=5EKt…STEE version=1.1.2 path=/v3/clusters query=limit=1000
+proxy 200: hotkey=5EKt…STEE version=1.1.2 path=/v3/clusters items=4 bytes=35138
 ```
 
 ## Metrics
