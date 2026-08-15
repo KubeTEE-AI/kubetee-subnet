@@ -30,7 +30,7 @@ SGLang (and most LLM NIMs) cannot require a client certificate, so the terminato
 
 **Public hop.** Grey-cloud DNS plus Traefik TLS passthrough is ordinary Let’s Encrypt into the LiteLLM guest (`kata-qemu-tdx-runtime-rs`). Client-attested RA-TLS on `llm.kubetee.ai` is later. If an L7 relay returns to the path, OHTTP+SKR is the attested relay design.
 
-**First cut (deployed 2026-08-15 on `na-us-oakland-56`):** LiteLLM → GLM-5.2 and DeepSeek-V4-Flash-0731 over Service `:8443` mTLS. KBS still uses `default.rego` (path×role + cpu0-affirming 401s). Implementation spec: [East-west attested mTLS](./EAST-WEST-ATTESTED-MTLS.md). Miner clusters will run TEE models without LiteLLM; the gateway stays on the infra cluster and uses the same Trustee mTLS over L4 passthrough — [Later: miner-cluster backends](./EAST-WEST-ATTESTED-MTLS.md#later-miner-cluster-backends). Do not start that until KBS resource fetch is attested or TLS-pinned.
+**First cut (deployed 2026-08-15 on `na-us-oakland-56`):** LiteLLM → GLM-5.2 and DeepSeek-V4-Flash-0731 over Service `:8443` mTLS. All four replicas `2/2`. SGLang binds `127.0.0.1:8000`; kubelet HTTPS probes use `:8443`. KBS still uses `default.rego` (path×role + cpu0-affirming 401s). Implementation spec: [East-west attested mTLS](./EAST-WEST-ATTESTED-MTLS.md). Miner clusters will run TEE models without LiteLLM; the gateway stays on the infra cluster and uses the same Trustee mTLS over L4 passthrough — [Later: miner-cluster backends](./EAST-WEST-ATTESTED-MTLS.md#later-miner-cluster-backends). Do not start that until KBS resource fetch is attested or TLS-pinned.
 
 ---
 

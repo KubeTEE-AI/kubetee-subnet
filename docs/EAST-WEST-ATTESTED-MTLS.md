@@ -1,6 +1,6 @@
 # East-west attested mTLS (LiteLLM ↔ inference guests)
 
-**Status:** deployed on staging `na-us-oakland-56` (2026-08-15). GLM + DSV4 inbound HAProxy `:8443`; Services expose `:8443` only. SGLang binds `127.0.0.1:8000`. Kubelet HTTPS probes use `:8443` `/health` and `/health_generate` (HAProxy `verify optional` on those GET paths only; all other paths need a verified client cert). LiteLLM presents the Trustee client cert via `sitecustomize.py` (httpx 0.28 ignores `ssl_certificate`). Public hop is still Let’s Encrypt + Traefik. KBS resource policy is still upstream `default.rego` — path×role + cpu0-affirming 401s after attest 200.  
+**Status:** deployed on staging `na-us-oakland-56` (2026-08-15). All four replicas `2/2` (`glm-0`/`glm-1`, `dsv4-0`/`dsv4-1`). GLM + DSV4 inbound HAProxy `:8443`; Services expose `:8443` only. SGLang binds `127.0.0.1:8000` (pod IP `:8000` connection refused). Kubelet HTTPS probes use `:8443` `/health` and `/health_generate` (HAProxy `verify optional` on those GET paths only; all other paths need a verified client cert). LiteLLM presents the Trustee client cert via `sitecustomize.py` (httpx 0.28 ignores `ssl_certificate`). Public hop is still Let’s Encrypt + Traefik. Gateway chat **200** for both public models. KBS resource policy is still upstream `default.rego` — path×role + cpu0-affirming 401s after attest 200.  
 **Date:** 2026-08-15  
 **Approach:** CoCo Confidential AI — Trustee issues TLS credentials after attestation. Apps speak ordinary mTLS. No quote parsing in LiteLLM or SGLang.
 
@@ -55,7 +55,7 @@ Live LiteLLM `api_base` rows (HTTPS `:8443`). First cut covers these two public 
 | `z-ai/glm-5.2` | `glm-5-2-nvfp4-sglang.nemo.svc.cluster.local` | `nim/glm-5-2-nvfp4-sglang-cc.yaml` (StatefulSet, 2 replicas, one Service) |
 | `deepseek/deepseek-v4-flash-0731` | `dsv4-0731-sglang-h200.nemo.svc.cluster.local` | `nim/deepseek-v4-flash-0731-sglang-h200-cc.yaml` |
 
-GLM HA uses the **existing Service**, not per-pod DNS. Both replicas attest independently and receive the same NIM server cert (SAN = Service FQDN). ClusterIP load-balances TCP; a stream stays on one pod. Kubernetes readiness is pod-wide: a replica must not be Ready until the `:8443` terminator is up, or the Service can send mTLS to a pod that is only healthy on `:8000`.
+GLM HA uses the **existing Service**, not per-pod DNS. Both replicas attest independently and receive the same NIM server cert (SAN = Service FQDN). ClusterIP load-balances TCP; a stream stays on one pod. Kubernetes readiness is pod-wide: a replica must not be Ready until HTTPS `:8443` `/health` succeeds (HAProxy up and SGLang healthy on loopback).
 
 NVIDIA NIM containers would not change Trustee, LiteLLM sidecar, or Service SAN. They would only change NIM-side TLS (optional `NIM_SSL_MODE=mtls` if that LLM NIM implements it) and how a sidecar is injected (`NIMService` vs StatefulSet). Out of scope for this cut.
 
