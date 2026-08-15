@@ -20,20 +20,17 @@ Traffic between these services is secured by **attestation-gated TLS, not operat
 - **A service mesh** (Linkerd, Istio, Calico's Istio integration) binds certificates to a pod's Kubernetes ServiceAccount, which authenticates *identity*, not *integrity*. Flip `runtimeClassName` from a confidential runtime to plain `nvidia` and the workload presents the same valid certificate over the same green mTLS — the mesh cannot tell a TEE workload from a non-TEE one. Its issuer key also lives in a Secret outside any TEE.
 - **Host-level encryption** (Calico or Cilium WireGuard/IPsec) is a host-to-host tunnel with no per-workload identity, so it cannot express "refuse a peer that cannot attest," and it leaves the host-to-pod segments in the clear.
 
-The general rule: any encryption layer whose keys are managed by the host fails here, because the host is the adversary being excluded. What KubeTEE runs instead:
+The general rule: any encryption layer whose keys are managed by the host fails here, because the host is the adversary being excluded.
 
-1. Each service generates its keypair **inside the guest**; the private key never leaves the CVM.
-2. A certificate is issued only against a valid TDX quote whose `report_data` commits to the **SHA-256** hash of that public key — SHA-256 rather than SHA-512 because TDX `report_data` is capped at 64 bytes.
-3. The quote is verified through **Intel Trust Authority**, so the relying party checks an Intel signature rather than trusting a KubeTEE verifier, against an allowlist of expected MRTD/RTMR measurements.
-4. Each side then refuses a peer that cannot present valid attestation — including one KubeTEE itself launched.
+KubeTEE follows the CoCo Confidential AI pattern: **Trustee issues TLS credentials after attestation; apps speak ordinary mTLS.** Guests do not parse quotes. The built-in CoCo Attestation Service verifies Intel-signed TDX DCAP quotes (PCCS collateral on the cluster); KBS policy releases certs only when the EAR is affirming and guest debug is off. TLS is terminated **inside** the guest, so cleartext exists only in encrypted guest memory. Intel Trust Authority is deferred.
 
-TLS is terminated **inside** the guest, so cleartext exists only in encrypted guest memory. The `report_data` binding in step 2 is what makes a certificate *mean* "this key lives inside an attested TEE" — without it a quote proves a TEE exists somewhere, not that the request entered it.
+That is not classic quote-in-handshake RA-TLS, and it is not in-guest keygen. Trustee is the relying party (trusted zone). A later profile can bind `report_data` to a guest-generated pubkey if keys must never exist in Trustee; that is not the first cut.
 
-**RA-TLS on the public hop.** Grey-cloud DNS plus Traefik TLS passthrough is ordinary TLS into the LiteLLM guest (`kata-qemu-tdx-runtime-rs`). Clients that attest the terminator bind the TLS public key into TDX `report_data` (RA-TLS) and verify the quote through Trustee + Intel Trust Authority. If an L7 relay returns to the path, OHTTP+SKR is the attested relay design; the current path is DNS-only + passthrough, so RA-TLS is the client-attested hop.
+SGLang (and most LLM NIMs) cannot require a client certificate, so the terminator is a second container in the **same** Kata sandbox (HAProxy, not Envoy/Traefik), proxying to the model server on guest loopback. LiteLLM 1.96 `ssl_certificate` is ignored by httpx 0.28; outbound mTLS is `sitecustomize.py` loading the Trustee client cert into the default SSL context. Kubernetes **Service** DNS is the TLS hostname: replicas share one cert SAN; they do not need per-pod endpoints.
 
-Inference servers generally cannot enforce client certificates themselves — SGLang has no way to make its HTTP server *require* one — so the attested terminator runs as a second container in the **same** Kata guest, requiring an attested client certificate on the way in and forwarding to the model server over guest loopback. Keeping the terminator inside the CVM is deliberate: everything in the guest is inside the TCB that has to be measured and published, which argues for the smallest possible proxy rather than a full service-mesh sidecar.
+**Public hop.** Grey-cloud DNS plus Traefik TLS passthrough is ordinary Let’s Encrypt into the LiteLLM guest (`kata-qemu-tdx-runtime-rs`). Client-attested RA-TLS on `llm.kubetee.ai` is later. If an L7 relay returns to the path, OHTTP+SKR is the attested relay design.
 
-Optional later: native TLS from the LiteLLM guest to NIM guests on miner clusters (same RA-TLS pattern, private hostnames, private CA).
+**First cut (deployed 2026-08-15 on `na-us-oakland-56`):** LiteLLM → GLM-5.2 and DeepSeek-V4-Flash-0731 over Service `:8443` mTLS. KBS still uses `default.rego` (path×role + cpu0-affirming 401s). Implementation spec: [East-west attested mTLS](./EAST-WEST-ATTESTED-MTLS.md). Miner clusters will run TEE models without LiteLLM; the gateway stays on the infra cluster and uses the same Trustee mTLS over L4 passthrough — [Later: miner-cluster backends](./EAST-WEST-ATTESTED-MTLS.md#later-miner-cluster-backends). Do not start that until KBS resource fetch is attested or TLS-pinned.
 
 ---
 
