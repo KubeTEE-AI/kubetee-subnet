@@ -140,7 +140,7 @@ A leftover Terminating LiteLLM pod from an earlier sidecar experiment must be le
 
 **Intended shape is still a second container** in the same Kata sandbox (`docker.io/library/haproxy:3.4.3-alpine`). Live GLM-1 on `na-us-oakland-56` (2026-08-14) hit QEMU `Duplicate nodes with node-name='drive-5'` after an init/sidecar EROFS unplug.
 
-Root cause (not a parallel-Create race): `wait_for_device_deleted` reset QMP `SO_RCVTIMEO` to **250ms**. The next container's multi-layer EROFS `blockdev-add` then returned `WouldBlock` after QEMU had already created `drive-N`. CreateContainer retry → Duplicate. That is [kata-containers#11649](https://github.com/kata-containers/kata-containers/issues/11649). Overlay **fix15** (`v4.0.0-nvswitch-fix15`) keeps a 60s hotplug timeout and treats Duplicate / in-use / timed-out-but-present as success. Restore the sidecar once that shim is on the node.
+Root cause (not a parallel-Create race): `wait_for_device_deleted` reset QMP `SO_RCVTIMEO` to **250ms**. The next container's multi-layer EROFS `blockdev-add` then returned `WouldBlock` after QEMU had already created `drive-N`. CreateContainer retry → Duplicate. That is [kata-containers#11649](https://github.com/kata-containers/kata-containers/issues/11649). Overlay **fix15** (now in current `v4.0.0-nvswitch-fix17`) keeps a 60s hotplug timeout and treats Duplicate / in-use / timed-out-but-present as success. That shim is on the node (2026-08-15). Restore the sidecar when ready; upstream [#13635](https://github.com/kata-containers/kata-containers/pull/13635) is still OPEN.
 
 Already in kata-deploy **4.0.0** (not enough for this race):
 
