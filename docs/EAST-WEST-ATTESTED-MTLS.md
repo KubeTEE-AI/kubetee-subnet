@@ -2,7 +2,8 @@
 
 **Status:** deployed on staging `na-us-oakland-56` (2026-08-15). All four replicas `2/2` (`glm-0`/`glm-1`, `dsv4-0`/`dsv4-1`). GLM + DSV4 inbound HAProxy `:8443`; Services expose `:8443` only. SGLang binds `127.0.0.1:8000` (pod IP `:8000` connection refused). Kubelet HTTPS probes use `:8443` `/health` and `/health_generate` (HAProxy `verify optional` on those GET paths only; all other paths need a verified client cert). LiteLLM presents the Trustee client cert via `sitecustomize.py` (httpx 0.28 ignores `ssl_certificate`). Public hop is still Let’s Encrypt + Traefik. Gateway chat **200** for both public models. KBS resource policy is still upstream `default.rego` — path×role + cpu0-affirming 401s after attest 200.  
 **Date:** 2026-08-15  
-**Approach:** CoCo Confidential AI — Trustee issues TLS credentials after attestation. Apps speak ordinary mTLS. No quote parsing in LiteLLM or SGLang.
+**Approach:** CoCo Confidential AI — Trustee issues TLS credentials after attestation. Apps speak ordinary mTLS. No quote parsing in LiteLLM or SGLang.  
+**Roadmap:** remaining gaps (HTTPS KBS, durable Trustee, gpu0/RVPS, sealed NGC) live in [EAST-WEST-ATTESTED-MTLS-PLAN.md](./EAST-WEST-ATTESTED-MTLS-PLAN.md).
 
 This is the implementation spec for [§2 Attestation-gated TLS](./NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md#2-attestation-gated-tls-between-services).
 
