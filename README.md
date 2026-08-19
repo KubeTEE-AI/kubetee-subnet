@@ -94,6 +94,7 @@ As a member of the [Confidential Computing Consortium (CCC)](https://confidentia
   - [Weight Setting](#weight-setting)
 - [Submitting a Confidential Job](#submitting-a-confidential-job)
   - [LiteLLM Gateway — the multi-service front door](#litellm-gateway--the-multi-service-front-door)
+  - [SN28 sayGM — idle capacity, not the product](#sn28-saygm--idle-capacity-not-the-product)
   - [Workflow Orchestration (Airflow & Metaflow)](#workflow-orchestration-airflow--metaflow)
   - [Jobs MCP Server](#jobs-mcp-server) — agent and chat-driven job deployment
 - [For Miners (Infrastructure)](#for-miners-infrastructure)
@@ -143,7 +144,7 @@ This README documents both what runs in the KubeTEE infrastructure and what is d
 | **Miner&nbsp;deposit** | 100 TAO gate **measured, not enforced** | On-chain collateral bonding ([Phase 1](#phase-1--expansion)) |
 | **Payments** | Alpha / TAO at a resources price per hour | USDC-on-BASE billing ([Phase 2](#phase-2--paid-jobs)) |
 | **LiteLLM&nbsp;gateway** | `llm.kubetee.ai` — OpenAI-compatible inference plus virtual keys, budgets, rate limits, and spend tracking. Cloudflare DNS-only (grey cloud) to oakland node IPs. LiteLLM runs in `kata-qemu-tdx-runtime-rs` with guest debug off; Traefik TLS passthrough terminates in the guest. CoCo Trustee attests the guest. Inference backends are in-cluster NIM on the staging cluster; miner clusters are extra `api_base` rows under the same `model_name`. | Wire `/mcp` and `/a2a` surfaces and the fine-tuning / batch endpoints through to Armada; KubeTEE as an upstream LiteLLM **provider**; RA-TLS so clients attest the terminator |
-| **Inference&nbsp;models** | **Live on the staging cluster:** Kimi-K3, GLM-5.2, DeepSeek-V4-Flash-0731 — available through `llm.kubetee.ai`. **SN28 (SayGM) integration in progress** (KubeTEE onboarded as a provider before Aug 15) — a demand channel, **not** an exclusive public-inference path | Expand the confidential model catalogue (more GPU classes, embedding/judge/retrieval models); additional demand channels as needed |
+| **Inference&nbsp;models** | **Live on the staging cluster** through `llm.kubetee.ai`: GLM-5.2, DeepSeek-V4-Flash-0731. **SN28 (sayGM) live 2026-08-19** as an **idle-capacity** demand channel — not SN90's product, not an exclusive public-inference path. Paid offers: `z-ai/glm-5.2` **64%** below retail, `deepseek/deepseek-v4-flash-0731` **20%** below retail ([SN28-SAYGM.md](./docs/SN28-SAYGM.md)). Free window closed at **14,812,329,857** tokens. | Expand the confidential model catalogue (more GPU classes, embedding/judge/retrieval models). Do not declare Kimi/Qwen/MiMo on SN28. |
 | **Jobs&nbsp;MCP&nbsp;server** | — | **Not developed yet** — agent- and chat-driven job deployment at `llm.kubetee.ai/mcp` ([Phase 1](#phase-1--expansion)) |
 | **Albedo&nbsp;SN97&nbsp;eval&nbsp;PoC** | **Parked (2026-08-13).** 100-sample king-of-the-hill eval succeeded 2026-08-09 on `na-us-oakland-56`. Revisit when Armada + CoCo Trustee are the complete job flow so upstream SN97 deploys **without modifications or architecture changes** — [SN97-ALBEDO-POC.md](./docs/SN97-ALBEDO-POC.md) | Complete Armada + Trustee, then deploy unmodified Albedo / Denrite |
 
@@ -499,6 +500,19 @@ Two things follow. First, an internal workload or pipeline deployed in the KubeT
 
 > **Status:** `llm.kubetee.ai` serves inference and multi-tenant governance (virtual keys, budgets, rate limits, spend tracking). Cloudflare is DNS-only (grey cloud). LiteLLM runs in `kata-qemu-tdx-runtime-rs` with guest debug off, Traefik TLS passthrough, and in-guest termination. CoCo Trustee attests the guest. Remaining: RA-TLS so clients attest the terminator; native TLS from the LiteLLM guest to NIM guests; wiring `/mcp`, `/a2a`, and the fine-tuning and batch endpoints through to Armada; upstream provider integration. See [What Ships Today](#what-ships-today).
 
+### SN28 sayGM — idle capacity, not the product
+
+**SN90 is not an inference subnet.** It is a confidential AI compute platform. Serving models is not the product. Workloads that run in the clusters always get priority. What goes to [sayGM (SN28)](https://saygm.com/) is **idle GPU headroom** — capacity that would otherwise sit warm and unused.
+
+That channel is **live** (2026-08-19). Buyers use the OpenAI-compatible sayGM API; the KubeTEE miner forwards to `llm.kubetee.ai` inside Intel TDX + NVIDIA CC. Same stack as the Factory gateway. Details: [SN28-SAYGM.md](./docs/SN28-SAYGM.md).
+
+| Buyer model | Discount vs sayGM retail |
+|---|---|
+| `z-ai/glm-5.2` (`glm-5.2`) | **64%** |
+| `deepseek/deepseek-v4-flash-0731` | **20%** |
+
+The free window that preceded this used **14,812,329,857** tokens.
+
 ### Workflow Orchestration (Airflow & Metaflow)
 
 For **multi-step AI pipelines** — ETL → fine-tune → evaluate → register → deploy — KubeTEE integrates with [Apache Airflow](https://airflow.apache.org/) (DAG-based) and [Metaflow](https://metaflow.org/) (Python `@step` flows) so each pipeline step runs as a confidential Armada batch job inside Kata + CoCo TEE pods. Airflow schedules the *pipeline*; Armada schedules the *task pods* across miner clusters. Every task pod runs under a TEE runtime class with CoCo remote attestation, and a pipeline can verify a step's attestation evidence before passing artifacts downstream.
@@ -569,7 +583,7 @@ verifies attestations and metrics.
 and binding procedures behind onboarding are intentionally not published in this
 public repository.
 
-> **Onboarding rate is demand-driven.** The rate at which KubeTEE onboards new miners is governed by demand-side consumption — production deployments that have been staged, measured, and incentivized. New miner capacity is added to match proven demand, not ahead of it, so emissions are not diluted by idle capacity.
+> **Onboarding rate is demand-driven.** The rate at which KubeTEE onboards new miners is governed by demand-side consumption — production deployments that have been staged, measured, and incentivized. New miner capacity is added to match proven demand, not ahead of it, so emissions are not diluted by unused clusters. Spare GPUs on **already-live** clusters can go to the [SN28 sayGM idle-capacity channel](#sn28-saygm--idle-capacity-not-the-product); that is utilisation, not a reason to onboard more miners.
 
 > **The staging cluster is not a template for miners.** KubeTEE operates one staging cluster where every node is TEE CC capable. It is a **debug target** if a workload fails — not a required promotion step. CC can be turned off on a staging node for debug; guest debug can be enabled per pod. Kata guest debug is **off** by default; CoCo Trustee attests those guests. Miners keep CC on: capacity with CC off is not confidential capacity and is not what the subnet scores. Miners provide attested confidential capacity (debug off) and execute jobs.
 
@@ -607,10 +621,11 @@ Full detail — the chain primitive, Alpha conversion, grace/recovery, `btcli` c
 - [x] Kata guest debug **off** on the staging cluster — CoCo Trustee attests those guests. Debug can be enabled per pod for diagnostics.
 - [ ] Validator runs in a TEE (Kata + CoCo) on the control plane; CoCo attestation proves the validator code is unmodified
 - [x] [Attestation-gated TLS](./docs/NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md#2-attestation-gated-tls-between-services) on the served backend (Kata runtime deployed) — in-guest keypairs, certificates issued only against a valid TDX quote verified through Intel Trust Authority, ingress on TLS passthrough, termination inside the guest
-- [ ] **Confidential model catalogue + SN28 (SayGM) integration** — stand up a TEE-served model line-up on `llm.kubetee.ai` and behind the SN28 router (SN28 added KubeTEE as a provider, onboarding before Aug 15). SN28 is a first-class demand channel, **not** the exclusive path to public inference — KubeTEE may also serve the public (and other partners) directly. Every model published in all three [serving configurations](#serving-configurations--every-job-requires-fast-inference) and billed at the below market of Openrouter prices per token (a demand channel, **not** a discounted reseller tier — see [Payment methods](#payment-methods)):
-  - [ ] **Kimi-K3** — B300 nodes
-  - [x] **GLM-5.2** — B200 nodes
-  - [x] **DeepSeek-V4-Flash-0731** — B200/H200 nodes
+- [x] **SN28 (sayGM) idle-capacity channel** — live 2026-08-19 ([SN28-SAYGM.md](./docs/SN28-SAYGM.md)). SN90 is **not** an inference subnet; Factory workloads keep priority; SN28 gets spare headroom. Buyer offers: `z-ai/glm-5.2` **64%** below retail, `deepseek/deepseek-v4-flash-0731` **20%** below retail. Free window closed at 14,812,329,857 tokens. Do not declare Kimi / Qwen / MiMo on SN28.
+- [ ] **Confidential model catalogue** — more TEE-served models on `llm.kubetee.ai` (and optionally extra SN28 SKUs). SN28 is a demand channel, **not** the exclusive path to public inference. Every model published in all three [serving configurations](#serving-configurations--every-job-requires-fast-inference) and billed at below-OpenRouter prices per token on the gateway (a demand channel, **not** an SN90 discounted reseller tier — see [Payment methods](#payment-methods)):
+  - [ ] **Kimi-K3** — B300 nodes (`llm.kubetee.ai`)
+  - [x] **GLM-5.2** — B200 nodes (`llm.kubetee.ai` + SN28)
+  - [x] **DeepSeek-V4-Flash-0731** — B200/H200 nodes (`llm.kubetee.ai` + SN28)
   - [ ] **SOTA embedding model**
   - [ ] **Specialised models for vectorization, LLM-as-judge, and document retrieval** — served through [NeMo Microservices](#nvidia-nemo-microservices--bittensor-subnet-integrations) (NeMo Retriever + Evaluator)
 - [ ] Deploy 2 US clusters (one hotkey each, each cluster's nodes co-located in a single DC — one West Coast, one East Coast)
@@ -631,7 +646,7 @@ Full detail — the chain primitive, Alpha conversion, grace/recovery, `btcli` c
 
 ### Phase 1 — Expansion
 
-- [ ] **Permissionless miner onboarding** — a self-service flow where a registered miner proves control of its own cluster and the `kubetee.ai/hotkey` binding is applied without operator involvement (today KubeTEE performs onboarding — see [Miner onboarding](#miner-onboarding)). Onboarding rate is **demand-driven**: new miner capacity is added to match proven demand-side consumption (production deployments that have been staged, measured, and incentivized), not ahead of it, so emissions are not diluted by idle capacity.
+- [ ] **Permissionless miner onboarding** — a self-service flow where a registered miner proves control of its own cluster and the `kubetee.ai/hotkey` binding is applied without operator involvement (today KubeTEE performs onboarding — see [Miner onboarding](#miner-onboarding)). Onboarding rate is **demand-driven**: new miner capacity is added to match proven Factory demand, not ahead of it. Spare GPUs on live clusters may go to [SN28](#sn28-saygm--idle-capacity-not-the-product); that does not justify onboarding extra miners.
 - [ ] **Bond the registration price on chain** — set the subnet's `collateral_lock_share` and `collateral_drain_ratio` so a share of each registration is locked as collateral rather than burned. The drain ratio governs how long a miner stays accountable and can only be sized against observed per-miner emission, so both values are set in Phase 1 once that data exists; Phase 0 runs the [100 TAO deposit](#miner-deposit-registration-collateral) through the validator gate alone (see [Miner Deposit](./docs/MINER-DEPOSIT.md))
 - [ ] More US + international clusters
 - [ ] **Armada in TEE** — move the Phase 0 Server and Executors onto Kata + CoCo TEE pods, with [attestation-gated TLS](./docs/NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md#2-attestation-gated-tls-between-services) on the Server-to-Executor control channel (see [Armada Multi-Cluster Batch Scheduling](#armada-multi-cluster-batch-scheduling))
@@ -672,6 +687,8 @@ Full detail — the chain primitive, Alpha conversion, grace/recovery, `btcli` c
 - [Tokenomics — Utility Token & DePIN Model](./docs/TOKENOMICS.md) — recycle vs burn, securities posture, cross-subnet consumption loop, DePIN subsidy trajectory
 - [Competitive Pricing & Miner Scoring](./docs/COMPETITIVE-PRICING.md) — pricing SN90 against Targon/Lium/Chutes and how price becomes weights
 - [NeMo Microservices & Bittensor Subnet Integrations](./docs/NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md) — attestation-gated TLS, NIM Operator Kata/CoCo limits, SOTA Bittensor subnet substitutes per NeMo layer, and the Stage 0 supply-chain security gate
+- [SN28 sayGM — idle-capacity channel](./docs/SN28-SAYGM.md) — live 2026-08-19; SN90 is not an inference subnet; GLM-5.2 64% / Flash-0731 20% below retail
+- [SN28→SN90 Alpha Recycler](./docs/SN28-SN90-ALPHA-RECYCLE.md) — swap SN28 stake to SN90 Alpha and recycle
 - [Albedo SN97 Eval PoC (KubeTEE SN90)](./docs/SN97-ALBEDO-POC.md) — parked 2026-08-13; 100-sample proof + artifacts; revisit when Armada + CoCo Trustee can run unmodified SN97
 - [Release & Versioning](./RELEASE-AND-VERSIONING.md) — semantic versioning scheme, image tag mapping, release procedure
 
@@ -688,7 +705,8 @@ Full detail — the chain primitive, Alpha conversion, grace/recovery, `btcli` c
 
 - **GitHub**: [KubeTEE-AI/kubetee-subnet](https://github.com/KubeTEE-AI/kubetee-subnet)
 - **Documentation**: [docs/](./docs/)
-- **Discord**: Coming soon
+- **sayGM (SN28)**: [saygm.com](https://saygm.com/) — idle-capacity inference channel ([SN28-SAYGM.md](./docs/SN28-SAYGM.md))
+- **Discord**: questions in the public channel, not DMs. **We never DM first.** Anyone in DMs claiming to be KubeTEE support, or pointing at a ticket server, is a scammer. Team members are listed in the pinned post.
 - **Twitter**: Coming soon
 
 ---
