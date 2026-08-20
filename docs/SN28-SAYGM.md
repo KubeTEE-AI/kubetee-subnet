@@ -10,7 +10,7 @@ Buyer-visible SKUs on sayGM, served from `llm.kubetee.ai` (LiteLLM in TDX) onto 
 
 | Buyer model | Miner offer | Discount vs retail | Backend |
 |---|---|---|---|
-| `glm-5.2` | `kubetee/z-ai/glm-5.2` | **64%** | `glm-5-2-nvfp4-sglang` (B200, NVFP4) |
+| `glm-5.2` | `kubetee/z-ai/glm-5.2` | **48.25%** | `glm-5-2-nvfp4-sglang` (B200, NVFP4) |
 | `deepseek/deepseek-v4-flash-0731` | `kubetee/deepseek/deepseek-v4-flash-0731` | **20%** | `dsv4-0731-sglang-h200` (H200, FP8-DSpark) |
 
 Do **not** declare `moonshotai/kimi-k3`, `qwen/qwen3.5-397b-a17b`, or `xiaomi/mimo-v2.5` even if `/v1/models` still lists them.
