@@ -6,12 +6,15 @@
 
 ## Live offers (KubeTEE miner)
 
-Buyer-visible SKUs on sayGM, served from `llm.kubetee.ai` (LiteLLM in TDX) onto Kata/TDX + NVIDIA CC backends. Discounts are vs sayGM retail, not an SN90 reseller tier.
+Buyer-visible SKUs on sayGM, served from `llm.kubetee.ai` (LiteLLM in TDX). GLM and Flash-0731 land on Kata/TDX + NVIDIA CC backends; Ornith-1.5-397B NVFP4 is host-nvidia B200 (non-CC). Discounts are vs sayGM retail, not an SN90 reseller tier.
 
 | Buyer model | Miner offer | Discount vs retail | Backend |
 |---|---|---|---|
 | `glm-5.2` | `kubetee/z-ai/glm-5.2` | **48.25%** | `glm-5-2-nvfp4-sglang` (B200, NVFP4) |
 | `deepseek/deepseek-v4-flash-0731` | `kubetee/deepseek/deepseek-v4-flash-0731` | **20%** | `dsv4-0731-sglang-h200` (H200, FP8-DSpark) |
+| `ornith/ornith-1.5-397b` | `kubetee/ornith/ornith-1.5-397b` | first worldwide (2026-08-20) | `ornith-1-5-397b-nvfp4-sglang-b200` (B200, NVFP4) |
+
+**First worldwide — Ornith-1.5-397B.** In collaboration with sayGM (SN28), KubeTEE was the first to provide [Ornith-1.5-397B](https://huggingface.co/ornith-ai/Ornith-1.5-397B-NVFP4) anywhere in the world (2026-08-20). Same idle-capacity channel: Factory workloads keep priority.
 
 Do **not** declare `moonshotai/kimi-k3`, `qwen/qwen3.5-397b-a17b`, or `xiaomi/mimo-v2.5` even if `/v1/models` still lists them.
 
@@ -37,4 +40,5 @@ During the free window, buyers used **14,812,329,857** tokens (~15 billion). Tha
 
 ## Community
 
-Questions in the public channel, not DMs. KubeTEE never DMs first.
+- **X (Twitter)**: [@KubeTEEAI](https://x.com/KubeTEEAI)
+- Questions in the public channel, not DMs. KubeTEE never DMs first.
