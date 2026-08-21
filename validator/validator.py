@@ -116,7 +116,10 @@ class Validator:
             effective_card,
         )
 
-        # Price feed: primary (live Taostats + chain) or fallback (S3 snapshot).
+        # Price feed: live Taostats (cached on 429) + chain, else S3 snapshot.
+        published_payout = fetch_published_payout()
+        if published_payout:
+            self.price_feed.seed_from_published(published_payout)
         tao_usd_fb: float | None = None
         alpha_to_tao_fb: float | None = None
         try:
@@ -182,7 +185,11 @@ class Validator:
             alpha_to_tao_now = self.chain.spot_price() or None
             self._publish_payout(
                 self._last_targon_payout,
-                tao_usd=tao_usd if tao_usd > 0 else None,
+                tao_usd=(
+                    tao_usd
+                    if tao_usd > 0
+                    else self.price_feed.last_tao_usd
+                ),
                 alpha_to_tao=(
                     alpha_to_tao_now
                     if alpha_to_tao_now and alpha_to_tao_now > 0
@@ -429,20 +436,28 @@ class Validator:
         stale, strictly better than skipping and leaving stale weights.
         """
         published = fetch_published_payout()
-        if published is None:
-            return None
-        usd_per_alpha = self.price_feed.usd_per_alpha_from_published(published)
-        tao_usd = self.price_feed.tao_usd_from_published(published)
-        alpha_to_tao_raw = published.get("alpha_to_tao")
+        if published:
+            self.price_feed.seed_from_published(published)
+        tao_usd = self.price_feed.last_tao_usd
+        if tao_usd is None and published:
+            tao_usd = self.price_feed.tao_usd_from_published(published)
+        alpha_to_tao_raw = (
+            published.get("alpha_to_tao") if isinstance(published, dict) else None
+        )
         alpha_to_tao = (
             float(alpha_to_tao_raw)
             if isinstance(alpha_to_tao_raw, (int, float))
             and alpha_to_tao_raw > 0
             else None
         )
-        if usd_per_alpha is None or tao_usd is None or alpha_to_tao is None:
+        if alpha_to_tao is None:
+            spot = self.chain.spot_price()
+            alpha_to_tao = spot if spot and spot > 0 else None
+        if tao_usd is None or alpha_to_tao is None:
             return None
-        return usd_per_alpha, tao_usd, alpha_to_tao
+        return float(tao_usd) * float(alpha_to_tao), float(tao_usd), float(
+            alpha_to_tao
+        )
 
     def _publish_card(self, card: dict[str, float]) -> None:
         if self.dry_run:

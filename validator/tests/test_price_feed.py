@@ -142,6 +142,62 @@ def test_published_fallback_returns_none_on_zero_or_negative():
     )
 
 
+def test_tao_usd_caches_live_and_reuses_on_429(tmp_path, monkeypatch):
+    from price_feed import PriceFeed
+
+    monkeypatch.setattr("price_feed.CACHE_PATH", str(tmp_path / "tao.json"))
+    feed = PriceFeed(_Cfg())
+    monkeypatch.setattr(
+        "price_feed._get_json", lambda url, key: {"price": 228.5}
+    )
+    assert feed.tao_usd() == pytest.approx(228.5)
+    assert feed.last_tao_usd == pytest.approx(228.5)
+
+    def boom(url, key):
+        raise PriceFeedError("taostats GET …: HTTP Error 429")
+
+    monkeypatch.setattr("price_feed._get_json", boom)
+    assert feed.tao_usd() == pytest.approx(228.5)
+
+
+def test_tao_usd_loads_disk_cache(tmp_path, monkeypatch):
+    from price_feed import PriceFeed, _save_tao_usd_cache
+
+    cache = tmp_path / "tao.json"
+    monkeypatch.setattr("price_feed.CACHE_PATH", str(cache))
+    _save_tao_usd_cache(201.31)
+    feed = PriceFeed(_Cfg())
+    assert feed.last_tao_usd == pytest.approx(201.31)
+
+    def boom(url, key):
+        raise PriceFeedError("429")
+
+    monkeypatch.setattr("price_feed._get_json", boom)
+    assert feed.tao_usd() == pytest.approx(201.31)
+
+
+def test_tao_usd_raises_without_cache(tmp_path, monkeypatch):
+    from price_feed import PriceFeed
+
+    monkeypatch.setattr("price_feed.CACHE_PATH", str(tmp_path / "none.json"))
+    feed = PriceFeed(_Cfg())
+
+    def boom(url, key):
+        raise PriceFeedError("429")
+
+    monkeypatch.setattr("price_feed._get_json", boom)
+    with pytest.raises(PriceFeedError):
+        feed.tao_usd()
+
+
+def test_seed_from_published_fills_cache():
+    from price_feed import PriceFeed
+
+    feed = PriceFeed(_Cfg())
+    feed.seed_from_published({"tao_usd": 210.0, "alpha_to_tao": 0.04})
+    assert feed.last_tao_usd == pytest.approx(210.0)
+
+
 def test_published_fallback_tao_usd():
     from price_feed import PriceFeed
 

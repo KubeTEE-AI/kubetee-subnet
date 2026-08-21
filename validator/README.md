@@ -147,7 +147,7 @@ Whatever miners do not earn is **recycled to the owner UID** (set as weight on t
 
 | Dependency | Primary | Fallback | Last resort |
 |------------|---------|----------|-------------|
-| TAO/USD (Taostats) | Live API | S3 `payout.json["tao_usd"]` | skip cycle |
+| TAO/USD (Taostats) | Live API | in-process / disk cache → S3 `payout.json["tao_usd"]` | skip cycle |
 | Alpha→TAO | Chain metagraph `mg.price` | S3 `payout.json["alpha_to_tao"]` | skip cycle |
 | GPU card (Targon) | Live API | local disk cache | S3 `payout.json["per_card_usd"]` → compiled default |
 | Rancher evidence | Owner: direct / Reader: proxy | — | skip cycle (stale evidence mis-scores) |
@@ -179,8 +179,8 @@ Enforcement is at three layers: exact path match, GET-only, query param allowlis
 
 Every proxy request is logged:
 ```
-proxy query: hotkey=5EKt…STEE version=1.1.2 path=/v3/clusters query=limit=1000
-proxy 200: hotkey=5EKt…STEE version=1.1.2 path=/v3/clusters items=4 bytes=35138
+proxy query: hotkey=5EKt…STEE version=1.1.3 path=/v3/clusters query=limit=1000
+proxy 200: hotkey=5EKt…STEE version=1.1.3 path=/v3/clusters items=4 bytes=35138
 ```
 
 ## Metrics

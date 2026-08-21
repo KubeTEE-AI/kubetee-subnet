@@ -2,13 +2,16 @@
 
 The alpha->TAO rate is read directly from the chain's metagraph (`mg.price`)
 to avoid Taostats delay. TAO/USD still comes from Taostats (the chain doesn't
-know USD). A failure raises PriceFeedError; the caller skips the cycle and
-previous on-chain weights persist. The validator never guesses a price.
+know USD). Live fetch is cached (memory + disk) so a 429 / outage reuses the
+last good price instead of skipping the cycle. A failure with no cache raises
+PriceFeedError; the caller then tries S3 payout.json.
 """
 
 from __future__ import annotations
 
 import json
+import logging
+import os
 import urllib.error
 import urllib.request
 
@@ -17,6 +20,13 @@ from config import Config
 _TAO_USD_URL = "https://api.taostats.io/api/price/latest/v1?asset=tao"
 
 _USER_AGENT = "kubetee-validator/0.1"
+
+CACHE_PATH = os.environ.get(
+    "KUBETEE_TAO_USD_CACHE",
+    os.path.expanduser("~/.kubetee/tao_usd_cache.json"),
+)
+
+log = logging.getLogger("validator")
 
 
 class PriceFeedError(RuntimeError):
@@ -72,18 +82,70 @@ def _extract_first(payload: object, keys: tuple[str, ...]) -> float | None:
     return None
 
 
+def _load_tao_usd_cache() -> float | None:
+    try:
+        with open(CACHE_PATH, "r", encoding="utf-8") as handle:
+            payload = json.load(handle)
+    except (OSError, json.JSONDecodeError):
+        return None
+    value = payload.get("tao_usd") if isinstance(payload, dict) else None
+    if isinstance(value, (int, float)) and float(value) > 0:
+        return float(value)
+    return None
+
+
+def _save_tao_usd_cache(tao_usd: float) -> None:
+    try:
+        os.makedirs(os.path.dirname(CACHE_PATH), exist_ok=True)
+        with open(CACHE_PATH, "w", encoding="utf-8") as handle:
+            json.dump({"tao_usd": tao_usd}, handle)
+    except OSError:
+        pass
+
+
 class PriceFeed:
     def __init__(self, config: Config, chain_state=None) -> None:
         self._api_key = config.taostats_api_key
         self._netuid = config.netuid
         self._chain_state = chain_state
+        self._last_tao_usd = _load_tao_usd_cache()
+
+    @property
+    def last_tao_usd(self) -> float | None:
+        """Last good TAO/USD (live, disk, or seeded from payout.json)."""
+        return self._last_tao_usd
+
+    def seed_tao_usd(self, tao_usd: float) -> None:
+        """Remember a TAO/USD from payout.json / a prior cycle (no disk write)."""
+        if tao_usd > 0:
+            self._last_tao_usd = float(tao_usd)
+
+    def seed_from_published(self, published: object) -> None:
+        value = self.tao_usd_from_published(published)
+        if value is not None:
+            self.seed_tao_usd(value)
 
     def tao_usd(self) -> float:
-        """TAO/USD from Taostats (the chain doesn't know USD)."""
-        payload = _get_json(_TAO_USD_URL, self._api_key)
-        value = _extract_first(payload, ("price", "usd", "rate"))
-        if value is None or value <= 0:
-            raise PriceFeedError("no usable TAO/USD in Taostats response")
+        """TAO/USD from Taostats, else the last good cached value.
+
+        The chain doesn't know USD. A 429 / outage must not skip the cycle
+        when we already observed a real price this process (or on disk).
+        """
+        try:
+            payload = _get_json(_TAO_USD_URL, self._api_key)
+            value = _extract_first(payload, ("price", "usd", "rate"))
+            if value is None or value <= 0:
+                raise PriceFeedError("no usable TAO/USD in Taostats response")
+        except PriceFeedError:
+            if self._last_tao_usd and self._last_tao_usd > 0:
+                log.warning(
+                    "taostats TAO/USD unavailable — using cached %.4f",
+                    self._last_tao_usd,
+                )
+                return self._last_tao_usd
+            raise
+        self._last_tao_usd = value
+        _save_tao_usd_cache(value)
         return value
 
     def alpha_to_tao(self) -> float:
