@@ -1,11 +1,11 @@
 # KubeTEE subnet-owner validator image.
 # Build context is the REPO ROOT so the vendored bittensor SDK is reachable:
 #   docker build -f validator/Dockerfile .
-# Optional: --build-arg VERSION=1.1.3  (propagates to KUBETEE_VALIDATOR_VERSION
+# Optional: --build-arg VERSION=1.1.4  (propagates to KUBETEE_VALIDATOR_VERSION
 # and the BT-Validator-Version proxy header / User-Agent).
 FROM python:3.14-slim AS base
 
-ARG VERSION=1.1.3
+ARG VERSION=1.1.4
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -35,8 +35,9 @@ COPY validator/*.py /app/
 
 # Run as a non-root user (the validator handles a hotkey seed and bearer tokens
 # in env; a container escape should not get root).
-RUN useradd -r -u 10001 -g nogroup kubetee \
-    && chown -R kubetee:nogroup /app
+RUN useradd -r -m -d /home/kubetee -u 10001 -g nogroup kubetee \
+    && mkdir -p /home/kubetee/.kubetee \
+    && chown -R kubetee:nogroup /app /home/kubetee
 USER kubetee
 
 # Default command — deployments can override (e.g. with --env-file, ONCE, DRY_RUN).
