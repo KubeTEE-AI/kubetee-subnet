@@ -148,16 +148,45 @@ def test_tao_usd_caches_live_and_reuses_on_429(tmp_path, monkeypatch):
     monkeypatch.setattr("price_feed.CACHE_PATH", str(tmp_path / "tao.json"))
     feed = PriceFeed(_Cfg())
     monkeypatch.setattr(
-        "price_feed._get_json", lambda url, key: {"price": 228.5}
+        "price_feed._get_json", lambda url, key="": {"price": 228.5}
     )
     assert feed.tao_usd() == pytest.approx(228.5)
     assert feed.last_tao_usd == pytest.approx(228.5)
 
-    def boom(url, key):
+    def boom(url, key="", label="taostats"):
         raise PriceFeedError("taostats GET …: HTTP Error 429")
 
     monkeypatch.setattr("price_feed._get_json", boom)
+    monkeypatch.setattr(
+        "price_feed._tao_usd_from_coingecko",
+        lambda: (_ for _ in ()).throw(PriceFeedError("coingecko down")),
+    )
     assert feed.tao_usd() == pytest.approx(228.5)
+
+
+def test_tao_usd_coingecko_fallback(tmp_path, monkeypatch):
+    from price_feed import PriceFeed
+
+    monkeypatch.setattr("price_feed.CACHE_PATH", str(tmp_path / "none.json"))
+    feed = PriceFeed(_Cfg())
+
+    def boom(url, key="", label="taostats"):
+        raise PriceFeedError("429")
+
+    monkeypatch.setattr("price_feed._get_json", boom)
+    monkeypatch.setattr("price_feed._tao_usd_from_coingecko", lambda: 231.47)
+    assert feed.tao_usd() == pytest.approx(231.47)
+    assert feed.last_tao_usd == pytest.approx(231.47)
+
+
+def test_tao_usd_from_coingecko_payload(monkeypatch):
+    from price_feed import _tao_usd_from_coingecko
+
+    monkeypatch.setattr(
+        "price_feed._get_json",
+        lambda url, api_key="", label="coingecko": {"bittensor": {"usd": 231.47}},
+    )
+    assert _tao_usd_from_coingecko() == pytest.approx(231.47)
 
 
 def test_tao_usd_loads_disk_cache(tmp_path, monkeypatch):
@@ -169,10 +198,14 @@ def test_tao_usd_loads_disk_cache(tmp_path, monkeypatch):
     feed = PriceFeed(_Cfg())
     assert feed.last_tao_usd == pytest.approx(201.31)
 
-    def boom(url, key):
+    def boom(url, key="", label="taostats"):
         raise PriceFeedError("429")
 
     monkeypatch.setattr("price_feed._get_json", boom)
+    monkeypatch.setattr(
+        "price_feed._tao_usd_from_coingecko",
+        lambda: (_ for _ in ()).throw(PriceFeedError("coingecko down")),
+    )
     assert feed.tao_usd() == pytest.approx(201.31)
 
 
@@ -182,10 +215,14 @@ def test_tao_usd_raises_without_cache(tmp_path, monkeypatch):
     monkeypatch.setattr("price_feed.CACHE_PATH", str(tmp_path / "none.json"))
     feed = PriceFeed(_Cfg())
 
-    def boom(url, key):
+    def boom(url, key="", label="taostats"):
         raise PriceFeedError("429")
 
     monkeypatch.setattr("price_feed._get_json", boom)
+    monkeypatch.setattr(
+        "price_feed._tao_usd_from_coingecko",
+        lambda: (_ for _ in ()).throw(PriceFeedError("coingecko down")),
+    )
     with pytest.raises(PriceFeedError):
         feed.tao_usd()
 

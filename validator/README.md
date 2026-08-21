@@ -136,7 +136,7 @@ Each cycle (default 360s ≈ one chain epoch):
 1. **Read metagraph** — Finney SN90 neurons, hotkeys, emissions, hyperparams
 2. **Read Rancher evidence** — clusters + nodes (owner: direct / reader: via proxy)
 3. **Resolve GPU price card** — published `price-card.json` from S3, envelope-clamped to `[0.8x, 1.25x]` of the compiled-in default
-4. **Price feed** — TAO/USD from Taostats × alpha→TAO from chain metagraph. Falls back to S3 `payout.json` if Taostats is down
+4. **Price feed** — TAO/USD from Taostats (CoinGecko public API if Taostats 429s) × alpha→TAO from chain metagraph. Then cache / S3 `payout.json`
 5. **Score miners** — per-GPU-class USD earned × tenure → proportional weight
 6. **Set weights** — once per epoch, respecting `weights_rate_limit` cooldown
 7. **Publish** (owner only) — price card, payout snapshot (with `tao_usd` + `alpha_to_tao`), dashboard to Hippius S3
@@ -147,7 +147,7 @@ Whatever miners do not earn is **recycled to the owner UID** (set as weight on t
 
 | Dependency | Primary | Fallback | Last resort |
 |------------|---------|----------|-------------|
-| TAO/USD (Taostats) | Live API | in-process / disk cache → S3 `payout.json["tao_usd"]` | skip cycle |
+| TAO/USD | Taostats live | CoinGecko public `simple/price` (no key) → cache → S3 `payout.json["tao_usd"]` | skip cycle |
 | Alpha→TAO | Chain metagraph `mg.price` | S3 `payout.json["alpha_to_tao"]` | skip cycle |
 | GPU card (Targon) | Live API | local disk cache | S3 `payout.json["per_card_usd"]` → compiled default |
 | Rancher evidence | Owner: direct / Reader: proxy | — | skip cycle (stale evidence mis-scores) |
@@ -179,8 +179,8 @@ Enforcement is at three layers: exact path match, GET-only, query param allowlis
 
 Every proxy request is logged:
 ```
-proxy query: hotkey=5EKt…STEE version=1.1.4 path=/v3/clusters query=limit=1000
-proxy 200: hotkey=5EKt…STEE version=1.1.4 path=/v3/clusters items=4 bytes=35138
+proxy query: hotkey=5EKt…STEE version=1.1.5 path=/v3/clusters query=limit=1000
+proxy 200: hotkey=5EKt…STEE version=1.1.5 path=/v3/clusters items=4 bytes=35138
 ```
 
 ## Metrics
@@ -220,7 +220,7 @@ VALIDATOR_HOTKEY_SEED=<mnemonic> python scripts/smoke_proxy.py
 | `rancher_proxy.py` | Hotkey-authenticated proxy server (owner only, port 9101) |
 | `infrastructure_validation.py` | Miner readiness verdict from Rancher node/cluster data |
 | `miner_scoring.py` | USD-denominated proportional weight computation |
-| `price_feed.py` | TAO/USD (Taostats) + alpha→TAO (chain) + S3 fallback |
+| `price_feed.py` | TAO/USD (Taostats → CoinGecko → cache) + alpha→TAO (chain) + S3 fallback |
 | `targon_payout_feed.py` | Targon SN4 live per-card USD + 4-tier fallback |
 | `price_card.py` | Build/parse/clamp the GPU price card |
 | `hippius_store.py` | SigV4-signed S3 client (publish + anonymous read) |

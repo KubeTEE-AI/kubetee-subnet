@@ -1,10 +1,14 @@
-"""Compensation price feed — Taostats for TAO/USD, on-chain for alpha->TAO.
+"""Compensation price feed — TAO/USD then on-chain alpha->TAO.
 
 The alpha->TAO rate is read directly from the chain's metagraph (`mg.price`)
-to avoid Taostats delay. TAO/USD still comes from Taostats (the chain doesn't
-know USD). Live fetch is cached (memory + disk) so a 429 / outage reuses the
-last good price instead of skipping the cycle. A failure with no cache raises
-PriceFeedError; the caller then tries S3 payout.json.
+to avoid Taostats delay. TAO/USD (the chain doesn't know USD) is:
+
+  1. Taostats live (`api.taostats.io`, needs ``TAOSTATS_API_KEY``)
+  2. CoinGecko public simple/price (no API key)
+  3. Last good in-process / disk cache
+  4. Caller then tries S3 payout.json
+
+A 429 / outage must not skip the cycle when any of those succeed.
 """
 
 from __future__ import annotations
@@ -18,6 +22,9 @@ import urllib.request
 from config import Config
 
 _TAO_USD_URL = "https://api.taostats.io/api/price/latest/v1?asset=tao"
+_COINGECKO_URL = (
+    "https://api.coingecko.com/api/v3/simple/price?ids=bittensor&vs_currencies=usd"
+)
 
 _USER_AGENT = "kubetee-validator/0.1"
 
@@ -33,25 +40,40 @@ class PriceFeedError(RuntimeError):
     """The compensation price could not be obtained; skip the cycle."""
 
 
-def _get_json(url: str, api_key: str) -> object:
-    request = urllib.request.Request(
-        url,
-        headers={
-            "Accept": "application/json",
-            "User-Agent": _USER_AGENT,
-            "Authorization": api_key,
-        },
-        method="GET",
-    )
+def _get_json(url: str, api_key: str = "", label: str = "taostats") -> object:
+    headers = {
+        "Accept": "application/json",
+        "User-Agent": _USER_AGENT,
+    }
+    if api_key:
+        headers["Authorization"] = api_key
+    request = urllib.request.Request(url, headers=headers, method="GET")
     try:
         with urllib.request.urlopen(request, timeout=30) as response:
             body = response.read()
     except urllib.error.URLError as exc:
-        raise PriceFeedError(f"taostats GET {url}: {exc}") from exc
+        raise PriceFeedError(f"{label} GET {url}: {exc}") from exc
     try:
         return json.loads(body)
     except json.JSONDecodeError as exc:
-        raise PriceFeedError(f"taostats GET {url}: invalid JSON") from exc
+        raise PriceFeedError(f"{label} GET {url}: invalid JSON") from exc
+
+
+def _tao_usd_from_coingecko() -> float:
+    """Public CoinGecko simple/price — no API key.
+
+    https://api.coingecko.com/api/v3/simple/price?ids=bittensor&vs_currencies=usd
+    """
+    payload = _get_json(_COINGECKO_URL, label="coingecko")
+    if not isinstance(payload, dict):
+        raise PriceFeedError("coingecko: unexpected payload")
+    coin = payload.get("bittensor")
+    if not isinstance(coin, dict):
+        raise PriceFeedError("coingecko: missing bittensor")
+    value = coin.get("usd")
+    if not isinstance(value, (int, float)) or float(value) <= 0:
+        raise PriceFeedError("coingecko: no usable usd price")
+    return float(value)
 
 
 def _extract_first(payload: object, keys: tuple[str, ...]) -> float | None:
@@ -125,28 +147,38 @@ class PriceFeed:
         if value is not None:
             self.seed_tao_usd(value)
 
-    def tao_usd(self) -> float:
-        """TAO/USD from Taostats, else the last good cached value.
+    def _remember(self, value: float) -> float:
+        self._last_tao_usd = value
+        _save_tao_usd_cache(value)
+        return value
 
-        The chain doesn't know USD. A 429 / outage must not skip the cycle
-        when we already observed a real price this process (or on disk).
+    def tao_usd(self) -> float:
+        """TAO/USD: Taostats → CoinGecko (no key) → last cached value.
+
+        The chain doesn't know USD. CoinGecko's public simple/price needs no
+        API key and unblocks a cold start during a Taostats 429.
         """
         try:
             payload = _get_json(_TAO_USD_URL, self._api_key)
             value = _extract_first(payload, ("price", "usd", "rate"))
             if value is None or value <= 0:
                 raise PriceFeedError("no usable TAO/USD in Taostats response")
-        except PriceFeedError:
-            if self._last_tao_usd and self._last_tao_usd > 0:
-                log.warning(
-                    "taostats TAO/USD unavailable — using cached %.4f",
-                    self._last_tao_usd,
-                )
-                return self._last_tao_usd
-            raise
-        self._last_tao_usd = value
-        _save_tao_usd_cache(value)
-        return value
+            return self._remember(value)
+        except PriceFeedError as taostats_exc:
+            log.warning("%s", taostats_exc)
+        try:
+            value = _tao_usd_from_coingecko()
+            log.warning("taostats TAO/USD unavailable — using CoinGecko %.4f", value)
+            return self._remember(value)
+        except PriceFeedError as cg_exc:
+            log.warning("%s", cg_exc)
+        if self._last_tao_usd and self._last_tao_usd > 0:
+            log.warning(
+                "taostats and CoinGecko unavailable — using cached %.4f",
+                self._last_tao_usd,
+            )
+            return self._last_tao_usd
+        raise PriceFeedError("no usable TAO/USD from Taostats, CoinGecko, or cache")
 
     def alpha_to_tao(self) -> float:
         """Alpha->TAO rate, read directly from the chain's metagraph (no delay).
