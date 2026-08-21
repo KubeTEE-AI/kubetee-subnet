@@ -1,6 +1,6 @@
 # Tokenomics — Utility Token & DePIN Model
 
-This document is the full analysis behind the README [Tokenomics — Utility Token & DePIN Model](../README.md#tokenomics--utility-token--depin-model) section. It covers the economic design of SN90 (KubeTEE) Alpha: recycle vs burn, securities posture, the cross-subnet consumption loop, the vertically-split corporate structure, and the DePIN subsidy trajectory.
+This document is the full analysis behind the README [Tokenomics — Utility Token & DePIN Model](../README.md#tokenomics--utility-token--depin-model) section. It covers the economic design of SN90 (KubeTEE) Alpha: recycle vs burn, securities posture, TAO on Base, the cross-subnet consumption loop, the vertically-split corporate structure, and the DePIN subsidy trajectory.
 
 > **Not legal advice.** The securities analysis below is engineering design rationale, not legal advice.
 
@@ -10,7 +10,7 @@ This document is the full analysis behind the README [Tokenomics — Utility Tok
 
 SN90 (KubeTEE) Alpha is a **utility token consumed to access confidential compute**, not a security. The design follows a DePIN subsidy model:
 
-- External inference demand buys Alpha on the **open market** and spends it to consume compute.
+- External inference demand buys Alpha on the **open market** and spends it to consume compute. TAO — the asset swapped for Alpha — is now also **live on Base** as a Chainlink CCIP-bridged ERC-20 (2026-08-21; see [TAO on Base](#tao-on-base)).
 - Spent Alpha is **recycled** to unissued supply and re-emitted through the protocol's fixed emission split — a self-sustaining security budget for the compute network (the Bitcoin-fee model applied to Alpha).
 - No entity sells tokens against promises, holds customer balances, or accumulates a treasury — all unused emissions are recycled. Value reaches each entity only through protocol safe-harbor channels (owner emissions, scored miner emissions).
 
@@ -93,6 +93,28 @@ Mechanically, a perpetually locked owner conviction also reduces circulating sup
 
 ---
 
+## TAO on Base
+
+**TAO is live on Base** as of 2026-08-21 — announced by [ForeverMoney (SN98)](https://x.com/forevermoney_ai/status/2090469070248235027). It is a Chainlink **CCIP-bridged ERC-20** of native Finney TAO, not a new token and not liquid-staked xTAO (Project Rubicon). Same asset, two rails.
+
+| | Finney TAO | TAO-on-BASE |
+|---|---|---|
+| Chain | Bittensor (Subtensor) | Base (Coinbase L2) |
+| Form | native `TAO` | ERC-20 `TAO` |
+| Contract | — (native) | [`0xf3081494b87e8d5fb7960f066e931d1d0e6e3d67`](https://basescan.org/token/0xf3081494b87e8d5fb7960f066e931d1d0e6e3d67) |
+| Bridge | — | Chainlink CCIP via [forevermoney.ai](https://forevermoney.ai/) |
+| Spot market | SN dTAO pools (TAO ↔ Alpha) | Aerodrome TAO/USDC |
+
+What this changes for SN90:
+
+- **Acquisition is no longer Bittensor-wallet-only.** A consumer (or a consuming subnet's treasury) can buy TAO from USDC or ETH in any Base wallet, then CCIP-bridge to Finney and swap into SN90 Alpha on the open pool. The "must download a Bittensor wallet first" friction that kept EVM capital off-subnet is gone.
+- **Phase 2 billing gets a native Base settlement asset.** The Early Access path is still Alpha / Finney TAO at a resources price per hour. Phase 2 layers **USDC-on-BASE and TAO-on-BASE** pull-based billing on top. The USDC→TAO hop is now a Base DEX swap (Aerodrome), not a custom KubeTEE bridge. Recycle still happens on Finney: USDC → TAO-on-BASE → CCIP → Finney TAO → SN90 Alpha → spend → recycle.
+- **The no-treasury / no-discount posture does not change.** TAO-on-BASE is another on-ramp onto the same open-pool acquisition leg. There is still no preferential Alpha placement, no volume discount, and no KubeTEE-held customer balance. A Base wallet buying TAO on Aerodrome and a Finney wallet swapping TAO for Alpha are the same economic act.
+
+What this does **not** change: SN90 Alpha is still the access ticket; spent Alpha is still recycled on Finney; emissions still split 41/41/18. Bridged TAO is a representation of Finney TAO, so circulating supply on Base is locked on Finney — it does not mint extra TAO.
+
+---
+
 ## Cross-Subnet Consumption Loop
 
 ### The protocol-native (no-invoice) model
@@ -108,6 +130,8 @@ Better still, it upgrades SN90's own token classification: an Alpha that **must 
 ```mermaid
 flowchart LR
     Cust["External customers<br/>pay fiat for AI workloads"] --> Cons["Subnets & AI workloads<br/>(e.g. SN64 / Chutes inference)"]
+    Base["BASE L2<br/>USDC / ETH"] -->|"Aerodrome swap"| BaseTAO["TAO-on-BASE<br/>CCIP ERC-20"]
+    BaseTAO -->|CCIP bridge| Cons
     Cons -->|swap TAO for Alpha<br/>on open pool| Pool["SN90 Alpha pool<br/>(open market, no discounts)"]
     Pool -->|Alpha| Cons
     Cons -->|spend Alpha<br/>for compute| SN90["SN90 (KubeTEE)<br/>confidential compute"]
@@ -118,7 +142,7 @@ flowchart LR
     Val -.->|Yuma Consensus| Proto
 ```
 
-The acquisition leg is where the value transfer happens: a consuming subnet or AI workload swaps TAO into SN90's pool to get Alpha — that swap is the real payment. Every purchase is TAO inflow into SN90's reserve and upward pressure on the Alpha price. Under the current emission model, each subnet's share of block emissions is proportional to its EMA token price normalized across all subnets, so sustained consumer buying directly raises SN90's emission share. The flywheel: external AI-workload revenue → consumers buy SN90 Alpha → price and emissions rise → miner incentive grows → more compute capacity → more workloads served. Because consumer demand is funded by outside customers, this is genuinely **external demand one hop removed** — not the circular emissions-recycling pattern that gets subnets dismissed as hot-potato economics.
+The acquisition leg is where the value transfer happens: a consuming subnet or AI workload swaps TAO into SN90's pool to get Alpha — that swap is the real payment. Every purchase is TAO inflow into SN90's reserve and upward pressure on the Alpha price. TAO itself can now be bought on **Base** (USDC/ETH → Aerodrome → TAO-on-BASE → CCIP → Finney) as well as on Finney, so the buyer set is any EVM wallet, not only a Bittensor-native one. Under the current emission model, each subnet's share of block emissions is proportional to its EMA token price normalized across all subnets, so sustained consumer buying directly raises SN90's emission share. The flywheel: external AI-workload revenue → consumers buy SN90 Alpha → price and emissions rise → miner incentive grows → more compute capacity → more workloads served. Because consumer demand is funded by outside customers, this is genuinely **external demand one hop removed** — not the circular emissions-recycling pattern that gets subnets dismissed as hot-potato economics.
 
 ### The spend leg (design decision)
 
@@ -253,4 +277,8 @@ The mechanism is defensible only as long as the story told about it matches the 
 - [Recycling — Learn Bittensor](https://learnbittensor.org/concepts/tokenomics/recycling)
 - [Recycling — TaoStats](https://docs.taostats.io/docs/recycling)
 - [Tao Emission — TaoStats](https://docs.taostats.io/docs/tao-emission)
+- [TAO live on Base](https://x.com/forevermoney_ai/status/2090469070248235027) — ForeverMoney (SN98), 2026-08-21
+- [ForeverMoney bridge](https://forevermoney.ai/) — Finney TAO ↔ TAO-on-BASE via Chainlink CCIP
+- [TAO-on-BASE (Basescan)](https://basescan.org/token/0xf3081494b87e8d5fb7960f066e931d1d0e6e3d67) — ERC-20 `0xf3081494b87e8d5fb7960f066e931d1d0e6e3d67`
+- [Bittensor (CCIP-Bridged) — CoinGecko](https://www.coingecko.com/en/coins/bittensor-ccip-bridged)
 

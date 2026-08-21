@@ -143,9 +143,9 @@ This README documents both what runs in the KubeTEE infrastructure and what is d
 | **Armada** | — | **In development** — Server on the control plane, Executor on each miner cluster ([Phase 0](#phase-0--early-access-current)); move into Kata + CoCo TEE pods with attestation-gated TLS ([Phase 1](#phase-1--expansion)) |
 | **Miner&nbsp;onboarding** | KubeTEE applies the hotkey binding | Permissionless self-service ([Phase 1](#phase-1--expansion)) |
 | **Miner&nbsp;deposit** | 100 TAO gate **measured, not enforced** | On-chain collateral bonding ([Phase 1](#phase-1--expansion)) |
-| **Payments** | Alpha / TAO at a resources price per hour | USDC-on-BASE billing ([Phase 2](#phase-2--paid-jobs)) |
+| **Payments** | Alpha / TAO at a resources price per hour. **TAO is live on Base** (Chainlink CCIP-bridged ERC-20, Aerodrome TAO/USDC — [ForeverMoney SN98](https://x.com/forevermoney_ai/status/2090469070248235027), 2026-08-21) | USDC-on-BASE and TAO-on-BASE job billing + automated recycle ([Phase 2](#phase-2--paid-jobs)) |
 | **LiteLLM&nbsp;gateway** | `llm.kubetee.ai` — OpenAI-compatible inference plus virtual keys, budgets, rate limits, and spend tracking. Cloudflare DNS-only (grey cloud) to oakland node IPs. LiteLLM runs in `kata-qemu-tdx-runtime-rs` with guest debug off; Traefik TLS passthrough terminates in the guest. CoCo Trustee attests the guest. Inference backends are in-cluster NIM on the staging cluster; miner clusters are extra `api_base` rows under the same `model_name`. | Wire `/mcp` and `/a2a` surfaces and the fine-tuning / batch endpoints through to Armada; KubeTEE as an upstream LiteLLM **provider**; RA-TLS so clients attest the terminator |
-| **Inference&nbsp;models** | **Live on the staging cluster** through `llm.kubetee.ai`: GLM-5.2, DeepSeek-V4-Flash-0731, **Ornith-1.5-397B**. **SN28 (sayGM) live 2026-08-19** as an **idle-capacity** demand channel — not SN90's product, not an exclusive public-inference path. Paid offers: `z-ai/glm-5.2` **48.25%** below retail, `deepseek/deepseek-v4-flash-0731` **20%** below retail ([SN28-SAYGM.md](./docs/SN28-SAYGM.md)). Free window closed at **14,812,329,857** tokens. **In collaboration with SN28 sayGM, KubeTEE was the first to provide Ornith-1.5-397B worldwide** (2026-08-20). | Expand the confidential model catalogue (more GPU classes, embedding/judge/retrieval models). Do not declare Kimi/Qwen/MiMo on SN28. |
+| **Inference&nbsp;models** | **Live on the staging cluster** through `llm.kubetee.ai`: GLM-5.2, DeepSeek-V4-Flash-0731, **Ornith-1.5-397B**. **SN28 (sayGM) live 2026-08-19** as an **idle-capacity** demand channel — not SN90's product, not an exclusive public-inference path. Paid offers: `z-ai/glm-5.2` **48.25%** below retail, `deepseek/deepseek-v4-flash-0731` **50%** below retail ([SN28-SAYGM.md](./docs/SN28-SAYGM.md)). Free window closed at **14,812,329,857** tokens. **In collaboration with SN28 sayGM, KubeTEE was the first to provide Ornith-1.5-397B worldwide** (2026-08-20). | Expand the confidential model catalogue (more GPU classes, embedding/judge/retrieval models). Do not declare Kimi/Qwen/MiMo on SN28. |
 | **Jobs&nbsp;MCP&nbsp;server** | — | **Not developed yet** — agent- and chat-driven job deployment at `llm.kubetee.ai/mcp` ([Phase 1](#phase-1--expansion)) |
 | **Albedo&nbsp;SN97&nbsp;eval&nbsp;PoC** | **Parked (2026-08-13).** 100-sample king-of-the-hill eval succeeded 2026-08-09 on `na-us-oakland-56`. Revisit when Armada + CoCo Trustee are the complete job flow so upstream SN97 deploys **without modifications or architecture changes** — [SN97-ALBEDO-POC.md](./docs/SN97-ALBEDO-POC.md) | Complete Armada + Trustee, then deploy unmodified Albedo / Denrite |
 
@@ -381,7 +381,9 @@ KubeTEE Early Access uses a **single Infrastructure incentive mechanism** with t
 
 **Subnet 90 Alpha, other subnets' Alpha, and TAO** are all accepted at the published resources-per-hour price. There are **no discounts and no referrer or reseller program**: SN90 compute is already priced competitively because it is subsidized by subnet emissions, so a discount layer would simply be gamed (see the [Tokenomics](#tokenomics--utility-token--depin-model) boundary conditions).
 
-The price itself is **competitive** (benchmarked against Targon/Lium/Chutes) and **dynamic with queue depth** — see [Competitive Pricing](#competitive-pricing). **USDC-on-BASE billing** and **automated USDC→TAO→Alpha recycling** layer on top in [Phase 2](#phase-2--paid-jobs).
+**TAO is live on Base** (2026-08-21) as a Chainlink CCIP-bridged ERC-20 — announced by [ForeverMoney (SN98)](https://x.com/forevermoney_ai/status/2090469070248235027), tradeable against USDC on Aerodrome (`0xf3081494b87e8d5fb7960f066e931d1d0e6e3d67`). A consumer can buy TAO from USDC or ETH in a Base wallet, without a Bittensor-native wallet, then spend it for SN90 compute. Finney TAO and TAO-on-BASE are the same asset on two rails; CCIP is the canonical bridge ([forevermoney.ai](https://forevermoney.ai/)). This is the acquisition path — settlement of a job still recycles Alpha on Finney (see [Tokenomics](./docs/TOKENOMICS.md#tao-on-base)).
+
+The price itself is **competitive** (benchmarked against Targon/Lium/Chutes) and **dynamic with queue depth** — see [Competitive Pricing](#competitive-pricing). **USDC-on-BASE and TAO-on-BASE billing** plus **automated USDC→TAO-on-BASE→Finney TAO→Alpha recycling** layer on in [Phase 2](#phase-2--paid-jobs). The Base rail is no longer a custom-bridge problem: TAO itself is the Base asset.
 
 #### Staging vs Production
 
@@ -404,7 +406,7 @@ SN90 (KubeTEE) Alpha is a **utility token consumed to access confidential comput
 - **Owner conviction auto-locked to perpetuity** — KubeTEE AI LTD owns the 18% owner emission stream and the $198k (≈1,003 TAO) subnet registration; 100% of its dTAO conviction is programmatically re-locked on-chain so it never decays and is never withdrawn. The owner holds no discretionary liquid position to sell — removes the large-discretionary-insider-position fact pattern from the securities analysis.
 - **Recycle vs burn** — spent Alpha is **recycled** (returned to unissued supply, extends the emission runway, refills the miner budget), not burned. For a compute subnet whose product is ongoing work, recycle funds future miner emissions.
 - **Corporate structure (vertically split)** — KubeTEE AI LTD (subnet owner, mechanism + IP, 18% stream) and 1-HORIZON LTD (miner operator, competes for the 41% miner share under identical rules as every external miner). The target state is a declining related-party share — the on-chain evidence the network is real.
-- **Cross-subnet consumption loop** — external customers → consuming subnet swaps TAO for SN90 Alpha on the open pool (no discounts) → spends Alpha on SN90 confidential compute → spent Alpha recycled → re-emitted via 41/41/18. A consumer-aligned validator on SN90 scores miner output as the protocol-native SLA. External demand one hop removed, not circular emissions-farming.
+- **Cross-subnet consumption loop** — external customers → consuming subnet swaps TAO for SN90 Alpha on the open pool (no discounts) → spends Alpha on SN90 confidential compute → spent Alpha recycled → re-emitted via 41/41/18. TAO can now be acquired on **Base** (CCIP-bridged ERC-20, Aerodrome USDC/TAO) as well as on Finney. A consumer-aligned validator on SN90 scores miner output as the protocol-native SLA. External demand one hop removed, not circular emissions-farming.
 - **DePIN subsidy trajectory** — the emission subsidy line decays as consumption revenue rises; they cross at the **crossover** (net Alpha issuance ≈ 0, consumers fund the miner budget). The subsidy ratio (emission value ÷ total miner compensation) is the single on-chain KPI, monotonically declining. Defenses: published glide path, stack-efficiency moat (bin-packing, TEE premium, utilization), and self-consumption made economically neutral to defeat wash consumption.
 
 Full analysis (securities posture, recycle mechanics, flywheel, trajectory charts): [Tokenomics — Utility Token & DePIN Model](./docs/TOKENOMICS.md).
@@ -512,7 +514,7 @@ That channel is **live** (2026-08-19). Buyers use the OpenAI-compatible sayGM AP
 | Buyer model | Discount vs sayGM retail |
 |---|---|
 | `z-ai/glm-5.2` (`glm-5.2`) | **48.25%** |
-| `deepseek/deepseek-v4-flash-0731` | **20%** |
+| `deepseek/deepseek-v4-flash-0731` | **50%** |
 | `ornith/ornith-1.5-397b` | first worldwide availability (2026-08-20) |
 
 The free window that preceded this used **14,812,329,857** tokens.
@@ -625,7 +627,7 @@ Full detail — the chain primitive, Alpha conversion, grace/recovery, `btcli` c
 - [x] Kata guest debug **off** on the staging cluster — CoCo Trustee attests those guests. Debug can be enabled per pod for diagnostics.
 - [ ] Validator runs in a TEE (Kata + CoCo) on the control plane; CoCo attestation proves the validator code is unmodified
 - [x] [Attestation-gated TLS](./docs/NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md#2-attestation-gated-tls-between-services) on the served backend (Kata runtime deployed) — in-guest keypairs, certificates issued only against a valid TDX quote verified through Intel Trust Authority, ingress on TLS passthrough, termination inside the guest
-- [x] **SN28 (sayGM) idle-capacity channel** — live 2026-08-19 ([SN28-SAYGM.md](./docs/SN28-SAYGM.md)). SN90 is **not** an inference subnet; Factory workloads keep priority; SN28 gets spare headroom. Buyer offers: `z-ai/glm-5.2` **48.25%** below retail, `deepseek/deepseek-v4-flash-0731` **20%** below retail. **Ornith-1.5-397B** — first worldwide availability, in collaboration with SN28 sayGM (2026-08-20). Free window closed at 14,812,329,857 tokens. Do not declare Kimi / Qwen / MiMo on SN28.
+- [x] **SN28 (sayGM) idle-capacity channel** — live 2026-08-19 ([SN28-SAYGM.md](./docs/SN28-SAYGM.md)). SN90 is **not** an inference subnet; Factory workloads keep priority; SN28 gets spare headroom. Buyer offers: `z-ai/glm-5.2` **48.25%** below retail, `deepseek/deepseek-v4-flash-0731` **50%** below retail. **Ornith-1.5-397B** — first worldwide availability, in collaboration with SN28 sayGM (2026-08-20). Free window closed at 14,812,329,857 tokens. Do not declare Kimi / Qwen / MiMo on SN28.
 - [ ] **Confidential model catalogue** — more TEE-served models on `llm.kubetee.ai` (and optionally extra SN28 SKUs). SN28 is a demand channel, **not** the exclusive path to public inference. Every model published in all three [serving configurations](#serving-configurations--every-job-requires-fast-inference) and billed at below-OpenRouter prices per token on the gateway (a demand channel, **not** an SN90 discounted reseller tier — see [Payment methods](#payment-methods)):
   - [ ] **Kimi-K3** — B300 nodes (`llm.kubetee.ai`)
   - [x] **GLM-5.2** — B200 nodes (`llm.kubetee.ai` + SN28)
@@ -665,8 +667,8 @@ Full detail — the chain primitive, Alpha conversion, grace/recovery, `btcli` c
 
 ### Phase 2 — Paid Jobs
 
-- [ ] USDC-on-BASE job billing (pull-based, per-epoch metering) — fiat billing layered on top of the Early Access Alpha / TAO resources-per-hour pricing
-- [ ] Automated USDC→TAO→Alpha recycling (unused emissions recycled)
+- [ ] USDC-on-BASE and **TAO-on-BASE** job billing (pull-based, per-epoch metering) — fiat and EVM-TAO billing layered on top of the Early Access Alpha / TAO resources-per-hour pricing. TAO itself is live on Base as of 2026-08-21 (Chainlink CCIP; [ForeverMoney SN98](https://x.com/forevermoney_ai/status/2090469070248235027))
+- [ ] Automated USDC→TAO-on-BASE→Finney TAO→Alpha recycling (unused emissions recycled)
 
 ### Phase 3 — Job-Type Growth
 
@@ -689,7 +691,7 @@ Full detail — the chain primitive, Alpha conversion, grace/recovery, `btcli` c
 - [Confidential Containers Certification](./docs/certification-confidential-containers.md) — CC standards and Kata runtime mapping
 - [Deploying in a TEE — Challenge & debugging](./docs/TEE-DEPLOYMENT-AND-CICD.md) — why TEE deployment is hard, staging as a debug target if a workload fails, Kata guest debug off, CoCo Trustee attestation
 - [Workflow Orchestration — Airflow & Metaflow](./docs/WORKFLOW-ORCHESTRATION.md) — orchestrating multi-step confidential pipelines on Armada
-- [Tokenomics — Utility Token & DePIN Model](./docs/TOKENOMICS.md) — recycle vs burn, securities posture, cross-subnet consumption loop, DePIN subsidy trajectory
+- [Tokenomics — Utility Token & DePIN Model](./docs/TOKENOMICS.md) — recycle vs burn, securities posture, TAO-on-BASE (CCIP), cross-subnet consumption loop, DePIN subsidy trajectory
 - [Competitive Pricing & Miner Scoring](./docs/COMPETITIVE-PRICING.md) — pricing SN90 against Targon/Lium/Chutes and how price becomes weights
 - [NeMo Microservices & Bittensor Subnet Integrations](./docs/NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md) — attestation-gated TLS, NIM Operator Kata/CoCo limits, SOTA Bittensor subnet substitutes per NeMo layer, and the Stage 0 supply-chain security gate
 - [SN28 sayGM — idle-capacity channel](./docs/SN28-SAYGM.md) — live 2026-08-19; SN90 is not an inference subnet; GLM-5.2 48.25% / Flash-0731 20% below retail; first worldwide Ornith-1.5-397B with SN28 (2026-08-20)

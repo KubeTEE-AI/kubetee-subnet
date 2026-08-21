@@ -315,7 +315,7 @@ The Targon row is designed to meet that auditability bar: metrics such as `kubet
   paid jobs (demand-side billing, dynamic per the job queues). The initial
   miner score is limited to infrastructure readiness.
 - **Phase 1 (Expansion):** add TEE-attestation + Armada-job-metrics + health scoring.
-- **Phase 2 (Paid Jobs):** layer **USDC-on-BASE fiat billing** on top of the Phase 0 resources-per-hour pricing, plus USDC→TAO→Alpha recycling.
+- **Phase 2 (Paid Jobs):** layer **USDC-on-BASE and TAO-on-BASE billing** on top of the Phase 0 resources-per-hour pricing, plus USDC→TAO-on-BASE→Finney TAO→Alpha recycling. TAO is live on Base as a Chainlink CCIP-bridged ERC-20 (2026-08-21; [ForeverMoney SN98](https://x.com/forevermoney_ai/status/2090469070248235027)).
 - **Phase 3 (Job-Type Growth):** extend the price formula to new job classes as new workload types come online.
 
 ## References
