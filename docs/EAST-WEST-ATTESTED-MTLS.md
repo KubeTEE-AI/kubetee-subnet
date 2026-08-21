@@ -49,12 +49,13 @@ CoCo reference: [Confidential AI / federated learning](https://confidentialconta
 
 ## First-cut workloads
 
-Live LiteLLM `api_base` rows (HTTPS `:8443`). First cut covers these two public model names:
+Live LiteLLM `api_base` rows (HTTPS `:8443`). Public names are GLM + Flash-0731; Pro-0813 is registered in LiteLLM but not published on AI Hub.
 
-| Public model | Service (TLS hostname) | Manifest |
-|--------------|------------------------|----------|
-| `z-ai/glm-5.2` | `glm-5-2-nvfp4-sglang.nemo.svc.cluster.local` | `nim/glm-5-2-nvfp4-sglang-cc.yaml` (StatefulSet, 2 replicas, one Service) |
-| `deepseek/deepseek-v4-flash-0731` | `dsv4-0731-sglang-h200.nemo.svc.cluster.local` | `nim/deepseek-v4-flash-0731-sglang-h200-cc.yaml` |
+| LiteLLM `model_name` | Service (TLS hostname) | Manifest | Public |
+|--------------|------------------------|----------|--------|
+| `z-ai/glm-5.2` | `glm-5-2-nvfp4-sglang.nemo.svc.cluster.local` | `nim/glm-5-2-nvfp4-sglang-cc.yaml` (StatefulSet, 2 replicas, one Service) | yes |
+| `deepseek/deepseek-v4-flash-0731` | `dsv4-0731-sglang-h200.nemo.svc.cluster.local` | `nim/deepseek-v4-flash-0731-sglang-h200-cc.yaml` | yes |
+| `ornith/ornith-1.5-397b-fp8` | `ornith-1-5-397b-fp8-sglang-h200.nemo.svc.cluster.local` | `nim/ornith-1.5-397b-fp8-sglang-h200-cc.yaml` (H200 CC, `am-h200-25`) | no |
 
 GLM HA uses the **existing Service**, not per-pod DNS. Both replicas attest independently and receive the same NIM server cert (SAN = Service FQDN). ClusterIP load-balances TCP; a stream stays on one pod. Kubernetes readiness is pod-wide: a replica must not be Ready until HTTPS `:8443` `/health` succeeds (HAProxy up and SGLang healthy on loopback).
 
@@ -84,6 +85,8 @@ NIM server cert SANs (explicit, not a wildcard):
 
 - `glm-5-2-nvfp4-sglang.nemo.svc.cluster.local`
 - `dsv4-0731-sglang-h200.nemo.svc.cluster.local`
+- `dsv4-pro-0813-sglang-h200.nemo.svc.cluster.local` (STOPPED 2026-08-19; SAN kept)
+- `ornith-1-5-397b-fp8-sglang-h200.nemo.svc.cluster.local`
 
 Generate the CA and leaf certs once, load them into Trustee with `kbs-client` and an admin JWT. Admin mode is `AuthenticatedAuthorization`; rotate and Fleet config live in the Trustee bundle `infrastructure/trustee/KubeTEE.md` (`kubetee-fleet`). Never commit the keys. Cert lifetime for this cut: ~90 days. Rotate by replacing KBS material and rolling guests. Short-lived refresh is a later cut (GLM/DSV4 boots take hours).
 
