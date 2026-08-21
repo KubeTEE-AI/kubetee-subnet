@@ -6,7 +6,7 @@ This document is the detailed reference behind the README [NVIDIA NeMo Microserv
 
 ## 1. NVIDIA NeMo Microservices on KubeTEE
 
-[NVIDIA NeMo Microservices](https://docs.nvidia.com/nemo/microservices/latest/about/index.html) are API-first, modular tools for customizing, evaluating, and securing LLMs and embedding models on Kubernetes. A goal of the KubeTEE AI Factory is to run the full NVIDIA AI stack — NeMo Microservices, NIM models, and AI Blueprints — inside Confidential Computing (Kata + CoCo TEE), scheduled as Armada batch jobs.
+[NVIDIA NeMo Microservices](https://docs.nvidia.com/nemo/microservices/latest/about/index.html) are API-first, modular tools for customizing, evaluating, and securing LLMs and embedding models on Kubernetes. A goal of the KubeTEE AI Factory is to run the full NVIDIA AI stack — NeMo Microservices, NIM models, and AI Blueprints — as **SOTA AI services** for enterprises inside Kata + CoCo TEE. Batch jobs are a secondary service: Armada schedules the jobs and pipelines that call those services when an enterprise needs that path.
 
 Each cluster therefore exposes a shared, high-availability NeMo Microservices deployment as **cluster-resident services that scheduled AI jobs call**. This is the distinction between a service and a job: Customizer, Evaluator, Guardrails, Retriever, and the model endpoints are long-lived and shared, while a job is a transient Armada workload that consumes them. A fine-tuning job dispatched to a miner cluster calls the local Customizer, an evaluation job calls the local Evaluator, and a RAG job calls the local Retriever — inside the cluster, without leaving the confidential boundary or crossing the public internet. Sharing one HA deployment per cluster also means the cost of standing up the stack is amortized across every job that lands there, rather than paid again per job.
 
@@ -96,7 +96,7 @@ Stage 0 scans the workload's **code, container image, and deploying IaC** — no
 
 ```mermaid
 flowchart LR
-    WL["AI workload<br/>(job template, image, Helm/IaC)"] -->|"CI on source + image + manifests"| S0["Supply-chain CI<br/>SAST, Trustee secrets, CVE, IaC, provenance"]
+    WL["AI service<br/>(image, Helm/IaC)"] -->|"CI on source + image + manifests"| S0["Supply-chain CI<br/>SAST, Trustee secrets, CVE, IaC, provenance"]
     S0 -->|"critical/high findings"| Fix["Remediate and resubmit"]
     Fix --> S0
     S0 -->|"clean report"| Miners["Miner clusters<br/>CC on, guest debug off; Trustee attests"]

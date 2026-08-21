@@ -2,7 +2,7 @@
 
 **Status:** live on mainnet (2026-08-19).  
 **Buyer gateway:** https://saygm.com/ · `https://api.saygm.com/v1`  
-**This is not SN90's product.** SN90 is a confidential AI compute platform. Serving models is not the product. AI Factory workloads on the clusters come first. What goes to SN28 is **idle GPU headroom** that would otherwise sit warm and unused.
+**This is not SN90's product.** SN90 hosts **SOTA AI services** for enterprises. Serving models to the general public is not the product. Factory services on the clusters come first. What goes to SN28 is **idle GPU headroom** that would otherwise sit warm and unused.
 
 ## Live offers (KubeTEE miner)
 
@@ -19,7 +19,7 @@ Buyer-visible SKUs on sayGM, served from `llm.kubetee.ai` (LiteLLM in TDX). GLM 
 ## What SN90 is — and is not
 
 - **SN90 is not an inference subnet.** Same platform, better utilisation.
-- Cluster AI workloads always have priority on capacity.
+- Cluster AI services always have priority on capacity.
 - SN28 is a demand channel for spare headroom. It is **not** the exclusive public-inference path — `llm.kubetee.ai` remains the Factory gateway.
 - New miner onboarding stays **demand-driven** ([README — Miner onboarding](../README.md#miner-onboarding)). Idle-capacity here means unused GPUs on clusters that are already live, not onboarding miners ahead of Factory demand.
 

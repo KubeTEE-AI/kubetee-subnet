@@ -2,7 +2,7 @@
 
 ## Scope
 
-KubeTEE AI (SN90) is a Bittensor subnet that runs confidential AI workloads in
+KubeTEE AI (SN90) is a Bittensor subnet that runs SOTA AI services for enterprises in
 hardware-secured Trusted Execution Environments (TEE) using Kata Containers and
 Confidential Containers (CoCo) on decentralized RKE2 Kubernetes infrastructure.
 

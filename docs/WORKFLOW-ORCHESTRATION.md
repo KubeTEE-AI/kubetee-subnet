@@ -1,6 +1,6 @@
 # Workflow Orchestration — Apache Airflow & Metaflow Integration
 
-KubeTEE AI Factory executes AI workloads as **Armada batch jobs** inside **Kata + CoCo TEE pods** on miner clusters. A single job is submitted to an Armada queue (see the README [Submitting a Confidential Job](../README.md#submitting-a-confidential-job) section). For **multi-step AI pipelines** — e.g. ETL → fine-tune → evaluate → register → deploy — KubeTEE integrates with two open-source orchestrators so that **every pipeline step runs as a confidential Armada batch job**:
+KubeTEE AI Factory hosts **SOTA AI services** and **enhanced services for enterprises** inside **Kata + CoCo TEE pods** on miner clusters. **Batch jobs** are a secondary service: **multi-step AI pipelines** — e.g. ETL → fine-tune → evaluate → register → deploy — are submitted to an Armada queue (see the README [Submitting a Confidential Job](../README.md#submitting-a-confidential-job) section). KubeTEE integrates with two open-source orchestrators so that **every pipeline step runs as a confidential Armada batch job**:
 
 - **[Apache Airflow](https://airflow.apache.org/)** — DAG-based pipeline orchestration.
 - **[Metaflow](https://metaflow.org/)** — a Python framework for data-science / ML workflows.

@@ -405,7 +405,7 @@ nvfwupd --query
 
 ## Cluster Architecture & High Availability
 
-> KubeTEE is a **decentralized multi-cluster architecture**. Each miner operates one RKE2 cluster (one hotkey per cluster), and the full tech stack — GPU Operator, Kata/CoCo runtime classes, NeMo Microservices, Armada Executor, Longhorn storage, monitoring — is deployed onto it via Rancher Fleet GitOps. Miners must provide the minimum cluster shape below to allow high availability, deploy the tech stack, and have enough nodes to run AI workloads. These minimum requirements are written and enforced in Phase 0.
+> KubeTEE is a **decentralized multi-cluster architecture**. Each miner operates one RKE2 cluster (one hotkey per cluster), and the full tech stack — GPU Operator, Kata/CoCo runtime classes, NeMo Microservices, Armada Executor, Longhorn storage, monitoring — is deployed onto it via Rancher Fleet GitOps. Miners must provide the minimum cluster shape below to allow high availability, deploy the tech stack, and have enough nodes to run SOTA AI services and enhanced services for enterprises. These minimum requirements are written and enforced in Phase 0.
 
 ### Minimum cluster topology
 
@@ -420,7 +420,7 @@ nvfwupd --query
 ### Why 8 nodes minimum
 
 - **5 control-plane + etcd + worker nodes**: RKE2 etcd needs an odd number for quorum. 5 nodes give 2-node failure tolerance (survive losing 2 of 5 and still have quorum). These 5 nodes are **not idle control-plane nodes** — they run the tech stack (GPU Operator, Kata/CoCo runtime classes, Longhorn storage, NeMo Microservices, monitoring, Armada Executor) and can serve inference workloads, so their GPU capacity counts toward the fleet. A 3-node control plane tolerates only 1 failure; 5 is the minimum where a cluster can lose 2 nodes and still serve.
-- **3 dedicated GPU workers per GPU type**: the tech stack on the 5 control-plane+worker nodes consumes CPU/memory and some GPU capacity for NeMo services and inference. 3 dedicated 8-GPU workers **per GPU type** ensure enough bare-metal GPU capacity to run Armada-dispatched AI job workloads (inference, fine-tuning, batch) without competing with the tech stack for resources, and ensure HA for that GPU type (survive losing 1 of 3 workers and still serve that workload class). **A mixed-GPU cluster needs 3 per type**: e.g. 3 H200 + 3 B200 = 6 dedicated GPU workers + 5 control-plane = 11 nodes total.
+- **3 dedicated GPU workers per GPU type**: the tech stack on the 5 control-plane+worker nodes consumes CPU/memory and some GPU capacity for NeMo services and inference. 3 dedicated 8-GPU workers **per GPU type** ensure enough bare-metal GPU capacity to run AI services and Armada jobs (inference, fine-tuning, batch) without competing with the tech stack for resources, and ensure HA for that GPU type (survive losing 1 of 3 workers and still serve that GPU type). **A mixed-GPU cluster needs 3 per type**: e.g. 3 H200 + 3 B200 = 6 dedicated GPU workers + 5 control-plane = 11 nodes total.
 - **8 total (single GPU type)**: 5 (control-plane+etcd+worker, running tech stack + inference) + 3 (dedicated GPU workers of one type, running AI jobs) = 8 nodes minimum for a single-GPU-type cluster. A mixed-GPU cluster adds 3 per additional GPU type.
 
 ### Scaling beyond the minimum

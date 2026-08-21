@@ -119,17 +119,17 @@ What this does **not** change: SN90 Alpha is still the access ticket; spent Alph
 
 ### The protocol-native (no-invoice) model
 
-The cleanest structure is the **protocol-native model**: SN90's Alpha is the access ticket to the compute; any other subnet or AI workload (e.g. an inference subnet like SN64 / Chutes) acquires it on the open market and spends it to consume. No bilateral paper anywhere.
+The cleanest structure is the **protocol-native model**: SN90's Alpha is the access ticket to the compute; any other subnet or AI service (e.g. an inference subnet like SN64 / Chutes) acquires it on the open market and spends it to consume. No bilateral paper anywhere.
 
 **Securities-wise this is the strongest possible fact pattern for SN90.** The absence of a contract is not a gap — it is the feature. There is no bilateral scheme to characterize as an investment contract, just spot acquisition of a token followed by its consumptive use, which lands squarely in the release's carve-out that securities laws generally do not apply to items purchased for use or consumption.
 
-Better still, it upgrades SN90's own token classification: an Alpha that **must be spent to obtain compute** is a token with genuine programmatic utility on a functional system — precisely the digital-commodity definition — rather than a token whose only story is speculation. Demand from subnets and AI workloads gives organic, verifiable consumption.
+Better still, it upgrades SN90's own token classification: an Alpha that **must be spent to obtain compute** is a token with genuine programmatic utility on a functional system — precisely the digital-commodity definition — rather than a token whose only story is speculation. Demand from subnets and AI services gives organic, verifiable consumption.
 
 ### The flywheel
 
 ```mermaid
 flowchart LR
-    Cust["External customers<br/>pay fiat for AI workloads"] --> Cons["Subnets & AI workloads<br/>(e.g. SN64 / Chutes inference)"]
+    Cust["External customers<br/>pay fiat for AI services"] --> Cons["Subnets & AI services<br/>(e.g. SN64 / Chutes inference)"]
     Base["BASE L2<br/>USDC / ETH"] -->|"Aerodrome swap"| BaseTAO["TAO-on-BASE<br/>CCIP ERC-20"]
     BaseTAO -->|CCIP bridge| Cons
     Cons -->|swap TAO for Alpha<br/>on open pool| Pool["SN90 Alpha pool<br/>(open market, no discounts)"]
@@ -142,7 +142,7 @@ flowchart LR
     Val -.->|Yuma Consensus| Proto
 ```
 
-The acquisition leg is where the value transfer happens: a consuming subnet or AI workload swaps TAO into SN90's pool to get Alpha — that swap is the real payment. Every purchase is TAO inflow into SN90's reserve and upward pressure on the Alpha price. TAO itself can now be bought on **Base** (USDC/ETH → Aerodrome → TAO-on-BASE → CCIP → Finney) as well as on Finney, so the buyer set is any EVM wallet, not only a Bittensor-native one. Under the current emission model, each subnet's share of block emissions is proportional to its EMA token price normalized across all subnets, so sustained consumer buying directly raises SN90's emission share. The flywheel: external AI-workload revenue → consumers buy SN90 Alpha → price and emissions rise → miner incentive grows → more compute capacity → more workloads served. Because consumer demand is funded by outside customers, this is genuinely **external demand one hop removed** — not the circular emissions-recycling pattern that gets subnets dismissed as hot-potato economics.
+The acquisition leg is where the value transfer happens: a consuming subnet or AI service swaps TAO into SN90's pool to get Alpha — that swap is the real payment. Every purchase is TAO inflow into SN90's reserve and upward pressure on the Alpha price. TAO itself can now be bought on **Base** (USDC/ETH → Aerodrome → TAO-on-BASE → CCIP → Finney) as well as on Finney, so the buyer set is any EVM wallet, not only a Bittensor-native one. Under the current emission model, each subnet's share of block emissions is proportional to its EMA token price normalized across all subnets, so sustained consumer buying directly raises SN90's emission share. The flywheel: external enterprise AI-service revenue → consumers buy SN90 Alpha → price and emissions rise → miner incentive grows → more compute capacity → more services served. Because consumer demand is funded by outside customers, this is genuinely **external demand one hop removed** — not the circular emissions-recycling pattern that gets subnets dismissed as hot-potato economics.
 
 ### The spend leg (design decision)
 
@@ -156,17 +156,17 @@ Recycle is the mechanically interesting choice for a compute subnet: recycling c
 
 ### Reflexivity risks (the flywheel spins both ways)
 
-- **Concentration**: if any single subnet or AI workload becomes the dominant source of TAO inflow, SN90's emission share is a derivative of one customer's purchasing schedule. The day they pause, your price EMA decays, emission share follows, miner revenue drops, and capacity exits. Single-customer alpha demand is how a subnet deregisters fast — diversify the consumer base across multiple subnets and workloads.
+- **Concentration**: if any single subnet or AI service becomes the dominant source of TAO inflow, SN90's emission share is a derivative of one customer's purchasing schedule. The day they pause, your price EMA decays, emission share follows, miner revenue drops, and capacity exits. Single-customer alpha demand is how a subnet deregisters fast — diversify the consumer base across multiple subnets and services.
 - **Predictability**: if a consumer buys on a fixed cadence sized to revenue, that flow is visible on-chain and will be front-run. Use continuous small swaps (TWAP-style) rather than monthly lumps — this also smooths the EMA rather than spiking it.
 - **Inventory exposure**: a consumer holds SN90 Alpha between purchase and spend, carrying the token's volatility as working-capital risk. The deeper the pool, the smaller that risk; pool depth is partly the subnet owner's problem to solve.
 
 ### Quality enforcement without contracts
 
-No SLA means SN90's validators **are** the SLA: scoring must measure exactly what consumers experience — latency, throughput, uptime, correctness of the compute delivered — or miners will optimize for the metric while consumers experience something worse. An elegant protocol-native option: a consuming subnet or AI workload (or an entity aligned with them) runs a validator on SN90, so the customer's own quality observations feed Yuma Consensus directly. The customer scores the vendor's workers, and the chain settles it.
+No SLA means SN90's validators **are** the SLA: scoring must measure exactly what consumers experience — latency, throughput, uptime, correctness of the compute delivered — or miners will optimize for the metric while consumers experience something worse. An elegant protocol-native option: a consuming subnet or AI service (or an entity aligned with them) runs a validator on SN90, so the customer's own quality observations feed Yuma Consensus directly. The customer scores the vendor's workers, and the chain settles it.
 
 ### Keep the loop at the market layer
 
-The clean version is entirely arm's-length at the market layer: every consumer swaps on the open pool like anyone else, spends like anyone else, and SN90's edge is just being the subnet whose token has real consumers (subnets and AI workloads, not just one named partner). That is also the version where the flywheel narrative — usage-backed Alpha demand — is verifiable by anyone reading the chain.
+The clean version is entirely arm's-length at the market layer: every consumer swaps on the open pool like anyone else, spends like anyone else, and SN90's edge is just being the subnet whose token has real consumers (subnets and AI services, not just one named partner). That is also the version where the flywheel narrative — usage-backed Alpha demand — is verifiable by anyone reading the chain.
 
 ---
 
@@ -195,7 +195,7 @@ A related-party miner on the subnet is unremarkable — most owner teams bootstr
 ### Load-bearing mitigations (in order)
 
 1. The incentive mechanism must be **objective and published**, scoring measurable compute properties so no validator judgment call can favor 1-HORIZON.
-2. The validator set should include parties KubeTEE does not control (a consumer-aligned validator from a consuming subnet or AI workload doubles as both quality signal and independence proof).
+2. The validator set should include parties KubeTEE does not control (a consumer-aligned validator from a consuming subnet or AI service doubles as both quality signal and independence proof).
 3. 1-HORIZON registers, competes, and is deregistered under identical rules as every other miner — same registration cost, same immunity period, no reserved UIDs.
 4. **Want external miners to out-compete 1-HORIZON over time** — a declining related-party share is the on-chain evidence the network is real. Target state: a taostats chart where the related-party (purple) share shrinks as external (gray) miners grow.
 
@@ -218,11 +218,11 @@ xychart-beta
     line "Consumption revenue" [10, 11, 13, 17, 22, 29, 37, 46, 57, 70, 84]
 ```
 
-The amber **emission subsidy** line decays as emissions taper over an unknown horizon; the green **consumption revenue** line rises as consumer spend (from subnets and AI workloads) grows. They cross at the **crossover** — the point where net Alpha issuance ≈ 0 and consumers (not emissions) fund the miner budget through the pool. The exact date is unknown (recycle shifts halving thresholds), so the x-axis is an undated horizon, not a halving schedule.
+The amber **emission subsidy** line decays as emissions taper over an unknown horizon; the green **consumption revenue** line rises as consumer spend (from subnets and AI services) grows. They cross at the **crossover** — the point where net Alpha issuance ≈ 0 and consumers (not emissions) fund the miner budget through the pool. The exact date is unknown (recycle shifts halving thresholds), so the x-axis is an undated horizon, not a halving schedule.
 
 ### The DePIN subsidy thesis
 
-Consumers (subnets and AI workloads) get compute at below-market price because SN90 emissions subsidize the cost of compute. This is the goal of SN90: help subsidize the cost of compute, with a more efficient tech stack that monetizes compute better than a VM.
+Consumers (subnets and AI services) get compute at below-market price because SN90 emissions subsidize the cost of compute. This is the goal of SN90: help subsidize the cost of compute, with a more efficient tech stack that monetizes compute better than a VM.
 
 ### Mechanics of who is paying
 

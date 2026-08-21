@@ -1,6 +1,6 @@
-# KubeTEE AI Factory — Decentralized Clusters (Kube) for AI Workloads in Trusted Execution Environment (TEE)
+# KubeTEE AI Factory — Decentralized Clusters (Kube) for SOTA AI Services in Trusted Execution Environment (TEE)
 
-> Enterprise-Grade Confidential Computing AI Factory on Decentralized Kubernetes Infrastructure, scheduled by Armada across Bittensor miner clusters
+> Enterprise-grade confidential computing for **SOTA AI services** and **enhanced services for enterprises** on decentralized Kubernetes across Bittensor miner clusters
 
 [![FIPS-140-3 Target](https://img.shields.io/badge/FIPS--140--3-Target-blue)](https://docs.rke2.io/security/fips_support)
 [![FIPS-140-2](https://img.shields.io/badge/FIPS--140--2-Validated-green)](https://docs.rke2.io/security/fips_support)
@@ -23,7 +23,7 @@
 
 ## About
 
-**KubeTEE AI** is the **AI Factory** of the Bittensor network: it turns decentralized GPU clusters into a confidential AI factory. AI workloads run inside hardware-secured Trusted Execution Environments (TEE) using [Kata Containers](https://katacontainers.io/) and [Confidential Containers (CoCo)](https://github.com/confidential-containers/confidential-containers), and are scheduled across miner clusters by [Armada](https://armadaproject.io/) — a CNCF Sandbox multi-cluster Kubernetes batch scheduler.
+**KubeTEE AI** is the **AI Factory** of the Bittensor network: it turns decentralized GPU clusters into a confidential factory for **SOTA AI services** and **enhanced services for enterprises**. Inference, NeMo microservices, retrieval, and agents run inside hardware-secured Trusted Execution Environments (TEE) using [Kata Containers](https://katacontainers.io/) and [Confidential Containers (CoCo)](https://github.com/confidential-containers/confidential-containers). **Batch jobs** (fine-tune, eval, multi-step pipelines) are one of those services — scheduled by [Armada](https://armadaproject.io/) when an enterprise needs them — not the product itself.
 
 KubeTEE AI is registered with the [**NVIDIA Inception Program**](https://www.nvidia.com/startups/) and is an active contributor to both the [**Kata Containers**](https://katacontainers.io/) and [**Confidential Containers (CoCo)**](https://github.com/confidential-containers/confidential-containers) ecosystems. It also leverages [**CNCF**](https://www.cncf.io/) projects for cloud-native infrastructure.
 
@@ -50,12 +50,12 @@ As a member of the [Confidential Computing Consortium (CCC)](https://confidentia
 
 ### Mission & Vision
 
-**Mission**: To turn decentralized multi-cluster GPU nodes into a worldwide (and in-space) confidential AI factory — running AI training, inference, and data-processing jobs in Trusted Execution Environments, scheduled fairly across Bittensor miner clusters by Armada, with the highest standards of security, compliance, and performance.
+**Mission**: To turn decentralized multi-cluster GPU nodes into a worldwide (and in-space) confidential AI factory — hosting **SOTA AI services** and **enhanced services for enterprises** in Trusted Execution Environments across Bittensor miner clusters, with the highest standards of security, compliance, and performance. Batch jobs are a secondary service on the same clusters.
 
 **Key Differentiators**:
 - **Security-First**: TEE-enabled infrastructure on a FIPS-validated RKE2 baseline with Kata Containers isolation
 - **Multi Cluster Scheduler**: multi-cluster batch scheduling with fair-use queuing, gang scheduling, and preemption across decentralized clusters
-- **NVIDIA-Powered**: NeMo Microservices, NIM models, and AI Blueprints as first-class confidential job types — and, where NVIDIA's own stack falls short (see [Kata / CoCo Limitations](./docs/NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md#4-kata--coco-limitations-nvidia)), SOTA [Bittensor subnet integrations](./docs/NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md#5-bittensor-subnet-integrations-sota-confidential-ready) running inside Kata + CoCo TEE instead
+- **SOTA AI services**: NeMo Microservices, NIM models, and AI Blueprints as first-class confidential enterprise services — and, where NVIDIA's own stack falls short (see [Kata / CoCo Limitations](./docs/NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md#4-kata--coco-limitations-nvidia)), SOTA [Bittensor subnet integrations](./docs/NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md#5-bittensor-subnet-integrations-sota-confidential-ready) running inside Kata + CoCo TEE instead
 - **Decentralized**: one hotkey per cluster, nodes located in distinct data center, expanding across global regions
 - **Open Source**: Built on OpenInfra Foundation and CNCF projects with community-driven innovation
 
@@ -76,12 +76,12 @@ As a member of the [Confidential Computing Consortium (CCC)](https://confidentia
 - [Debugging on the staging cluster](#debugging-on-the-staging-cluster)
 - [Architecture](#architecture)
   - [Confidential Computing (Kata + CoCo)](#confidential-computing-kata--coco)
-  - [Infrastructure](#infrastructure) — RKE2 HA, Armada batch scheduling
+  - [Infrastructure](#infrastructure) — RKE2 HA; Armada for the batch-job service
   - [Security & Compliance](#security--compliance)
   - [Multi-Cluster Topology](#multi-cluster-topology)
   - [Early Access Topology](#early-access-topology)
-- [Supported AI Workloads (Job Types)](#supported-ai-workloads-job-types)
-  - [Serving Configurations](#serving-configurations--every-job-requires-fast-inference)
+- [Supported SOTA AI Services](#supported-sota-ai-services)
+  - [Serving Configurations](#serving-configurations--every-service-requires-fast-inference)
   - [NVIDIA NeMo Microservices & Bittensor Subnet Integrations](#nvidia-nemo-microservices--bittensor-subnet-integrations) — attestation-gated TLS, NIM Operator Kata/CoCo limits, SOTA Bittensor subnet substitutes, Stage 0 supply-chain CI
 - [Subnet Economics](#subnet-economics)
   - [Incentive Mechanism: Infrastructure](#incentive-mechanism-infrastructure-early-access)
@@ -109,9 +109,9 @@ As a member of the [Confidential Computing Consortium (CCC)](https://confidentia
 
 ## Overview
 
-KubeTEE AI Factory provides Enterprise-Grade Confidential Computing for AI batch jobs on a Decentralized Multi-Cluster Kubernetes RKE2 infrastructure. Jobs are submitted to Armada queues and scheduled across miner clusters, executing inside Trusted Execution Environments (TEE) so that data and models are protected **at rest, in transit, and in use** — and never leave the confidential computing boundary.
+KubeTEE AI Factory provides enterprise-grade confidential computing for **SOTA AI services** on a decentralized multi-cluster Kubernetes RKE2 infrastructure. Services run inside Trusted Execution Environments (TEE) so that data and models are protected **at rest, in transit, and in use** — and never leave the confidential computing boundary. **Batch jobs** (fine-tune, eval, pipelines) are a secondary service on the same clusters, submitted to Armada queues when needed.
 
-Each miner cluster is identified by a permanent Bittensor **hotkey/coldkey** pair. Armada dispatches batch jobs to these clusters as Kubernetes pods; the pods run under a confidential `runtimeClassName` so the workload is hardware-isolated and attested. TEE classes are **`kata-qemu-nvidia-gpu-tdx-runtime-rs`** (GPU) and **`kata-qemu-tdx-runtime-rs`** (CPU-only). Every node on the **staging cluster** is TEE CC capable. Kata guest debug is **off**; CoCo Trustee attests those guests. For diagnostics, CC can be turned **off** on a staging node, and guest debug can be enabled **per pod**; Trustee attests only when debug is off.
+Each miner cluster is identified by a permanent Bittensor **hotkey/coldkey** pair. **SOTA AI services** run as Kubernetes pods under a confidential `runtimeClassName` so they are hardware-isolated and attested. When that service is a batch job, Armada dispatches it. TEE classes are **`kata-qemu-nvidia-gpu-tdx-runtime-rs`** (GPU) and **`kata-qemu-tdx-runtime-rs`** (CPU-only). Every node on the **staging cluster** is TEE CC capable. Kata guest debug is **off**; CoCo Trustee attests those guests. For diagnostics, CC can be turned **off** on a staging node, and guest debug can be enabled **per pod**; Trustee attests only when debug is off.
 
 The RKE2 baseline is **[FIPS-140-2 validated](https://docs.rke2.io/security/fips_support)** today; FIPS-140-3 is a [Phase 3](#phase-3--job-type-growth) target. Both are referred to below simply as the FIPS-validated baseline.
 
@@ -153,10 +153,10 @@ This README documents both what runs in the KubeTEE infrastructure and what is d
 
 ## The Confidential Compute Challenge: Problems We Solve
 
-Organizations running sensitive AI workloads — training, fine-tuning, inference, data processing — face an impossible choice between security, cost, and trust. KubeTEE resolves all three:
+Enterprises running sensitive SOTA AI services — inference, agents, training, fine-tuning, data processing — face an impossible choice between security, cost, and trust. KubeTEE resolves all three:
 
 1. **Private data & models must stay private** — Public cloud AI and traditional deployments expose data in memory and give providers/insiders access. KubeTEE enforces hardware TEE isolation (Intel TDX/SGX, NVIDIA CC) via Kata + CoCo, with remote attestation so you can verify the exact code running on your data; data is protected at rest, in transit, and in use.
-2. **Regulated workloads need verifiable compute** — Healthcare (HIPAA), Finance (SOC2/PCI-DSS), Government (FedRAMP) need proof of isolation. KubeTEE provides a FIPS-validated RKE2 baseline, cryptographic attestation, audit trails (Prometheus, Kubernetes events), and isolated namespaces for tenant separation.
+2. **Regulated AI services need verifiable compute** — Healthcare (HIPAA), Finance (SOC2/PCI-DSS), Government (FedRAMP) need proof of isolation. KubeTEE provides a FIPS-validated RKE2 baseline, cryptographic attestation, audit trails (Prometheus, Kubernetes events), and isolated namespaces for tenant separation.
 3. **Trust in decentralized infrastructure** — Centralized clouds are single points of failure with vendor lock-in. KubeTEE's decentralized multi-cluster architecture, Bittensor incentives, validator attestation, and open standards (Kubernetes, Armada, Kata, CoCo) remove the single point of failure and the lock-in.
 
 ---
@@ -192,7 +192,7 @@ If a workload fails, it can be targeted at the **staging cluster** for diagnosti
 
 ```mermaid
 flowchart LR
-    Jobs["AI workload"] --> Miners["Miner clusters<br/>CC on, guest debug off<br/>CoCo Trustee attests"]
+    Jobs["AI service"] --> Miners["Miner clusters<br/>CC on, guest debug off<br/>CoCo Trustee attests"]
     Jobs -.->|"on failure, debug"| Staging["Staging cluster<br/>CC-capable; CC off and<br/>per-pod guest debug available"]
 ```
 
@@ -210,7 +210,7 @@ Supply-chain CI (SAST, Trustee secrets, image CVE, IaC) is designed, not yet aut
 - Intel TDX/SGX
 - NVIDIA Hopper/Blackwell/Vera Rubin
 
-Confidential jobs execute under the TEE runtime classes in the [Overview](#overview). On staging, every node is TEE CC capable; Kata guest debug is off and CoCo Trustee attests those guests. CC can be turned off on a staging node for debug. See [Armada Multi-Cluster Batch Scheduling](#armada-multi-cluster-batch-scheduling) for how they are scheduled.
+Confidential services execute under the TEE runtime classes in the [Overview](#overview). On staging, every node is TEE CC capable; Kata guest debug is off and CoCo Trustee attests those guests. CC can be turned off on a staging node for debug. Batch jobs use the same runtime classes; see [Armada Multi-Cluster Batch Scheduling](#armada-multi-cluster-batch-scheduling) for that secondary path.
 
 ### Infrastructure
 
@@ -325,17 +325,19 @@ flowchart LR
 
 ---
 
-## Supported AI Workloads (Job Types)
+## Supported SOTA AI Services
 
-KubeTEE AI Factory schedules AI workloads as Armada batch jobs that execute inside Kata + CoCo TEE pods. The Factory ships with first-class job templates built on the NVIDIA AI stack — NeMo Microservices, NIM models, and AI Blueprints — and any containerized batch job can be submitted to an Armada queue.
+KubeTEE AI Factory hosts **SOTA AI services** and **enhanced services for enterprises** inside Kata + CoCo TEE pods — inference (NIM / SGLang), NeMo microservices, retrieval, and agents — shared HA per cluster. The Factory ships first-class templates on the NVIDIA AI stack — NeMo Microservices, NIM models, and AI Blueprints.
 
-### Serving Configurations — Every Job Requires Fast Inference
+**Batch jobs** (fine-tune, eval, multi-step pipelines) are a secondary service on the same clusters. When an enterprise needs that path, the job is submitted to an Armada queue.
 
-Confidential execution is not an excuse for slow inference. **Every job type on KubeTEE requires fast inference**, whether it is an agent loop, a consumer chat session, or an overnight batch. The Kata + CoCo boundary is a security property, not a performance tax, and each workload is held to a latency and throughput target inside the TEE.
+### Serving Configurations — Every Service Requires Fast Inference
+
+Confidential execution is not an excuse for slow inference. **Every AI service on KubeTEE requires fast inference**, whether it is an agent loop, a consumer chat session, or an overnight batch. The Kata + CoCo boundary is a security property, not a performance tax, and each service is held to a latency and throughput target inside the TEE.
 
 No single operating point serves an agentic tool-calling loop and a heavy-context batch equally well, so **every model is published in three serving configurations**. All three run the same attested weights on the same confidential runtime — what differs is how the serve is tuned: concurrency ceiling, batching and chunked-prefill sizing, KV-cache budget, and speculative decoding.
 
-| Configuration | Target workload | Optimized for |
+| Configuration | Target service | Optimized for |
 |---------------|-----------------|---------------|
 | **Low-latency** | Agentic, low concurrency | Time-to-first-token and per-token latency for tool-calling loops, where every hop blocks the caller. Concurrency is deliberately capped to keep the tail predictable. |
 | **Balanced** | General, consumer-aligned | The default consumer-facing operating point — interactive chat responsiveness at a sane occupancy per GPU. |
@@ -345,7 +347,7 @@ A consumer picks the configuration alongside the model at submission. Because th
 
 ### NVIDIA NeMo Microservices & Bittensor Subnet Integrations
 
-[NVIDIA NeMo Microservices](https://docs.nvidia.com/nemo/microservices/latest/about/index.html) (Customizer, Evaluator, Guardrails, Retriever, model endpoints) run as **cluster-resident services** that scheduled Armada jobs call inside the confidential boundary — shared HA per cluster, amortized across jobs. Service-to-service traffic uses **attestation-gated TLS** (in-guest keypairs, certificates issued only against a valid TDX quote, verified through Intel Trust Authority, terminated inside the guest) — not cert-manager, not a service mesh, not host-level encryption, because the host is the adversary. The NVIDIA NIM Operator has **experimental** Kata sandbox + Dynamo support, but KubeTEE runs the **stable** `kata-qemu-nvidia-gpu-tdx` runtime classes instead and is working with NVIDIA to graduate the experimental paths (Phase 3).
+[NVIDIA NeMo Microservices](https://docs.nvidia.com/nemo/microservices/latest/about/index.html) (Customizer, Evaluator, Guardrails, Retriever, model endpoints) run as **cluster-resident services** that other SOTA AI services — and, secondarily, batch jobs — call inside the confidential boundary — shared HA per cluster, amortized across every consumer. Service-to-service traffic uses **attestation-gated TLS** (in-guest keypairs, certificates issued only against a valid TDX quote, verified through Intel Trust Authority, terminated inside the guest) — not cert-manager, not a service mesh, not host-level encryption, because the host is the adversary. The NVIDIA NIM Operator has **experimental** Kata sandbox + Dynamo support, but KubeTEE runs the **stable** `kata-qemu-nvidia-gpu-tdx` runtime classes instead and is working with NVIDIA to graduate the experimental paths (Phase 3).
 
 Given the NIM Operator's current Kata/CoCo limitations, KubeTEE's thesis is that **the Bittensor ecosystem already contains SOTA, verifiable substitutes** for several NeMo stack layers. Each subnet below exposes a verifiable feed (public API + on-chain metagraph) and is a **potential partnership** — a candidate integration, not a shipping integration — that could run inside `kata-qemu-nvidia-gpu-tdx` / `kata-qemu-tdx` with its outputs attested and persisted on confidential storage. This is the Bittensor-native path to a confidential AI Factory not locked to a single vendor's experimental stack.
 
@@ -476,7 +478,7 @@ These are the validator behaviors:
 
 ## Submitting a Confidential Job
 
-Confidential compute reaches consumers through three front doors, in decreasing order of maturity: the **[LiteLLM gateway](#litellm-gateway--the-multi-service-front-door)** at `llm.kubetee.ai`, which ships today; **[Airflow and Metaflow connectors](#workflow-orchestration-airflow--metaflow)** for multi-step pipelines (designed, not built); and the **[Jobs MCP server](#jobs-mcp-server)** for agents and humans submitting conversationally (not developed yet). Underneath all three, batch work will land on Armada queues (Armada is in development) and be scheduled onto miner clusters with a confidential `runtimeClassName`. In Early Access, direct Armada submission will be open to the subnet owner and authorized integrators.
+The primary door is the **[LiteLLM gateway](#litellm-gateway--the-multi-service-front-door)** at `llm.kubetee.ai` (ships today) — SOTA inference, tools, and agents. **Batch jobs** are a secondary service: **[Airflow and Metaflow connectors](#workflow-orchestration-airflow--metaflow)** for multi-step pipelines (designed, not built) and the **[Jobs MCP server](#jobs-mcp-server)** for conversational submit (not developed yet). Those land on Armada queues (Armada is in development) with a confidential `runtimeClassName`. In Early Access, direct Armada submission will be open to the subnet owner and authorized integrators.
 
 (Miners join the other side of this: they register one cluster per hotkey with the subnet owner for Rancher Fleet and Armada enrollment — see [For Miners (Infrastructure)](#for-miners-infrastructure).)
 
@@ -499,13 +501,13 @@ Confidential compute reaches consumers through three front doors, in decreasing 
 
 When a miner cluster has a model, LiteLLM gets another row with the same `model_name` and that cluster's private `api_base`. `simple-shuffle` / `least-busy` uses capacity on every healthy backend.
 
-Two things follow. First, an internal workload or pipeline deployed in the KubeTEE multi-cluster adopts KubeTEE by changing a base URL — no KubeTEE-specific SDK, and the tools, agents, and fine-tuning jobs they already run keep working, only now inside a TEE. Second, KubeTEE contributes to LiteLLM upstream and is integrating as a **provider inside the open-source project**, so a LiteLLM deployment *someone else* operates (including SN28/SayGM) can route to KubeTEE confidential compute as a first-class backend rather than a hand-configured custom endpoint. Meeting consumers in the open-source platforms they already run is the distribution strategy; the gateway is not a KubeTEE-only walled garden.
+Two things follow. First, an internal AI service or pipeline deployed in the KubeTEE multi-cluster adopts KubeTEE by changing a base URL — no KubeTEE-specific SDK, and the tools, agents, and fine-tuning jobs they already run keep working, only now inside a TEE. Second, KubeTEE contributes to LiteLLM upstream and is integrating as a **provider inside the open-source project**, so a LiteLLM deployment *someone else* operates (including SN28/SayGM) can route to KubeTEE confidential compute as a first-class backend rather than a hand-configured custom endpoint. Meeting consumers in the open-source platforms they already run is the distribution strategy; the gateway is not a KubeTEE-only walled garden.
 
 > **Status:** `llm.kubetee.ai` serves inference and multi-tenant governance (virtual keys, budgets, rate limits, spend tracking). Cloudflare is DNS-only (grey cloud). LiteLLM runs in `kata-qemu-tdx-runtime-rs` with guest debug off, Traefik TLS passthrough, and in-guest termination. CoCo Trustee attests the guest. Remaining: RA-TLS so clients attest the terminator; native TLS from the LiteLLM guest to NIM guests; wiring `/mcp`, `/a2a`, and the fine-tuning and batch endpoints through to Armada; upstream provider integration. See [What Ships Today](#what-ships-today).
 
 ### SN28 sayGM — idle capacity, not the product
 
-**SN90 is not an inference subnet.** It is a confidential AI compute platform. Serving models is not the product. Workloads that run in the clusters always get priority. What goes to [sayGM (SN28)](https://saygm.com/) is **idle GPU headroom** — capacity that would otherwise sit warm and unused.
+**SN90 is not an inference subnet.** It hosts **SOTA AI services** for enterprises. Serving models to the general public is not the product. Factory services on the clusters always get priority. What goes to [sayGM (SN28)](https://saygm.com/) is **idle GPU headroom** — capacity that would otherwise sit warm and unused.
 
 That channel is **live** (2026-08-19). Buyers use the OpenAI-compatible sayGM API; the KubeTEE miner forwards to `llm.kubetee.ai` inside Intel TDX + NVIDIA CC. Same stack as the Factory gateway. Details: [SN28-SAYGM.md](./docs/SN28-SAYGM.md).
 
@@ -595,9 +597,9 @@ public repository.
 
 **Minimum For Staging Participation** — what the **miner** provides:
 
-> KubeTEE is a decentralized multi-cluster architecture. Miners must provide the minimum requirements below to allow high availability, deploy the full tech stack, and have enough nodes to run AI workloads. These minimum requirements are written and enforced in Phase 0.
+> KubeTEE is a decentralized multi-cluster architecture. Miners must provide the minimum requirements below to allow high availability, deploy the full tech stack, and have enough nodes to run SOTA AI services and enhanced services for enterprises. These minimum requirements are written and enforced in Phase 0.
 
-- **8 nodes minimum per cluster** (5 control-plane + etcd + worker combined, 3+ dedicated 8-GPU workers **per GPU type**) — all co-located in a single data center. The 5 combined nodes run the tech stack (GPU Operator, Kata/CoCo, Longhorn, NeMo, Armada Executor, monitoring) and serve inference; **3 dedicated GPU workers per GPU type** ensure HA for each workload class (a mixed-GPU cluster needs 3 per type, e.g. 3 H200 + 3 B200). Fewer nodes cannot simultaneously host the tech stack and serve inference with HA. Full topology + scaling table: [GPU Node Requirements — Cluster Architecture & HA](./docs/GPU-NODE-REQUIREMENTS.md#cluster-architecture--high-availability)
+- **8 nodes minimum per cluster** (5 control-plane + etcd + worker combined, 3+ dedicated 8-GPU workers **per GPU type**) — all co-located in a single data center. The 5 combined nodes run the tech stack (GPU Operator, Kata/CoCo, Longhorn, NeMo, Armada Executor, monitoring) and serve inference; **3 dedicated GPU workers per GPU type** ensure HA for each GPU type (a mixed-GPU cluster needs 3 per type, e.g. 3 H200 + 3 B200). Fewer nodes cannot simultaneously host the tech stack and serve inference with HA. Full topology + scaling table: [GPU Node Requirements — Cluster Architecture & HA](./docs/GPU-NODE-REQUIREMENTS.md#cluster-architecture--high-availability)
 - Intel TDX (AMD SEV-SNP, Phase 1) compatible nodes with NVIDIA H100/H200/B200/B300; BIOS + kernel TDX/SGX enabled; one cluster per miner; cluster registered with Rancher for Fleet management
 - Production Rancher inventory passes the infrastructure-readiness policy (readiness, HA topology, CPU/memory, eight-GPU workers, passthrough wiring, confidential runtime handler)
 - A **100 TAO deposit** held as on-chain registration collateral on the mining hotkey — see [Miner deposit (registration collateral)](#miner-deposit-registration-collateral)
@@ -627,7 +629,7 @@ Full detail — the chain primitive, Alpha conversion, grace/recovery, `btcli` c
 - [x] Kata guest debug **off** on the staging cluster — CoCo Trustee attests those guests. Debug can be enabled per pod for diagnostics.
 - [ ] Validator runs in a TEE (Kata + CoCo) on the control plane; CoCo attestation proves the validator code is unmodified
 - [x] [Attestation-gated TLS](./docs/NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md#2-attestation-gated-tls-between-services) on the served backend (Kata runtime deployed) — in-guest keypairs, certificates issued only against a valid TDX quote verified through Intel Trust Authority, ingress on TLS passthrough, termination inside the guest
-- [x] **SN28 (sayGM) idle-capacity channel** — live 2026-08-19 ([SN28-SAYGM.md](./docs/SN28-SAYGM.md)). SN90 is **not** an inference subnet; Factory workloads keep priority; SN28 gets spare headroom. Buyer offers: `z-ai/glm-5.2` **48.25%** below retail, `deepseek/deepseek-v4-flash-0731` **50%** below retail. **Ornith-1.5-397B** — first worldwide availability, in collaboration with SN28 sayGM (2026-08-20). Free window closed at 14,812,329,857 tokens. Do not declare Kimi / Qwen / MiMo on SN28.
+- [x] **SN28 (sayGM) idle-capacity channel** — live 2026-08-19 ([SN28-SAYGM.md](./docs/SN28-SAYGM.md)). SN90 is **not** an inference subnet; Factory AI services keep priority; SN28 gets spare headroom. Buyer offers: `z-ai/glm-5.2` **48.25%** below retail, `deepseek/deepseek-v4-flash-0731` **50%** below retail. **Ornith-1.5-397B** — first worldwide availability, in collaboration with SN28 sayGM (2026-08-20). Free window closed at 14,812,329,857 tokens. Do not declare Kimi / Qwen / MiMo on SN28.
 - [ ] **Confidential model catalogue** — more TEE-served models on `llm.kubetee.ai` (and optionally extra SN28 SKUs). SN28 is a demand channel, **not** the exclusive path to public inference. Every model published in all three [serving configurations](#serving-configurations--every-job-requires-fast-inference) and billed at below-OpenRouter prices per token on the gateway (a demand channel, **not** an SN90 discounted reseller tier — see [Payment methods](#payment-methods)):
   - [ ] **Kimi-K3** — B300 nodes (`llm.kubetee.ai`)
   - [x] **GLM-5.2** — B200 nodes (`llm.kubetee.ai` + SN28)
@@ -720,4 +722,4 @@ Full detail — the chain primitive, Alpha conversion, grace/recovery, `btcli` c
 
 **Built by the KubeTEE Community**
 
-*Confidential compute for decentralized AI jobs — secured by TEE, scheduled by Armada, incentivized by Bittensor.*
+*Confidential compute for SOTA AI services and enhanced services for enterprises — secured by TEE, incentivized by Bittensor.*
