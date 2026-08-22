@@ -95,6 +95,7 @@ As a member of the [Confidential Computing Consortium (CCC)](https://confidentia
   - [Weight Setting](#weight-setting)
 - [Submitting a Confidential Job](#submitting-a-confidential-job)
   - [LiteLLM Gateway — the multi-service front door](#litellm-gateway--the-multi-service-front-door)
+  - [Inference providers and TEE fallbacks](#inference-providers-and-tee-fallbacks)
   - [SN28 sayGM — idle capacity, not the product](#sn28-saygm--idle-capacity-not-the-product)
   - [Workflow Orchestration (Airflow & Metaflow)](#workflow-orchestration-airflow--metaflow)
   - [Jobs MCP Server](#jobs-mcp-server) — agent and chat-driven job deployment
@@ -144,8 +145,8 @@ This README documents both what runs in the KubeTEE infrastructure and what is d
 | **Miner&nbsp;onboarding** | KubeTEE applies the hotkey binding | Permissionless self-service ([Phase 1](#phase-1--expansion)) |
 | **Miner&nbsp;deposit** | 100 TAO gate **measured, not enforced** | On-chain collateral bonding ([Phase 1](#phase-1--expansion)) |
 | **Payments** | Alpha / TAO at a resources price per hour. **TAO is live on Base** (Chainlink CCIP-bridged ERC-20, Aerodrome TAO/USDC — [ForeverMoney SN98](https://x.com/forevermoney_ai/status/2090469070248235027), 2026-08-21) | USDC-on-BASE and TAO-on-BASE job billing + automated recycle ([Phase 2](#phase-2--paid-jobs)) |
-| **LiteLLM&nbsp;gateway** | `llm.kubetee.ai` — OpenAI-compatible inference plus virtual keys, budgets, rate limits, and spend tracking. Cloudflare DNS-only (grey cloud) to oakland node IPs. LiteLLM runs in `kata-qemu-tdx-runtime-rs` with guest debug off; Traefik TLS passthrough terminates in the guest. CoCo Trustee attests the guest. Inference backends are in-cluster NIM on the staging cluster; miner clusters are extra `api_base` rows under the same `model_name`. | Wire `/mcp` and `/a2a` surfaces and the fine-tuning / batch endpoints through to Armada; KubeTEE as an upstream LiteLLM **provider**; RA-TLS so clients attest the terminator |
-| **Inference&nbsp;models** | **Live on the staging cluster** through `llm.kubetee.ai`: GLM-5.2, DeepSeek-V4-Flash-0731, **Ornith-1.5-397B**. **SN28 (sayGM) live 2026-08-19** as an **idle-capacity** demand channel — not SN90's product, not an exclusive public-inference path. Paid offers: `z-ai/glm-5.2` **48.25%** below retail, `deepseek/deepseek-v4-flash-0731` **50%** below retail ([SN28-SAYGM.md](./docs/SN28-SAYGM.md)). Free window closed at **14,812,329,857** tokens. **In collaboration with SN28 sayGM, KubeTEE was the first to provide Ornith-1.5-397B worldwide** (2026-08-20). | Expand the confidential model catalogue (more GPU classes, embedding/judge/retrieval models). Do not declare Kimi/Qwen/MiMo on SN28. |
+| **LiteLLM&nbsp;gateway** | `llm.kubetee.ai` — OpenAI-compatible inference plus virtual keys, budgets, rate limits, and spend tracking. Cloudflare DNS-only (grey cloud) to oakland node IPs. LiteLLM runs in `kata-qemu-tdx-runtime-rs` with guest debug off; Traefik TLS passthrough terminates in the guest. CoCo Trustee attests the guest. Inference backends are in-cluster NIM on the staging cluster; miner clusters are extra `api_base` rows under the same `model_name`. **sayGM (SN28)** is a connected inference provider (same `model` names). | Wire `/mcp` and `/a2a` and fine-tuning / batch through to Armada; KubeTEE as an upstream LiteLLM **provider**; RA-TLS; **TEE fallbacks** to Chutes / Phala / Near AI ([Inference providers](#inference-providers-and-tee-fallbacks)) |
+| **Inference&nbsp;models** | **Live on the staging cluster** through `llm.kubetee.ai`: GLM-5.2, DeepSeek-V4-Flash-0731, **Ornith-1.5-397B**. **SN28 (sayGM) live 2026-08-19** as an inference provider + idle-capacity demand channel — not SN90's product. Paid offers: `z-ai/glm-5.2` **48.25%** below retail, `deepseek/deepseek-v4-flash-0731` **50%** below retail ([SN28-SAYGM.md](./docs/SN28-SAYGM.md)). Free window closed at **14,812,329,857** tokens. **In collaboration with SN28 sayGM, KubeTEE was the first to provide Ornith-1.5-397B worldwide** (2026-08-20). | TEE router fallbacks (Chutes / Phala / Near AI). Expand the confidential model catalogue. Do not declare Kimi/Qwen/MiMo on SN28. |
 | **Jobs&nbsp;MCP&nbsp;server** | — | **Not developed yet** — agent- and chat-driven job deployment at `llm.kubetee.ai/mcp` ([Phase 1](#phase-1--expansion)) |
 | **Albedo&nbsp;SN97&nbsp;eval&nbsp;PoC** | **Parked (2026-08-13).** 100-sample king-of-the-hill eval succeeded 2026-08-09 on `na-us-oakland-56`. Revisit when Armada + CoCo Trustee are the complete job flow so upstream SN97 deploys **without modifications or architecture changes** — [SN97-ALBEDO-POC.md](./docs/SN97-ALBEDO-POC.md) | Complete Armada + Trustee, then deploy unmodified Albedo / Denrite |
 
@@ -360,7 +361,8 @@ Given the NIM Operator's current Kata/CoCo limitations, KubeTEE's thesis is that
 | Search | [Desearch SN22](https://desearch.ai/) | Decentralized real-time web + X/Twitter search for AI agents |
 | Retriever / RAG | [Rec4ll SN31](https://taostats.io/subnets/31) | Decentralized RAG — miners serve embeddings, vector search, and LLM inference; validators score retrieval accuracy and answer quality |
 | Video Search & Summarization | [Score SN44](https://github.com/score-technologies/turbovision) | Decentralized computer vision — object detection, tracking, structured annotations |
-| Inference + distributed training | [Chutes SN64](https://chutes.ai/) / Parallax | Serverless inference + decentralized MoE training (already fully TEE-only) |
+| Inference + distributed training | [Chutes SN64](https://chutes.ai/) / Parallax | Serverless inference + decentralized MoE training (already fully TEE-only). Also a [LiteLLM TEE fallback](#inference-providers-and-tee-fallbacks) |
+| Inference (LiteLLM provider) | [sayGM SN28](https://saygm.com/) | Connected to `llm.kubetee.ai` as an inference provider — models on the gateway; idle-capacity inbound from sayGM buyers. Fallbacks are other TEE networks, not a loop back through sayGM |
 | Persistent storage | [Hippius SN75](https://hippius.com/) | S3-compatible + IPFS pinning (already ships AMD SEV-SNP CC) |
 | Agent memory / context | [Ditto SN118](https://heyditto.ai/) | Open-source persistent memory layer for AI agents (Claude / Cursor / MCP) |
 
@@ -502,9 +504,25 @@ The primary door is the **[LiteLLM gateway](#litellm-gateway--the-multi-service-
 
 When a miner cluster has a model, LiteLLM gets another row with the same `model_name` and that cluster's private `api_base`. `simple-shuffle` / `least-busy` uses capacity on every healthy backend.
 
-Two things follow. First, an internal AI service or pipeline deployed in the KubeTEE multi-cluster adopts KubeTEE by changing a base URL — no KubeTEE-specific SDK, and the tools, agents, and fine-tuning jobs they already run keep working, only now inside a TEE. Second, KubeTEE contributes to LiteLLM upstream and is integrating as a **provider inside the open-source project**, so a LiteLLM deployment *someone else* operates (including SN28/SayGM) can route to KubeTEE confidential compute as a first-class backend rather than a hand-configured custom endpoint. Meeting consumers in the open-source platforms they already run is the distribution strategy; the gateway is not a KubeTEE-only walled garden.
+Two things follow. First, an internal AI service or pipeline deployed in the KubeTEE multi-cluster adopts KubeTEE by changing a base URL — no KubeTEE-specific SDK, and the tools, agents, and fine-tuning jobs they already run keep working, only now inside a TEE. Second, KubeTEE contributes to LiteLLM upstream and is integrating as a **provider inside the open-source project**, so a LiteLLM deployment *someone else* operates (including SN28/sayGM) can route to KubeTEE confidential compute as a first-class backend rather than a hand-configured custom endpoint. Meeting consumers in the open-source platforms they already run is the distribution strategy; the gateway is not a KubeTEE-only walled garden.
 
-> **Status:** `llm.kubetee.ai` serves inference and multi-tenant governance (virtual keys, budgets, rate limits, spend tracking). Cloudflare is DNS-only (grey cloud). LiteLLM runs in `kata-qemu-tdx-runtime-rs` with guest debug off, Traefik TLS passthrough, and in-guest termination. CoCo Trustee attests the guest. Remaining: RA-TLS so clients attest the terminator; native TLS from the LiteLLM guest to NIM guests; wiring `/mcp`, `/a2a`, and the fine-tuning and batch endpoints through to Armada; upstream provider integration. See [What Ships Today](#what-ships-today).
+#### Inference providers and TEE fallbacks
+
+[sayGM (SN28)](https://saygm.com/) is an **inference provider** connected to the KubeTEE LiteLLM gateway. The same OpenRouter-style `model` names (`z-ai/glm-5.2`, `deepseek/deepseek-v4-flash-0731`, `ornith/ornith-1.5-397b`, …) are the models on `llm.kubetee.ai`. Inbound sayGM buyers already hit those SKUs through the KubeTEE miner ([SN28-SAYGM.md](./docs/SN28-SAYGM.md)).
+
+**Primary:** in-cluster TEE backends (Kata + NVIDIA CC). **Fallbacks** are other networks that already serve models **in TEE** — not plaintext public cloud:
+
+| Fallback | What it is | Why it qualifies |
+|---|---|---|
+| [Chutes (SN64)](https://chutes.ai/) | Bittensor serverless inference | Fully TEE-only infrastructure stack |
+| [Phala](https://phala.network/) | Confidential VM / TEE inference | Hardware-isolated guests (the same CC path KubeTEE helped bring up) |
+| [Near AI](https://near.ai/) | TEE-served model inference | Confidential inference fallback when in-cluster capacity is down |
+
+LiteLLM router fallbacks ([docs](https://docs.litellm.ai/docs/proxy/reliability)) send the same `model` to the next TEE backend after cooldown (`allowed_fails` / `cooldown_time`). Do **not** add sayGM as a fallback for KubeTEE-hosted SKUs — the miner already forwards sayGM → `llm.kubetee.ai`, so that hop would loop.
+
+> **Status:** inbound sayGM → LiteLLM → in-cluster TEE is **live**. Router fallbacks to Chutes / Phala / Near AI are the HA design — credentials stay out-of-band (Trustee / KBS), TEE-only backends only.
+
+> **Status:** `llm.kubetee.ai` serves inference and multi-tenant governance (virtual keys, budgets, rate limits, spend tracking). Cloudflare is DNS-only (grey cloud). LiteLLM runs in `kata-qemu-tdx-runtime-rs` with guest debug off, Traefik TLS passthrough, and in-guest termination. CoCo Trustee attests the guest. Remaining: RA-TLS so clients attest the terminator; native TLS from the LiteLLM guest to NIM guests; wiring `/mcp`, `/a2a`, and the fine-tuning and batch endpoints through to Armada; upstream provider integration; TEE fallbacks (Chutes / Phala / Near AI). See [What Ships Today](#what-ships-today).
 
 ### SN28 sayGM — idle capacity, not the product
 
@@ -630,7 +648,8 @@ Full detail — the chain primitive, Alpha conversion, grace/recovery, `btcli` c
 - [x] Kata guest debug **off** on the staging cluster — CoCo Trustee attests those guests. Debug can be enabled per pod for diagnostics.
 - [ ] Validator runs in a TEE (Kata + CoCo) on the control plane; CoCo attestation proves the validator code is unmodified
 - [x] [Attestation-gated TLS](./docs/NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md#2-attestation-gated-tls-between-services) on the served backend (Kata runtime deployed) — in-guest keypairs, certificates issued only against a valid TDX quote verified through Intel Trust Authority, ingress on TLS passthrough, termination inside the guest
-- [x] **SN28 (sayGM) idle-capacity channel** — live 2026-08-19 ([SN28-SAYGM.md](./docs/SN28-SAYGM.md)). SN90 is **not** an inference subnet; Factory AI services keep priority; SN28 gets spare headroom. Buyer offers: `z-ai/glm-5.2` **48.25%** below retail, `deepseek/deepseek-v4-flash-0731` **50%** below retail. **Ornith-1.5-397B** — first worldwide availability, in collaboration with SN28 sayGM (2026-08-20). Free window closed at 14,812,329,857 tokens. Do not declare Kimi / Qwen / MiMo on SN28.
+- [x] **SN28 (sayGM) idle-capacity channel + LiteLLM inference provider** — live 2026-08-19 ([SN28-SAYGM.md](./docs/SN28-SAYGM.md)). SN90 is **not** an inference subnet; Factory AI services keep priority; SN28 gets spare headroom. Same `model` names on `llm.kubetee.ai`. Buyer offers: `z-ai/glm-5.2` **48.25%** below retail, `deepseek/deepseek-v4-flash-0731` **50%** below retail. **Ornith-1.5-397B** — first worldwide availability, in collaboration with SN28 sayGM (2026-08-20). Free window closed at 14,812,329,857 tokens.
+- [ ] **LiteLLM TEE fallbacks** — if an in-cluster TEE backend is down or overloaded, router fallbacks to TEE-served models on [Chutes](https://chutes.ai/), [Phala](https://phala.network/), and [Near AI](https://near.ai/) through sayGM but not in loop. See [Inference providers and TEE fallbacks](#inference-providers-and-tee-fallbacks).
 - [ ] **Confidential model catalogue** — more TEE-served models on `llm.kubetee.ai` (and optionally extra SN28 SKUs). SN28 is a demand channel, **not** the exclusive path to public inference. Every model published in all three [serving configurations](#serving-configurations--every-job-requires-fast-inference) and billed at below-OpenRouter prices per token on the gateway (a demand channel, **not** an SN90 discounted reseller tier — see [Payment methods](#payment-methods)):
   - [ ] **Kimi-K3** — B300 nodes (`llm.kubetee.ai`)
   - [x] **GLM-5.2** — B200 nodes (`llm.kubetee.ai` + SN28)
@@ -696,7 +715,7 @@ Full detail — the chain primitive, Alpha conversion, grace/recovery, `btcli` c
 - [Tokenomics — Utility Token & DePIN Model](./docs/TOKENOMICS.md) — recycle vs burn, securities posture, TAO-on-BASE (CCIP), cross-subnet consumption loop, DePIN subsidy trajectory
 - [Competitive Pricing & Miner Scoring](./docs/COMPETITIVE-PRICING.md) — pricing SN90 against Targon/Lium/Chutes and how price becomes weights
 - [NeMo Microservices & Bittensor Subnet Integrations](./docs/NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md) — attestation-gated TLS, NIM Operator Kata/CoCo limits, SOTA Bittensor subnet substitutes per NeMo layer, and the Stage 0 supply-chain security gate
-- [SN28 sayGM — idle-capacity channel](./docs/SN28-SAYGM.md) — live 2026-08-19; SN90 is not an inference subnet; GLM-5.2 48.25% / Flash-0731 20% below retail; first worldwide Ornith-1.5-397B with SN28 (2026-08-20)
+- [SN28 sayGM — idle-capacity channel](./docs/SN28-SAYGM.md) — live 2026-08-19; LiteLLM inference provider; TEE fallbacks (Chutes / Phala / Near AI); GLM-5.2 48.25% / Flash-0731 50% below retail; first worldwide Ornith-1.5-397B with SN28 (2026-08-20)
 - [SN28→SN90 Alpha Recycler](./docs/SN28-SN90-ALPHA-RECYCLE.md) — swap SN28 stake to SN90 Alpha and recycle
 - [Albedo SN97 Eval PoC (KubeTEE SN90)](./docs/SN97-ALBEDO-POC.md) — parked 2026-08-13; 100-sample proof + artifacts; revisit when Armada + CoCo Trustee can run unmodified SN97
 - [Release & Versioning](./RELEASE-AND-VERSIONING.md) — semantic versioning scheme, image tag mapping, release procedure
@@ -714,7 +733,7 @@ Full detail — the chain primitive, Alpha conversion, grace/recovery, `btcli` c
 
 - **GitHub**: [KubeTEE-AI/kubetee-subnet](https://github.com/KubeTEE-AI/kubetee-subnet)
 - **Documentation**: [docs/](./docs/)
-- **sayGM (SN28)**: [saygm.com](https://saygm.com/) — idle-capacity inference channel ([SN28-SAYGM.md](./docs/SN28-SAYGM.md)). Together we were the first to provide Ornith-1.5-397B worldwide.
+- **sayGM (SN28)**: [saygm.com](https://saygm.com/) — LiteLLM inference provider + idle-capacity channel ([SN28-SAYGM.md](./docs/SN28-SAYGM.md)). Together we were the first to provide Ornith-1.5-397B worldwide.
 - **Discord**: questions in the public channel, not DMs. **We never DM first.** Anyone in DMs claiming to be KubeTEE support, or pointing at a ticket server, is a scammer. Team members are listed in the pinned post.
 - **X (Twitter)**: [@KubeTEEAI](https://x.com/KubeTEEAI)
 
