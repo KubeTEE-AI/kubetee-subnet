@@ -10,8 +10,8 @@ Buyer-visible SKUs on sayGM, served from `llm.kubetee.ai` (LiteLLM in TDX). GLM 
 
 | Buyer model | Miner offer | Discount vs retail | Backend |
 |---|---|---|---|
-| `glm-5.2` | `kubetee/z-ai/glm-5.2` | **48.25%** | `glm-5-2-nvfp4-sglang` (B200, NVFP4) |
-| `deepseek/deepseek-v4-flash-0731` | `kubetee/deepseek/deepseek-v4-flash-0731` | **50%** | `dsv4-0731-sglang-h200` (H200, FP8-DSpark) |
+| `glm-5.2` | `kubetee/z-ai/glm-5.2` | **62.41%** | `glm-5-2-nvfp4-sglang` (B200, NVFP4) |
+| `deepseek/deepseek-v4-flash-0731` | `kubetee/deepseek/deepseek-v4-flash-0731` | **76.14%** | `dsv4-0731-sglang-h200` (H200, FP8-DSpark) |
 | `ornith/ornith-1.5-397b` | `kubetee/ornith/ornith-1.5-397b` | **15%** (first worldwide, 2026-08-20) | `ornith-1-5-397b` (B200, NVFP4) |
 
 **First worldwide — Ornith-1.5-397B.** In collaboration with sayGM (SN28), KubeTEE was the first to provide [Ornith-1.5-397B](https://huggingface.co/ornith-ai/Ornith-1.5-397B-NVFP4) anywhere in the world (2026-08-20).
