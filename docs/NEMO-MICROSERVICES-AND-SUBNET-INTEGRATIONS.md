@@ -1,6 +1,6 @@
 # NeMo Microservices, Bittensor Subnet Integrations & the Stage 0 Security Gate
 
-This document is the detailed reference behind the README [NVIDIA NeMo Microservices](../README.md#nvidia-nemo-microservices--bittensor-subnet-integrations) and [Bittensor Subnet Integrations](../README.md#nvidia-nemo-microservices--bittensor-subnet-integrations) sections. It covers: the NeMo stack on KubeTEE, the attestation-gated TLS protocol between services, the NVIDIA NIM Operator's experimental Kata/Dynamo support and its CoCo limitations, the SOTA Bittensor subnets that could replace or augment each NeMo layer inside a TEE, and the Stage 0 supply-chain security gate (including why BitSec SN60 is not that gate).
+This document is the detailed reference behind the README [NVIDIA NeMo Microservices](../README.md#nvidia-nemo-microservices--bittensor-subnet-integrations) and [Bittensor Subnet Integrations](../README.md#nvidia-nemo-microservices--bittensor-subnet-integrations) sections. It covers: the NeMo stack on KubeTEE, the attestation-gated TLS protocol between services, the NVIDIA NIM Operator's experimental Kata/Dynamo support and its CoCo limitations, the SOTA Bittensor subnets that could replace or augment each NeMo layer inside a TEE, and the Stage 0 supply-chain security gate.
 
 ---
 
@@ -77,7 +77,8 @@ Given the limitations above, KubeTEE's thesis is that **the Bittensor ecosystem 
 | SN120 | [Affine](https://www.affine.io/) | Incentivized RL ("reason mining") — miners submit on-chain model revisions; validators host inference and run challenger-vs-champion duels; winner-takes-all; sybil/decoy/copy/overfitting-proof | NeMo Customizer (RL / reasoning) | Validator inference + duels run in TEE; winning models bridge to Chutes (SN64) for confidential serving |
 | SN97 | [Albedo](https://github.com/unarbos/distil) / [albedo](https://github.com/unarbos/albedo) (Distil) | Competitive **model distillation** (trajectory / knowledge distillation — not coding agents): miners commit ≤33B students distilled from a large teacher; validators score king-of-the-hill duels on a multi-axis composite; open HF checkpoints + public duel traces; upstream already serves the king at [chat.arbos.life](https://chat.arbos.life). **KubeTEE SN90 PoC parked 2026-08-13** after a successful 100-sample run (2026-08-09). Revisit when Armada + CoCo Trustee can deploy **unmodified** SN97 (no KubeTEE fork / split topology). Details: [SN97-ALBEDO-POC.md](./SN97-ALBEDO-POC.md) · [PLAN.md](https://github.com/KubeTEE-AI-Blueprints/albedo/blob/kubetee-poc/kubetee/PLAN.md) · [unarbos/albedo#4](https://github.com/unarbos/albedo/pull/4). | NeMo Customizer (distillation) + Evaluator (duel / composite scoring) + model endpoints (serve the reigning king) | Distillation + duels in TEE; reigning king served as confidential (or staging) inference; open distilled checkpoints reusable as job templates |
 | SN27 | [Orion](https://github.com/SILX-LABS/Orion) | Decentralized data subnet — campaign-driven discovery / generation / curation of model-ready training data with on-chain quality validation | NeMo Data Designer / data pipeline | Data provenance is on-chain; generation miners run in TEE for confidential data pipelines |
-| SN22 | [Desearch](https://desearch.ai/) | Decentralized real-time web + X/Twitter search for AI agents; cited, context-rich results via API | NeMo Retriever / RAG grounding | Live retrieval runs as a confidential grounding step inside the TEE before generation |
+| SN22 | [Desearch](https://desearch.ai/) | Decentralized real-time web + X/Twitter search for AI agents; cited, context-rich results via API | Live search / grounding (not RAG) | Search runs as a confidential web/X lookup inside the TEE before generation |
+| SN31 | [Rec4ll](https://taostats.io/subnets/31) | Decentralized RAG — miners serve embedding models, vector search, and LLM inference; validators independently score retrieval accuracy and answer quality; the subnet routes queries to the top RAG pipeline | NeMo Retriever / RAG | RAG pipeline (embed → retrieve → generate) runs inside the TEE; citations and retrieved chunks stay in the enclave |
 | SN44 | [Score](https://github.com/score-technologies/turbovision) (TurboVision) | Decentralized computer vision — miners run CV models (object detection, keypoint detection, tracking) on live video/imagery and return structured, decision-ready annotations; validators benchmark on live data via lightweight hybrid validation (frame filtering, keypoint + homography checks, CLIP-based semantic verification). First deployment: Game State Recognition for football at 10–100× lower cost than manual annotation; generalizes to any camera feed | NVIDIA Video Search and Summarization blueprint (video analytics / structured video understanding) | CV inference + validation run inside KubeTEE TEE pods → confidential video analytics with attested structured outputs; sensitive footage stays in the enclave |
 | SN64 | [Chutes](https://chutes.ai/) — Parallax (Jon Durbin) | Decentralized serverless inference + **Parallax** decentralized MoE training (surrogate experts, no all-to-all; ternary weights; Gated DeltaNet) across heterogeneous, non-colocated GPUs — within 0.6% of centralized baseline | Inference + distributed training | Chutes already runs a **fully TEE-only infrastructure stack**; Parallax trains frontier models on distributed confidential compute — a native fit for KubeTEE's decentralized TEE clusters |
 | SN75 | [Hippius](https://hippius.com/) | Decentralized cloud storage — S3-compatible + IPFS pinning; Arion engine (Reed-Solomon k=10/m=20, CRUSH placement, self-healing) | Persistent storage (solves CoCo's **ephemeral-data-only** limitation) | **Already ships Confidential Compute** (AMD SEV-SNP encrypted VMs); drop-in S3 endpoint replacing/augmenting encrypted Longhorn + object store |
@@ -112,22 +113,6 @@ flowchart LR
 
 **Why a gate, not a scanner inside the cluster:** production SN90 clusters run confidential workloads under Kata + CoCo with attested, encrypted memory. A security agent *inside* the TEE would either see confidential data (breaking the trust boundary) or see nothing useful.
 
-### Why BitSec SN60 is not the gate
-
-[Bitsec.ai (SN60)](https://bitsec.ai/) was previously listed as this Stage 0. A review of the live code ([Bitsec-AI/sandbox](https://github.com/Bitsec-AI/sandbox), [docs.bitsec.ai](https://docs.bitsec.ai/)) shows it does not fit:
-
-| KubeTEE Stage 0 needs | What SN60 actually is |
-|-----------------------|------------------------|
-| Call a scanner from CI with a workload artifact | Miners submit `agent.py`; there is no customer scan API for a Helm chart or image |
-| Python serving code, Fleet YAML, Helm, container layers | Agents are scored on [SCA-Bench](https://github.com/scabench-org/scabench); docs limit scope to **Solidity** smart contracts. The baseline agent only discovers `*.sol` / `*.vy` / `*.cairo` / `*.rs` / `*.move` |
-| Per-revision, minutes-scale pass/fail | Winner-take-all **rounds** (minimum winning period ≥ 3 days); 3 runs × N validators × 4 projects, 30-minute Docker sandboxes |
-| Fail-closed evidence that *this* revision is clean | Scoring is "did the agent rediscover *known* benchmark vulns?" Binary 1.0/0.0 per codebase. Stated SOTA is **<10%** with GPT-5 — absence of findings is not evidence |
-| Keep workload source private | After the submission window, agent code, scores, and eval logs become **public** |
-| TEE-compatible analysis | Validators run **plain Docker**; inference is Chutes/OpenRouter via BitSec's proxy; validators must be manually activated by the BitSec team |
-
-"Bitsec Scanner" / "Bitsec Hunter" remain **roadmap** applications on the older [Bitsec-AI/subnet](https://github.com/Bitsec-AI/subnet) README (last push 2025-08-28). They are not a shipping CI product.
-
-
 ---
 
 ## References
@@ -136,5 +121,4 @@ flowchart LR
 - [NVIDIA NIM Operator](https://docs.nvidia.com/nim-operator/latest/) — [Kata Sandbox (Experimental)](https://docs.nvidia.com/nim-operator/latest/kata-sandbox.html) | [Dynamo (Experimental)](https://docs.nvidia.com/nim-operator/latest/dynamo.html) | [Release Notes](https://docs.nvidia.com/nim-operator/latest/release-notes.html)
 - [NVIDIA Confidential Containers Reference Architecture](https://docs.nvidia.com/datacenter/cloud-native/confidential-containers/latest/overview.html)
 - [Intel Trust Authority](https://www.intel.com/content/www/us/en/security/trust-authority.html)
-- [Bitsec-AI/sandbox](https://github.com/Bitsec-AI/sandbox) · [docs.bitsec.ai](https://docs.bitsec.ai/) — SN60 is a Solidity-agent contest, not Stage 0
-- Bittensor subnets: [Gradients SN56](https://www.gradients.io/) · [Affine SN120](https://www.affine.io/) · [Albedo SN97](https://github.com/unarbos/distil) · [Orion SN27](https://github.com/SILX-LABS/Orion) · [Desearch SN22](https://desearch.ai/) · [Score SN44](https://github.com/score-technologies/turbovision) · [Chutes SN64](https://chutes.ai/) · [Hippius SN75](https://hippius.com/) · [Ditto SN118](https://heyditto.ai/)
+- Bittensor subnets: [Gradients SN56](https://www.gradients.io/) · [Affine SN120](https://www.affine.io/) · [Albedo SN97](https://github.com/unarbos/distil) · [Orion SN27](https://github.com/SILX-LABS/Orion) · [Desearch SN22](https://desearch.ai/) · [Rec4ll SN31](https://taostats.io/subnets/31) · [Score SN44](https://github.com/score-technologies/turbovision) · [Chutes SN64](https://chutes.ai/) · [Hippius SN75](https://hippius.com/) · [Ditto SN118](https://heyditto.ai/)
