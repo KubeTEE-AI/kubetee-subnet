@@ -1,6 +1,6 @@
 # SN28→SN90 Alpha Recycler
 
-**Status:** Fleet bundle checked in; not live until AddProxy + KBS seed + image push + GitRepo apply.  
+**Status:** Live on `na-us-oakland-56` as of 2026-08-23. First run swapped a partial fill (~134 SN28 α → 52.6 SN90 α recycled). CronJob is now capped at `MAX_ORIGIN_RAO=1000000000` (1 SN28 α) for further tests; unset that env to swap all remaining origin.  
 **Channel:** SN28 sayGM is live as idle-capacity inference — [SN28-SAYGM.md](./SN28-SAYGM.md). This doc is only the Alpha swap/recycle job.  
 **Cluster:** `na-us-oakland-56` only (`kata-qemu-tdx-runtime-rs`).  
 **Bundle:** `fleet-gitops/infrastructure/alpha-recycler/`
@@ -8,7 +8,7 @@
 Each SN28 epoch (~360 blocks / ~72 min), a CPU-TDX CronJob:
 
 1. Attests to Trustee KBS and fetches **proxy** seeds (not the main coldkey).
-2. `swap_stake_limit` SN28→SN90 on hotkey `sn28` with `rate_tolerance=0.001`, `allow_partial=True`.
+2. `swap_stake_limit` SN28→SN90 on hotkey `sn28` with `rate_tolerance=0.001`, `allow_partial=True` (amount = `min(origin, MAX_ORIGIN_RAO)` when the cap is set).
 3. `recycle_alpha` on netuid **90** for SN90 alpha on that hotkey.
 
 Main kubetee coldkey stays offline after a one-time `AddProxy`.
@@ -34,7 +34,7 @@ Follow [`scripts/sn28-add-proxy-and-seed-kbs.md`](../../scripts/sn28-add-proxy-a
 1. Generate proxy keypairs A and B (local only).
 2. `AddProxy` Staking + NonFungible from the **main** coldkey (then coldkey offline).
 3. Seed both seeds into Trustee KBS with admin JWT (`kbs-client set-resource`).
-4. Build/push `ghcr.io/kubetee-ai/alpha-recycler:v0.1.0` and ensure nodes can pull it (`IfNotPresent` — pre-pull on TDX nodes if needed).
+4. Build/push **private** `ghcr.io/kubetee-ai/alpha-recycler:v0.1.0`. CronJob uses out-of-band `ghcr-kubetee` (`imagePullSecrets`). Do not host-pull on TDX nodes.
 5. Apply GitRepo on stagingrancher (Gotcha #8).
 
 ## Deploy / resync
