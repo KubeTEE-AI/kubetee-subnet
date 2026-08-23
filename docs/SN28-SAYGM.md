@@ -43,4 +43,4 @@ sayGM is connected to `llm.kubetee.ai` as a provider: buyer SKUs and Factory `mo
 
 - **X (Twitter)**: [@KubeTEEAI](https://x.com/KubeTEEAI)
 - Questions in the public channel, not DMs. KubeTEE never DMs first.
-- SN28→SN90 recycle (how to verify on-chain): [SN28-SN90-ALPHA-RECYCLE.md](./SN28-SN90-ALPHA-RECYCLE.md#how-to-see-recycled-alpha)
+- SN28→SN90 recycle (how to verify on-chain): [SN28-SN90-ALPHA-RECYCLE.md](./SN28-SN90-ALPHA-RECYCLE.md)
