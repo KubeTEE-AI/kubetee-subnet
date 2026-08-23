@@ -36,12 +36,13 @@ def derive_hotkey_keypair(seed: str) -> Keypair:
 
 
 class ChainState:
-    """Thin wrapper over the vendored bittensor v11 SDK."""
+    """Thin wrapper over the vendored bittensor 11.1 SDK (subtensor v445)."""
 
     def __init__(self, network: str, endpoint: str, hotkey_seed: str) -> None:
         network = (network or "finney").strip()
         self._subtensor = bt.Subtensor(endpoint or network)
         self._keypair = derive_hotkey_keypair(hotkey_seed)
+        self._last_metagraph = None
 
     @property
     def endpoint(self) -> str:
@@ -79,10 +80,23 @@ class ChainState:
 
     def emissions(self) -> dict[int, float]:
         """On-chain emission per UID (alpha tokens, from last epoch)."""
-        mg = getattr(self, "_last_metagraph", None)
-        if mg is None or not hasattr(mg, "raw") or not mg.raw:
+        mg = self._last_metagraph
+        if mg is None:
             return {}
-        raw_em = mg.raw.get("emission", [])
+        neurons = getattr(mg, "neurons", None)
+        if neurons:
+            out: dict[int, float] = {}
+            for neuron in neurons:
+                em = getattr(neuron, "emission", None)
+                amount = getattr(em, "amount", em)
+                try:
+                    value = float(amount) if amount else 0.0
+                except (TypeError, ValueError):
+                    value = 0.0
+                out[int(neuron.uid)] = value
+            return out
+        raw = getattr(mg, "raw", None) or {}
+        raw_em = raw.get("emission", [])
         return {
             uid: float(em) / 1e9 if em else 0.0
             for uid, em in enumerate(raw_em)
@@ -149,17 +163,32 @@ class ChainState:
 
     def tempo(self, netuid: int) -> int | None:
         """Subnet epoch length in blocks, if available."""
-        hyperparams = self.hyperparams(netuid)
-        if not hyperparams:
-            return None
-        for attr in ("tempo", "blocks_per_epoch", "epoch_length"):
-            value = hyperparams.get(attr)
-            if isinstance(value, (int, float)):
-                return int(value)
+        progress = self.epoch_progress(netuid)
+        if progress:
+            return progress[0]
+        return None
+
+    def weights_rate_limit(self, netuid: int) -> int | None:
+        """Blocks a validator must wait between set_weights calls."""
+        try:
+            value = self._subtensor.hyperparameters.weights_rate_limit(netuid)
+        except Exception:  # noqa: BLE001 - fall back to the flat map
+            hyperparams = self.hyperparams(netuid)
+            value = (hyperparams or {}).get("weights_rate_limit")
+        if isinstance(value, (int, float)) and value > 0:
+            return int(value)
         return None
 
     def epoch_progress(self, netuid: int) -> tuple[int, int, int] | None:
         """Epoch state: (tempo, blocks_since_last_step, blocks_until_next_epoch)."""
+        mg = self._last_metagraph
+        if mg is not None:
+            tempo = getattr(mg, "tempo", None)
+            since = getattr(mg, "blocks_since_last_step", None)
+            if isinstance(tempo, (int, float)) and tempo > 0:
+                tempo_i = int(tempo)
+                since_i = int(since) if isinstance(since, (int, float)) else 0
+                return tempo_i, since_i, max(tempo_i - since_i, 0)
         hyperparams = self.hyperparams(netuid)
         if not hyperparams:
             return None
@@ -187,6 +216,8 @@ class ChainState:
                 break
         if tempo is None:
             return None
+        if until is None and since is not None:
+            until = max(tempo - since, 0)
         return tempo, since, until
 
     def set_weights(

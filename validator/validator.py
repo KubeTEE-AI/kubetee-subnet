@@ -186,9 +186,7 @@ class Validator:
             self._publish_payout(
                 self._last_targon_payout,
                 tao_usd=(
-                    tao_usd
-                    if tao_usd > 0
-                    else self.price_feed.last_tao_usd
+                    tao_usd if tao_usd > 0 else self.price_feed.last_tao_usd
                 ),
                 alpha_to_tao=(
                     alpha_to_tao_now
@@ -442,7 +440,9 @@ class Validator:
         if tao_usd is None and published:
             tao_usd = self.price_feed.tao_usd_from_published(published)
         alpha_to_tao_raw = (
-            published.get("alpha_to_tao") if isinstance(published, dict) else None
+            published.get("alpha_to_tao")
+            if isinstance(published, dict)
+            else None
         )
         alpha_to_tao = (
             float(alpha_to_tao_raw)
@@ -455,8 +455,10 @@ class Validator:
             alpha_to_tao = spot if spot and spot > 0 else None
         if tao_usd is None or alpha_to_tao is None:
             return None
-        return float(tao_usd) * float(alpha_to_tao), float(tao_usd), float(
-            alpha_to_tao
+        return (
+            float(tao_usd) * float(alpha_to_tao),
+            float(tao_usd),
+            float(alpha_to_tao),
         )
 
     def _publish_card(self, card: dict[str, float]) -> None:
@@ -623,10 +625,9 @@ class Validator:
         # Wait for the chain's weights_rate_limit cooldown before attempting.
         rate_limit = 100
         try:
-            h = self.chain.hyperparams(self.config.netuid) or {}
-            rl = h.get("weights_rate_limit")
-            if isinstance(rl, (int, float)) and rl > 0:
-                rate_limit = int(rl)
+            rl = self.chain.weights_rate_limit(self.config.netuid)
+            if rl is not None:
+                rate_limit = rl
         except Exception:
             pass
 

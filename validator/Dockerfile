@@ -20,7 +20,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
     && rm -rf /var/lib/apt/lists/* \
     && update-ca-certificates
 
-# Vendored bittensor v11 SDK (path dependency).
+# Vendored bittensor 11.1 SDK (path dependency; pulls bittensor-core>=0.1.3).
 COPY subtensor/sdk/python /opt/bittensor-sdk
 
 RUN pip install --no-cache-dir \

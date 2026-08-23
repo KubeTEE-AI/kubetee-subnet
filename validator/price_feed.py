@@ -22,9 +22,7 @@ import urllib.request
 from config import Config
 
 _TAO_USD_URL = "https://api.taostats.io/api/price/latest/v1?asset=tao"
-_COINGECKO_URL = (
-    "https://api.coingecko.com/api/v3/simple/price?ids=bittensor&vs_currencies=usd"
-)
+_COINGECKO_URL = "https://api.coingecko.com/api/v3/simple/price?ids=bittensor&vs_currencies=usd"
 
 _USER_AGENT = "kubetee-validator/0.1"
 
@@ -168,7 +166,9 @@ class PriceFeed:
             log.warning("%s", taostats_exc)
         try:
             value = _tao_usd_from_coingecko()
-            log.warning("taostats TAO/USD unavailable — using CoinGecko %.4f", value)
+            log.warning(
+                "taostats TAO/USD unavailable — using CoinGecko %.4f", value
+            )
             return self._remember(value)
         except PriceFeedError as cg_exc:
             log.warning("%s", cg_exc)
@@ -178,30 +178,22 @@ class PriceFeed:
                 self._last_tao_usd,
             )
             return self._last_tao_usd
-        raise PriceFeedError("no usable TAO/USD from Taostats, CoinGecko, or cache")
+        raise PriceFeedError(
+            "no usable TAO/USD from Taostats, CoinGecko, or cache"
+        )
 
     def alpha_to_tao(self) -> float:
         """Alpha->TAO rate, read directly from the chain's metagraph (no delay).
 
         Falls back to Taostats pool API if the chain read fails.
         """
-        # Primary: read from chain metagraph (zero delay, authoritative)
+        # Primary: cached metagraph spot price (zero delay, no second client)
         if self._chain_state is not None:
             try:
-                import asyncio
-
-                async def _get_chain_price():
-                    c = await __import__("bittensor").Subtensor(
-                        self._chain_state._subtensor.network
-                        if hasattr(self._chain_state._subtensor, "network")
-                        else "finney"
-                    )
-                    mg = await c.subnets.metagraph(
-                        self._netuid, commitments=False
-                    )
-                    return float(mg.price) if mg.price else None
-
-                price = asyncio.run(_get_chain_price())
+                price = self._chain_state.spot_price()
+                if not price:
+                    self._chain_state.metagraph(self._netuid)
+                    price = self._chain_state.spot_price()
                 if price and price > 0:
                     return price
             except Exception:

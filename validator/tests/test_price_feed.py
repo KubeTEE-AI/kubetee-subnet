@@ -43,7 +43,9 @@ def test_targon_live_uses_highest_per_card_not_average():
 
 def test_targon_live_clamps_downward_and_floors():
     live = {"H200": 1.0, "H100": 5.0}  # H200 way below, H100 above card
-    effective, source = _feed(floor=0.75, fetcher=lambda: live).effective_card()
+    effective, source = _feed(
+        floor=0.75, fetcher=lambda: live
+    ).effective_card()
     # H200 floor = 5.50*0.75 = 4.125 (live 1.0 is lifted to floor)
     assert effective["H200"] == pytest.approx(4.125)
     # H100 capped at card (live 5.0 pulled down to 4.0)
@@ -184,7 +186,9 @@ def test_tao_usd_from_coingecko_payload(monkeypatch):
 
     monkeypatch.setattr(
         "price_feed._get_json",
-        lambda url, api_key="", label="coingecko": {"bittensor": {"usd": 231.47}},
+        lambda url, api_key="", label="coingecko": {
+            "bittensor": {"usd": 231.47}
+        },
     )
     assert _tao_usd_from_coingecko() == pytest.approx(231.47)
 
@@ -290,6 +294,27 @@ def test_targon_published_fallback_skips_invalid_entries(
     resolved, source = feed.resolve_per_card_usd()
     assert source == "published"
     assert resolved == {"H100": 2.9, "B300": 7.5}
+
+
+def test_alpha_to_tao_uses_cached_metagraph_spot_price():
+    """Reuse ChainState.spot_price — do not open a second Subtensor."""
+    from price_feed import PriceFeed
+
+    class _Chain:
+        def __init__(self):
+            self.reads = 0
+
+        def spot_price(self):
+            self.reads += 1
+            return 0.0125
+
+        def metagraph(self, netuid):
+            raise AssertionError("cached spot price should skip a refetch")
+
+    chain = _Chain()
+    feed = PriceFeed(_Cfg(), chain_state=chain)
+    assert feed.alpha_to_tao() == pytest.approx(0.0125)
+    assert chain.reads == 1
 
 
 def test_targon_published_failure_falls_to_card(tmp_path, monkeypatch):
