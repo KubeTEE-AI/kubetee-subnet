@@ -1,6 +1,6 @@
 # SN28→SN90 Alpha Recycler
 
-**Status:** Live on `na-us-oakland-56` as of 2026-08-23. First run swapped a partial fill (~134 SN28 α → 52.6 SN90 α recycled). CronJob is now capped at `MAX_ORIGIN_RAO=1000000000` (1 SN28 α) for further tests; unset that env to swap all remaining origin.  
+**Status:** Live on `na-us-oakland-56` as of 2026-08-23. Hourly CronJob swaps remaining SN28 on `sn28` with `allow_partial=True` and recycles the SN90 fill.  
 **Channel:** SN28 sayGM is live as idle-capacity inference — [SN28-SAYGM.md](./SN28-SAYGM.md). This doc is only the Alpha swap/recycle job.  
 **Cluster:** `na-us-oakland-56` only (`kata-qemu-tdx-runtime-rs`).  
 **Bundle:** `fleet-gitops/infrastructure/alpha-recycler/`
@@ -8,7 +8,7 @@
 Each SN28 epoch (~360 blocks / ~72 min), a CPU-TDX CronJob:
 
 1. Attests to Trustee KBS and fetches **proxy** seeds (not the main coldkey).
-2. `swap_stake_limit` SN28→SN90 on hotkey `sn28` with `rate_tolerance=0.001`, `allow_partial=True` (amount = `min(origin, MAX_ORIGIN_RAO)` when the cap is set).
+2. `swap_stake_limit` SN28→SN90 on hotkey `sn28` with `rate_tolerance=0.001`, `allow_partial=True` (full remaining origin; optional `MAX_ORIGIN_RAO` cap).
 3. `recycle_alpha` on netuid **90** for SN90 alpha on that hotkey.
 
 Main kubetee coldkey stays offline after a one-time `AddProxy`.
