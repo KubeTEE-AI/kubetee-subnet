@@ -72,8 +72,51 @@ Paste stdout into CronJob annotation `io.katacontainers.config.hypervisor.cc_ini
 - Stock SDK `SwapStake` hardcodes `allow_partial=False`; `recycle.py` composes `swap_stake_limit` with `allow_partial=True` via `submit_call` + `Proxy.proxy`.
 - Image rebuild is only needed for SDK bumps; script changes go through ConfigMap (`scripts/_embed_configmap.py`).
 
+## How to see recycled alpha
+
+`recycle_alpha` does **not** show up as a TAO transfer. It emits `SubtensorModule.AlphaRecycled(coldkey, hotkey, amount, netuid)` and increments `AlphaAssets.AlphaRecycled[netuid]` (circulating SN90 alpha down; emission runway up). The swap that feeds it **does** show as a dTAO trade (SN28 → SN90).
+
+**Public (anyone):**
+
+| What | Where |
+|------|--------|
+| First live swap (2026-08-23 13:00:36Z) | [tao.app extrinsic `8907772-0011`](https://www.tao.app/extrinsic/8907772-0011) · [block 8907772](https://www.tao.app/block/8907772) |
+| Coldkey stake + trades | [tao.app account](https://www.tao.app/account/5C9y6fnLPSzBeh1Np7f4DnGen42xV29nL9qZTDuwpVC4iTEE) · [TaoStats account](https://taostats.io/account/5C9y6fnLPSzBeh1Np7f4DnGen42xV29nL9qZTDuwpVC4iTEE) |
+| SN90 subnet | [tao.app / subnet 90](https://www.tao.app/subnet/90) · [TaoStats SN90](https://taostats.io/subnets/90) |
+
+That first fill: **134.452694 SN28 α → 52.576115 SN90 α** (~τ2.24 / ~$507), then `recycle_alpha` on hotkey `sn28` (uid 44). Recycle is the next `Proxy.proxy` after the swap (same coldkey; inner call `SubtensorModule.recycle_alpha`). TaoStats lists the swap as a dTAO trade `from_name=SN28` `to_name=SN90`.
+
+```bash
+# Remaining SN28 on sn28; SN90 on that hotkey should be dust/zero after recycle
+btcli stake list \
+  --coldkey 5C9y6fnLPSzBeh1Np7f4DnGen42xV29nL9qZTDuwpVC4iTEE \
+  --network finney --dust
+
+btcli query block-info --block 8907772 --network finney
+```
+
+**Operator (cluster):**
+
+```bash
+kubectl --context na-us-oakland-56-direct -n kubetee-ops get cronjob,job
+kubectl --context na-us-oakland-56-direct -n kubetee-ops logs \
+  -l app.kubernetes.io/name=alpha-recycler -c recycle --tail=80
+```
+
+Look for `swap done dest_before=… dest_after=… filled=…` then `recycle done`. Never `--force` delete the Kata pod.
+
+## Announcement (paste for @KubeTEEAI)
+
+SN28 miner emissions we earn on sayGM idle capacity are now swapped SN28→SN90 and recycled on SN90 each hour (`allow_partial`). Recycled alpha returns to unissued supply — it is not a TAO burn and not a transfer off the coldkey.
+
+First fill (2026-08-23): 134.45 SN28 α → 52.58 SN90 α recycled (~τ2.24). Verify: https://www.tao.app/extrinsic/8907772-0011
+
+Coldkey: `5C9y6fnLPSzBeh1Np7f4DnGen42xV29nL9qZTDuwpVC4iTEE`  
+Hotkey `sn28` (uid 44): `5EvosuiYGEf8xqDfHVyQcyPD1BjN1fDjyqLdhHMRMawPo42Y`
+
 ## Related
 
 - East-west AA/KBS pattern: [EAST-WEST-ATTESTED-MTLS.md](./EAST-WEST-ATTESTED-MTLS.md)
 - Trustee ops: `fleet-gitops/infrastructure/trustee/KubeTEE.md`
-- SayGM / SN28 miner context: `nim/CLAUDE.md` (gm-miner section)
+- SayGM / SN28 miner context: [SN28-SAYGM.md](./SN28-SAYGM.md)
+- Recycling: [TaoStats recycling](https://docs.taostats.io/docs/recycling)
