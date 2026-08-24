@@ -134,7 +134,7 @@ This README documents both what runs in the KubeTEE infrastructure and what is d
 
 | Area | Exists today (infrastructure / design) | Designed / to be built |
 |------|--------------------|--------------------|
-| **Confidential&nbsp;runtime** | Kata + CoCo TEE runtime classes on TDX H200/B200 nodes | AMD SEV-SNP multi-arch + RTX 5000 Pro Server Edition testing ([Phase 1](#phase-1--expansion)) |
+| **Confidential&nbsp;runtime** | Kata **4.1.0** + CoCo TEE runtime-rs classes on TDX H200/B200 nodes (`kata-qemu-nvidia-gpu-tdx-runtime-rs` / `kata-qemu-tdx-runtime-rs`) | AMD SEV-SNP multi-arch + RTX 5000 Pro Server Edition testing ([Phase 1](#phase-1--expansion)) |
 | **Service&nbsp;transport** | Grey-cloud DNS + Traefik TLS passthrough into the LiteLLM TDX guest. [Attestation-gated TLS](./docs/NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md#2-attestation-gated-tls-between-services) (RA-TLS: TLS public key in TDX `report_data`, Trustee + Intel Trust Authority) is the client-attested hop on top of that path | Native TLS from the LiteLLM guest to NIM guests on miner clusters |
 | **Staging&nbsp;cluster** | Subnet-owner staging cluster — every node is TEE CC capable. Debug target if a workload fails. Kata **guest debug off**; CoCo Trustee attests those guests. CC can be turned off on a node for debug; guest debug can be enabled per pod. | — |
 | **Security&nbsp;gate** | — | Supply-chain CI (SAST, Trustee/KBS secrets, image CVE, IaC/Helm policy, image provenance) — design, not yet automated |
@@ -180,6 +180,8 @@ More on staging as a debug target: [Deploying in a TEE — Challenge and debuggi
 KubeTEE does not just consume upstream projects; it hardens them and reports what it finds. A concrete example from Early Access:
 
 While bringing up a 2.5 TB Kimi-K3 inference pod (8× B300 GPU passthrough) under `kata-qemu-nvidia-gpu-tdx-runtime-rs`, the sandbox hung at boot and hit the 1200s `create_container` timeout before the guest kernel even started. Root cause: the `OVMF.inteltdx.fd` shipped in **kata-deploy v4.0.0** performs **eager memory acceptance** for Intel TDX guests — spending all its time in `TDCALL [TDG.MEM.PAGE.ACCEPT]` for large-memory VMs. The distro `ovmf-inteltdx` (Ubuntu, with lazy-accept enabled by `PcdLazyAcceptPartialMemorySize=512`) booted the same 512 GB TDX VM in under 15 seconds. KubeTEE filed the issue with full evidence (serial logs, kata config, kernel `CONFIG_UNACCEPTED_MEMORY=y`), root-cause analysis (Config-A vs Config-B build, PCD defaults), and three proposed solutions — [kata-containers#13535](https://github.com/kata-containers/kata-containers/issues/13535).
+
+The fleet is on kata-deploy **4.1.0** (2026-08-24). Stock 4.1.0 OVMF still needs the `ovmf-tdx-bump-202605` overlay ([#13631](https://github.com/kata-containers/kata-containers/issues/13631) reverted). `#13471` (NVSwitch topology path) and `#13482` (`WantedBy=rke2-server.service`) are in the tag; keep the shim / base / CSI overlays for still-open items. See [TEE deployment](./docs/TEE-DEPLOYMENT-AND-CICD.md#runtime-classes-kata-410).
 
 This is the model: hit the failure in production, isolate it (CC off on a staging node for debug, plus the distro OVMF comparison), file it upstream with a reproducible root cause and a fix proposal, and carry a local workaround until the upstream fix lands. KubeTEE maintains a fork branch (`ovmf-tdx-bump-202605`) with a pre-built Config-B OVMF from `edk2-stable202605` and a reproducible build script for pipeline testing.
 
@@ -348,9 +350,9 @@ A consumer picks the configuration alongside the model at submission. Because th
 
 ### NVIDIA NeMo Microservices & Bittensor Subnet Integrations
 
-[NVIDIA NeMo Microservices](https://docs.nvidia.com/nemo/microservices/latest/about/index.html) (Customizer, Evaluator, Guardrails, Retriever, model endpoints) run as **cluster-resident services** that other SOTA AI services — and, secondarily, batch jobs — call inside the confidential boundary — shared HA per cluster, amortized across every consumer. Service-to-service traffic uses **attestation-gated TLS** (in-guest keypairs, certificates issued only against a valid TDX quote, verified through Intel Trust Authority, terminated inside the guest) — not cert-manager, not a service mesh, not host-level encryption, because the host is the adversary. The NVIDIA NIM Operator has **experimental** Kata sandbox + Dynamo support, but KubeTEE runs the **stable** `kata-qemu-nvidia-gpu-tdx` runtime classes instead and is working with NVIDIA to graduate the experimental paths (Phase 3).
+[NVIDIA NeMo Microservices](https://docs.nvidia.com/nemo/microservices/latest/about/index.html) (Customizer, Evaluator, Guardrails, Retriever, model endpoints) run as **cluster-resident services** that other SOTA AI services — and, secondarily, batch jobs — call inside the confidential boundary — shared HA per cluster, amortized across every consumer. Service-to-service traffic uses **attestation-gated TLS** (in-guest keypairs, certificates issued only against a valid TDX quote, verified through Intel Trust Authority, terminated inside the guest) — not cert-manager, not a service mesh, not host-level encryption, because the host is the adversary. The NVIDIA NIM Operator has **experimental** Kata sandbox + Dynamo support, but KubeTEE runs the **stable** `kata-qemu-nvidia-gpu-tdx-runtime-rs` / `kata-qemu-tdx-runtime-rs` classes instead and is working with NVIDIA to graduate the experimental paths (Phase 3).
 
-Given the NIM Operator's current Kata/CoCo limitations, KubeTEE's thesis is that **the Bittensor ecosystem already contains SOTA, verifiable substitutes** for several NeMo stack layers. Each subnet below exposes a verifiable feed (public API + on-chain metagraph) and is a **potential partnership** — a candidate integration, not a shipping integration — that could run inside `kata-qemu-nvidia-gpu-tdx` / `kata-qemu-tdx` with its outputs attested and persisted on confidential storage. This is the Bittensor-native path to a confidential AI Factory not locked to a single vendor's experimental stack.
+Given the NIM Operator's current Kata/CoCo limitations, KubeTEE's thesis is that **the Bittensor ecosystem already contains SOTA, verifiable substitutes** for several NeMo stack layers. Each subnet below exposes a verifiable feed (public API + on-chain metagraph) and is a **potential partnership** — a candidate integration, not a shipping integration — that could run inside `kata-qemu-nvidia-gpu-tdx-runtime-rs` / `kata-qemu-tdx-runtime-rs` with its outputs attested and persisted on confidential storage. This is the Bittensor-native path to a confidential AI Factory not locked to a single vendor's experimental stack.
 
 | NeMo layer | Bittensor subnet (potential partner) | What it could replace/augment |
 |---|---|---|
@@ -643,7 +645,7 @@ Full detail — the chain primitive, Alpha conversion, grace/recovery, `btcli` c
 
 ### Phase 0 — Early Access (Current)
 
-- [x] Kata + CoCo TEE runtime classes (`kata-qemu-nvidia-gpu-tdx`, `kata-qemu-tdx`)
+- [x] Kata **4.1.0** + CoCo TEE runtime-rs classes (`kata-qemu-nvidia-gpu-tdx-runtime-rs`, `kata-qemu-tdx-runtime-rs`)
 - [x] Staging cluster — every node is TEE CC capable (H200/B200). Debug target if a workload fails; CC can be turned off on a node for debug (see [Debugging on the staging cluster](#debugging-on-the-staging-cluster))
 - [x] Kata guest debug **off** on the staging cluster — CoCo Trustee attests those guests. Debug can be enabled per pod for diagnostics.
 - [ ] Validator runs in a TEE (Kata + CoCo) on the control plane; CoCo attestation proves the validator code is unmodified
@@ -710,7 +712,7 @@ Full detail — the chain primitive, Alpha conversion, grace/recovery, `btcli` c
 - [Cluster Naming Convention](./docs/CLUSTER_NAMING_CONVENTION.md) — `kubetee.ai/*` labels and Fleet GitOps targeting
 - [FIPS-140-3 Target](./docs/FIPS-140-3.md) — RKE2 + Kata + CoCo FIPS stack research
 - [Confidential Containers Certification](./docs/certification-confidential-containers.md) — CC standards and Kata runtime mapping
-- [Deploying in a TEE — Challenge & debugging](./docs/TEE-DEPLOYMENT-AND-CICD.md) — why TEE deployment is hard, staging as a debug target if a workload fails, Kata guest debug off, CoCo Trustee attestation
+- [Deploying in a TEE — Challenge & debugging](./docs/TEE-DEPLOYMENT-AND-CICD.md) — Kata 4.1.0 runtime-rs classes, why TEE deployment is hard, staging as a debug target if a workload fails, Kata guest debug off, CoCo Trustee attestation
 - [Workflow Orchestration — Airflow & Metaflow](./docs/WORKFLOW-ORCHESTRATION.md) — orchestrating multi-step confidential pipelines on Armada
 - [Tokenomics — Utility Token & DePIN Model](./docs/TOKENOMICS.md) — recycle vs burn, securities posture, TAO-on-BASE (CCIP), cross-subnet consumption loop, DePIN subsidy trajectory
 - [Competitive Pricing & Miner Scoring](./docs/COMPETITIVE-PRICING.md) — pricing SN90 against Targon/Lium/Chutes and how price becomes weights

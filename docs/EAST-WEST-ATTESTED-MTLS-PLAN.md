@@ -92,7 +92,7 @@ steal items below are what we do **next**.
       applied**; live is still `default.rego`
 
 Inbound terminator is still **in-process** in the SGLang container (kata#11649
-/ overlay fix15 now in **fix17**). Intended shape remains a same-sandbox
+/ overlay fix15 now in **fix19** on kata-deploy 4.1.0). Intended shape remains a same-sandbox
 HAProxy sidecar — Phase 6.
 
 ---
@@ -129,7 +129,7 @@ HAProxy sidecar — Phase 6.
   `*.pem` / `*.key`.
 - Do not kubectl-patch Fleet-managed Deployments (Fleet SSA).
 - Keep **NRAS Remote** on Oakland. Do not revert the NVIDIA verifier to Local.
-- Do not enable CoCo `kata-as-coco-runtime` (duplicates kata-deploy 4.0.0).
+- Do not enable CoCo `kata-as-coco-runtime` (duplicates kata-deploy 4.1.0).
 - Do not treat the CoCo tutorial as encrypted-weights. Its `/opt/nim/.cache`
   is a plaintext `emptyDir`.
 - Hopper `cc.mode=off` is a PPCIE trap — not a baseline we run.
@@ -160,7 +160,7 @@ Docker Compose Trustee walkthrough. We steal **practices**, not YAML.
 | Tutorial | KubeTEE |
 |----------|---------|
 | SNP `HOST_DATA` / `sev-snp-measure` / live QEMU scrape | TDX MRTD/RTMR + initdata claims. We already bind `role` in initdata (`litellm` vs `nim-terminator`). Pin digest in policy when RVPS is filled — do not scrape QEMU on the GPU node. |
-| 1 GPU SNP (`nvidia.com/pgpu: "1"`, `kata-qemu-nvidia-gpu-snp`) | 8 GPU TDX + PPCIE + NVSwitch. Hopper: `nvidia.com/nvswitch: "4"`, `cc.mode=ppcie`, overlay **fix17**. Blackwell: `cc.mode=on`. Runtime: `kata-qemu-nvidia-gpu-tdx-runtime-rs` only. |
+| 1 GPU SNP (`nvidia.com/pgpu: "1"`, `kata-qemu-nvidia-gpu-snp`) | 8 GPU TDX + PPCIE + NVSwitch. Hopper: `nvidia.com/nvswitch: "4"`, `cc.mode=ppcie`, overlay **fix19** on 4.1.0. Blackwell: `cc.mode=on`. Runtime: `kata-qemu-nvidia-gpu-tdx-runtime-rs` only. |
 | Guest-pull block PV (`/dev/trusted_store`, loop `/tmp`) | **kata-direct** for weights. Later CDH LUKS ([pamanseau/kubetee-ai#1](https://github.com/pamanseau/kubetee-ai/issues/1)). Agent `cdh_secure_mount` still hardcodes `sourceType: "empty"` and omits `key` — LUKS is **not** done. |
 | Raw NIM Pod + `genpolicy` on the worker | NIMService / SGLang StatefulSet + `fetch-certs` + HAProxy `:8443`. LiteLLM is Helm 1.96.2 (Fleet), not a Pod manifest. |
 | Docker Compose Trustee on the GPU node | Fleet operator v0.21.0 (already). Pin to the CoCo/Kata pair; no `latest`. Do not run Trustee on the workload node. |
@@ -175,7 +175,7 @@ Docker Compose Trustee walkthrough. We steal **practices**, not YAML.
 | Docker Compose Trustee on the GPU node | Trust separation is the point. Oakland already has Fleet operator. |
 | Loop `/tmp` PVs / `local-storage` | We have `kata-direct` + Longhorn V2. |
 | `cc.mode=off` baseline on Hopper | PPCIE trap — label-only CC→non-CC does not clear the PPCIE register. |
-| Enabling CoCo `kata-as-coco-runtime` | Duplicates kata-deploy 4.0.0 RuntimeClasses. Keep `enabled: false`. |
+| Enabling CoCo `kata-as-coco-runtime` | Duplicates kata-deploy 4.1.0 RuntimeClasses. Keep `enabled: false`. |
 | Guest-pull as the default TDX image path | Needs HTTPS KBS + guest registry egress. **erofs + host-pull + `IfNotPresent`** is the no-KBS-egress path. Keep nydus installed, do not select it for TDX shims until Phase 2 + egress exist. |
 | Treating the tutorial as encrypted-weights | `/opt/nim/.cache` is a plaintext `emptyDir`. Encrypted weights are issue #1 + agent key plumbing — not this example. |
 | Replacing SGLang with Llama 3.1 8B NIM | First-cut models stay GLM + DSV4 SGLang. NIM containers are a later reuse of Trustee + LiteLLM, not a swap. |
@@ -431,15 +431,15 @@ owner.
 ## Phase 6: Restore HAProxy sidecar (existing follow-up)
 
 **Status:** overlay **fix15** (idempotent `blockdev-add`) is in
-`v4.0.0-nvswitch-fix17` (2026-08-15). Upstream
+`v4.1.0-nvswitch-fix19` (2026-08-24). Upstream
 [#13635](https://github.com/kata-containers/kata-containers/pull/13635) still
-OPEN. Live inbound terminator stays in-process (`start-sglang.sh`).
+OPEN (not in stock 4.1.0). Live inbound terminator stays in-process (`start-sglang.sh`).
 
 Intended shape is still a second container in the same sandbox
 (`docker.io/library/haproxy:3.4.3-alpine`). See spec
 [Follow-up: restore HAProxy sidecar](./EAST-WEST-ATTESTED-MTLS.md#follow-up-restore-haproxy-sidecar-kata11649).
 
-- [ ] Confirm fix17 is on every CC node and a GLM/DSV4 roll with init +
+- [ ] Confirm fix19 is on every CC node and a GLM/DSV4 roll with init +
       sidecar does not hit `Duplicate nodes with node-name='drive-N'`.
 - [ ] Restore sidecar + `fetch-certs` init; drop in-process fetch/HAProxy
       from `start-sglang.sh`.

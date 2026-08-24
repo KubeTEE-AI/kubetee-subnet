@@ -47,7 +47,7 @@ metagraph and validates the Rancher cluster/node inventory. The production
 profile requires Ready HA topology (3 etcd and 3 control-plane nodes), a
 schedulable worker, at least 8 CPU cores and 16 GiB per active node, and at
 least one schedulable eight-GPU H100/H200/B200/B300/RTX PRO 6000 worker with
-`vm-passthrough` and `kata-qemu-nvidia-gpu-tdx`. Any explicit missing,
+`vm-passthrough` and `kata-qemu-nvidia-gpu-tdx-runtime-rs`. Any explicit missing,
 malformed, ambiguous, or unhealthy evidence scores **0**. A Rancher outage
 skips the whole weight cycle instead of blaming miners.
 

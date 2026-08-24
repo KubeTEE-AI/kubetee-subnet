@@ -144,16 +144,16 @@ A leftover Terminating LiteLLM pod from an earlier sidecar experiment must be le
 
 **Intended shape is still a second container** in the same Kata sandbox (`docker.io/library/haproxy:3.4.3-alpine`). Live GLM-1 on `na-us-oakland-56` (2026-08-14) hit QEMU `Duplicate nodes with node-name='drive-5'` after an init/sidecar EROFS unplug.
 
-Root cause (not a parallel-Create race): `wait_for_device_deleted` reset QMP `SO_RCVTIMEO` to **250ms**. The next container's multi-layer EROFS `blockdev-add` then returned `WouldBlock` after QEMU had already created `drive-N`. CreateContainer retry → Duplicate. That is [kata-containers#11649](https://github.com/kata-containers/kata-containers/issues/11649). Overlay **fix15** (now in current `v4.0.0-nvswitch-fix17`) keeps a 60s hotplug timeout and treats Duplicate / in-use / timed-out-but-present as success. That shim is on the node (2026-08-15). Restore the sidecar when ready; upstream [#13635](https://github.com/kata-containers/kata-containers/pull/13635) is still OPEN.
+Root cause (not a parallel-Create race): `wait_for_device_deleted` reset QMP `SO_RCVTIMEO` to **250ms**. The next container's multi-layer EROFS `blockdev-add` then returned `WouldBlock` after QEMU had already created `drive-N`. CreateContainer retry → Duplicate. That is [kata-containers#11649](https://github.com/kata-containers/kata-containers/issues/11649). Overlay **fix15** (now in `v4.1.0-nvswitch-fix19`) keeps a 60s hotplug timeout and treats Duplicate / in-use / timed-out-but-present as success. Restore the sidecar when a sidecar roll on that shim proves no Duplicate; upstream [#13635](https://github.com/kata-containers/kata-containers/pull/13635) is still OPEN (not in kata-deploy **4.1.0**).
 
-Already in kata-deploy **4.0.0** (not enough for this race):
+Already in kata-deploy **4.1.0** (not enough for this race):
 
 - [#13216](https://github.com/kata-containers/kata-containers/pull/13216) — hot-unplug block devices (merged 2026-06-22, related to #11649)
 
-Still missing (do **not** put the sidecar back until this is in a tag we run, or in the shim overlay):
+Still missing from the **stock** 4.1.0 shim (do **not** put the sidecar back until #13635 is in a tag we run, or a sidecar roll on **fix19** is proven):
 
 - [#11650](https://github.com/kata-containers/kata-containers/pull/11650) — idempotent `blockdev-add` (`Fixes #11649`) — **closed without merge**
-- Or any later PR that serializes / uniquifies `drive-N` across parallel `CreateContainer`
+- [#13635](https://github.com/kata-containers/kata-containers/pull/13635) — idempotent `blockdev-add` after unplug timeout (OPEN; carried in shim overlay fix19)
 
 Check:
 
@@ -162,7 +162,7 @@ gh issue view 11649 --repo kata-containers/kata-containers --json state,closedAt
 gh pr list --repo kata-containers/kata-containers --search "11649" --state all
 ```
 
-When #11649 is actually fixed in the running `containerd-shim-kata-v2` (next kata-deploy tag **> 4.0.0**, or a shim-overlay slice that includes the atomicity patch — not merely #13216):
+When #11649 is actually fixed in the **stock** `containerd-shim-kata-v2` (a kata-deploy tag that contains #13635, not merely 4.1.0 / #13216):
 
 1. Restore the HAProxy sidecar on GLM/DSV4 (`nim/glm-5-2-nvfp4-sglang-cc.yaml` and the DSV4 manifest). A `fetch-certs` init is the same class of extra EROFS — do not add it back either.
 2. Drop in-process fetch + HAProxy from `start-sglang.sh` (keep `fetch-certs.sh` for the sidecar/init once #11649 is actually fixed).

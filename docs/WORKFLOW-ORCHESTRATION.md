@@ -5,7 +5,7 @@ KubeTEE AI Factory hosts **SOTA AI services** and **enhanced services for enterp
 - **[Apache Airflow](https://airflow.apache.org/)** — DAG-based pipeline orchestration.
 - **[Metaflow](https://metaflow.org/)** — a Python framework for data-science / ML workflows.
 
-The orchestrator schedules the *pipeline*; Armada schedules each *task pod* across miner clusters. Task pods execute under a confidential `runtimeClassName` (`kata-qemu-nvidia-gpu-tdx` for GPU, `kata-qemu-tdx` for CPU) with CoCo remote attestation, so the entire pipeline — code, data, and artifacts — stays inside the confidential computing boundary.
+The orchestrator schedules the *pipeline*; Armada schedules each *task pod* across miner clusters. Task pods execute under a confidential `runtimeClassName` (`kata-qemu-nvidia-gpu-tdx-runtime-rs` for GPU, `kata-qemu-tdx-runtime-rs` for CPU) with CoCo remote attestation, so the entire pipeline — code, data, and artifacts — stays inside the confidential computing boundary.
 
 These connectors are one of three front doors onto the same Armada queues. The other two are the [LiteLLM gateway](../README.md#litellm-gateway--the-multi-service-front-door) at `llm.kubetee.ai`, which exposes the OpenAI fine-tuning and batch APIs, and the [Jobs MCP server](../README.md#jobs-mcp-server) for agents and humans submitting conversationally. Pick the orchestrator path when the work is a *multi-step pipeline* with dependencies and retries; the other two are better shapes for a single job.
 
@@ -25,7 +25,7 @@ flowchart LR
     end
     subgraph miner["Miner Cluster (1 hotkey, 1 DC)"]
         Exec["Armada Executor"]
-        Pod["Task pod\nkata-qemu-nvidia-gpu-tdx\n(TEE + attestation)"]
+        Pod["Task pod\nkata-qemu-nvidia-gpu-tdx-runtime-rs\n(TEE + attestation)"]
     end
     Airflow -->|submit job spec| ArmadaServer
     Metaflow -->|submit job spec| ArmadaServer
@@ -65,7 +65,7 @@ with DAG("nemo_finetune_pipeline", start_date=days_ago(1), schedule_interval=Non
         task_id="etl",
         armada_connection="kubetee_armada",      # Airflow Connection: Armada server URL + queue
         queue="confidential-ml",
-        runtime_class="kata-qemu-tdx",            # CPU TEE for ETL
+        runtime_class="kata-qemu-tdx-runtime-rs",            # CPU TEE for ETL
         image="ghcr.io/kubetee/nemo-etl:latest",
         kbs_secret_keys=["s3-creds"],             # injected into the TEE, never in DAG code
     )
@@ -74,7 +74,7 @@ with DAG("nemo_finetune_pipeline", start_date=days_ago(1), schedule_interval=Non
         task_id="train",
         armada_connection="kubetee_armada",
         queue="confidential-ml",
-        runtime_class="kata-qemu-nvidia-gpu-tdx", # GPU TEE for training
+        runtime_class="kata-qemu-nvidia-gpu-tdx-runtime-rs", # GPU TEE for training
         image="ghcr.io/kubetee/nemo-train:latest",
         gpus=8,
         kbs_secret_keys=["s3-creds", "hf-token"],
@@ -108,7 +108,7 @@ class NemoFinetuneFlow(FlowSpec):
         self.next(self.train)
 
     @kubetee_batch(queue="confidential-ml",
-                   runtime_class="kata-qemu-nvidia-gpu-tdx",
+                   runtime_class="kata-qemu-nvidia-gpu-tdx-runtime-rs",
                    image="ghcr.io/kubetee/nemo-train:latest",
                    gpus=8,
                    kbs_secret_keys=["s3-creds", "hf-token"],
@@ -133,7 +133,7 @@ if __name__ == "__main__":
 
 ## Confidentiality & Attestation
 
-- **Per-task TEE**: every step runs under `kata-qemu-nvidia-gpu-tdx` (GPU) or `kata-qemu-tdx` (CPU). The host and hypervisor cannot read task memory.
+- **Per-task TEE**: every step runs under `kata-qemu-nvidia-gpu-tdx-runtime-rs` (GPU) or `kata-qemu-tdx-runtime-rs` (CPU). The host and hypervisor cannot read task memory.
 - **CoCo remote attestation**: each task pod attests its image and runtime; pipelines can gate downstream steps on verified attestation evidence.
 - **No plaintext secrets in the orchestrator**: DAG / flow code references KBS keys only; the KBS releases secrets into the TEE after attestation.
 - **Confidential artifacts**: intermediate artifacts move through encrypted Longhorn volumes or an encrypted object store; they are decrypted only inside downstream TEE pods.

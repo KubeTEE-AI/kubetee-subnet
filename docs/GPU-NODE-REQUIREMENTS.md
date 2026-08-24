@@ -210,14 +210,14 @@ dmesg | grep -i "AMD-Vi"
 
 ## Kata guest debug and CoCo Trustee
 
-Miner GPU nodes and the subnet-owner **staging cluster** run Kata with **guest debug off**. CoCo Trustee attests those guests. Every staging node is TEE CC capable; CC can be turned off on a staging node for debug.
+Miner GPU nodes and the subnet-owner **staging cluster** run **Kata 4.1.0** with **guest debug off**. CoCo Trustee attests those guests. Every staging node is TEE CC capable; CC can be turned off on a staging node for debug.
 
 | `runtimeClassName` | Workload |
 |--------------------|----------|
 | `kata-qemu-nvidia-gpu-tdx-runtime-rs` | GPU TEE (NIM / SGLang) |
 | `kata-qemu-tdx-runtime-rs` | CPU-only TDX (gateway-class) |
 
-Guest debug can be enabled **per pod** for diagnostics. Trustee attests only when debug is off.
+Guest debug can be enabled **per pod** for diagnostics. Trustee attests only when debug is off. Do not use the retired Go classes (`kata-qemu-nvidia-gpu-tdx`, `kata-qemu-tdx`). See [TEE deployment](./TEE-DEPLOYMENT-AND-CICD.md#runtime-classes-kata-410).
 
 ---
 
@@ -236,7 +236,7 @@ Because the GPU Operator owns the GPU software stack, the node must start from a
 
 **OS Requirement**:
 - ✅ Ubuntu 26.04 (clean installation, no pre-existing NVIDIA software)
-- ✅ Kernel 7.0.0-27-generic or newer
+- ✅ Kernel **7.0.0-31-generic** (Ubuntu 26.04 pin; `-27` or newer still works, do not drift onto `-28`/`-30` without the pin)
 - ✅ etcd user/group created
 
 ---
@@ -291,7 +291,7 @@ df -h /data
 
 # 8. Verify OS and kernel
 lsb_release -ds  # Should show: Ubuntu 26.04 LTS
-uname -r         # Should show: 7.0.0-27-generic or newer
+uname -r         # Should show: 7.0.0-31-generic (pin) or 7.0.0-27-generic+
 
 # 9. Verify a clean baseline (no pre-existing NVIDIA stack)
 which nvidia-smi  # Should return: not found (GPU Operator installs it later)
@@ -330,7 +330,7 @@ Is your node a GPU node?
     ├─ VFIO/IOMMU enabled?
     │   ├─ NO → Enable in BIOS, update kernel params
     │   └─ YES → Continue
-    ├─ Clean Ubuntu 26.04, kernel 7.0.0-27-generic+ (no pre-existing NVIDIA stack)?
+    ├─ Clean Ubuntu 26.04, kernel 7.0.0-31-generic pin (no pre-existing NVIDIA stack)?
     │   ├─ NO → Reinstall Ubuntu 26.04
     │   └─ YES → Continue
     └─ ✅ Node meets ALL requirements → Proceed with registration
@@ -397,7 +397,7 @@ nvfwupd --query
 | **Firmware** | Latest (25.10.1+) | Outdated versions |
 | **GPU Mode** | PPCIe enabled | Standard PCIe |
 | **IOMMU** | Enabled | Disabled |
-| **OS** | Ubuntu 26.04 (clean, kernel 7.0.0-27-generic+) | Pre-existing NVIDIA software |
+| **OS** | Ubuntu 26.04 (clean, kernel 7.0.0-31-generic pin) | Pre-existing NVIDIA software |
 | **OS Disk** | 800 GB+ | <800 GB |
 | **Data Disk** | 3 TB+ | <3 TB |
 
@@ -463,7 +463,7 @@ See [Node Registration](NODE-REGISTRATION.md) for the RKE2 node registration com
 1. ✅ **Hardware**: 8x H100, H200, B200, or B300 GPUs on Intel 5th/6th Gen Xeon OR AMD EPYC 4th/5th Gen
 2. ✅ **Firmware**: Latest version from [NVIDIA DGX Firmware Guide](https://docs.nvidia.com/dgx/dgxh100-fw-update-guide/)
 3. ✅ **BIOS**: TDX/SEV-SNP, PPCIe mode, VFIO/IOMMU enabled
-4. ✅ **OS**: Ubuntu 26.04 clean, kernel 7.0.0-27-generic+ (GPU Operator manages all GPU software)
+4. ✅ **OS**: Ubuntu 26.04 clean, kernel 7.0.0-31-generic pin (GPU Operator manages all GPU software)
 5. ✅ **Storage**: 800GB OS + 3TB data disks
 6. ✅ **Register**: Run registration command with network addresses
 7. ✅ **Label**: `kubectl label node <name> nvidia.com/gpu.workload.config=vm-passthrough`
