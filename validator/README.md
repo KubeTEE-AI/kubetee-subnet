@@ -121,7 +121,7 @@ See [`.env.example`](./.env.example) for the full list with inline comments. Sum
 | `RANCHER_URL` | yes | Rancher API URL | `https://validator.kubetee.ai` | Rancher evidence source |
 | `RANCHER_BEARER_TOKEN` | owner only | token | **empty** | Rancher API key (owner) / empty (reader uses proxy) |
 | `TAOSTATS_API_KEY` | yes | key | key | TAO/USD price feed |
-| `KUBETEE_OWNER_UID` | no | 0 | 0 | UID receiving the recycle-to-UID weight |
+| `KUBETEE_OWNER_UID` | no | 0 | 0 | UID receiving the remainder weight (protocol recycle/burn sink — never paid to the owner key) |
 | `KUBETEE_HIPPIUS_ACCESS_KEY` | owner only | key | — | S3 publish (publisher role) |
 | `KUBETEE_HIPPIUS_SECRET_KEY` | owner only | key | — | S3 publish (publisher role) |
 | `KUBETEE_PROXY_PORT` | no | 9101 | — | Proxy listen port (owner only) |
@@ -141,7 +141,7 @@ Each cycle (default 360s ≈ one chain epoch):
 6. **Set weights** — once per epoch, respecting `weights_rate_limit` cooldown
 7. **Publish** (owner only) — price card, payout snapshot (with `tao_usd` + `alpha_to_tao`), dashboard to Hippius S3
 
-Whatever miners do not earn is **recycled to the owner UID** (set as weight on the owner's hotkey).
+Whatever miners do not earn is set as weight on the **owner UID** — the protocol's recycle/burn sink. Under SN90's `recycle_or_burn=recycle` hyperparameter, that alpha returns to unissued supply and **never credits the owner's key**; it is equivalent to a burn from the owner's perspective ([Bittensor subnet guide](https://www.bittensor.com/docs/guides/subnets)). The owner's only emission is the protocol-fixed 18% owner cut.
 
 ## Fallback chain
 

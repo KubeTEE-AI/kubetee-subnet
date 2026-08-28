@@ -70,7 +70,10 @@ mechanism sound. A PR that changes scoring or weight-setting must preserve:
    evidence scores `0`. A Rancher evidence *outage* skips the whole cycle
    rather than failing miners.
 2. **Miner/owner weight split**: weights sum to `1.0`; the owner remainder
-   recycles to the owner UID when the owner is on the metagraph.
+   is set on the owner UID — the protocol's recycle/burn sink. Under
+   `recycle_or_burn=recycle` that alpha returns to unissued supply and never
+   credits the owner key; it is not an owner payout
+   ([Bittensor subnet guide](https://www.bittensor.com/docs/guides/subnets)).
 3. **Single weight matrix**: one `set_weights` per epoch (no `mechanism_id`
    split), boundary-aligned, with `weights_rate_limit` cooldown.
 4. **No secrets in code**: all credentials come from environment variables
