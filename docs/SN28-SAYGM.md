@@ -6,18 +6,18 @@
 
 ## Live offers (KubeTEE miner)
 
-Buyer-visible SKUs on sayGM, served from `llm.kubetee.ai` (LiteLLM in TDX). GLM-5.2 and GLM-5.3-Flash land on Kata/TDX + NVIDIA CC; Ornith-1.5-397B NVFP4 is host-nvidia B200 (non-CC). Discounts are vs sayGM retail, not an SN90 reseller tier.
+Buyer-visible SKUs on sayGM, served from `llm.kubetee.ai` (LiteLLM in TDX). GLM-5.2, GLM-5.3-Flash, and Ornith-1.5-397B (short name) land on Kata/TDX + NVIDIA CC. Discounts are vs sayGM retail, not an SN90 reseller tier.
 
 | Buyer model | Miner offer | Discount vs retail | Backend |
 |---|---|---|---|
-| `glm-5.2` | `kubetee/z-ai/glm-5.2` | **62.60%** (matched competing miner 2026-08-27) | `glm-5-2-nvfp4-sglang` (B200, NVFP4) |
+| `glm-5.2` | `kubetee/z-ai/glm-5.2` | **50%** (set 2026-08-28; matcher suspended) | `glm-5-2-nvfp4-sglang` (B200, NVFP4) |
 | `z-ai/glm-5.3-flash` | `kubetee/z-ai/glm-5.3-flash` | **60%** | `glm-5-3-flash-sglang-h200` (H200, FP8) |
 | `qwen/qwen3.8-flash-next` | `kubetee/qwen/qwen3.8-flash-next` | **15%** | `qwen38-flash-next-fp8-sglang-h200` (H200, FP8) |
-| `ornith/ornith-1.5-397b` | `kubetee/ornith/ornith-1.5-397b` | **50%** (first worldwide, 2026-08-20; 15%→50% 2026-08-27) | `ornith-1-5-397b` (B200, NVFP4) |
+| `ornith/ornith-1.5-397b` | `kubetee/ornith/ornith-1.5-397b` | **50%** (first worldwide, 2026-08-20; 15%→50% 2026-08-27) | `ornith-1-5-397b-fp8-sglang-h200` (H200, FP8; retargeted 2026-08-28) |
 
 `deepseek/deepseek-v4-flash-0731` was withdrawn from the miner offer set on 2026-08-27 (`withdrawn_by_miner`). Do not re-declare it. The SKU can still be served on `llm.kubetee.ai`.
 
-**Auto-match (GLM-5.2 only).** Fleet CronJob `saygm-discount-match` in `kubetee-ops` (`*/15 * * * *`) raises our discount to tie the cheapest eligible rival, capped at **70%**. It never undercuts and never re-declares withdrawn SKUs. HTTP against the registry — no `gmcli` in-cluster. Seed Secret `saygm-discount-match-gmcli` with `match.py emit-seed` after `gmcli login`; that OAuth session is then owned by the Job. See `fleet-gitops/infrastructure/saygm-discount-match/staging/README.md`.
+**Auto-match (GLM-5.2 only).** Fleet CronJob `saygm-discount-match` in `kubetee-ops` is **suspended** (2026-08-28) so a fixed **50%** offer is not raised back to the cheapest rival. When re-enabled it matches (never undercuts) up to a **70%** cap. HTTP against the registry — no `gmcli` in-cluster. Seed Secret `saygm-discount-match-gmcli` with `match.py emit-seed` after `gmcli login`. See `fleet-gitops/infrastructure/saygm-discount-match/staging/README.md`.
 
 **First worldwide — Ornith-1.5-397B.** In collaboration with sayGM (SN28), KubeTEE was the first to provide [Ornith-1.5-397B](https://huggingface.co/ornith-ai/Ornith-1.5-397B-NVFP4) anywhere in the world (2026-08-20).
 
