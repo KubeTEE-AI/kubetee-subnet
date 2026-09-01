@@ -56,7 +56,6 @@ Live LiteLLM `api_base` rows (HTTPS `:8443`). Public names are GLM + Flash-0731;
 | `z-ai/glm-5.2` | `glm-5-2-nvfp4-sglang.nemo.svc.cluster.local` | `nim/glm-5-2-nvfp4-sglang-cc.yaml` (StatefulSet, 2 replicas, one Service) | yes |
 | `deepseek/deepseek-v4-flash-0731` | `dsv4-0731-sglang-h200.nemo.svc.cluster.local` | `nim/deepseek-v4-flash-0731-sglang-h200-cc.yaml` | yes |
 | `ornith/ornith-1.5-397b` | `ornith-1-5-397b-fp8-sglang-h200.nemo.svc.cluster.local` | `nim/ornith-1.5-397b-fp8-sglang-h200-cc.yaml` (H200 CC; short name retargeted 2026-08-28) | yes (SayGM) |
-| `ornith/ornith-1.5-397b-fp8` | `ornith-1-5-397b-fp8-sglang-h200.nemo.svc.cluster.local` | same Service as the short name | no |
 | `zai-org/glm-4.5-air-fp8` | `glm-45-air-fp8-vllm.nemo.svc.cluster.local` | `nim/glm-45-air-fp8-vllm-h200-cc.yaml` — **STOPPED 2026-08-28** (Affine wvk 10; previous SN120 teacher). SAN kept. | no |
 
 GLM HA uses the **existing Service**, not per-pod DNS. Both replicas attest independently and receive the same NIM server cert (SAN = Service FQDN). ClusterIP load-balances TCP; a stream stays on one pod. Kubernetes readiness is pod-wide: a replica must not be Ready until HTTPS `:8443` `/health` succeeds (HAProxy up and SGLang healthy on loopback).
