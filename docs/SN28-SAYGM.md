@@ -10,14 +10,19 @@ Buyer-visible SKUs on sayGM, served from `llm.kubetee.ai` (LiteLLM in TDX). GLM-
 
 | Buyer model | Miner offer | Discount vs retail | Backend |
 |---|---|---|---|
-| `glm-5.2` | `kubetee/z-ai/glm-5.2` | **50%** (set 2026-08-28; matcher suspended) | `glm-5-2-nvfp4-sglang` (B200, NVFP4) |
+| `glm-5.2` | `kubetee/z-ai/glm-5.2` | **40% — margin recovery** (2026-09-01: 50%→40%, extending the day's 62.88%→50% margin-recovery sequence) | `glm-5-2-nvfp4-sglang` (B200, NVFP4) |
+| `glm-5.3` | `kubetee/z-ai/glm-5.3` | **10%** (set 2026-09-01; deliberate undercut below rank-match) | `glm-5-3-flash` sibling backend (see `nim/CLAUDE.md`) |
 | `z-ai/glm-5.3-flash` | `kubetee/z-ai/glm-5.3-flash` | **60%** | `glm-5-3-flash-sglang-h200` (H200, FP8) |
 | `qwen/qwen3.8-flash-next` | `kubetee/qwen/qwen3.8-flash-next` | **15%** | `qwen38-flash-next-fp8-sglang-h200` (H200, FP8) |
 | `ornith/ornith-1.5-397b` | `kubetee/ornith/ornith-1.5-397b` | **50%** (first worldwide, 2026-08-20; 15%→50% 2026-08-27) | `ornith-1-5-397b-fp8-sglang-h200` (H200, FP8; retargeted 2026-08-28) |
 
+**All five offers rank 1** on the registry pricing field (verified 2026-09-01 after the GLM-5.3/GLM-5.2 declarations). Discounts are match-to-cheapest-rival (never undercut), computed via the `match.py` blend logic.
+
 `deepseek/deepseek-v4-flash-0731` was withdrawn from the miner offer set on 2026-08-27 (`withdrawn_by_miner`). Do not re-declare it. The SKU can still be served on `llm.kubetee.ai`.
 
-**Auto-match (GLM-5.2 only).** Fleet CronJob `saygm-discount-match` in `kubetee-ops` is **suspended** (2026-08-28) so a fixed **50%** offer is not raised back to the cheapest rival. When re-enabled it matches (never undercuts) up to a **70%** cap. HTTP against the registry — no `gmcli` in-cluster. Seed Secret `saygm-discount-match-gmcli` with `match.py emit-seed` after `gmcli login`. See `fleet-gitops/infrastructure/saygm-discount-match/staging/README.md`.
+**Auto-match (GLM-5.3, Flash, Qwen, Ornith).** Fleet CronJob `saygm-discount-match` in `kubetee-ops` is **live** (re-activated 2026-09-01, 70% cap, match-never-undercut). **GLM-5.2 is excluded from the matcher and held at a fixed 40%** (margin recovery, 2026-09-01: 50%→40%): the rank-1 provider runs a script that mirrors/undercuts any exact match, so KubeTEE does not chase it. The earlier same-day sequence was 50%→62.85% (rank-1 match)→62.88% (rank-2, +0.05% above leader)→**50%→40%** for margin recovery. Re-adding GLM-5.2 to `values.yaml` `config.products` re-enables rank-1 defense for it. HTTP against the registry — no `gmcli` in-cluster. See `fleet-gitops/infrastructure/saygm-discount-match/staging/README.md`.
+
+> ⚠️ **Matcher auth re-seed needed (2026-09-01):** an operator query consumed the in-cluster rotating refresh token without write-back (read-only Secret mount), leaving `saygm-discount-match-gmcli` dead (`AUTH: refresh_token rejected 401`). Re-seed with `gmcli login` + `match.py emit-seed` per the matcher README. GLM-5.2's 40% must be declared **by hand** (`gmcli declare-product --discount-pct 40`) once re-logged-in — it is excluded from the matcher.
 
 **First worldwide — Ornith-1.5-397B.** In collaboration with sayGM (SN28), KubeTEE was the first to provide [Ornith-1.5-397B](https://huggingface.co/ornith-ai/Ornith-1.5-397B-NVFP4) anywhere in the world (2026-08-20).
 
