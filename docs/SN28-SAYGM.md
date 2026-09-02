@@ -11,7 +11,7 @@ Buyer-visible SKUs on sayGM, served from `llm.kubetee.ai` (LiteLLM in TDX). GLM-
 | Buyer model | Miner offer | Discount vs retail | Backend |
 |---|---|---|---|
 | `glm-5.2` | `kubetee/z-ai/glm-5.2` | **40% — margin recovery** (2026-09-01: 50%→40%, extending the day's 62.88%→50% margin-recovery sequence) | `glm-5-2-nvfp4-sglang` (B200, NVFP4) |
-| `glm-5.3` | `kubetee/z-ai/glm-5.3` | **10.1%** (matcher-held rank-1 tie; set 10% 2026-09-01, matcher nudged to 10.1% to match) | `glm-5-3-flash` sibling backend (see `nim/CLAUDE.md`) |
+| `glm-5.3` | `kubetee/z-ai/glm-5.3` | **10.35%** (matcher-held, live rank war — field grew 2→3 offers 2026-09-02; matcher crept 10.1%→10.25%→10.35% in one hour) | `glm-5-3-flash` sibling backend (see `nim/CLAUDE.md`) |
 | `z-ai/glm-5.3-flash` | `kubetee/z-ai/glm-5.3-flash` | **60%** | `glm-5-3-flash-sglang-h200` (H200, FP8) |
 | `qwen/qwen3.8-flash-next` | `kubetee/qwen/qwen3.8-flash-next` | **5%** (matcher-held rank-1; was 15% pre-2026-09-01) | `qwen38-flash-next-fp8-sglang-h200` (H200, FP8) |
 | `ornith/ornith-1.5-397b` | `kubetee/ornith/ornith-1.5-397b` | **50%** (first worldwide, 2026-08-20; 15%→50% 2026-08-27) | `ornith-1-5-397b-fp8-sglang-h200` (H200, FP8; retargeted 2026-08-28) |
