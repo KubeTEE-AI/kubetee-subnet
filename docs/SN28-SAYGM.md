@@ -11,12 +11,14 @@ Buyer-visible SKUs on sayGM, served from `llm.kubetee.ai` (LiteLLM in TDX). GLM-
 | Buyer model | Miner offer | Discount vs retail | Backend |
 |---|---|---|---|
 | `glm-5.2` | `kubetee/z-ai/glm-5.2` | **40% — margin recovery** (2026-09-01: 50%→40%, extending the day's 62.88%→50% margin-recovery sequence) | `glm-5-2-nvfp4-sglang` (B200, NVFP4) |
-| `glm-5.3` | `kubetee/z-ai/glm-5.3` | **10%** (set 2026-09-01; deliberate undercut below rank-match) | `glm-5-3-flash` sibling backend (see `nim/CLAUDE.md`) |
+| `glm-5.3` | `kubetee/z-ai/glm-5.3` | **10.1%** (matcher-held rank-1 tie; set 10% 2026-09-01, matcher nudged to 10.1% to match) | `glm-5-3-flash` sibling backend (see `nim/CLAUDE.md`) |
 | `z-ai/glm-5.3-flash` | `kubetee/z-ai/glm-5.3-flash` | **60%** | `glm-5-3-flash-sglang-h200` (H200, FP8) |
-| `qwen/qwen3.8-flash-next` | `kubetee/qwen/qwen3.8-flash-next` | **15%** | `qwen38-flash-next-fp8-sglang-h200` (H200, FP8) |
+| `qwen/qwen3.8-flash-next` | `kubetee/qwen/qwen3.8-flash-next` | **5%** (matcher-held rank-1; was 15% pre-2026-09-01) | `qwen38-flash-next-fp8-sglang-h200` (H200, FP8) |
 | `ornith/ornith-1.5-397b` | `kubetee/ornith/ornith-1.5-397b` | **50%** (first worldwide, 2026-08-20; 15%→50% 2026-08-27) | `ornith-1-5-397b-fp8-sglang-h200` (H200, FP8; retargeted 2026-08-28) |
 
-**All five offers rank 1** on the registry pricing field (verified 2026-09-01 after the GLM-5.3/GLM-5.2 declarations). Discounts are match-to-cheapest-rival (never undercut), computed via the `match.py` blend logic.
+**Four of five offers rank 1** on the registry pricing field (glm-5.2 deliberately ranks 4 of 8 — margin recovery, see below). Auto-matched discounts are match-to-cheapest-rival (never undercut), computed via the `match.py` blend logic.
+
+**LiteLLM cost basis = sayGM net receive** (registry retail × (1−discount), all dimensions incl. cache-read), re-pinned 2026-09-02 via `sync.py --skip-gmcli`. Qwen's basis uses **registry** retail ($0.16 in / $0.16 cache-read per Mtok) — not OpenRouter's ($0.15/$0.016, a 10× cache mismatch). GLM-5.3's basis follows the matcher: re-pin after it moves the discount.
 
 `deepseek/deepseek-v4-flash-0731` was withdrawn from the miner offer set on 2026-08-27 (`withdrawn_by_miner`). Do not re-declare it. The SKU can still be served on `llm.kubetee.ai`.
 
