@@ -19,8 +19,6 @@ Pricing adjusts automatically to the live market.</think>
 
 **LiteLLM cost basis = sayGM net receive** (registry retail × (1−discount), all dimensions incl. cache-read), re-pinned via `sync.py --skip-gmcli` whenever a discount moves.
 
-`deepseek/deepseek-v4-flash-0731` was withdrawn from the miner offer set on 2026-08-27 (`withdrawn_by_miner`). Do not re-declare it. The 0731 SKU can still be served on `llm.kubetee.ai`.
-
 **Auto-match.** A private Fleet CronJob (`kubetee-ops`) keeps offers price-competitive — discounts are set **dynamically** from the live market. **Do not pin discount numbers in documentation** — they move with the market.
 
 **First worldwide — Ornith-1.5-397B.** In collaboration with sayGM (SN28), KubeTEE was the first to provide [Ornith-1.5-397B](https://huggingface.co/ornith-ai/Ornith-1.5-397B-NVFP4) anywhere in the world (2026-08-20).
@@ -35,7 +33,7 @@ Pricing adjusts automatically to the live market.</think>
 
 ## Free window (closed)
 
-During the free window, buyers used **14,812,329,857** tokens (~15 billion). That load is what hardened GLM-5.2 and Flash-0731 before the paid sayGM offers.
+During the free window, buyers used **14,812,329,857** tokens (~15 billion). That load is what hardened the serving stack before the paid sayGM offers.
 
 ## LiteLLM provider + TEE fallbacks
 
@@ -44,7 +42,7 @@ sayGM is connected to `llm.kubetee.ai` as a provider: buyer SKUs and Factory `mo
 ## Operator notes
 
 - Phala CVM holds the LiteLLM key (`--kubetee`). `declare-product` is registry-only; a new SKU does not require a miner image bump when Envoy already forwards `kubetee` to `llm.kubetee.ai`.
-- Flash listing: [taostat/gm-miner#193](https://github.com/taostat/gm-miner/pull/193) (docs, merged 2026-08-19). Registry accepted `kubetee/deepseek/deepseek-v4-flash-0731` the same day; offer withdrawn 2026-08-27.
+- Flash listing: [taostat/gm-miner#193](https://github.com/taostat/gm-miner/pull/193) (docs, merged 2026-08-19).
 - SN28 Alpha on hotkey `sn28` is swapped SN28→SN90 and recycled — [SN28-SN90-ALPHA-RECYCLE.md](./SN28-SN90-ALPHA-RECYCLE.md).
 - Manifests and gateway wiring: `nim/CLAUDE.md` (gm-miner section).
 
