@@ -6,7 +6,7 @@
 
 ## Live offers (KubeTEE miner)
 
-Buyer-visible SKUs on sayGM, served from `llm.kubetee.ai` (LiteLLM in TDX). GLM-5.2, GLM-5.3, GLM-5.3-Flash, and Ornith-1.5-397B (short name) land on Kata/TDX + NVIDIA CC. Discounts are vs sayGM retail, not an SN90 reseller tier. **Discounts are dynamic — set automatically against the live market; they are never pinned in docs.**
+Buyer-visible SKUs on sayGM, served from `llm.kubetee.ai` (LiteLLM in TDX). GLM-5.2, GLM-5.3, GLM-5.3-Flash, and Ornith-1.5-397B (short name) land on Kata/TDX + NVIDIA CC.
 
 | Buyer model | Miner offer | Pricing | Backend |
 |---|---|---|---|
@@ -15,11 +15,7 @@ Buyer-visible SKUs on sayGM, served from `llm.kubetee.ai` (LiteLLM in TDX). GLM-
 | `z-ai/glm-5.3-flash` | `kubetee/z-ai/glm-5.3-flash` | dynamic | `glm-5-3-flash-sglang-h200` (H200, FP8) |
 | `ornith/ornith-1.5-397b` | `kubetee/ornith/ornith-1.5-397b` | dynamic (sole provider) | `ornith-1-5-397b-fp8-sglang-h200` (H200, FP8; retargeted 2026-08-28) |
 
-Pricing adjusts automatically to the live market.</think>
-
-**LiteLLM cost basis = sayGM net receive** (registry retail × (1−discount), all dimensions incl. cache-read), re-pinned via `sync.py --skip-gmcli` whenever a discount moves.
-
-**Auto-match.** A private Fleet CronJob (`kubetee-ops`) keeps offers price-competitive — discounts are set **dynamically** from the live market. **Do not pin discount numbers in documentation** — they move with the market.
+Pricing adjusts to the market; per-offer prices are visible on sayGM.
 
 **First worldwide — Ornith-1.5-397B.** In collaboration with sayGM (SN28), KubeTEE was the first to provide [Ornith-1.5-397B](https://huggingface.co/ornith-ai/Ornith-1.5-397B-NVFP4) anywhere in the world (2026-08-20).
 
