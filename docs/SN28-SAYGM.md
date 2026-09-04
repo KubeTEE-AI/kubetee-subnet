@@ -19,7 +19,7 @@ Pricing adjusts automatically to the live market.</think>
 
 **LiteLLM cost basis = sayGM net receive** (registry retail × (1−discount), all dimensions incl. cache-read), re-pinned via `sync.py --skip-gmcli` whenever a discount moves.
 
-`deepseek/deepseek-v4-flash-0731` was withdrawn from the miner offer set on 2026-08-27 (`withdrawn_by_miner`). **`qwen/qwen3.8-flash-next` was withdrawn 2026-09-04 — LICENSE: the Qwen Community License 1.0 requires a separate Qwen license for any Model-as-a-Service commercial use (no revenue threshold).** Do not re-declare either. The 0731 SKU can still be served on `llm.kubetee.ai`; the qwen backend was decommissioned (STS deleted, PVCs retained).
+`deepseek/deepseek-v4-flash-0731` was withdrawn from the miner offer set on 2026-08-27 (`withdrawn_by_miner`). Do not re-declare it. The 0731 SKU can still be served on `llm.kubetee.ai`.
 
 **Auto-match.** A private Fleet CronJob (`kubetee-ops`) keeps offers price-competitive — discounts are set **dynamically** from the live market. **Do not pin discount numbers in documentation** — they move with the market.
 
