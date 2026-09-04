@@ -120,8 +120,6 @@ LiteLLM 1.96 `ssl_certificate` is ignored by httpx 0.28. Live outbound mTLS is `
 | Upstream Service | Live `api_base` |
 |------------------|-----------------|
 | GLM | `https://glm-5-2-nvfp4-sglang.nemo.svc.cluster.local:8443/v1` |
-| DSV4 H200 | `https://dsv4-0731-sglang-h200.nemo.svc.cluster.local:8443/v1` |
-| Affine teacher (STOPPED 2026-08-28) | `https://glm-45-air-fp8-vllm.nemo.svc.cluster.local:8443/v1` |
 
 `model_list` in the ConfigMap stays `[]`. Flip `api_base` via `/model/update` and **re-include** every `litellm_params` field (known gotcha: unspecified list fields are nulled). Scripts: `nim/scripts/litellm-glm52-https-8443.py`, `nim/scripts/litellm-dsv4-https-8443.py`.
 
