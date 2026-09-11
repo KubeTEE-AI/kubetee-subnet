@@ -1,7 +1,7 @@
 # East-west attested mTLS (LiteLLM ↔ inference guests)
 
-**Status:** deployed on staging `na-us-oakland-56` (2026-08-15). All four replicas `2/2` (`glm-0`/`glm-1`, `dsv4-0`/`dsv4-1`). GLM + DSV4 inbound HAProxy `:8443`; Services expose `:8443` only. SGLang binds `127.0.0.1:8000` (pod IP `:8000` connection refused). Kubelet HTTPS probes use `:8443` `/health` and `/health_generate` (HAProxy `verify optional` on those GET paths only; all other paths need a verified client cert). LiteLLM presents the Trustee client cert via `sitecustomize.py` (httpx 0.28 ignores `ssl_certificate`). Public hop is still Let’s Encrypt + Traefik. Gateway chat **200** for both public models. KBS resource policy is still upstream `default.rego` — path×role + cpu0-affirming 401s after attest 200.  
-**Date:** 2026-08-15  
+**Status:** deployed on staging `na-us-oakland-56` (2026-08-15; rows synced 2026-09-11). Five east-west backends, all 2 replicas: `glm-5-2-nvfp4-sglang` (B200), `glm-5-3-flash-sglang-h200`, `ornith-1-5-397b-fp8-sglang-h200`, `dsv41-flash-sglang-h200` (H200), `glm-5-3-sglang-b200-cc` (B200). Services expose `:8443` only. SGLang binds `127.0.0.1:8000` (pod IP `:8000` connection refused). Kubelet HTTPS probes use `:8443` `/health` and `/health_generate` (HAProxy `verify optional` on those GET paths only; all other paths need a verified client cert). LiteLLM presents the Trustee client cert via `sitecustomize.py` (httpx 0.28 ignores `ssl_certificate`). Public hop is still Let’s Encrypt + Traefik. KBS resource policy is still upstream `default.rego` — path×role + cpu0-affirming 401s after attest 200.  
+**Date:** 2026-08-15 (rows synced 2026-09-11)  
 **Approach:** CoCo Confidential AI — Trustee issues TLS credentials after attestation. Apps speak ordinary mTLS. No quote parsing in LiteLLM or SGLang.  
 **Roadmap:** remaining gaps (HTTPS KBS, durable Trustee, gpu0/RVPS, sealed NGC) live in [EAST-WEST-ATTESTED-MTLS-PLAN.md](./EAST-WEST-ATTESTED-MTLS-PLAN.md).
 
@@ -49,14 +49,16 @@ CoCo reference: [Confidential AI / federated learning](https://confidentialconta
 
 ## First-cut workloads
 
-Live LiteLLM `api_base` rows (HTTPS `:8443`). Public names are GLM + Flash-0731; Pro-0813 is registered in LiteLLM but not published on AI Hub.
+Live LiteLLM `api_base` rows (HTTPS `:8443`), synced 2026-09-11 against `GET /v1/model/info` + the `nemo` StatefulSets. Public names: `z-ai/glm-5.2`, `z-ai/glm-5.3`, `z-ai/glm-5.3-flash`, `ornith/ornith-1.5-397b`, `deepseek/deepseek-v4.1-flash`.
 
 | LiteLLM `model_name` | Service (TLS hostname) | Manifest | Public |
 |--------------|------------------------|----------|--------|
 | `z-ai/glm-5.2` | `glm-5-2-nvfp4-sglang.nemo.svc.cluster.local` | `nim/glm-5-2-nvfp4-sglang-cc.yaml` (StatefulSet, 2 replicas, one Service) | yes |
-| `deepseek/deepseek-v4-flash-0731` | `dsv4-0731-sglang-h200.nemo.svc.cluster.local` | `nim/deepseek-v4-flash-0731-sglang-h200-cc.yaml` | yes |
-| `ornith/ornith-1.5-397b` | `ornith-1-5-397b-fp8-sglang-h200.nemo.svc.cluster.local` | `nim/ornith-1.5-397b-fp8-sglang-h200-cc.yaml` (H200 CC; short name retargeted 2026-08-28) | yes (SayGM) |
-| `zai-org/glm-4.5-air-fp8` | `glm-45-air-fp8-vllm.nemo.svc.cluster.local` | `nim/glm-45-air-fp8-vllm-h200-cc.yaml` — **STOPPED 2026-08-28** (Affine wvk 10; previous SN120 teacher). SAN kept. | no |
+| `z-ai/glm-5.3-flash` | `glm-5-3-flash-sglang-h200.nemo.svc.cluster.local` | `nim/glm-5-3-flash-sglang-h200-cc.yaml` (H200 CC, 2 replicas, 2026-08-27) | yes |
+| `z-ai/glm-5.3` | `glm-5-3-sglang-b200-cc.nemo.svc.cluster.local` | `nim/glm-5-3-sglang-b200-cc.yaml` (B200 CC, 2 replicas on `am-b200-59`/`60`; retargeted from non-CC `:8000` 2026-09-11) | yes |
+| `ornith/ornith-1.5-397b` | `ornith-1-5-397b-fp8-sglang-h200.nemo.svc.cluster.local` | `nim/ornith-1.5-397b-fp8-sglang-h200-cc.yaml` (H200 CC, 2 replicas; short name retargeted 2026-08-28) | yes (SayGM) |
+| `deepseek/deepseek-v4.1-flash` | `dsv41-flash-sglang-h200.nemo.svc.cluster.local` | `nim/deepseek-v4-1-flash-sglang-h200-cc.yaml` (H200 CC, 2 replicas 2026-09-11, `am-h200-27`/`22`) | yes |
+| `moonshotai/kimi-k3` | `kimi-k3-sglang-cc.nemo.svc.cluster.local:8000` | `nim/kimi-k3-sglang-b300.yaml` (B300, non-CC) — **row is stale: Service deleted, backend gone; do not route to it** | no |
 
 GLM HA uses the **existing Service**, not per-pod DNS. Both replicas attest independently and receive the same NIM server cert (SAN = Service FQDN). ClusterIP load-balances TCP; a stream stays on one pod. Kubernetes readiness is pod-wide: a replica must not be Ready until HTTPS `:8443` `/health` succeeds (HAProxy up and SGLang healthy on loopback).
 
@@ -85,10 +87,11 @@ Resources (illustrative URIs; keep the `default` repository unless Trustee layou
 NIM server cert SANs (explicit, not a wildcard):
 
 - `glm-5-2-nvfp4-sglang.nemo.svc.cluster.local`
-- `dsv4-0731-sglang-h200.nemo.svc.cluster.local`
-- `dsv4-pro-0813-sglang-h200.nemo.svc.cluster.local` (STOPPED 2026-08-19; SAN kept)
+- `dsv4-0731-sglang-h200.nemo.svc.cluster.local` (STOPPED — backend deleted, replaced by V4.1-Flash; SAN kept)
 - `ornith-1-5-397b-fp8-sglang-h200.nemo.svc.cluster.local`
-- `glm-45-air-fp8-vllm.nemo.svc.cluster.local` (STOPPED 2026-08-28; SAN kept)
+- `glm-5-3-flash-sglang-h200.nemo.svc.cluster.local` (added 2026-08-27)
+- `glm-5-3-sglang-b200-cc.nemo.svc.cluster.local` (added 2026-09-11)
+- `dsv41-flash-sglang-h200.nemo.svc.cluster.local` (added 2026-09-10)
 
 Generate the CA and leaf certs once, load them into Trustee with `kbs-client` and an admin JWT. Admin mode is `AuthenticatedAuthorization`; rotate and Fleet config live in the Trustee bundle `infrastructure/trustee/KubeTEE.md` (`kubetee-fleet`). Never commit the keys. Cert lifetime for this cut: ~90 days. Rotate by replacing KBS material and rolling guests. Short-lived refresh is a later cut (GLM/DSV4 boots take hours).
 
