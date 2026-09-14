@@ -39,9 +39,9 @@ def _healthy_cluster(hotkey=HOTKEY):
     cluster = {"id": "c-1", "labels": {"kubetee.ai/hotkey": hotkey}}
     cp = [
         _node(32, "128Gi", ["etcd", "control-plane", "worker"])
-        for _ in range(3)
+        for _ in range(5)
     ]
-    gpu = [_gpu_node()]
+    gpu = [_gpu_node() for _ in range(2)]
     nodes = {cluster["id"]: cp + gpu}
     return [cluster], nodes
 
@@ -90,23 +90,35 @@ def test_two_clusters_one_hotkey_is_ambiguous():
 
 def test_no_gpu_worker_fails():
     clusters, nodes = _healthy_cluster()
-    nodes[clusters[0]["id"]] = nodes[clusters[0]["id"]][:3]  # drop GPU node
+    nodes[clusters[0]["id"]] = nodes[clusters[0]["id"]][:3]  # drop GPU nodes
     verdict = validate_miner(HOTKEY, clusters, nodes, _cid)
     assert not verdict.ready
     assert any("8-GPU" in r or "GPU" in r for r in verdict.reasons)
 
 
+def test_below_minimum_nodes_fails():
+    clusters, nodes = _healthy_cluster()
+    # 6 nodes: drop one GPU worker from the 5+2 shape -> below the 7 minimum
+    nodes[clusters[0]["id"]] = nodes[clusters[0]["id"]][:-1]
+    verdict = validate_miner(HOTKEY, clusters, nodes, _cid)
+    assert not verdict.ready
+    assert any("7 minimum" in r for r in verdict.reasons)
+
+
 def test_gpu_node_without_passthrough_fails():
     clusters, nodes = _healthy_cluster()
-    gpu = nodes[clusters[0]["id"]][-1]
-    del gpu["labels"]["nvidia.com/gpu.workload.config"]
+    for node in nodes[clusters[0]["id"]]:
+        if node["labels"].get("nvidia.com/gpu.model"):
+            del node["labels"]["nvidia.com/gpu.workload.config"]
     verdict = validate_miner(HOTKEY, clusters, nodes, _cid)
     assert not verdict.ready
 
 
 def test_unschedulable_worker_fails():
     clusters, nodes = _healthy_cluster()
-    gpu = nodes[clusters[0]["id"]][-1]
-    gpu["unschedulable"] = True  # Rancher top-level unschedulable flag
+    for node in nodes[clusters[0]["id"]]:
+        if node["labels"].get("nvidia.com/gpu.model"):
+            # Rancher top-level unschedulable flag
+            node["unschedulable"] = True
     verdict = validate_miner(HOTKEY, clusters, nodes, _cid)
     assert not verdict.ready

@@ -22,7 +22,7 @@ Albedo remains **Bittensor SN97**; KubeTEE is **SN90**. Upstream PR from the PoC
 
 **PoC-era LiteLLM notes (king Service — not the revisit path):**
 - During king reload, `/ready` and `/v1/*` returned **503** with `fault_code=king_changing` — clients had to retry / fail soft.
-- King GPUs were shared with challenger capacity (king held 4× H200 on `am-h200-25`).
+- King GPUs were shared with challenger capacity (king held 4× H200 on one staging node).
 - The PoC king was non-CC staging. Confidential serve is in the revisit gate (Trustee + `kata-*`), via unmodified Albedo — not by registering this Service in LiteLLM.
 
 ---
@@ -62,7 +62,7 @@ Namespace: `albedo-poc` on context `na-us-oakland-56-direct`.
 | Piece | Manifest (Albedo fork) | Role |
 |-------|------------------------|------|
 | Dataset corpus | `kubetee/deploy/dataset-prep.yaml` | One-shot Job fills `albedo-poc-dataset-root` + verifies `manifest.json`. Re-run only on corpus/version change. |
-| Always-on king | `kubetee/deploy/king.yaml` | 4× H200 / TP=4 on `am-h200-25` (`kubetee.ai/albedo-king=true`). OpenAI HTTP via `king_serve.py` + local vLLM (`albedo-king:8000`). |
+| Always-on king | `kubetee/deploy/king.yaml` | 4× H200 / TP=4 (`kubetee.ai/albedo-king=true`). OpenAI HTTP via `king_serve.py` + local vLLM (`albedo-king:8000`). |
 | Challenger Job | `kubetee/deploy/eval.yaml` | 4× H200 / TP=4. Mounts corpus; local vLLM challenger; HTTP previous-king gens; scores via shared judge; uploads artifacts. |
 | Shared judge | `kubetee/deploy/judge-api.yaml` | `albedo-judge-api:8091` → LiteLLM `http://litellm.litellm.svc.cluster.local:4000`. |
 

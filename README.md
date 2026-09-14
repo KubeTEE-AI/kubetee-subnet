@@ -120,8 +120,9 @@ The RKE2 baseline is **[FIPS-140-2 validated](https://docs.rke2.io/security/fips
 
 ### Early Access
 
-KubeTEE is in **Early Access**. The first deployment targets **two clusters in the USA**, one hotkey each, with all nodes of a cluster co-located in a single data center. Early Access focuses on:
+KubeTEE is in **Early Access**. Miner registration is hand-reviewed and onboarded directly with KubeTEE; permissionless self-service onboarding ships in [Phase 1](#phase-1--expansion) (see [Miner onboarding](#miner-onboarding)). Early Access focuses on:
 
+- **First external miner live**: **BTLABS (UID 97)** operates the first production miner cluster (`na-us-michigan-97`, 7 nodes, 56 GPUs — H100 + H200) — real hardware, TDX attestation, and live emissions. The subnet-owner staging cluster remains the debug target, not a miner template
 - Standing up the Armada multi-cluster batch scheduler across miner clusters
 - Running confidential AI jobs in Kata + CoCo TEE pods
 - A **staging cluster** operated by Pierre as the subnet-owner staging miner — all nodes are TEE CC capable. Workloads run on miner clusters; if a workload fails, it can be targeted at staging for debug. Kata guest debug is **off**; CoCo Trustee attests those guests. CC can be turned off on a staging node for debug; guest debug can be enabled per pod. See [Debugging on the staging cluster](#debugging-on-the-staging-cluster)
@@ -130,11 +131,12 @@ KubeTEE is in **Early Access**. The first deployment targets **two clusters in t
 
 ### What Ships Today
 
-This README documents both what runs in the KubeTEE infrastructure and what is designed. Sections describing unimplemented work carry a status note pointing back here; this table is the single source of truth for the distinction. **The Bittensor validator v1 is built, tested, and live on Finney** — it scores the subnet-owner staging miner on a single Infrastructure mechanism and sets weights once per epoch. The "Designed / to be built" column lists future-scoring dimensions on top of that base.
+This README documents both what runs in the KubeTEE infrastructure and what is designed. Sections describing unimplemented work carry a status note pointing back here; this table is the single source of truth for the distinction. **The Bittensor validator v1 is built, tested, and live on Finney** — it scores miners on a single Infrastructure mechanism and sets weights once per epoch. The "Designed / to be built" column lists future-scoring dimensions on top of that base.
 
 | Area | Exists today (infrastructure / design) | Designed / to be built |
 |------|--------------------|--------------------|
-| **Confidential&nbsp;runtime** | Kata **4.1.0** + CoCo TEE runtime-rs classes on TDX H200/B200 nodes (`kata-qemu-nvidia-gpu-tdx-runtime-rs` / `kata-qemu-tdx-runtime-rs`) | AMD SEV-SNP multi-arch + RTX 5000 Pro Server Edition testing ([Phase 1](#phase-1--expansion)) |
+| **Miner&nbsp;fleet** | **BTLABS (UID 97)** — first production miner cluster (`na-us-michigan-97`): 7 nodes, 56 GPUs (32× H100 + 24× H200), Intel TDX + NVIDIA CC, running production workloads and earning emissions, scored and paid every epoch. Plus the subnet-owner staging cluster (UID 56). See [Miner onboarding](#miner-onboarding) | More miner clusters — Early Access onboarding is open and hand-reviewed; permissionless registration in [Phase 1](#phase-1--expansion) |
+| **Confidential&nbsp;runtime** | Kata **4.1.0** + CoCo TEE runtime-rs classes on TDX H200/B200 nodes (`kata-qemu-nvidia-gpu-tdx-runtime-rs` / `kata-qemu-tdx-runtime-rs`) | AMD SEV-SNP multi-arch + RTX 6000 Pro Server Edition testing ([Phase 1](#phase-1--expansion)) |
 | **Service&nbsp;transport** | Grey-cloud DNS + Traefik TLS passthrough into the LiteLLM TDX guest. [Attestation-gated TLS](./docs/NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md#2-attestation-gated-tls-between-services) (RA-TLS: TLS public key in TDX `report_data`, Trustee + Intel Trust Authority) is the client-attested hop on top of that path | Native TLS from the LiteLLM guest to NIM guests on miner clusters |
 | **Staging&nbsp;cluster** | Subnet-owner staging cluster — every node is TEE CC capable. Debug target if a workload fails. Kata **guest debug off**; CoCo Trustee attests those guests. CC can be turned off on a node for debug; guest debug can be enabled per pod. | — |
 | **Security&nbsp;gate** | — | Supply-chain CI (SAST, Trustee/KBS secrets, image CVE, IaC/Helm policy, image provenance) — design, not yet automated |
@@ -303,28 +305,21 @@ flowchart LR
     subgraph staging["KubeTEE Staging Cluster — subnet-owner"]
         NodeTEE["CC-capable TDX GPU nodes (H200 / B200)<br/>kata-qemu-nvidia-gpu-tdx-runtime-rs<br/>guest debug off; Trustee attests<br/>CC can be turned off for debug"]
     end
-    subgraph clusterA["Miner Cluster A — 1 hotkey, 1 DC (USA)"]
+    subgraph clusterA["Miner Cluster — BTLABS (UID 97), 1 hotkey, 1 DC (USA)"]
         ExecA["Armada Executor"]
-        NodeA["GPU nodes\nkata-qemu-nvidia-gpu-tdx-runtime-rs\nguest debug off"]
-    end
-    subgraph clusterB["Miner Cluster B — 1 hotkey, 1 DC (USA)"]
-        ExecB["Armada Executor"]
-        NodeB["GPU nodes\nkata-qemu-nvidia-gpu-tdx-runtime-rs\nguest debug off"]
+        NodeA["7 nodes, 56 GPUs (H100 + H200)\nkata-qemu-nvidia-gpu-tdx-runtime-rs\nguest debug off"]
     end
     Client["Job Submitter\nNeMo/NIM/Blueprint job"] -->|submit| ArmadaServer
     Client -.->|"on failure, debug"| NodeTEE
     ArmadaServer -->|schedule| ExecA
-    ArmadaServer -->|schedule| ExecB
     ExecA --> NodeA
-    ExecB --> NodeB
     NodeA -.->|attestation + metrics| Validator
-    NodeB -.->|attestation + metrics| Validator
     Validator -->|set weights| Chain["Bittensor\nemissions"]
 ```
 
 > The **Validator** runs on the control plane inside a confidential Kata + CoCo TEE pod (see [Validator Runtime (TEE)](#validator-runtime-tee)). The **Armada Server** and **Executors** are drawn here as designed: they are stood up in [Phase 0](#phase-0--early-access-current) and move into TEE pods in [Phase 1](#phase-1--expansion) ([What Ships Today](#what-ships-today)).
 >
-> The **staging cluster** is KubeTEE's own. Every node is TEE CC capable. It is a **debug target** if a workload fails — not a required promotion step. Kata guest debug is **off**; CoCo Trustee attests those guests. CC can be turned off on a staging node for debug; guest debug can be enabled per pod. Miner clusters keep CC on with guest debug off. See [For Miners (Infrastructure)](#for-miners-infrastructure) and [Debugging on the staging cluster](#debugging-on-the-staging-cluster).
+> The **first miner cluster** is live in production: BTLABS (UID 97), `na-us-michigan-97` — 7 nodes (8-GPU H100 + 3× 8-GPU H200), Intel TDX, NVIDIA CC. Subsequent miner clusters join the same shape. The **staging cluster** is KubeTEE's own. Every node is TEE CC capable. It is a **debug target** if a workload fails — not a required promotion step. Kata guest debug is **off**; CoCo Trustee attests those guests. CC can be turned off on a staging node for debug; guest debug can be enabled per pod. Miner clusters keep CC on with guest debug off. See [For Miners (Infrastructure)](#for-miners-infrastructure) and [Debugging on the staging cluster](#debugging-on-the-staging-cluster).
 
 ---
 
@@ -399,6 +394,7 @@ The price itself is **competitive** (benchmarked against Targon/Lium/Chutes) and
 - Test applications, infrastructure, upgrades; community Staging jobs
 
 **Production Environment** (Permissionless with minimum qualification and collaterals):
+- **Live**: BTLABS (UID 97) operates the first production miner cluster (`na-us-michigan-97`) — real hardware, TDX attestation, live emissions
 - Multi-cluster — one per data center per miner hotkey
 - Must pass minimum requirements (hardware, HA topology, 8-GPU workers, passthrough wiring), TEE attestation, and infrastructure-readiness validation
 - **TEE-only, Kata guest debug off**, CoCo Trustee attests
@@ -426,9 +422,11 @@ Full analysis (securities posture, recycle mechanics, flywheel, trajectory chart
 The validator is the subnet's referee. In Early Access it scores each miner (one hotkey per cluster) on a single Infrastructure mechanism and sets Bittensor weights each epoch.
 
 > **Status:** validator v1 is **built, tested (35 tests), and live on Finney** —
-> it scores the subnet-owner staging miner on a single Infrastructure mechanism and sets Bittensor
+> it scores every registered miner cluster (subnet-owner staging + production
+> miners) on a single Infrastructure mechanism and sets Bittensor
 > weights once per epoch (boundary-aligned, with `weights_rate_limit` cooldown).
-> The KubeTEE Validator/Miners Dashboard is published to Hippius S3 every cycle at
+> The first production miner (BTLABS, UID 97 — `na-us-michigan-97`) is validated
+> and earning every epoch. The KubeTEE Validator/Miners Dashboard is published to Hippius S3 every cycle at
 > [https://s3.hippius.com/kubetee-validator/index.html](https://s3.hippius.com/kubetee-validator/index.html).
 > The sections below
 > describe both the running v1 and the future-scoring dimensions on top of it.
@@ -602,7 +600,10 @@ flowchart LR
 hardware it runs on (requirements below); KubeTEE binds it by applying the
 `kubetee.ai/hotkey` label that links the cluster to the miner's registered
 hotkey. Rancher Fleet GitOps then deploys the infrastructure onto RKE2 and
-verifies attestations and metrics.
+verifies attestations and metrics. **The first miner onboarded this way is
+BTLABS (UID 97)** — its production cluster (`na-us-michigan-97`) went through
+the full path: registration, binding, infrastructure validation, scoring, and
+emissions (see [Early Access](#early-access)).
 
 **Self-service permissionless onboarding ships in Phase 1** — see
 [Roadmap](#phase-1--expansion). Until then the platform endpoints, credentials,
@@ -617,7 +618,7 @@ public repository.
 
 > KubeTEE is a decentralized multi-cluster architecture. Miners must provide the minimum requirements below to allow high availability, deploy the full tech stack, and have enough nodes to run SOTA AI services and enhanced services for enterprises. These minimum requirements are written and enforced in Phase 0.
 
-- **8 nodes minimum per cluster** (5 control-plane + etcd + worker combined, 3+ dedicated 8-GPU workers **per GPU type**) — all co-located in a single data center. The 5 combined nodes run the tech stack (GPU Operator, Kata/CoCo, Longhorn, NeMo, Armada Executor, monitoring) and serve inference; **3 dedicated GPU workers per GPU type** ensure HA for each GPU type (a mixed-GPU cluster needs 3 per type, e.g. 3 H200 + 3 B200). Fewer nodes cannot simultaneously host the tech stack and serve inference with HA. Full topology + scaling table: [GPU Node Requirements — Cluster Architecture & HA](./docs/GPU-NODE-REQUIREMENTS.md#cluster-architecture--high-availability)
+- **7 nodes minimum per cluster** (5 control-plane + etcd + worker combined, 2+ dedicated 8-GPU workers **per GPU type**) — all co-located in a single data center. The 5 combined nodes run the tech stack (GPU Operator, Kata/CoCo, Longhorn, NeMo, Armada Executor, monitoring) and serve inference; **3 dedicated GPU workers per GPU type** keep HA for each GPU type (a mixed-GPU cluster needs 3 per type, e.g. 3 H200 + 3 B200). Fewer nodes cannot simultaneously host the tech stack and serve inference with HA. Full topology + scaling table: [GPU Node Requirements — Cluster Architecture & HA](./docs/GPU-NODE-REQUIREMENTS.md#cluster-architecture--high-availability)
 - Intel TDX (AMD SEV-SNP, Phase 1) compatible nodes with NVIDIA H100/H200/B200/B300; BIOS + kernel TDX/SGX enabled; one cluster per miner; cluster registered with Rancher for Fleet management
 - Production Rancher inventory passes the infrastructure-readiness policy (readiness, HA topology, CPU/memory, eight-GPU workers, passthrough wiring, confidential runtime handler)
 - A **100 TAO deposit** held as on-chain registration collateral on the mining hotkey — see [Miner deposit (registration collateral)](#miner-deposit-registration-collateral)
@@ -653,19 +654,21 @@ Full detail — the chain primitive, Alpha conversion, grace/recovery, `btcli` c
   - [ ] **Kimi-K3** — B300 nodes (`llm.kubetee.ai`)
   - [x] **GLM-5.2** — B200 nodes (`llm.kubetee.ai` + SN28)
   - [x] **Ornith-1.5-397B** — B200 NVFP4 (`llm.kubetee.ai` + SN28). First worldwide, in collaboration with SN28 sayGM (2026-08-20).
+  - [x] **GLM-5.3** - B200 nodes
+  - [x] **GLM-5.3-Flash** - H200 nodes
   - [ ] **SOTA embedding model**
   - [ ] **Specialised models for vectorization, LLM-as-judge, and document retrieval** — served through [NeMo Microservices](#nvidia-nemo-microservices--bittensor-subnet-integrations) (NeMo Retriever + Evaluator)
-- [ ] Deploy 2 US clusters (one hotkey each, each cluster's nodes co-located in a single DC — one West Coast, one East Coast)
+- [x] **Deploy 2 US clusters** (one hotkey each, each cluster's nodes co-located in a single DC): subnet-owner staging (`na-us-oakland-56`, West Coast) + **first production miner cluster — BTLABS UID 97** (`na-us-michigan-97`, 7 nodes, 56 GPUs, H100 + H200). Onboarding validated end to end: registration, binding, infrastructure validation, scoring, emissions.
 - [ ] Armada Server Multi-cluster Scheduler on the subnet-owner control plane; Armada Executor on each miner cluster
 - [ ] Automate supply-chain CI (SAST, Trustee secrets, image CVE, IaC) and publish results (see [Debugging on the staging cluster](#debugging-on-the-staging-cluster))
 - [ ] Binary Infrastructure validator gate (hotkey binding identity, Rancher readiness, HA, capacity, GPU/runtime wiring)
 - [ ] Extend scoring with fresh TEE attestation, Armada job metrics, serving probes, workload identity, and KeyLease freshness
 - [ ] KubeTEE-hosted validator offering: KubeTEE runs the validator code in a KubeTEE confidential cluster for operators without their own TEE infrastructure
-- [ ] Validator Rancher v3 API access: a validator authenticates by **signing a challenge with its Bittensor hotkey**; an auth mechanism connected to Rancher verifies the signature and issues the narrow cluster/node-read plus guarded-cluster-delete role. Split reconciliation behind an operator-owned mutation credential/controller before describing validator scoring tokens as read-only
+- [x] Validator Rancher v3 API access: a validator authenticates by **signing a challenge with its Bittensor hotkey**; an auth mechanism connected to Rancher verifies the signature and issues the narrow cluster/node-read plus guarded-cluster-delete role. Split reconciliation behind an operator-owned mutation credential/controller before describing validator scoring tokens as read-only
 - [ ] Miner Rancher access on cluster creation: the miner authenticates with the same **hotkey-signed** flow, scoped **read-only** to their own cluster (the one carrying their `kubetee.ai/hotkey` label, bound to `cluster-readonly`) so the miner can observe their cluster (subnet owner manages via Fleet)
-- [ ] Emissions rewards for miners providing confidential compute capacity (supply-side)
+- [x] Emissions rewards for miners providing confidential compute capacity (supply-side) — **live**: first external miner (BTLABS UID 97) earning since its first scored epoch
 - [ ] Alpha / TAO paid jobs (demand-side) — compute priced at a resources price per hour, dynamic with Armada queue depth and wait time per job class
-- [ ] Competitive pricing, supply side: implement the live Targon (SN4) payout feed to clamp the GPU price card (one publisher, all validators read), and the per-GPU price paid to miners
+- [x] Competitive pricing, supply side: implement the live Targon (SN4) payout feed to clamp the GPU price card (one publisher, all validators read), and the per-GPU price paid to miners
 - [ ] Competitive pricing, demand side: scrape Lium (SN51) / Chutes (SN64) price feeds, compute per-class target price, score miners on price competitiveness
 - [ ] Confidential job templates — NeMo / NIM / Blueprint, for subnet owners and approved integrators
 - [x] **[Albedo SN97 competitive-distillation eval PoC](./docs/SN97-ALBEDO-POC.md)** (KubeTEE SN90 hosting SN97 king-of-the-hill duels — not coding agents) — **parked 2026-08-13**. First successful 100-sample duel 2026-08-09 ([artifacts](./docs/SN97-ALBEDO-POC.md#latest-successful-run-2026-08-09), [upstream PR](https://github.com/unarbos/albedo/pull/4)). Do not extend the KubeTEE-specific split topology.
@@ -703,6 +706,7 @@ Full detail — the chain primitive, Alpha conversion, grace/recovery, `btcli` c
 
 ### Documentation
 - [Miner Deposit — registration collateral](./docs/MINER-DEPOSIT.md) — the 100 TAO on-chain registration deposit, chain primitive, and runbooks
+- [Node BIOS & OS Preparation](./docs/NODE-BIOS-OS-PREPARATION.md) — pre-registration BIOS/TDX/SGX, OS, PCCS/QGS, and storage setup up to node registration (validated on the first miner onboarding)
 - [Node Registration](./docs/NODE-REGISTRATION.md) — Miner RKE2 node registration and `kubetee.ai/*` labels
 - [GPU Node Requirements](./docs/GPU-NODE-REQUIREMENTS.md) — GPU/TEE hardware requirements
 - [Cluster Naming Convention](./docs/CLUSTER_NAMING_CONVENTION.md) — `kubetee.ai/*` labels and Fleet GitOps targeting

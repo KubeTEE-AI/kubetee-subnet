@@ -55,9 +55,9 @@ Live LiteLLM `api_base` rows (HTTPS `:8443`), synced 2026-09-11 against `GET /v1
 |--------------|------------------------|----------|--------|
 | `z-ai/glm-5.2` | `glm-5-2-nvfp4-sglang.nemo.svc.cluster.local` | `nim/glm-5-2-nvfp4-sglang-cc.yaml` (StatefulSet, 2 replicas, one Service) | yes |
 | `z-ai/glm-5.3-flash` | `glm-5-3-flash-sglang-h200.nemo.svc.cluster.local` | `nim/glm-5-3-flash-sglang-h200-cc.yaml` (H200 CC, 2 replicas, 2026-08-27) | yes |
-| `z-ai/glm-5.3` | `glm-5-3-sglang-b200-cc.nemo.svc.cluster.local` | `nim/glm-5-3-sglang-b200-cc.yaml` (B200 CC, 2 replicas on `am-b200-59`/`60`; retargeted from non-CC `:8000` 2026-09-11) | yes |
+| `z-ai/glm-5.3` | `glm-5-3-sglang-b200-cc.nemo.svc.cluster.local` | `nim/glm-5-3-sglang-b200-cc.yaml` (B200 CC, 2 replicas; retargeted from non-CC `:8000` 2026-09-11) | yes |
 | `ornith/ornith-1.5-397b` | `ornith-1-5-397b-fp8-sglang-h200.nemo.svc.cluster.local` | `nim/ornith-1.5-397b-fp8-sglang-h200-cc.yaml` (H200 CC, 2 replicas; short name retargeted 2026-08-28) | yes (SayGM) |
-| `deepseek/deepseek-v4.1-flash` | `dsv41-flash-sglang-h200.nemo.svc.cluster.local` | `nim/deepseek-v4-1-flash-sglang-h200-cc.yaml` (H200 CC, 2 replicas 2026-09-11, `am-h200-27`/`22`) | yes |
+| `deepseek/deepseek-v4.1-flash` | `dsv41-flash-sglang-h200.nemo.svc.cluster.local` | `nim/deepseek-v4-1-flash-sglang-h200-cc.yaml` (H200 CC, 2 replicas 2026-09-11) | yes |
 | `moonshotai/kimi-k3` | `kimi-k3-sglang-cc.nemo.svc.cluster.local:8000` | `nim/kimi-k3-sglang-b300.yaml` (B300, non-CC) — **row is stale: Service deleted, backend gone; do not route to it** | no |
 
 GLM HA uses the **existing Service**, not per-pod DNS. Both replicas attest independently and receive the same NIM server cert (SAN = Service FQDN). ClusterIP load-balances TCP; a stream stays on one pod. Kubernetes readiness is pod-wide: a replica must not be Ready until HTTPS `:8443` `/health` succeeds (HAProxy up and SGLang healthy on loopback).

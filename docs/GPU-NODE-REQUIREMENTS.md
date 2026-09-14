@@ -411,23 +411,23 @@ nvfwupd --query
 
 | Requirement | Minimum | Why |
 |---|---|---|
-| **Total nodes** | **8 minimum** (5 control-plane+etcd+worker combined, 3+ dedicated GPU workers per GPU type) | 5 nodes run the control plane, etcd, and the tech stack (GPU Operator, Kata/CoCo, Longhorn, NeMo Microservices, Armada Executor, monitoring) while also serving inference; 3+ dedicated 8-GPU workers **per GPU type** run AI job workloads. Fewer nodes cannot simultaneously host the tech stack and serve inference with HA. |
+| **Total nodes** | **7 minimum** (5 control-plane+etcd+worker combined, 2+ dedicated GPU workers per GPU type) | 5 nodes run the control plane, etcd, and the tech stack (GPU Operator, Kata/CoCo, Longhorn, NeMo Microservices, Armada Executor, monitoring) while also serving inference; 3+ dedicated 8-GPU workers **per GPU type** run AI job workloads. Fewer nodes cannot simultaneously host the tech stack and serve inference with HA. |
 | **Control-plane + etcd nodes** | **5** (combined control-plane + etcd + worker role) | 5 nodes give etcd quorum with 2-node failure tolerance. These nodes run the control plane AND double as workers — they host the tech stack and can serve inference workloads, so they are not "wasted" on control-plane duty alone. |
-| **Dedicated GPU worker nodes** | **3+ per GPU type** (8x H100/H200/B200/B300 per node) | **3 nodes of each GPU type** is the minimum for HA — if a cluster serves H200 and B200 workloads, it needs 3 H200 nodes + 3 B200 nodes (6 dedicated GPU workers). A single-GPU-type cluster needs 3; a mixed-GPU cluster needs 3 per type. Each 8-GPU worker can run one large confidential workload or multiple smaller ones. |
+| **Dedicated GPU worker nodes** | **3+ per GPU type** (8x H100/H200/B200/B300 per node) | **3 nodes of each GPU type** is the minimum for HA — if a cluster serves H200 and B200 workloads, it needs 3 H200 nodes + 3 B200 nodes (4 dedicated GPU workers). A single-GPU-type cluster needs 3; a mixed-GPU cluster needs 3 per type. Each 8-GPU worker can run one large confidential workload or multiple smaller ones. |
 | **Co-location** | All nodes in a **single data center** | Multi-GPU NVLink/NVSwitch passthrough requires low latency; cross-DC NVLink is unsupported. One cluster = one DC. |
 | **Network** | All nodes on the same L2 / low-latency fabric | VFIO passthrough, Kata sandbox creation, and in-guest NVLink all depend on local fabric; high-latency cross-DC links cause sandbox timeouts and degraded GPU topology |
 
-### Why 8 nodes minimum
+### Why 7 nodes minimum
 
 - **5 control-plane + etcd + worker nodes**: RKE2 etcd needs an odd number for quorum. 5 nodes give 2-node failure tolerance (survive losing 2 of 5 and still have quorum). These 5 nodes are **not idle control-plane nodes** — they run the tech stack (GPU Operator, Kata/CoCo runtime classes, Longhorn storage, NeMo Microservices, monitoring, Armada Executor) and can serve inference workloads, so their GPU capacity counts toward the fleet. A 3-node control plane tolerates only 1 failure; 5 is the minimum where a cluster can lose 2 nodes and still serve.
-- **3 dedicated GPU workers per GPU type**: the tech stack on the 5 control-plane+worker nodes consumes CPU/memory and some GPU capacity for NeMo services and inference. 3 dedicated 8-GPU workers **per GPU type** ensure enough bare-metal GPU capacity to run AI services and Armada jobs (inference, fine-tuning, batch) without competing with the tech stack for resources, and ensure HA for that GPU type (survive losing 1 of 3 workers and still serve that GPU type). **A mixed-GPU cluster needs 3 per type**: e.g. 3 H200 + 3 B200 = 6 dedicated GPU workers + 5 control-plane = 11 nodes total.
-- **8 total (single GPU type)**: 5 (control-plane+etcd+worker, running tech stack + inference) + 3 (dedicated GPU workers of one type, running AI jobs) = 8 nodes minimum for a single-GPU-type cluster. A mixed-GPU cluster adds 3 per additional GPU type.
+- **3 dedicated GPU workers per GPU type**: the tech stack on the 5 control-plane+worker nodes consumes CPU/memory and some GPU capacity for NeMo services and inference. 3 dedicated 8-GPU workers **per GPU type** ensure enough bare-metal GPU capacity to run AI services and Armada jobs (inference, fine-tuning, batch) without competing with the tech stack for resources, and keep HA for that GPU type (losing 1 of 2 leaves 1 dedicated worker serving that GPU type). **A mixed-GPU cluster needs 3 per type**: e.g. 3 H200 + 3 B200 = 6 dedicated GPU workers + 5 control-plane.
+- **7 total (single GPU type)**: 5 (control-plane+etcd+worker, running tech stack + inference) + 2 (dedicated GPU workers of one type, running AI jobs) = 7 nodes minimum for a single-GPU-type cluster. A mixed-GPU cluster adds 2 per additional GPU type.
 
 ### Scaling beyond the minimum
 
 | Scale | Total nodes | Topology | Concurrent 8-GPU workloads | Networking |
 |---|---|---|---|
-| **Minimum** | 8 | 5 control-plane+etcd+worker (tech stack + inference) + 3 dedicated GPU workers | 3+ (dedicated) + inference on the 5 combined | Ethernet OK |
+| **Minimum** | 7 | 5 control-plane+etcd+worker (tech stack + inference) + 2 dedicated GPU workers | 2+ (dedicated) + inference on the 5 combined | Ethernet OK |
 | **Small** | 12 | 5 control-plane+etcd+worker + 7 dedicated GPU workers | 7+ | Ethernet OK |
 | **Production** | 16+ | 5 control-plane+etcd+worker + 11+ dedicated GPU workers | 11+ | **InfiniBand required** |
 | **Large** | 24+ | 5 control-plane+etcd+worker + 19+ dedicated GPU workers | 19+ | **InfiniBand required** |

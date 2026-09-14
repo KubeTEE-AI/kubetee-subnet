@@ -415,7 +415,7 @@ default TDX image path.
 - [ ] **Step 1: Write the owner column** into
       `fleet-gitops/infrastructure/trustee/KubeTEE.md` (or a short
       `nim/eastwest/README.md`) so the next human does not run `genpolicy` /
-      `set-resource` on `am-b200-38`.
+      `set-resource` on the GPU node.
 
 - [ ] **Step 2: Stop generating initdata interactively on GPU nodes.**
       `encode-initdata.py` + committed TOML stay in the release path.
