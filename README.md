@@ -659,8 +659,7 @@ Full detail — the chain primitive, Alpha conversion, grace/recovery, `btcli` c
 - [x] **Deploy 2 US clusters** (one hotkey each, each cluster's nodes co-located in a single DC): subnet-owner staging (`na-us-oakland-56`, West Coast) + **first production miner cluster — BTLABS UID 97** (`na-us-michigan-97`, 7 nodes, 56 GPUs, H100 + H200). Onboarding validated end to end: registration, binding, infrastructure validation, scoring, emissions.
 - [ ] Armada Server Multi-cluster Scheduler on the subnet-owner control plane; Armada Executor on each miner cluster
 - [ ] Automate supply-chain CI (SAST, Trustee secrets, image CVE, IaC) and publish results (see [Debugging on the staging cluster](#debugging-on-the-staging-cluster))
-- [ ] Binary Infrastructure validator gate (hotkey binding identity, Rancher readiness, HA, capacity, GPU/runtime wiring)
-- [ ] Extend scoring with fresh TEE attestation, Armada job metrics, serving probes, workload identity, and KeyLease freshness
+- [ ] Binary Infrastructure validator gate (hotkey binding identity, Rancher readiness, HA, capacity, GPU/runtime wiring, TEE attestations)
 - [x] Validator Rancher v3 API access: a validator authenticates by **signing a challenge with its Bittensor hotkey**; an auth mechanism connected to Rancher verifies the signature and issues the narrow cluster/node-read plus guarded-cluster-delete role. Split reconciliation behind an operator-owned mutation credential/controller before describing validator scoring tokens as read-only
 - [ ] Miner Rancher access on cluster creation: the miner authenticates with the same **hotkey-signed** flow, scoped **read-only** to their own cluster (the one carrying their `kubetee.ai/hotkey` label, bound to `cluster-readonly`) so the miner can observe their cluster (subnet owner manages via Fleet)
 - [x] Emissions rewards for miners providing confidential compute capacity (supply-side) — **live**: first external miner (BTLABS UID 97) earning since its first scored epoch
@@ -687,6 +686,7 @@ Full detail — the chain primitive, Alpha conversion, grace/recovery, `btcli` c
 - [ ] USDC-on-BASE and **TAO-on-BASE** job billing (pull-based, per-epoch metering) — fiat and EVM-TAO billing layered on top of the Alpha / TAO resources-per-hour pricing. TAO itself is live on Base as of 2026-08-21 (Chainlink CCIP; [ForeverMoney SN98](https://x.com/forevermoney_ai/status/2090469070248235027))
 - [ ] Automated USDC→TAO-on-BASE→Finney TAO→Alpha recycling (unused emissions recycled)
 - [ ] Validator runs in a TEE (Kata + CoCo) on the control plane; CoCo attestation proves the validator code is unmodified
+- [ ] Extend scoring with fresh TEE attestation, Armada job metrics, serving probes, workload identity, and KeyLease freshness
 
 ### Phase 3 — Job-Type Growth
 
