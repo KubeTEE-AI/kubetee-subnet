@@ -661,7 +661,7 @@ Full detail — the chain primitive, Alpha conversion, grace/recovery, `btcli` c
   - [ ] **OCR (NeMo)** — document OCR served through [NeMo Microservices](#nvidia-nemo-microservices--bittensor-subnet-integrations)
   - [ ] **Specialised models for vectorization, LLM-as-judge, and document retrieval** — served through [NeMo Microservices](#nvidia-nemo-microservices--bittensor-subnet-integrations) (NeMo Retriever + Evaluator)
 - [x] **Deploy 2 US clusters** (one hotkey each, each cluster's nodes co-located in a single DC): subnet-owner staging (`na-us-oakland-56`, West Coast) + **first production miner cluster — BTLABS UID 97** (`na-us-michigan-97`, 7 nodes, 56 GPUs, H100 + H200). Onboarding validated end to end: registration, binding, infrastructure validation, scoring, emissions.
-- [ ] Armada Server Multi-cluster Scheduler on the subnet-owner control plane; Armada Executor on each miner cluster
+- [x] Armada Server Multi-cluster Scheduler on the subnet-owner control plane; Armada Executor on each miner cluster
 - [ ] Automate supply-chain CI (SAST, Trustee secrets, image CVE, IaC) and publish results (see [Debugging on the staging cluster](#debugging-on-the-staging-cluster))
 - [ ] Binary Infrastructure validator gate (hotkey binding identity, Rancher readiness, HA, capacity, GPU/runtime wiring, TEE attestations)
 - [x] Validator Rancher v3 API access: a validator authenticates by **signing a challenge with its Bittensor hotkey**; an auth mechanism connected to Rancher verifies the signature and issues the narrow cluster/node-read plus guarded-cluster-delete role. Split reconciliation behind an operator-owned mutation credential/controller before describing validator scoring tokens as read-only
@@ -681,6 +681,12 @@ Full detail — the chain primitive, Alpha conversion, grace/recovery, `btcli` c
 - [ ] Validator scoring expansion: TEE attestation + Armada job metrics + infrastructure health (replacing the Early Access liveness stand-in)
 - [ ] Apache Airflow + Metaflow Armada connectors — multi-step confidential pipelines (see [Workflow Orchestration](./docs/WORKFLOW-ORCHESTRATION.md))
 - [ ] Jobs MCP server — deploy confidential jobs from an autonomous agent, a human chat client, or a pipeline orchestrator: browse templates, quote, submit to Armada, and track status and attestation; quoting grounded in the Phase 0 [Competitive Pricing](./docs/COMPETITIVE-PRICING.md) target price (see [Jobs MCP Server](#jobs-mcp-server))
+- [ ] **Free Tier LiteLLM endpoints** on `llm.kubetee.ai` — free-tier surface for:
+  - [ ] **Skills**
+  - [ ] **MCP servers** (published through the gateway's `/mcp` surface)
+  - [ ] **Search Tools** — AIQ Deep Research → [Desearch SN22](https://desearch.ai/) and other subnets
+  - [ ] **Tools**
+  - [ ] **Plugins**
 - [ ] Build documentation website
 
 ### Phase 2 — Paid Jobs
