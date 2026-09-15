@@ -127,7 +127,7 @@ KubeTEE is in **Early Access**. Miner registration is hand-reviewed and onboarde
 - Running confidential AI jobs in Kata + CoCo TEE pods
 - A **staging cluster** operated by Pierre as the subnet-owner staging miner — all nodes are TEE CC capable. Workloads run on miner clusters; if a workload fails, it can be targeted at staging for debug. Kata guest debug is **off**; CoCo Trustee attests those guests. CC can be turned off on a staging node for debug; guest debug can be enabled per pod. See [Debugging on the staging cluster](#debugging-on-the-staging-cluster)
 - The **validator incentive mechanism**: scoring miners on TEE attestation, Armada job success, uptime, and **competitive pricing** against the other compute subnets (Targon, Lium, Chutes)
-- **Emissions + Alpha/TAO paid jobs** — the supply and demand sides of a single mechanism (see [Subnet Economics](#subnet-economics))
+- **Emissions + Alpha/TAO paid jobs** — the supply and demand sides of a single mechanism (see [Subnet Economics](#subnet-economics)); demand-side paid jobs land in [Phase 2](#phase-2--paid-jobs)
 
 ### What Ships Today
 
@@ -142,11 +142,11 @@ This README documents both what runs in the KubeTEE infrastructure and what is d
 | **Security&nbsp;gate** | — | Supply-chain CI (SAST, Trustee/KBS secrets, image CVE, IaC/Helm policy, image provenance) — design, not yet automated |
 | **Validator&nbsp;scoring** | **v1 live on Finney:** binary infrastructure-readiness gate (hotkey binding, Rancher readiness, HA topology, capacity, 8-GPU passthrough, confidential runtime handler) + USD-denominated compensation pricing via Taostats + Targon SN4 supply-side clamp + [KubeTEE Validator/Miners Dashboard](https://s3.hippius.com/kubetee-validator/index.html) (hosted on Hippius) | `PROBATION`→`EARNING` state machine; fresh TEE attestation, Armada job metrics, serving probes, workload identity |
 | **Validator&nbsp;pricing** | **v1 live:** Taostats compensation feed (`api/dtao/pool/latest/v1`) + Targon SN4 payout feed (`stats.targon.com/api/miners`) + per-GPU price card (H100 $4 / H200 $5.50 / B200 $8 / B300 $10 / RTX6000 $2.50 /GPU/hr); one `set_weights` per epoch with rate-limit cooldown | Lium / Chutes demand-side scrape, per-job-class target price, price-competitiveness weighting |
-| **Validator&nbsp;runtime** | **v1 live:** flat self-contained Python unit (12 modules, 35 tests) running as a container on the operator's machine; sets weights once per epoch | Run inside a Kata + CoCo TEE pod on the control plane with CoCo remote attestation (the referee itself attested) |
+| **Validator&nbsp;runtime** | **v1 live:** flat self-contained Python unit (12 modules, 35 tests) running as a container on the operator's machine; sets weights once per epoch | Run inside a Kata + CoCo TEE pod on the control plane with CoCo remote attestation (the referee itself attested) ([Phase 2](#phase-2--paid-jobs)) |
 | **Armada** | — | **In development** — Server on the control plane, Executor on each miner cluster ([Phase 0](#phase-0--early-access-current)); move into Kata + CoCo TEE pods with attestation-gated TLS ([Phase 1](#phase-1--expansion)) |
 | **Miner&nbsp;onboarding** | KubeTEE applies the hotkey binding | Permissionless self-service ([Phase 1](#phase-1--expansion)) |
 | **Miner&nbsp;deposit** | 100 TAO gate **measured, not enforced** | On-chain collateral bonding ([Phase 1](#phase-1--expansion)) |
-| **Payments** | Alpha / TAO at a resources price per hour. **TAO is live on Base** (Chainlink CCIP-bridged ERC-20, Aerodrome TAO/USDC — [ForeverMoney SN98](https://x.com/forevermoney_ai/status/2090469070248235027), 2026-08-21) | USDC-on-BASE and TAO-on-BASE job billing + automated recycle ([Phase 2](#phase-2--paid-jobs)) |
+| **Payments** | **TAO is live on Base** (Chainlink CCIP-bridged ERC-20, Aerodrome TAO/USDC — [ForeverMoney SN98](https://x.com/forevermoney_ai/status/2090469070248235027), 2026-08-21) — the payment rail exists | Alpha / TAO paid jobs (demand-side) at the resources price per hour; USDC-on-BASE and TAO-on-BASE job billing + automated recycle ([Phase 2](#phase-2--paid-jobs)) |
 | **LiteLLM&nbsp;gateway** | `llm.kubetee.ai` — OpenAI-compatible inference plus virtual keys, budgets, rate limits, and spend tracking. Cloudflare DNS-only (grey cloud) to oakland node IPs. LiteLLM runs in `kata-qemu-tdx-runtime-rs` with guest debug off; Traefik TLS passthrough terminates in the guest. CoCo Trustee attests the guest. Inference backends are in-cluster NIM on the staging cluster; miner clusters are extra `api_base` rows under the same `model_name`. **sayGM (SN28)** is a connected inference provider (same `model` names). | Wire `/mcp` and `/a2a` and fine-tuning / batch through to Armada; KubeTEE as an upstream LiteLLM **provider**; RA-TLS; **TEE fallbacks** to Chutes / Phala / Near AI ([Inference providers](#inference-providers-and-tee-fallbacks)) |
 | **Inference&nbsp;models** | **Live on the staging cluster** through `llm.kubetee.ai`: GLM-5.2, GLM-5.3, GLM-5.3-Flash, **Ornith-1.5-397B**. **SN28 (sayGM) live 2026-08-19** as an inference provider + idle-capacity demand channel — not SN90's product. Paid offers: `z-ai/glm-5.2`, `z-ai/glm-5.3-flash`, `z-ai/glm-5.3`, `ornith/ornith-1.5-397b` — [SN28-SAYGM.md](./docs/SN28-SAYGM.md). Free window closed at **14,812,329,857** tokens. **In collaboration with SN28 sayGM, KubeTEE was the first to provide Ornith-1.5-397B worldwide** (2026-08-20). | TEE router fallbacks (Chutes / Phala / Near AI). Expand the confidential model catalogue. Do not declare Kimi/Qwen/MiMo on SN28. |
 | **Jobs&nbsp;MCP&nbsp;server** | — | **Not developed yet** — agent- and chat-driven job deployment at `llm.kubetee.ai/mcp` ([Phase 1](#phase-1--expansion)) |
@@ -280,7 +280,7 @@ Armada addresses Kubernetes batch limitations that matter for the Factory: singl
   - Kata Containers (TEE)
   - [Confidential Containers](https://confidentialcontainers.org/docs/overview/) Operator
   - Armada Server (controller, scheduler, lookout + Pulsar/Redis/Postgres)
-- Validator runs in a TEE on the control plane; KubeTEE can also host the validator code (see [Validator Runtime (TEE)](#validator-runtime-tee))
+- Validator on the control plane; running it in a TEE and the KubeTEE-hosted validator offering are [Phase 2](#phase-2--paid-jobs) (see [Validator Runtime (TEE)](#validator-runtime-tee))
 
 #### Miner Infrastructure
 - RKE2 Rancher Kubernetes
@@ -317,7 +317,7 @@ flowchart LR
     Validator -->|set weights| Chain["Bittensor\nemissions"]
 ```
 
-> The **Validator** runs on the control plane inside a confidential Kata + CoCo TEE pod (see [Validator Runtime (TEE)](#validator-runtime-tee)). The **Armada Server** and **Executors** are drawn here as designed: they are stood up in [Phase 0](#phase-0--early-access-current) and move into TEE pods in [Phase 1](#phase-1--expansion) ([What Ships Today](#what-ships-today)).
+> The **Validator** runs on the subnet-owner control plane; moving it into a confidential Kata + CoCo TEE pod is a [Phase 2](#phase-2--paid-jobs) item (see [Validator Runtime (TEE)](#validator-runtime-tee)). The **Armada Server** and **Executors** are drawn here as designed: they are stood up in [Phase 0](#phase-0--early-access-current) and move into TEE pods in [Phase 1](#phase-1--expansion) ([What Ships Today](#what-ships-today)).
 >
 > The **first miner cluster** is live in production: BTLABS (UID 97), `na-us-michigan-97` — 7 nodes (8-GPU H100 + 3× 8-GPU H200), Intel TDX, NVIDIA CC. Subsequent miner clusters join the same shape. The **staging cluster** is KubeTEE's own. Every node is TEE CC capable. It is a **debug target** if a workload fails — not a required promotion step. Kata guest debug is **off**; CoCo Trustee attests those guests. CC can be turned off on a staging node for debug; guest debug can be enabled per pod. Miner clusters keep CC on with guest debug off. See [For Miners (Infrastructure)](#for-miners-infrastructure) and [Debugging on the staging cluster](#debugging-on-the-staging-cluster).
 
@@ -375,13 +375,13 @@ Full detail — the attestation-gated TLS protocol, the NIM Operator experimenta
 
 ### Incentive Mechanism: Infrastructure (Early Access)
 
-KubeTEE Early Access uses a **single Infrastructure incentive mechanism** with two sides. On the **supply side**, miners earn Bittensor emissions for providing confidential compute capacity and reliably executing Armada-scheduled jobs; emissions are distributed per resources provided (GPU nodes), weighted by attested TEE health, job-execution quality, and uptime. On the **demand side**, consumers pay Alpha or TAO at a published **resources price per hour** for the compute they consume.
+KubeTEE Early Access uses a **single Infrastructure incentive mechanism** with two sides. On the **supply side**, miners earn Bittensor emissions for providing confidential compute capacity and reliably executing Armada-scheduled jobs; emissions are distributed per resources provided (GPU nodes), weighted by attested TEE health, job-execution quality, and uptime. On the **demand side**, consumers pay Alpha or TAO at a published **resources price per hour** for the compute they consume (demand-side paid jobs land in [Phase 2](#phase-2--paid-jobs)).
 
 **TEE attestation is mandatory** — Intel TDX/SGX and NVIDIA CC must be proven, and **no attestation means no emissions**. Compliance is enforced rather than requested, higher-tier GPU nodes earn more, and a miner is paid on capacity it makes available *and can prove*.
 
 #### Payment methods
 
-**Subnet 90 Alpha, other subnets' Alpha, and TAO** are all accepted at the published resources-per-hour price. There are **no discounts and no referrer or reseller program**: SN90 compute is already priced competitively because it is subsidized by subnet emissions, so a discount layer would simply be gamed (see the [Tokenomics](#tokenomics--utility-token--depin-model) boundary conditions).
+**Subnet 90 Alpha, other subnets' Alpha, and TAO** are all accepted at the published resources-per-hour price (demand-side paid jobs land in [Phase 2](#phase-2--paid-jobs)). There are **no discounts and no referrer or reseller program**: SN90 compute is already priced competitively because it is subsidized by subnet emissions, so a discount layer would simply be gamed (see the [Tokenomics](#tokenomics--utility-token--depin-model) boundary conditions).
 
 **TAO is live on Base** (2026-08-21) as a Chainlink CCIP-bridged ERC-20 — announced by [ForeverMoney (SN98)](https://x.com/forevermoney_ai/status/2090469070248235027), tradeable against USDC on Aerodrome (`0xf3081494b87e8d5fb7960f066e931d1d0e6e3d67`). A consumer can buy TAO from USDC or ETH in a Base wallet, without a Bittensor-native wallet, then spend it for SN90 compute. Finney TAO and TAO-on-BASE are the same asset on two rails; CCIP is the canonical bridge ([forevermoney.ai](https://forevermoney.ai/)). This is the acquisition path — settlement of a job still recycles Alpha on Finney (see [Tokenomics](./docs/TOKENOMICS.md#tao-on-base)).
 
@@ -445,9 +445,11 @@ scoring dimensions on top of that base.
 
 ### Validator Runtime (TEE)
 
-The referee itself must be trustworthy, so the validator process runs **inside a confidential TEE pod** on the subnet-owner control plane, with CoCo remote attestation proving the validator code and configuration are unmodified. Scoring, weight-setting, and credentials (Rancher token, Bittensor wallet) stay confidential and tamper-resistant — the validator cannot be silently altered by the host or hypervisor.
+The referee itself must be trustworthy, so the validator process is designed to run **inside a confidential TEE pod** on the subnet-owner control plane, with CoCo remote attestation proving the validator code and configuration are unmodified. Scoring, weight-setting, and credentials (Rancher token, Bittensor wallet) stay confidential and tamper-resistant — the validator cannot be silently altered by the host or hypervisor.
 
 **KubeTEE-hosted validator**: KubeTEE offers to run the validator code in KubeTEE clusters, so a validator operator does not need to provision and operate their own TEE infrastructure. KubeTEE schedules the validator as a confidential workload in a KubeTEE confidential cluster, with attestation evidence available to the subnet. This lowers the barrier to running a validator and ensures every validator runs in a genuine, attested TEE.
+
+> **Status:** both are [Phase 2](#phase-2--paid-jobs) roadmap items — validator v1 currently runs as a container on the operator's machine ([What Ships Today](#what-ships-today)).
 
 ### Evidence Feeds
 
@@ -646,7 +648,6 @@ Full detail — the chain primitive, Alpha conversion, grace/recovery, `btcli` c
 - [x] Kata **4.1.0** + CoCo TEE runtime-rs classes (`kata-qemu-nvidia-gpu-tdx-runtime-rs`, `kata-qemu-tdx-runtime-rs`)
 - [x] Staging cluster — every node is TEE CC capable (H200/B200). Debug target if a workload fails; CC can be turned off on a node for debug (see [Debugging on the staging cluster](#debugging-on-the-staging-cluster))
 - [x] Kata guest debug **off** on the staging cluster — CoCo Trustee attests those guests. Debug can be enabled per pod for diagnostics.
-- [ ] Validator runs in a TEE (Kata + CoCo) on the control plane; CoCo attestation proves the validator code is unmodified
 - [x] [Attestation-gated TLS](./docs/NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md#2-attestation-gated-tls-between-services) on the served backend (Kata runtime deployed) — in-guest keypairs, certificates issued only against a valid TDX quote verified through Intel Trust Authority, ingress on TLS passthrough, termination inside the guest
 - [x] **SN28 (sayGM) idle-capacity channel + LiteLLM inference provider** — live 2026-08-19 ([SN28-SAYGM.md](./docs/SN28-SAYGM.md)). SN90 is **not** an inference subnet; Factory AI services keep priority; SN28 gets spare headroom. Same `model` names on `llm.kubetee.ai`. Buyer offers: `z-ai/glm-5.2`, `z-ai/glm-5.3`, `z-ai/glm-5.3-flash`, `ornith/ornith-1.5-397b` — [SN28-SAYGM.md](./docs/SN28-SAYGM.md). **Ornith-1.5-397B** — first worldwide availability, in collaboration with SN28 sayGM (2026-08-20). Free window closed at 14,812,329,857 tokens.
 - [ ] **LiteLLM TEE fallbacks** — if an in-cluster TEE backend is down or overloaded, router fallbacks to TEE-served models on [Chutes](https://chutes.ai/), [Phala](https://phala.network/), and [Near AI](https://near.ai/) through sayGM but not in loop. See [Inference providers and TEE fallbacks](#inference-providers-and-tee-fallbacks).
@@ -663,14 +664,11 @@ Full detail — the chain primitive, Alpha conversion, grace/recovery, `btcli` c
 - [ ] Automate supply-chain CI (SAST, Trustee secrets, image CVE, IaC) and publish results (see [Debugging on the staging cluster](#debugging-on-the-staging-cluster))
 - [ ] Binary Infrastructure validator gate (hotkey binding identity, Rancher readiness, HA, capacity, GPU/runtime wiring)
 - [ ] Extend scoring with fresh TEE attestation, Armada job metrics, serving probes, workload identity, and KeyLease freshness
-- [ ] KubeTEE-hosted validator offering: KubeTEE runs the validator code in a KubeTEE confidential cluster for operators without their own TEE infrastructure
 - [x] Validator Rancher v3 API access: a validator authenticates by **signing a challenge with its Bittensor hotkey**; an auth mechanism connected to Rancher verifies the signature and issues the narrow cluster/node-read plus guarded-cluster-delete role. Split reconciliation behind an operator-owned mutation credential/controller before describing validator scoring tokens as read-only
 - [ ] Miner Rancher access on cluster creation: the miner authenticates with the same **hotkey-signed** flow, scoped **read-only** to their own cluster (the one carrying their `kubetee.ai/hotkey` label, bound to `cluster-readonly`) so the miner can observe their cluster (subnet owner manages via Fleet)
 - [x] Emissions rewards for miners providing confidential compute capacity (supply-side) — **live**: first external miner (BTLABS UID 97) earning since its first scored epoch
-- [ ] Alpha / TAO paid jobs (demand-side) — compute priced at a resources price per hour, dynamic with Armada queue depth and wait time per job class
 - [x] Competitive pricing, supply side: implement the live Targon (SN4) payout feed to clamp the GPU price card (one publisher, all validators read), and the per-GPU price paid to miners
 - [ ] Competitive pricing, demand side: scrape Lium (SN51) / Chutes (SN64) price feeds, compute per-class target price, score miners on price competitiveness
-- [ ] Confidential job templates — NeMo / NIM / Blueprint, for subnet owners and approved integrators
 - [x] **[Albedo SN97 competitive-distillation eval PoC](./docs/SN97-ALBEDO-POC.md)** (KubeTEE SN90 hosting SN97 king-of-the-hill duels — not coding agents) — **parked 2026-08-13**. First successful 100-sample duel 2026-08-09 ([artifacts](./docs/SN97-ALBEDO-POC.md#latest-successful-run-2026-08-09), [upstream PR](https://github.com/unarbos/albedo/pull/4)). Do not extend the KubeTEE-specific split topology.
   - [ ] **Revisit when Armada + CoCo Trustee are complete** — deploy upstream Albedo / Denrite **without modifications or architecture changes** (Armada `JobSubmitRequest` + attested `kata-qemu-nvidia-gpu-tdx-runtime-rs` / `kata-direct` + Trustee secrets). The parked fork’s LiteLLM king-register / split-gen-score / custom judge-api items are **not** the revisit path.
 
@@ -689,8 +687,12 @@ Full detail — the chain primitive, Alpha conversion, grace/recovery, `btcli` c
 
 ### Phase 2 — Paid Jobs
 
-- [ ] USDC-on-BASE and **TAO-on-BASE** job billing (pull-based, per-epoch metering) — fiat and EVM-TAO billing layered on top of the Early Access Alpha / TAO resources-per-hour pricing. TAO itself is live on Base as of 2026-08-21 (Chainlink CCIP; [ForeverMoney SN98](https://x.com/forevermoney_ai/status/2090469070248235027))
+- [ ] Alpha / TAO paid jobs (demand-side) — compute priced at a resources price per hour, dynamic with Armada queue depth and wait time per job class
+- [ ] Confidential job templates — NeMo / NIM / Blueprint, for subnet owners and approved integrators
+- [ ] USDC-on-BASE and **TAO-on-BASE** job billing (pull-based, per-epoch metering) — fiat and EVM-TAO billing layered on top of the Alpha / TAO resources-per-hour pricing. TAO itself is live on Base as of 2026-08-21 (Chainlink CCIP; [ForeverMoney SN98](https://x.com/forevermoney_ai/status/2090469070248235027))
 - [ ] Automated USDC→TAO-on-BASE→Finney TAO→Alpha recycling (unused emissions recycled)
+- [ ] Validator runs in a TEE (Kata + CoCo) on the control plane; CoCo attestation proves the validator code is unmodified
+- [ ] KubeTEE-hosted validator offering: KubeTEE runs the validator code in a KubeTEE confidential cluster for operators without their own TEE infrastructure
 
 ### Phase 3 — Job-Type Growth
 

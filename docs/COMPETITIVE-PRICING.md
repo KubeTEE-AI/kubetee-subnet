@@ -311,11 +311,15 @@ The Targon row is designed to meet that auditability bar: metrics such as `kubet
   not a frozen snapshot.
 - **Phase 0 (planned extension):** add the demand-side half — Lium/Chutes
   scraping, target-price computation, and price-competitiveness weighting — and
-  use that target price as the **resources price per hour** for Alpha / TAO
-  paid jobs (demand-side billing, dynamic per the job queues). The initial
+  publish that target price as the **resources price per hour** for
+  Alpha / TAO paid jobs (demand-side billing itself is a Phase 2 roadmap
+  item — dynamic per the job queues). The initial
   miner score is limited to infrastructure readiness.
 - **Phase 1 (Expansion):** add TEE-attestation + Armada-job-metrics + health scoring.
-- **Phase 2 (Paid Jobs):** layer **USDC-on-BASE and TAO-on-BASE billing** on top of the Phase 0 resources-per-hour pricing, plus USDC→TAO-on-BASE→Finney TAO→Alpha recycling. TAO is live on Base as a Chainlink CCIP-bridged ERC-20 (2026-08-21; [ForeverMoney SN98](https://x.com/forevermoney_ai/status/2090469070248235027)).
+- **Phase 2 (Paid Jobs):** Alpha / TAO paid jobs (demand-side) at the
+  resources price per hour, plus **USDC-on-BASE and TAO-on-BASE billing**
+  on top of that resources-per-hour pricing, plus
+  USDC→TAO-on-BASE→Finney TAO→Alpha recycling. TAO is live on Base as a Chainlink CCIP-bridged ERC-20 (2026-08-21; [ForeverMoney SN98](https://x.com/forevermoney_ai/status/2090469070248235027)).
 - **Phase 3 (Job-Type Growth):** extend the price formula to new job classes as new workload types come online.
 
 ## References
