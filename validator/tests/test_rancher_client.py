@@ -120,6 +120,7 @@ def test_reader_mode_version_header_from_module(monkeypatch):
     headers2 = client._auth_headers("/v3/clusters", "")
     assert headers2["BT-Validator-Version"] == "9.8.7"
 
+
 def test_reader_mode_signature_covers_path_query_ts():
     """The signed message must be `<path>\n<query>\n<ts>` — verify the format
     by capturing the message passed to keypair.sign()."""
