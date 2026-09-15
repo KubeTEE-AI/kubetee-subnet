@@ -150,7 +150,6 @@ This README documents both what runs in the KubeTEE infrastructure and what is d
 | **LiteLLM&nbsp;gateway** | `llm.kubetee.ai` — OpenAI-compatible inference plus virtual keys, budgets, rate limits, and spend tracking. Cloudflare DNS-only (grey cloud) to oakland node IPs. LiteLLM runs in `kata-qemu-tdx-runtime-rs` with guest debug off; Traefik TLS passthrough terminates in the guest. CoCo Trustee attests the guest. Inference backends are in-cluster NIM on the staging cluster; miner clusters are extra `api_base` rows under the same `model_name`. **sayGM (SN28)** is a connected inference provider (same `model` names). | Wire `/mcp` and `/a2a` and fine-tuning / batch through to Armada; KubeTEE as an upstream LiteLLM **provider**; RA-TLS; **TEE fallbacks** to Chutes / Phala / Near AI ([Inference providers](#inference-providers-and-tee-fallbacks)) |
 | **Inference&nbsp;models** | **Live on the staging cluster** through `llm.kubetee.ai`: GLM-5.2, GLM-5.3, GLM-5.3-Flash, **Ornith-1.5-397B**. **SN28 (sayGM) live 2026-08-19** as an inference provider + idle-capacity demand channel — not SN90's product. Paid offers: `z-ai/glm-5.2`, `z-ai/glm-5.3-flash`, `z-ai/glm-5.3`, `ornith/ornith-1.5-397b` — [SN28-SAYGM.md](./docs/SN28-SAYGM.md). Free window closed at **14,812,329,857** tokens. **In collaboration with SN28 sayGM, KubeTEE was the first to provide Ornith-1.5-397B worldwide** (2026-08-20). | TEE router fallbacks (Chutes / Phala / Near AI). Expand the confidential model catalogue. Do not declare Kimi/Qwen/MiMo on SN28. |
 | **Jobs&nbsp;MCP&nbsp;server** | — | **Not developed yet** — agent- and chat-driven job deployment at `llm.kubetee.ai/mcp` ([Phase 1](#phase-1--expansion)) |
-| **Albedo&nbsp;SN97&nbsp;eval&nbsp;PoC** | **Parked (2026-08-13).** 100-sample king-of-the-hill eval succeeded 2026-08-09 on `na-us-oakland-56`. Revisit when Armada + CoCo Trustee are the complete job flow so upstream SN97 deploys **without modifications or architecture changes** — [SN97-ALBEDO-POC.md](./docs/SN97-ALBEDO-POC.md) | Complete Armada + Trustee, then deploy unmodified Albedo / Denrite |
 
 ---
 
@@ -354,7 +353,6 @@ Given the NIM Operator's current Kata/CoCo limitations, KubeTEE's thesis is that
 | Data Designer | [Orion SN27](https://github.com/SILX-LABS/Orion) | Decentralized data discovery / generation / curation with on-chain quality validation |
 | Customizer (fine-tuning) | [Gradients SN56](https://www.gradients.io/) | AutoML tournaments — open-source SFT/DPO/GRPO training scripts |
 | Customizer (RL/reasoning) | [Affine SN120](https://www.affine.io/) | Incentivized RL "reason mining" — challenger-vs-champion duels |
-| Customizer (distillation) + Evaluator + Inference | [Albedo SN97](https://github.com/unarbos/distil) ([albedo](https://github.com/unarbos/albedo)) | Competitive **model distillation** (not coding agents): miners compress a large teacher into ≤33B students; validators run king-of-the-hill duels on a multi-axis composite; the reigning king is a reusable open checkpoint ([chat.arbos.life](https://chat.arbos.life) upstream). **PoC parked 2026-08-13** after a successful 100-sample run (2026-08-09); revisit when Armada + CoCo Trustee can run **unmodified** SN97 — [SN97-ALBEDO-POC.md](./docs/SN97-ALBEDO-POC.md) · [upstream PR](https://github.com/unarbos/albedo/pull/4) |
 | Search | [Desearch SN22](https://desearch.ai/) | Decentralized real-time web + X/Twitter search for AI agents |
 | Retriever / RAG | [Rec4ll SN31](https://taostats.io/subnets/31) | Decentralized RAG — miners serve embeddings, vector search, and LLM inference; validators score retrieval accuracy and answer quality |
 | Video Search & Summarization | [Score SN44](https://github.com/score-technologies/turbovision) | Decentralized computer vision — object detection, tracking, structured annotations |
@@ -669,8 +667,6 @@ Full detail — the chain primitive, Alpha conversion, grace/recovery, `btcli` c
 - [x] Emissions rewards for miners providing confidential compute capacity (supply-side) — **live**: first external miner (BTLABS UID 97) earning since its first scored epoch
 - [x] Competitive pricing, supply side: implement the live Targon (SN4) payout feed to clamp the GPU price card (one publisher, all validators read), and the per-GPU price paid to miners
 - [ ] Competitive pricing, demand side: scrape Lium (SN51) / Chutes (SN64) price feeds, compute per-class target price, score miners on price competitiveness
-- [x] **[Albedo SN97 competitive-distillation eval PoC](./docs/SN97-ALBEDO-POC.md)** (KubeTEE SN90 hosting SN97 king-of-the-hill duels — not coding agents) — **parked 2026-08-13**. First successful 100-sample duel 2026-08-09 ([artifacts](./docs/SN97-ALBEDO-POC.md#latest-successful-run-2026-08-09), [upstream PR](https://github.com/unarbos/albedo/pull/4)). Do not extend the KubeTEE-specific split topology.
-  - [ ] **Revisit when Armada + CoCo Trustee are complete** — deploy upstream Albedo / Denrite **without modifications or architecture changes** (Armada `JobSubmitRequest` + attested `kata-qemu-nvidia-gpu-tdx-runtime-rs` / `kata-direct` + Trustee secrets). The parked fork’s LiteLLM king-register / split-gen-score / custom judge-api items are **not** the revisit path.
 
 ### Phase 1 — Expansion
 
@@ -720,7 +716,6 @@ Full detail — the chain primitive, Alpha conversion, grace/recovery, `btcli` c
 - [NeMo Microservices & Bittensor Subnet Integrations](./docs/NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md) — attestation-gated TLS, NIM Operator Kata/CoCo limits, SOTA Bittensor subnet substitutes per NeMo layer, and the Stage 0 supply-chain security gate
 - [SN28 sayGM — idle-capacity channel](./docs/SN28-SAYGM.md) — live 2026-08-19; LiteLLM inference provider; TEE fallbacks (Chutes / Phala / Near AI); first worldwide Ornith-1.5-397B with SN28 (2026-08-20)
 - [SN28→SN90 Alpha Recycler](./docs/SN28-SN90-ALPHA-RECYCLE.md) — swap SN28 stake to SN90 Alpha and recycle
-- [Albedo SN97 Eval PoC (KubeTEE SN90)](./docs/SN97-ALBEDO-POC.md) — parked 2026-08-13; 100-sample proof + artifacts; revisit when Armada + CoCo Trustee can run unmodified SN97
 - [Release & Versioning](./RELEASE-AND-VERSIONING.md) — semantic versioning scheme, image tag mapping, release procedure
 
 ### External Resources
