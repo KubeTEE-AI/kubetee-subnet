@@ -280,7 +280,7 @@ Armada addresses Kubernetes batch limitations that matter for the Factory: singl
   - Kata Containers (TEE)
   - [Confidential Containers](https://confidentialcontainers.org/docs/overview/) Operator
   - Armada Server (controller, scheduler, lookout + Pulsar/Redis/Postgres)
-- Validator on the control plane; running it in a TEE and the KubeTEE-hosted validator offering are [Phase 2](#phase-2--paid-jobs) (see [Validator Runtime (TEE)](#validator-runtime-tee))
+- Validator on the control plane; running it in a TEE is a [Phase 2](#phase-2--paid-jobs) item (see [Validator Runtime (TEE)](#validator-runtime-tee))
 
 #### Miner Infrastructure
 - RKE2 Rancher Kubernetes
@@ -447,9 +447,9 @@ scoring dimensions on top of that base.
 
 The referee itself must be trustworthy, so the validator process is designed to run **inside a confidential TEE pod** on the subnet-owner control plane, with CoCo remote attestation proving the validator code and configuration are unmodified. Scoring, weight-setting, and credentials (Rancher token, Bittensor wallet) stay confidential and tamper-resistant — the validator cannot be silently altered by the host or hypervisor.
 
-**KubeTEE-hosted validator**: KubeTEE offers to run the validator code in KubeTEE clusters, so a validator operator does not need to provision and operate their own TEE infrastructure. KubeTEE schedules the validator as a confidential workload in a KubeTEE confidential cluster, with attestation evidence available to the subnet. This lowers the barrier to running a validator and ensures every validator runs in a genuine, attested TEE.
+**Public attestation endpoint**: the validator's attestation evidence is exposed through a public endpoint, so anyone can verify that the code KubeTEE runs is the attested code running inside a genuine TEE — the referee is verified, not taken on trust.
 
-> **Status:** both are [Phase 2](#phase-2--paid-jobs) roadmap items — validator v1 currently runs as a container on the operator's machine ([What Ships Today](#what-ships-today)).
+> **Status:** a [Phase 2](#phase-2--paid-jobs) roadmap item — validator v1 currently runs as a container on the operator's machine ([What Ships Today](#what-ships-today)).
 
 ### Evidence Feeds
 
@@ -692,7 +692,6 @@ Full detail — the chain primitive, Alpha conversion, grace/recovery, `btcli` c
 - [ ] USDC-on-BASE and **TAO-on-BASE** job billing (pull-based, per-epoch metering) — fiat and EVM-TAO billing layered on top of the Alpha / TAO resources-per-hour pricing. TAO itself is live on Base as of 2026-08-21 (Chainlink CCIP; [ForeverMoney SN98](https://x.com/forevermoney_ai/status/2090469070248235027))
 - [ ] Automated USDC→TAO-on-BASE→Finney TAO→Alpha recycling (unused emissions recycled)
 - [ ] Validator runs in a TEE (Kata + CoCo) on the control plane; CoCo attestation proves the validator code is unmodified
-- [ ] KubeTEE-hosted validator offering: KubeTEE runs the validator code in a KubeTEE confidential cluster for operators without their own TEE infrastructure
 
 ### Phase 3 — Job-Type Growth
 
