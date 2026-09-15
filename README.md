@@ -655,6 +655,10 @@ Full detail — the chain primitive, Alpha conversion, grace/recovery, `btcli` c
   - [x] **GLM-5.3** - B200 nodes
   - [x] **GLM-5.3-Flash** - H200 nodes
   - [ ] **SOTA embedding model**
+  - [ ] **Rerank** — retrieval reranking models on the gateway `/rerank` endpoint
+  - [ ] **Images** — image generation models on the gateway `/images` endpoints
+  - [ ] **Videos** — video generation models on the same attested runtime
+  - [ ] **OCR (NeMo)** — document OCR served through [NeMo Microservices](#nvidia-nemo-microservices--bittensor-subnet-integrations)
   - [ ] **Specialised models for vectorization, LLM-as-judge, and document retrieval** — served through [NeMo Microservices](#nvidia-nemo-microservices--bittensor-subnet-integrations) (NeMo Retriever + Evaluator)
 - [x] **Deploy 2 US clusters** (one hotkey each, each cluster's nodes co-located in a single DC): subnet-owner staging (`na-us-oakland-56`, West Coast) + **first production miner cluster — BTLABS UID 97** (`na-us-michigan-97`, 7 nodes, 56 GPUs, H100 + H200). Onboarding validated end to end: registration, binding, infrastructure validation, scoring, emissions.
 - [ ] Armada Server Multi-cluster Scheduler on the subnet-owner control plane; Armada Executor on each miner cluster
