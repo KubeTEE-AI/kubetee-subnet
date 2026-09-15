@@ -701,8 +701,8 @@ Full detail — the chain primitive, Alpha conversion, grace/recovery, `btcli` c
 
 - [ ] Job templates
 - [ ] Jobs MCP server — deploy confidential jobs from an autonomous agent, a human chat client, or a pipeline orchestrator: browse templates, quote, submit to Armada, and track status and attestation; quoting grounded in the Phase 0 [Competitive Pricing](./docs/COMPETITIVE-PRICING.md) target price (see [Jobs MCP Server](#jobs-mcp-server))
-- [ ] **AIQ for enterprises** — NVIDIA [Agent Intelligence Kit](https://github.com/NVIDIA/aiqtoolkit) workflows as managed confidential services for enterprise agents:
-  - [ ] **RAG** (ingestion / query) — [Memgraph](https://memgraph.com/)
+- [ ] **AIQ for enterprises** — NVIDIA [AI-Q Blueprint](https://github.com/KubeTEE-AI-Blueprints/aiq) workflows as managed confidential services for enterprise agents:
+  - [ ] **RAG** (ingestion / query) in TEE Multi-Tenants
   - [ ] **Memory (Memgraph)** — **free**
   - [ ] **Guardrails** — **free**
 - [ ] Multi-arch TEE expansion (additional confidential compute runtimes beyond Intel TDX)
