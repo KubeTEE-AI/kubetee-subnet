@@ -145,7 +145,7 @@ if __name__ == "__main__":
 This integration is on the **roadmap** (see the README [Roadmap](../README.md#roadmap)):
 
 - **Phase 1 — Expansion**: `kubetee-airflow` Armada operator + `kubetee_batch` Metaflow decorator; example DAGs and flows; KBS secret injection.
-- **Phase 3 — Job-Type Growth**: attestation-gated step transitions, artifact lineage, and additional orchestrator connectors.
+- **Phase 3 — Job-Type/Services Growth**: attestation-gated step transitions, artifact lineage, and additional orchestrator connectors.
 
 Until the connectors ship, pipelines can submit Armada jobs directly with `armadactl` (see [Submitting a Confidential Job](../README.md#submitting-a-confidential-job)).
 
