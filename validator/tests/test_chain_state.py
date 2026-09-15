@@ -3,6 +3,8 @@
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from chain_state import ChainState
 
 
@@ -59,6 +61,35 @@ def test_spot_and_moving_price_from_metagraph():
     chain._last_metagraph = SimpleNamespace(price=0.0125, moving_price=0.01)
     assert chain.spot_price() == 0.0125
     assert chain.moving_price() == 0.01
+
+
+def test_emission_pool_is_miner_share_of_combined_emission():
+    """Regression (2026-09-15): metagraph emission[] is the COMBINED
+    server+validator emission; the chain only pays miners 50% of it
+    (pending_server_alpha = alpha_out x 0.5). Summing the combined array
+    as the weight denominator halved every miner payout (UID 97 got
+    17.7083 alpha instead of ~35.6). The pool must be the miner half.
+    """
+    chain, _fake = _chain()
+    # Combined per-UID emission sums to 100 alpha (miners + validators).
+    chain._last_metagraph = SimpleNamespace(
+        neurons=[
+            SimpleNamespace(uid=97, emission=SimpleNamespace(amount=40.0)),
+            SimpleNamespace(uid=3, emission=SimpleNamespace(amount=60.0)),
+        ],
+        price=0.5,
+    )
+    # tao_usd=2.0, spot=0.5 -> combined pool USD = 100 * 2.0 * 0.5 = 100
+    # miner-accessible pool = 100 * 0.5 = 50
+    assert chain.emission_pool_usd(2.0) == pytest.approx(50.0)
+
+
+def test_emission_pool_fallbacks_when_chain_data_missing():
+    chain, _fake = _chain()
+    chain._last_metagraph = None
+    assert chain.emission_pool_usd(2.0) == 1.0
+    chain._last_metagraph = SimpleNamespace(neurons=[], price=0.5)
+    assert chain.emission_pool_usd(2.0) == 1.0
 
 
 def test_weights_rate_limit_uses_typed_namespace():

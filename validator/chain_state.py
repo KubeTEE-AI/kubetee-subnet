@@ -124,16 +124,25 @@ class ChainState:
             return 0.0
         return float(getattr(mg, "price", 0.0) or 0.0)
 
-    def emission_pool_usd(
-        self, tao_usd: float, miner_share: float = 0.41
-    ) -> float:
-        """Total USD value of the emission pool per epoch (from on-chain emissions).
+    # The metagraph's emission[] array stores the COMBINED per-UID emission
+    # (server/miner incentive + validator dividends) — see the pallet's
+    # persist_netuid_epoch_terms(), which inserts Emission::<T> from
+    # combined_emission. The chain, however, only ever directs 50% of the
+    # post-owner-cut alpha_out to miners (run_coinbase.rs:
+    # pending_server_alpha = alpha_out × 0.5); the other 50% goes to
+    # validators (minus the root proportion). Summing the combined array
+    # therefore yields a pool ~2x what miners can actually receive, halving
+    # every weight. The pool must be the miner-accessible half.
+    MINER_EMISSION_SHARE = 0.5
+
+    def emission_pool_usd(self, tao_usd: float) -> float:
+        """Miner-accessible USD emission pool per epoch (on-chain).
 
         Uses the actual emission[] array from the metagraph (the real alpha
         paid last epoch), not the EMA-based Targon formula which is near-zero
         for new subnets.
 
-        pool_usd = total_emission_alpha × tao_usd × spot_price
+        pool_usd = total_emission_alpha × miner_share × tao_usd × spot_price
         """
         emissions = self.emissions()
         if not emissions:
@@ -142,7 +151,7 @@ class ChainState:
         spot = self.spot_price()
         if total_alpha <= 0 or spot <= 0 or tao_usd <= 0:
             return 1.0
-        return total_alpha * tao_usd * spot
+        return total_alpha * self.MINER_EMISSION_SHARE * tao_usd * spot
 
     def hyperparams(self, netuid: int) -> dict | None:
         """Subnet hyperparameters as a flat name -> value map, or None."""
