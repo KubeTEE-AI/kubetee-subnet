@@ -19,9 +19,9 @@ from dataclasses import dataclass, field
 from rancher_client import hotkey_of, is_banned
 
 _GPU_CLASSES = ("H100", "H200", "B200", "B300", "RTX6000")
-_MIN_CPU_CORES = 8
-_MIN_MEM_GIB = 16
-_MIN_ACTIVE_NODES = 7
+_MIN_CPU_CORES = 72
+_MIN_MEM_GIB = 1024
+_MIN_ACTIVE_NODES = 5
 
 _ROLE_KEYWORDS = ("etcd", "control-plane", "worker")
 
