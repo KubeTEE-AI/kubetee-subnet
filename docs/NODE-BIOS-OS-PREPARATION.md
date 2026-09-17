@@ -251,7 +251,7 @@ The minimum cluster topology was reduced from 8 to 7 nodes: Rationale: the 5-nod
 
 ### Milestone — first production miner live (2026-09-14)
 
-`na-us-michigan-97` (**BTLABS, UID 97**) completed onboarding and entered production: 7 nodes Ready, all Intel TDX + NVIDIA CC, full Fleet GitOps infrastructure (Longhorn V2, GPU Operator, Kata 4.1.0, monitoring), hotkey binding `5DviRt3e…`, validator verdict **validated**, earning emissions every epoch. The onboarding path — BIOS/OS prep (this document) → node registration → Fleet infrastructure → hotkey binding → infrastructure validation → scoring → payout — is proven end to end on external hardware. Early Access onboarding remains hand-reviewed (KubeTEE-applied binding); permissionless registration follows in Phase 1.
+`na-us-michigan-97` (**BTLABS, UID 97**) completed onboarding and entered production: 7 nodes Ready, all Intel TDX + NVIDIA CC, full Fleet GitOps infrastructure (Longhorn V2, GPU Operator, Kata 4.2.0, monitoring), hotkey binding `5DviRt3e…`, validator verdict **validated**, earning emissions every epoch. The onboarding path — BIOS/OS prep (this document) → node registration → Fleet infrastructure → hotkey binding → infrastructure validation → scoring → payout — is proven end to end on external hardware. Early Access onboarding remains hand-reviewed (KubeTEE-applied binding); permissionless registration follows in Phase 1.
 
 ---
 

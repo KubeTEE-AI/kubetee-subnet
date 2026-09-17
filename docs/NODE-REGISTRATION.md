@@ -572,7 +572,7 @@ nvfwupd --query
 - BIOS/UEFI
 - GPU firmware
 - PCIe switches and retimers
-- Network adapter firmware (ConnectX-7, Intel NIC)
+- Network adapter firmware (ConnectX-7 or equivalent Ethernet NIC — RoCE-capable is a plus; InfiniBand-only HCAs are not required for CC inference)
 
 **Refer to the official guide**: [NVIDIA DGX H100/H200 Firmware Update Guide](https://docs.nvidia.com/dgx/dgxh100-fw-update-guide/)
 

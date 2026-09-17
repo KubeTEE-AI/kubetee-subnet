@@ -147,7 +147,7 @@ The Compatibility Matrix is the source of truth for supported **GPU + VBIOS + CU
 - BIOS/UEFI
 - GPU firmware
 - PCIe switches and retimers
-- Network adapter firmware (ConnectX-7, Intel NIC)
+- Network adapter firmware (ConnectX-7 or equivalent Ethernet NIC — RoCE-capable is a plus, InfiniBand-only HCAs are not required; see the Networking note under Cluster Architecture)
 - PSUs, CPLDs, and other components
 
 **For DGX Systems**:
@@ -210,14 +210,14 @@ dmesg | grep -i "AMD-Vi"
 
 ## Kata guest debug and CoCo Trustee
 
-Miner GPU nodes and the subnet-owner **staging cluster** run **Kata 4.1.0** with **guest debug off**. CoCo Trustee attests those guests. Every staging node is TEE CC capable; CC can be turned off on a staging node for debug.
+Miner GPU nodes and the subnet-owner **staging cluster** run **Kata 4.2.0** with **guest debug off**. CoCo Trustee attests those guests. Every staging node is TEE CC capable; CC can be turned off on a staging node for debug.
 
 | `runtimeClassName` | Workload |
 |--------------------|----------|
 | `kata-qemu-nvidia-gpu-tdx-runtime-rs` | GPU TEE (NIM / SGLang) |
 | `kata-qemu-tdx-runtime-rs` | CPU-only TDX (gateway-class) |
 
-Guest debug can be enabled **per pod** for diagnostics. Trustee attests only when debug is off. Do not use the retired Go classes (`kata-qemu-nvidia-gpu-tdx`, `kata-qemu-tdx`). See [TEE deployment](./TEE-DEPLOYMENT-AND-CICD.md#runtime-classes-kata-410).
+Guest debug can be enabled **per pod** for diagnostics. Trustee attests only when debug is off. Do not use the retired Go classes (`kata-qemu-nvidia-gpu-tdx`, `kata-qemu-tdx`). See [TEE deployment](./TEE-DEPLOYMENT-AND-CICD.md#runtime-classes-kata-420).
 
 ---
 
@@ -236,7 +236,7 @@ Because the GPU Operator owns the GPU software stack, the node must start from a
 
 **OS Requirement**:
 - ✅ Ubuntu 26.04 (clean installation, no pre-existing NVIDIA software)
-- ✅ Kernel **7.0.0-31-generic** (Ubuntu 26.04 pin; `-27` or newer still works, do not drift onto `-28`/`-30` without the pin)
+- ✅ Kernel **7.0.0-38-generic** (Ubuntu 26.04 pin; `-31` or newer — `-31` is in updates/security, `-38` via `resolute-proposed` + apt pin. The pin is what matters: do not drift onto unpinned proposed kernels)
 - ✅ etcd user/group created
 
 ---
@@ -291,7 +291,7 @@ df -h /data
 
 # 8. Verify OS and kernel
 lsb_release -ds  # Should show: Ubuntu 26.04 LTS
-uname -r         # Should show: 7.0.0-31-generic (pin) or 7.0.0-27-generic+
+uname -r         # Should show: 7.0.0-38-generic (pin) or 7.0.0-31-generic+ (updates)
 
 # 9. Verify a clean baseline (no pre-existing NVIDIA stack)
 which nvidia-smi  # Should return: not found (GPU Operator installs it later)
@@ -330,7 +330,7 @@ Is your node a GPU node?
     ├─ VFIO/IOMMU enabled?
     │   ├─ NO → Enable in BIOS, update kernel params
     │   └─ YES → Continue
-    ├─ Clean Ubuntu 26.04, kernel 7.0.0-31-generic pin (no pre-existing NVIDIA stack)?
+    ├─ Clean Ubuntu 26.04, kernel 7.0.0-3x pin (no pre-existing NVIDIA stack)?
     │   ├─ NO → Reinstall Ubuntu 26.04
     │   └─ YES → Continue
     └─ ✅ Node meets ALL requirements → Proceed with registration
@@ -397,7 +397,7 @@ nvfwupd --query
 | **Firmware** | Latest (25.10.1+) | Outdated versions |
 | **GPU Mode** | PPCIe enabled | Standard PCIe |
 | **IOMMU** | Enabled | Disabled |
-| **OS** | Ubuntu 26.04 (clean, kernel 7.0.0-31-generic pin) | Pre-existing NVIDIA software |
+| **OS** | Ubuntu 26.04 (clean, kernel 7.0.0-38-generic pin; `-31`+ acceptable) | Pre-existing NVIDIA software |
 | **OS Disk** | 800 GB+ | <800 GB |
 | **Data Disk** | 3 TB+ | <3 TB |
 
@@ -429,11 +429,11 @@ nvfwupd --query
 |---|---|---|---|
 | **Minimum** | 7 | 5 control-plane+etcd+worker (tech stack + inference) + 2 dedicated GPU workers | 2+ (dedicated) + inference on the 5 combined | Ethernet OK |
 | **Small** | 12 | 5 control-plane+etcd+worker + 7 dedicated GPU workers | 7+ | Ethernet OK |
-| **Production** | 16+ | 5 control-plane+etcd+worker + 11+ dedicated GPU workers | 11+ | **InfiniBand required** |
-| **Large** | 24+ | 5 control-plane+etcd+worker + 19+ dedicated GPU workers | 19+ | **InfiniBand required** |
-| **HGX Cluster** | 32+ | 5 control-plane+etcd+worker + 27+ dedicated GPU workers (full HGX racks) | 27+ | **InfiniBand required** |
+| **Production** | 16+ | 5 control-plane+etcd+worker + 11+ dedicated GPU workers | 11+ | High-bandwidth Ethernet (100/400GbE, jumbo-frame capable) |
+| **Large** | 24+ | 5 control-plane+etcd+worker + 19+ dedicated GPU workers | 19+ | High-bandwidth Ethernet (100/400GbE, jumbo-frame capable) |
+| **HGX Cluster** | 32+ | 5 control-plane+etcd+worker + 27+ dedicated GPU workers (full HGX racks) | 27+ | High-bandwidth Ethernet (100/400GbE, jumbo-frame capable) |
 
-> **InfiniBand is a hard requirement from Production and up.** Multi-node inference, distributed training, and large-model weight loading over Ethernet suffer bandwidth and latency bottlenecks that InfiniBand eliminates. Minimum and Small clusters may use high-bandwidth Ethernet (e.g. 100/400GbE); Production clusters and above require an InfiniBand fabric (HDR 200Gb/s or NDR 400Gb/s) between all GPU worker nodes for inter-node GPU-to-GPU communication, NCCL/RDMA, and disaggregated serving workloads.
+> **InfiniBand is not a hard requirement.** High-bandwidth Ethernet (100/400GbE) is the baseline at every scale. If a miner provides an RDMA-capable fabric anyway, it **must be RoCE (RDMA over Converged Ethernet), not InfiniBand**: kernel-bypass RDMA into Confidential Computing guest memory does not work until **TDX Connect is GA on 6th-Generation Intel Xeon (Granite Rapids)**. Our 2026-09-15/16 HCA-passthrough PoC on 8×H200 TDX + PPCIE (kata 4.1.0 and 4.2.0) proved the full device pipeline works (vfio-pci bind → device plugin → CDI → 4×CX7 ACTIVE at 400 Gb/s NDR → NCCL NET/IB transport with QPs + ECE) but the first `ibv_reg_mr_iova2` fails with `EFAULT` — the NIC cannot DMA into encrypted guest memory. Until the TDX Connect hardware path is GA, confidential workloads run over ordinary TCP (NCCL NET/Socket) on the Ethernet fabric; enable jumbo frames for throughput (measured on our 8×H200 fleet: MTU 9000 gives 5.8× non-CC and 3.1× CC pod-to-pod over the Calico overlay).
 
 > **One cluster per hotkey.** A miner may operate multiple clusters, but each cluster must have its own Bittensor hotkey (one cluster per hotkey, enforced by the validator's `kubetee.ai/hotkey` label binding). Multiple clusters = multiple hotkeys = multiple DCs.
 
@@ -463,7 +463,7 @@ See [Node Registration](NODE-REGISTRATION.md) for the RKE2 node registration com
 1. ✅ **Hardware**: 8x H100, H200, B200, or B300 GPUs on Intel 5th/6th Gen Xeon OR AMD EPYC 4th/5th Gen
 2. ✅ **Firmware**: Latest version from [NVIDIA DGX Firmware Guide](https://docs.nvidia.com/dgx/dgxh100-fw-update-guide/)
 3. ✅ **BIOS**: TDX/SEV-SNP, PPCIe mode, VFIO/IOMMU enabled
-4. ✅ **OS**: Ubuntu 26.04 clean, kernel 7.0.0-31-generic pin (GPU Operator manages all GPU software)
+4. ✅ **OS**: Ubuntu 26.04 clean, kernel 7.0.0-3x pin (GPU Operator manages all GPU software)
 5. ✅ **Storage**: 800GB OS + 3TB data disks
 6. ✅ **Register**: Run registration command with network addresses
 7. ✅ **Label**: `kubectl label node <name> nvidia.com/gpu.workload.config=vm-passthrough`

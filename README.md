@@ -136,7 +136,7 @@ This README documents both what runs in the KubeTEE infrastructure and what is d
 | Area | Exists today (infrastructure / design) | Designed / to be built |
 |------|--------------------|--------------------|
 | **Miner&nbsp;fleet** | **BTLABS (UID 97)** — first production miner cluster (`na-us-michigan-97`): 7 nodes, 56 GPUs (32× H100 + 24× H200), Intel TDX + NVIDIA CC, running production workloads and earning emissions, scored and paid every epoch. Plus the subnet-owner staging cluster (UID 56). See [Miner onboarding](#miner-onboarding) | More miner clusters — Early Access onboarding is open and hand-reviewed; permissionless registration in [Phase 1](#phase-1--expansion) |
-| **Confidential&nbsp;runtime** | Kata **4.1.0** + CoCo TEE runtime-rs classes on TDX H200/B200 nodes (`kata-qemu-nvidia-gpu-tdx-runtime-rs` / `kata-qemu-tdx-runtime-rs`) | AMD SEV-SNP multi-arch + RTX 6000 Pro Server Edition testing ([Phase 1](#phase-1--expansion)) |
+| **Confidential&nbsp;runtime** | Kata **4.2.0** + CoCo TEE runtime-rs classes on TDX H200/B200 nodes (`kata-qemu-nvidia-gpu-tdx-runtime-rs` / `kata-qemu-tdx-runtime-rs`) | AMD SEV-SNP multi-arch + RTX 6000 Pro Server Edition testing ([Phase 1](#phase-1--expansion)) |
 | **Service&nbsp;transport** | Grey-cloud DNS + Traefik TLS passthrough into the LiteLLM TDX guest. [Attestation-gated TLS](./docs/NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md#2-attestation-gated-tls-between-services) (RA-TLS: TLS public key in TDX `report_data`, Trustee + Intel Trust Authority) is the client-attested hop on top of that path | Native TLS from the LiteLLM guest to NIM guests on miner clusters |
 | **Staging&nbsp;cluster** | Subnet-owner staging cluster — every node is TEE CC capable. Debug target if a workload fails. Kata **guest debug off**; CoCo Trustee attests those guests. CC can be turned off on a node for debug; guest debug can be enabled per pod. | — |
 | **Security&nbsp;gate** | — | Supply-chain CI (SAST, Trustee/KBS secrets, image CVE, IaC/Helm policy, image provenance) — design, not yet automated |
@@ -182,9 +182,9 @@ KubeTEE does not just consume upstream projects; it hardens them and reports wha
 
 While bringing up a 2.5 TB Kimi-K3 inference pod (8× B300 GPU passthrough) under `kata-qemu-nvidia-gpu-tdx-runtime-rs`, the sandbox hung at boot and hit the 1200s `create_container` timeout before the guest kernel even started. Root cause: the `OVMF.inteltdx.fd` shipped in **kata-deploy v4.0.0** performs **eager memory acceptance** for Intel TDX guests — spending all its time in `TDCALL [TDG.MEM.PAGE.ACCEPT]` for large-memory VMs. The distro `ovmf-inteltdx` (Ubuntu, with lazy-accept enabled by `PcdLazyAcceptPartialMemorySize=512`) booted the same 512 GB TDX VM in under 15 seconds. KubeTEE filed the issue with full evidence (serial logs, kata config, kernel `CONFIG_UNACCEPTED_MEMORY=y`), root-cause analysis (Config-A vs Config-B build, PCD defaults), and three proposed solutions — [kata-containers#13535](https://github.com/kata-containers/kata-containers/issues/13535).
 
-The fleet is on kata-deploy **4.1.0** (2026-08-24). Stock 4.1.0 OVMF still needs the `ovmf-tdx-bump-202605` overlay ([#13631](https://github.com/kata-containers/kata-containers/issues/13631) reverted). `#13471` (NVSwitch topology path) and `#13482` (`WantedBy=rke2-server.service`) are in the tag; keep the shim / base / CSI overlays for still-open items. See [TEE deployment](./docs/TEE-DEPLOYMENT-AND-CICD.md#runtime-classes-kata-410).
+The fleet is on kata-deploy **4.2.0** (since 2026-09-15; staging `na-us-oakland-56` and production `na-us-michigan-97`). Stock OVMF still needs the lazy-accept overlay ([#13631](https://github.com/kata-containers/kata-containers/issues/13631) reverted upstream; we ship `edk2-stable202608` via `kata-deploy-ovmf-overlay`). The shim runs the MINIMAL `v4.2.0-fix11649` overlay on both clusters — [kata-containers#11649](https://github.com/kata-containers/kata-containers/issues/11649) (deterministic `Duplicate nodes` on stock after an init-container unplug) is the one demonstrated stock failure the overlay prevents; every other carried fix class proved moot on 4.2.0 in the 2026-09-17 A/B. See [TEE deployment](./docs/TEE-DEPLOYMENT-AND-CICD.md#runtime-classes-kata-420).
 
-This is the model: hit the failure in production, isolate it (CC off on a staging node for debug, plus the distro OVMF comparison), file it upstream with a reproducible root cause and a fix proposal, and carry a local workaround until the upstream fix lands. KubeTEE maintains a fork branch (`ovmf-tdx-bump-202605`) with a pre-built Config-B OVMF from `edk2-stable202605` and a reproducible build script for pipeline testing.
+This is the model: hit the failure in production, isolate it (CC off on a staging node for debug, plus the distro OVMF comparison), file it upstream with a reproducible root cause and a fix proposal, and carry a local workaround until the upstream fix lands. KubeTEE maintains a fork branch with pre-built lazy-accept OVMF from `edk2-stable202608` (202605 + the TDVF below-4G fix) and a reproducible build workflow for pipeline testing.
 
 ---
 
@@ -642,7 +642,7 @@ Full detail — the chain primitive, Alpha conversion, grace/recovery, `btcli` c
 
 ### Phase 0 — Early Access (Current)
 
-- [x] Kata **4.1.0** + CoCo TEE runtime-rs classes (`kata-qemu-nvidia-gpu-tdx-runtime-rs`, `kata-qemu-tdx-runtime-rs`)
+- [x] Kata **4.2.0** + CoCo TEE runtime-rs classes (`kata-qemu-nvidia-gpu-tdx-runtime-rs`, `kata-qemu-tdx-runtime-rs`)
 - [x] Staging cluster — every node is TEE CC capable (H200/B200). Debug target if a workload fails; CC can be turned off on a node for debug (see [Debugging on the staging cluster](#debugging-on-the-staging-cluster))
 - [x] Kata guest debug **off** on the staging cluster — CoCo Trustee attests those guests. Debug can be enabled per pod for diagnostics.
 - [x] [Attestation-gated TLS](./docs/NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md#2-attestation-gated-tls-between-services) on the served backend (Kata runtime deployed) — in-guest keypairs, certificates issued only against a valid TDX quote verified through Intel Trust Authority, ingress on TLS passthrough, termination inside the guest
@@ -703,8 +703,8 @@ Full detail — the chain primitive, Alpha conversion, grace/recovery, `btcli` c
 - [ ] Jobs MCP server — deploy confidential jobs from an autonomous agent, a human chat client, or a pipeline orchestrator: browse templates, quote, submit to Armada, and track status and attestation; quoting grounded in the Phase 0 [Competitive Pricing](./docs/COMPETITIVE-PRICING.md) target price (see [Jobs MCP Server](#jobs-mcp-server))
 - [ ] **AIQ for enterprises** — NVIDIA [AI-Q Blueprint](https://github.com/KubeTEE-AI-Blueprints/aiq) workflows as managed confidential services for enterprise agents:
   - [ ] **RAG** (ingestion / query) in TEE Multi-Tenants
-  - [ ] **Memory (Memgraph)** — **free**
-  - [ ] **Guardrails** — **free**
+  - [ ] **Memory (Memgraph)**
+  - [ ] **Guardrails**
 - [ ] Multi-arch TEE expansion (additional confidential compute runtimes beyond Intel TDX)
 - [ ] Additional confidential compute runtimes
 - [ ] FIPS-140-3 on the FIPS-140-2 validated RKE2 baseline
@@ -722,7 +722,7 @@ Full detail — the chain primitive, Alpha conversion, grace/recovery, `btcli` c
 - [Cluster Naming Convention](./docs/CLUSTER_NAMING_CONVENTION.md) — `kubetee.ai/*` labels and Fleet GitOps targeting
 - [FIPS-140-3 Target](./docs/FIPS-140-3.md) — RKE2 + Kata + CoCo FIPS stack research
 - [Confidential Containers Certification](./docs/certification-confidential-containers.md) — CC standards and Kata runtime mapping
-- [Deploying in a TEE — Challenge & debugging](./docs/TEE-DEPLOYMENT-AND-CICD.md) — Kata 4.1.0 runtime-rs classes, why TEE deployment is hard, staging as a debug target if a workload fails, Kata guest debug off, CoCo Trustee attestation
+- [Deploying in a TEE — Challenge & debugging](./docs/TEE-DEPLOYMENT-AND-CICD.md) — Kata 4.2.0 runtime-rs classes, why TEE deployment is hard, staging as a debug target if a workload fails, Kata guest debug off, CoCo Trustee attestation
 - [Workflow Orchestration — Airflow & Metaflow](./docs/WORKFLOW-ORCHESTRATION.md) — orchestrating multi-step confidential pipelines on Armada
 - [Tokenomics — Utility Token & DePIN Model](./docs/TOKENOMICS.md) — recycle vs burn, securities posture, TAO-on-BASE (CCIP), cross-subnet consumption loop, DePIN subsidy trajectory
 - [Competitive Pricing & Miner Scoring](./docs/COMPETITIVE-PRICING.md) — pricing SN90 against Targon/Lium/Chutes and how price becomes weights

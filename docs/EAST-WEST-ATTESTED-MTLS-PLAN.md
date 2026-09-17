@@ -91,9 +91,9 @@ steal items below are what we do **next**.
 - [x] Draft `nim/eastwest/resource-policy.rego` (cpu0 + path×role) — **not
       applied**; live is still `default.rego`
 
-Inbound terminator is still **in-process** in the SGLang container (kata#11649
-/ overlay fix15 now in **fix19** on kata-deploy 4.1.0). Intended shape remains a same-sandbox
-HAProxy sidecar — Phase 6.
+Inbound terminator: the **HAProxy sidecar is rolled on all 10 CC pods** (2026-09-17,
+kata#11649 fixed via the MINIMAL `v4.2.0-fix11649` shim overlay on both clusters —
+decision 2026-09-16: permanent terminator, image `haproxy:3.4.4-alpine`)
 
 ---
 
@@ -129,7 +129,7 @@ HAProxy sidecar — Phase 6.
   `*.pem` / `*.key`.
 - Do not kubectl-patch Fleet-managed Deployments (Fleet SSA).
 - Keep **NRAS Remote** on Oakland. Do not revert the NVIDIA verifier to Local.
-- Do not enable CoCo `kata-as-coco-runtime` (duplicates kata-deploy 4.1.0).
+- Do not enable CoCo `kata-as-coco-runtime` (duplicates kata-deploy 4.2.0 RuntimeClasses).
 - Do not treat the CoCo tutorial as encrypted-weights. Its `/opt/nim/.cache`
   is a plaintext `emptyDir`.
 - Hopper `cc.mode=off` is a PPCIE trap — not a baseline we run.
@@ -160,7 +160,7 @@ Docker Compose Trustee walkthrough. We steal **practices**, not YAML.
 | Tutorial | KubeTEE |
 |----------|---------|
 | SNP `HOST_DATA` / `sev-snp-measure` / live QEMU scrape | TDX MRTD/RTMR + initdata claims. We already bind `role` in initdata (`litellm` vs `nim-terminator`). Pin digest in policy when RVPS is filled — do not scrape QEMU on the GPU node. |
-| 1 GPU SNP (`nvidia.com/pgpu: "1"`, `kata-qemu-nvidia-gpu-snp`) | 8 GPU TDX + PPCIE + NVSwitch. Hopper: `nvidia.com/nvswitch: "4"`, `cc.mode=ppcie`, overlay **fix19** on 4.1.0. Blackwell: `cc.mode=on`. Runtime: `kata-qemu-nvidia-gpu-tdx-runtime-rs` only. |
+| 1 GPU SNP (`nvidia.com/pgpu: "1"`, `kata-qemu-nvidia-gpu-snp`) | 8 GPU TDX + PPCIE + NVSwitch. Hopper: `nvidia.com/nvswitch: "4"`, `cc.mode=ppcie`. Blackwell: `cc.mode=on`. Runtime: `kata-qemu-nvidia-gpu-tdx-runtime-rs` only. |
 | Guest-pull block PV (`/dev/trusted_store`, loop `/tmp`) | **kata-direct** for weights. Later CDH LUKS ([pamanseau/kubetee-ai#1](https://github.com/pamanseau/kubetee-ai/issues/1)). Agent `cdh_secure_mount` still hardcodes `sourceType: "empty"` and omits `key` — LUKS is **not** done. |
 | Raw NIM Pod + `genpolicy` on the worker | NIMService / SGLang StatefulSet + `fetch-certs` + HAProxy `:8443`. LiteLLM is Helm 1.96.2 (Fleet), not a Pod manifest. |
 | Docker Compose Trustee on the GPU node | Fleet operator v0.21.0 (already). Pin to the CoCo/Kata pair; no `latest`. Do not run Trustee on the workload node. |
@@ -175,7 +175,7 @@ Docker Compose Trustee walkthrough. We steal **practices**, not YAML.
 | Docker Compose Trustee on the GPU node | Trust separation is the point. Oakland already has Fleet operator. |
 | Loop `/tmp` PVs / `local-storage` | We have `kata-direct` + Longhorn V2. |
 | `cc.mode=off` baseline on Hopper | PPCIE trap — label-only CC→non-CC does not clear the PPCIE register. |
-| Enabling CoCo `kata-as-coco-runtime` | Duplicates kata-deploy 4.1.0 RuntimeClasses. Keep `enabled: false`. |
+| Enabling CoCo `kata-as-coco-runtime` | Duplicates kata-deploy 4.2.0 RuntimeClasses. Keep `enabled: false`. |
 | Guest-pull as the default TDX image path | Needs HTTPS KBS + guest registry egress. **erofs + host-pull + `IfNotPresent`** is the no-KBS-egress path. Keep nydus installed, do not select it for TDX shims until Phase 2 + egress exist. |
 | Treating the tutorial as encrypted-weights | `/opt/nim/.cache` is a plaintext `emptyDir`. Encrypted weights are issue #1 + agent key plumbing — not this example. |
 | Replacing SGLang with Llama 3.1 8B NIM | First-cut models stay GLM + DSV4 SGLang. NIM containers are a later reuse of Trustee + LiteLLM, not a swap. |
@@ -428,22 +428,54 @@ owner.
 
 ---
 
-## Phase 6: Restore HAProxy sidecar (existing follow-up)
+## Phase 6: Restore HAProxy sidecar — COMPLETE (2026-09-17)
 
-**Status:** overlay **fix15** (idempotent `blockdev-add`) is in
-`v4.1.0-nvswitch-fix19` (2026-08-24). Upstream
-[#13635](https://github.com/kata-containers/kata-containers/pull/13635) still
-OPEN (not in stock 4.1.0). Live inbound terminator stays in-process (`start-sglang.sh`).
+**Status (2026-09-17): COMPLETE.** #11649 was reproduced deterministically on
+stock kata 4.2.0 (ornith-1 `am-h200-29`, glm-5-3-flash `am-h200-23`) and the
+MINIMAL `v4.2.0-fix11649` overlay (idempotent `blockdev-add` only) is live on
+**both** clusters (oakland staging, michigan production; fleet commits
+`7c2defe`/`9f765e2`). The sidecar roll then completed: **all 10 CC pods** on
+`na-us-oakland-56` run `fetch-certs` init + `haproxy` sidecar + SGLang,
+0 restarts, no `Duplicate nodes` events. Inbound TLS terminates in the
+sidecar; the in-process terminator is retired. Upstream
+[#13635](https://github.com/kata-containers/kata-containers/pull/13635) was
+**closed unmerged** (2026-09-13); [the issue](https://github.com/kata-containers/kata-containers/issues/11649)
+is OPEN with our live-repro comment — keep the overlay until an official tag
+carries the fix.
 
-Intended shape is still a second container in the same sandbox
-(`docker.io/library/haproxy:3.4.3-alpine`). See spec
+**Decision (2026-09-16): the sidecar is the permanent terminator, not a stopgap.**
+In-process TLS inside SGLang was evaluated and **rejected** — see the spec's
+[decision record](./EAST-WEST-ATTESTED-MTLS.md#inbound) for the evidence
+(Granian `ssl_verify=False` hardcoded at both call sites; uvicorn
+`CERT_NONE`; rustls `allow_unauthenticated()` unreachable without patching
+the image, which KubeTEE policy forbids). The sidecar is stack-agnostic: the
+same config serves SGLang any version, vLLM (`glm-45-air`), and any future
+inference stack, with zero per-version image maintenance.
+
+Image standard for the sidecar (all 12 `nim/*-cc.yaml` manifests, 2026-09-16):
+`docker.io/library/haproxy:3.4.4-alpine`, digest-pinned, running as
+`USER haproxy` (uid 99) with caps dropped and read-only rootfs. HTTP/2 enabled
+on the bind (`alpn h2,http/1.1`). DHI hardened-FIPS variant rejected — it
+requires authenticated `dhi.io` pulls and our CC guest-pull is anonymous.
+See spec [image standard](./EAST-WEST-ATTESTED-MTLS.md).
+
+The sidecar is a second container in the same sandbox. See spec
 [Follow-up: restore HAProxy sidecar](./EAST-WEST-ATTESTED-MTLS.md#follow-up-restore-haproxy-sidecar-kata11649).
 
-- [ ] Confirm fix19 is on every CC node and a GLM/DSV4 roll with init +
-      sidecar does not hit `Duplicate nodes with node-name='drive-N'`.
-- [ ] Restore sidecar + `fetch-certs` init; drop in-process fetch/HAProxy
+- [x] `v4.2.0-fix11649` overlay on **every CC node of both clusters** (2026-09-17;
+      oakland 10/10 + michigan 7/7, shim sha `15d32291507e…` verified per node) —
+      init + sidecar rolls no longer hit `Duplicate nodes with node-name='drive-N'`.
+- [x] Sidecar + `fetch-certs` init restored; in-process fetch/HAProxy dropped
       from `start-sglang.sh`.
-- [ ] Keep `partition: 1` until glm-0 is ready to roll. Never `--force`.
+- [x] Partition dropped to 0 (all 10 live CC pods, no `partition` set).
+- [x] Sidecar image+config roll **canary-verified** (2026-09-17, ornith
+      pod-1, `am-h200-29`): 2/2, 0 restarts, `nbthread 2` over 19 guest
+      CPUs, 4× gateway 200s, ALPN `h2` negotiated (3.4.3 pod-0 also
+      negotiated h2 — HAProxy ≥2.8 defaults bind ALPN to `h2,http/1.1`).
+- [x] Full rollout: **all 10 CC pods** on `na-us-oakland-56` run
+      init + haproxy + sglang (verified 2026-09-17) — the two pods that
+      wedged on stock during the roll (ornith-1 h200-1, glm-5-3-flash h200-1)
+      recovered clean on the fixed shim.
 
 This is independent of sealed NGC. Do not block Phase 1–2 on it.
 
@@ -472,7 +504,7 @@ L4 passthrough only.
 | Sealed NGC/HF | 4 | Not done |
 | LUKS / encrypted weights | 4 / #1 | Not done — agent hardcodes `empty` |
 | Five-actor ops | 5 | Not done |
-| HAProxy sidecar restore | 6 | Overlay ready; not rolled |
+| HAProxy sidecar restore | 6 | **COMPLETE (2026-09-17)** — rolled on all 10 CC pods, `3.4.4-alpine` + h2, on the `fix11649` shim overlay |
 | Miner backends | 7 | Blocked on Phase 2 |
 | NRAS Remote | — | **Shipped** — do not revert |
 | Guest-pull as TDX default | — | **Ignored** |
