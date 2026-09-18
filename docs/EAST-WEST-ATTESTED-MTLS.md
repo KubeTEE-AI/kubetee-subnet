@@ -210,6 +210,39 @@ nonce semantics, Intel Trust Authority + local DCAP verification paths):
 Public-hop RA-TLS (quote bound to the terminator key) remains a later
 hardening option on top of this.
 
+## Public KBS endpoint — SHIPPED (2026-09-18): `https://kbs.kubetee.ai`
+
+Production-cluster guests (michigan-97 today, miner production clusters
+later) attest against the oakland Trustee over a public endpoint instead
+of the in-cluster ClusterIP URL. Fleet bundle
+`fleet-gitops/infrastructure/kbs-gateway/` (GitRepo
+`kbs-gateway-staging`, oakland only):
+
+- **Traefik Gateway API** (not IngressRoute): `Gateway kbs-gateway`
+  (HTTPS listener on **entrypoint** port 8443 — the traefik #11842 gotcha:
+  listener ports match entrypoints, not the LB Service port 443), TLS
+  Terminate with `Certificate kbs-tls` (Let's Encrypt DNS-01 via
+  `letsencrypt-prod`), `HTTPRoute kbs-route` → `kbs-service:8080` (HTTP).
+- **Exact-path allowlist**: `/kbs/v0/auth`, `/kbs/v0/attest` (Exact) +
+  `/kbs/v0/resource/` (PathPrefix). A first cut with `PathPrefix /kbs/v0/`
+  leaked the admin endpoints (found live: `/kbs/v0/resource-policy` 401
+  instead of 404) — admin, `/metrics`, `/healthz` now 404 at the Gateway.
+- **DNS**: external-dns `gateway-httproute` source (added to the shared
+  bundle 2026-09-18) publishes from the HTTPRoute hostname + Gateway
+  status.addresses (= traefik `statusaddress` → rke2-traefik LB Service →
+  all node ExternalIPs, grey cloud).
+- **Guest side needs zero changes**: `cc_kbc` is reqwest + rustls +
+  webpki-roots (ISRG Root X1) — the public LE chain validates with no
+  `KBS_CERT`. Verified end-to-end 2026-09-18: a mirror of the LiteLLM
+  CPU-TDX guest with `aa_kbc_params=cc_kbc::https://kbs.kubetee.ai`
+  completed the **full RCAR handshake through the public Gateway**
+  (auth → attest → resource: fetched the 1854-byte east-west CA over TLS).
+  Oakland's own guests keep the in-cluster URL (no hairpin through traefik).
+- Production guests bake `https://kbs.kubetee.ai` into `cc_init_data` /
+  kernel params at their first CC rollout (michigan has zero CC pods today,
+  so nothing to re-encode yet). The measured agent-policy allowlist in
+  `cc_init_data` is per-deployment (same encode-initdata.py flow).
+
 ## Later: miner-cluster backends
 
 LiteLLM stays on the infra cluster (`na-us-oakland-56`). Miner clusters run models (e.g. DSV4-Flash-0731) in TEE and do **not** run LiteLLM. LiteLLM’s `api_base` points at the remote guest over the WAN. Same CoCo pattern as this cut: Trustee issues TLS after attestation; apps speak ordinary mTLS. The miner host, kubelet, and CNI stay untrusted.
@@ -231,7 +264,7 @@ SGLang
 
 ### Do this
 
-1. **One Trustee KubeTEE operates.** Remote guests attest to *this* KBS (CoCo AS, `td_attributes.debug == false`, initdata role `nim-terminator`). Do not trust a Trustee the miner runs — that makes the miner the CA.
+1. **One Trustee KubeTEE operates.** Remote guests attest to *this* KBS (CoCo AS, `td_attributes.debug == false`, initdata role `nim-terminator`) over the public endpoint `https://kbs.kubetee.ai` (see "Public KBS endpoint" above — live since 2026-09-18, full RCAR verified through it). Do not trust a Trustee the miner runs — that makes the miner the CA.
 
 2. **Per-cluster server cert, KubeTEE DNS.** Explicit SAN, not a wildcard, e.g. `dsv4-0731.as-in-delhi-staging-0.inference.kubetee.ai`. Bind `[data] cluster` in initdata so KBS releases only that cluster’s key (`kbs:///default/eastwest-nim-<cluster>/…`). LiteLLM `api_base` is that HTTPS URL. Hostname verify is the binding: the miner can point DNS at a fake; without the attested key, TLS fails.
 
