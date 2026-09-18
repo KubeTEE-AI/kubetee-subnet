@@ -184,12 +184,27 @@ Docker Compose Trustee walkthrough. We steal **practices**, not YAML.
 
 ## Phase 1: Durable Trustee storage
 
-**Status:** not done. Live KBS resource store is LocalFs on an `emptyDir`
-(Memory). Trustee pod restart wipes `default/eastwest-*`; admin re-seeds from
-`$HOME/.kubetee/eastwest-certs`.
+**Status:** **DONE (2026-09-18)** — Trustee migrated to the **v0.22.0 vendored
+Helm chart** (microservices: `kbs-service` + AS `coco-as-grpc` + RVPS) with
+**LocalFs on `longhorn-v2` PVCs** (`trustee-kbs-data`, `trustee-as-data`,
+`trustee-rvps-data`). The operator + `KbsConfig` path is retired (operator
+v0.21.0 hardcoded `emptyDir medium: Memory`). Resources + both policies
+re-seeded once and verified persistent across a KBS `rollout restart`
+(east-west certs, alpha-recycler proxy seeds, `default` attestation policy,
+`resource-policy` all survived). A fresh alpha-recycler guest attested
+end-to-end on the new stack (MRCONFIGID + EventLog checks passed,
+`AttestationEvaluate succeeded`, seeds fetched, recycle done). Chart patches
++ migration runbook: `fleet-gitops/infrastructure/trustee/staging/chart/KUBETEE-PATCHES.md`
+and `staging/migration/MIGRATION-OPERATOR-TO-CHART.md`.
 
-**Why now:** every later phase (HTTPS, policy, sealed NGC) writes KBS state.
-Wiping that on a rollout is an outage.
+**Namespace note (deferred):** pods remain in `trustee-operator-system`; move
+to `trustee-system` later — the KBS URL is measured into every guest's
+`cc_init_data`, so the rename requires re-encoding initdata + rolling all
+13 guests (wedge-prone GPU recreates) or an ExternalName bridge. Bundle it
+with the next initdata-changing rollout.
+
+**Why it mattered:** every later phase (HTTPS, policy, sealed NGC) writes KBS
+state. Wiping that on a rollout is an outage.
 
 **Files:** `fleet-gitops/infrastructure/trustee/` (KbsConfig + volumes). Chart
 knobs for reference (operator must express the same outcome):
@@ -497,7 +512,7 @@ L4 passthrough only.
 | Item | Phase | Status |
 |------|-------|--------|
 | Trustee-issued east-west mTLS | 0 | **Shipped** — live spec |
-| Durable KBS store | 1 | Not done (`emptyDir`) |
+| Durable KBS store | 1 | **Done (2026-09-18)** — v0.22.0 chart, LocalFs `longhorn-v2` PVCs, roll-survival verified |
 | HTTPS KBS + `kbs_cert` in initdata | 2 | Not done (HTTP, no cert) |
 | path×role + cpu0 policy | 3a | Draft only; live `default.rego` |
 | gpu0 + initdata digest | 3b | Blocked on RVPS VBIOS/driver |
