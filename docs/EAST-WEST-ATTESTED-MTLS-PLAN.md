@@ -61,7 +61,7 @@ Remaining Trustee gaps (this plan — not “deploy Trustee”):
 |-----|------------|------------|
 | Transport | `http://kbs-service.trustee-operator-system.svc.cluster.local:8080` — no `kbs_cert` in initdata | HTTPS KBS + cert in measured `aa.toml` / `cdh.toml` |
 | Storage | Memory / `emptyDir` LocalFs — rolls wipe east-west certs (admin re-seed) | PVC or Postgres/Valkey (chart already supports this) |
-| Resource policy | Upstream `default.rego`. Draft `nim/eastwest/resource-policy.rego` is cpu0 + path×role only. cpu0-affirming **denies** after attest 200 | Apply path×role + cpu0 when the EAR shape is confirmed; add gpu0 + initdata digest once RVPS has VBIOS/driver refs |
+| Resource policy | **LIVE (2026-09-18):** `nim/eastwest/resource-policy.rego` — cpu0 affirming + path×role (incl. `proxy-*` for alpha-recycler); attestation policy seeded as `default_cpu`. Wrong-role guests get attest 200 + resource 401 | gpu0 + initdata digest once RVPS has VBIOS/driver refs |
 | Runtime keys | NGC/HF still host Kubernetes Secrets | Vault sealed secrets → `kbs:///default/…` so etcd never holds runtime keys |
 | Ops model | One operator persona in practice | Five-actor split (below) |
 
@@ -107,7 +107,7 @@ decision 2026-09-16: permanent terminator, image `haproxy:3.4.4-alpine`)
 | `nim/eastwest/fetch-certs.sh` | CDH fetch → `/certs/*.pem` |
 | `nim/eastwest/initdata-litellm.toml` | `role = "litellm"` + HTTP KBS URL (no `kbs_cert` yet) |
 | `nim/eastwest/initdata-nim.toml` / `initdata-glm.toml` / `initdata-dsv4.toml` | `role = "nim-terminator"` + HTTP KBS URL |
-| `nim/eastwest/resource-policy.rego` | **Draft** KBS policy: cpu0 affirming + path×role. Not live. |
+| `nim/eastwest/resource-policy.rego` | **LIVE** KBS policy (seeded 2026-09-18 via admin API): cpu0 affirming + path×role incl. `proxy-*` for the alpha-recycler. |
 | `nim/glm-5-2-nvfp4-sglang-cc.yaml` | GLM STS + Service `:8443` |
 | `nim/deepseek-v4-flash-0731-sglang-h200-cc.yaml` | DSV4 STS + Service `:8443` |
 | `fleet-gitops/infrastructure/litellm/staging/values-litellm-na-us-oakland-56.yaml` | LiteLLM TDX overlay (LE public hop + east-west client cert) |
@@ -190,8 +190,10 @@ Helm chart** (microservices: `kbs-service` + AS `coco-as-grpc` + RVPS) with
 `trustee-rvps-data`). The operator + `KbsConfig` path is retired (operator
 v0.21.0 hardcoded `emptyDir medium: Memory`). Resources + both policies
 re-seeded once and verified persistent across a KBS `rollout restart`
-(east-west certs, alpha-recycler proxy seeds, `default` attestation policy,
-`resource-policy` all survived). A fresh alpha-recycler guest attested
+(east-west certs, alpha-recycler proxy seeds, attestation policy,
+`resource-policy` all survived — note: the migration seeded the relaxed
+attestation policy under id `default`, which the broker never resolves; it
+was re-seeded as `default_cpu` on 2026-09-18 with Phase 3a). A fresh alpha-recycler guest attested
 end-to-end on the new stack (MRCONFIGID + EventLog checks passed,
 `AttestationEvaluate succeeded`, seeds fetched, recycle done). Chart patches
 + migration runbook: `fleet-gitops/infrastructure/trustee/staging/chart/KUBETEE-PATCHES.md`
@@ -304,14 +306,43 @@ Blocked: miner-cluster backends (Phase 7). Guest-pull (ignored as default).
 
 ## Phase 3: Resource policy (path×role + cpu0, then gpu0)
 
-**Status:** draft exists, **not live**.
+**Status:** **3a DONE (2026-09-18)** — path×role + cpu0-affirming resource
+policy is **live** on the v0.22.0 chart KBS, seeded via the admin API.
+**3b (gpu0 + initdata digest) remains blocked** on RVPS reference values.
 
-- Live: upstream `default.rego` (resource plugin, not sample).
-- Draft: `nim/eastwest/resource-policy.rego` — `data.plugin == "resource"`,
-  `cpu0` affirming, path×role from
-  `input.submods.cpu0["ear.veraison.annotated-evidence"].init_data_claims.role`.
-- 2026-08-15: applying cpu0-affirming **401s after attest 200**. Do not force
-  this on a Friday rollout. Dump one live EAR token first.
+Root cause of the old "cpu0-affirming 401s after attest 200" (2026-08-15):
+the EAR broker looks up `{policy_id}_{tee_class}` (guests send no selector →
+KBS default `default` → storage key `default_cpu.rego`). The relaxed
+first-cut attestation policy had been seeded under the id `default`, which
+the broker never consults — the **built-in** `default_cpu` (with active
+`query_reference_value` checks against an empty RVPS) kept winning, so cpu0
+appraised Contraindicated (hardware 97 / executables 33 / configuration 36).
+Fixed 2026-09-18 by seeding the relaxed policy as `default_cpu` (admin API
+`POST /kbs/v0/attestation-policy`, `overwrite: true`; the built-in seeds
+with `overwrite: false` at AS startup, so our seed survives AS restarts —
+verified by a probe attestation after an AS roll).
+
+Live resource policy (`nim/eastwest/resource-policy.rego`): cpu0 affirming +
+path×role over `eastwest-ca` (litellm|nim-terminator), `eastwest-litellm`
+(litellm), `eastwest-nim` (nim-terminator), `proxy-staking` +
+`proxy-nonfungible` (alpha-recycler — added 2026-09-18; the draft would have
+broken the CronJob's seed fetch).
+
+Verification (2026-09-18, KBS access log evidence):
+
+| Probe | Role | attest | eastwest-ca | own paths | foreign paths |
+|-------|------|--------|-------------|-----------|---------------|
+| fresh alpha-recycler Job | `alpha-recycler` | 200 | 200 | seeds 200 | `eastwest-litellm/tls.crt` **401** |
+| recreated LiteLLM pod | `litellm` | 200 | 200 | `eastwest-litellm` pair 200 | — |
+| CPU probe w/ nim initdata | `nim-terminator` | 200 | 200 | `eastwest-nim` pair 200 | — |
+
+`agent_policy_claims` is **absent** from the live EAR (init-data is only
+digest-measured; the containers field is not parsed into claims) — that is
+todo "measured agent-policy container allowlist" (Phase 4-class, not 3b).
+
+- Live attestation policy: first-cut relaxed (Intel-signed quote + debug off
+  + TCB UpToDate; RVMS pins commented out, restore when RVPS is filled).
+- 3b sketch (gpu0 + initdata digest) unchanged — blocked on RVPS.
 
 Tutorial policy (SNP) required `cpu0` + `gpu0` affirming **and**
 `annotated_evidence["init_data"] == expected_digest`. We adapt that to TDX
@@ -319,17 +350,31 @@ claims, not `HOST_DATA`.
 
 ### 3a — path×role + cpu0 (apply the draft)
 
-- [ ] **Step 1: Dump one token** from a working GLM or LiteLLM attest
-      (`POST /kbs/v0/attest` 200). Confirm the initdata role path matches the
-      draft. If it does not, patch the draft — do not ship `allow_all`.
+- [x] **Step 1: Dump one token** (done 2026-09-18). AS `RUST_LOG=debug` for
+      one roll (`debug!(ear =? ear, "Unsigned EAR Token")` in
+      `ear_token/broker.rs`), one-off alpha-recycler probe Job with the real
+      CronJob's `cc_init_data`. Confirmed:
+      `submods.cpu0["ear.veraison.annotated-evidence"].init_data_claims.role`
+      = `"alpha-recycler"` — matches the draft path exactly. Single cpu0
+      submod on CPU-TDX guests (no GPU submods). Also confirmed the seeded
+      `default` policy was inert (broker resolves `default_cpu`) — see
+      Phase 3 status note. Log level reverted after capture.
 
-- [ ] **Step 2: Apply** `nim/eastwest/resource-policy.rego` via the operator
-      ConfigMap key the live KbsConfig already mounts. Graceful Trustee roll
-      if KBS caches policy.
+- [x] **Step 2: Apply** (done 2026-09-18, admin API — the chart stores
+      policies in the PVC-backed KV store, no ConfigMap mount):
+      1. attestation policy seeded as **`default_cpu`** (the storage key the
+         broker actually resolves) — relaxed first-cut TDX checks;
+      2. resource policy = `nim/eastwest/resource-policy.rego` + the
+         `proxy-staking`/`proxy-nonfungible` paths for the alpha-recycler
+         role (missing from the draft — would have broken the CronJob).
+      Both survive AS restarts (built-ins seed with `overwrite: false`).
 
-- [ ] **Step 3: Prove** LiteLLM + one GLM replica still fetch certs; a guest
-      with the wrong `role` is denied; `get-resource` without attestation
-      fails.
+- [x] **Step 3: Prove** (done 2026-09-18; see the verification table above):
+      recreated LiteLLM pod fetched all three eastwest resources 200; a
+      fresh alpha-recycler guest fetched its seeds 200 and was **401-denied**
+      `eastwest-litellm/tls.crt` (wrong role); a `nim-terminator`-role CPU
+      probe fetched the `eastwest-nim` pair 200. Post-AS-roll probe still
+      passes (policies persisted).
 
 ### 3b — gpu0 + initdata digest (after RVPS)
 
