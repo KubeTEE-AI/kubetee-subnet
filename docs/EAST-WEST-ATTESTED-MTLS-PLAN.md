@@ -108,6 +108,8 @@ decision 2026-09-16: permanent terminator, image `haproxy:3.4.4-alpine`)
 | `nim/eastwest/initdata-litellm.toml` | `role = "litellm"` + HTTP KBS URL (no `kbs_cert` yet) |
 | `nim/eastwest/initdata-nim.toml` / `initdata-glm.toml` / `initdata-dsv4.toml` | `role = "nim-terminator"` + HTTP KBS URL |
 | `nim/eastwest/resource-policy.rego` | **LIVE** KBS policy (seeded 2026-09-18 via admin API): cpu0 affirming + path×role incl. `proxy-*` for the alpha-recycler. |
+| `nim/eastwest/kubetee_attestation.py` | Client-facing attestation module (Phase 8): `GET /v1/attestation` + inline `X-KubeTEE-Nonce` evidence. Embedded in the litellm `eastwest-fetch-certs` ConfigMap. |
+| `kubetee-subnet/docs/CLIENT-FACING-ATTESTATION.md` | Client guide (Phase 8): API surface, nonce semantics, ITA + local DCAP verification paths. |
 | `nim/glm-5-2-nvfp4-sglang-cc.yaml` | GLM STS + Service `:8443` |
 | `nim/deepseek-v4-flash-0731-sglang-h200-cc.yaml` | DSV4 STS + Service `:8443` |
 | `fleet-gitops/infrastructure/litellm/staging/values-litellm-na-us-oakland-56.yaml` | LiteLLM TDX overlay (LE public hop + east-west client cert) |
@@ -552,6 +554,30 @@ L4 passthrough only.
 
 ---
 
+## Phase 8: Client-facing attestation of inference — COMPLETE (2026-09-18)
+
+**Client contract:** [CLIENT-FACING-ATTESTATION.md](./CLIENT-FACING-ATTESTATION.md) (full guide with ITA + local verification paths).
+
+What shipped (all verified live 2026-09-18 on the 3-replica gateway):
+
+- [x] **Prompt logging off** — `turn_off_message_logging: true` (base values + oakland overlay repeated map)
+- [x] **Kata debug-off verified** — AS policy + live EAR `td_attributes.debug` check (documented in Trustee `KubeTEE.md` debug-off record)
+- [x] **Trustee resource policy live** — path×role + cpu0 (Phase 3a)
+- [x] **Measured agent-policy container allowlist** — pause + fetch-certs + litellm images/UIDs in `policy-litellm.rego`; TD measurement changed (intended). `agent_policy_claims` extraction fixed (policy_data last, no trailing commas, literal not in comments)
+- [x] **In-guest attestation REST API** — `agent.guest_components_rest_api=all` (`/aa/evidence` + `/cdh/resource` both live; `attestation` alone would break fetch-certs)
+- [x] **`GET /v1/attestation?nonce=<64 hex>`** — fresh TDX quote, JSON payload, `pod` replica pinning. Verified: HTTP 200, nonce echoed, REPORTDATA == SHA512(nonce) at offset 568
+- [x] **Inline evidence** — `X-KubeTEE-Nonce` request header → `X-KubeTEE-Attestation-Quote` + backend identity headers on the SAME response (streaming + non-streaming; verified with live chat 200 + SSE 200)
+- [x] **26 unit tests** for the module (mocked httpx/litellm)
+
+Implementation notes for future phases:
+
+- The callback hook is `async_post_call_response_headers_hook` — NOT `async_post_call_success_hook`. The latter runs AFTER the streaming `StreamingResponse` is constructed (headers frozen); the headers hook fires before freeze on both paths.
+- Nonce binding: gateway passes `SHA512(nonce)` as `runtime_data` to the in-guest `/aa/evidence`; client submits the RAW nonce as `runtime_data` to Intel Trust Authority. ITA re-hashes and matches REPORTDATA. (ITA's own client `collect_evidence` would double-hash — use pre-collected evidence.)
+- `kubectl exec` into the gateway guest is **denied by the agent policy** (`ExecProcessRequest := false`, todo 4) — test via port-forward or a curl pod.
+- Scope decisions (2026-09-17/18): gateway mints the per-request quote (cheap, CPU TDX); backends stay boot-time attested (per-request GPU quotes are a bigger lift — revisit if a profile requires them).
+
+---
+
 ## Spec coverage (next work)
 
 | Item | Phase | Status |
@@ -559,12 +585,13 @@ L4 passthrough only.
 | Trustee-issued east-west mTLS | 0 | **Shipped** — live spec |
 | Durable KBS store | 1 | **Done (2026-09-18)** — v0.22.0 chart, LocalFs `longhorn-v2` PVCs, roll-survival verified |
 | HTTPS KBS + `kbs_cert` in initdata | 2 | Not done (HTTP, no cert) |
-| path×role + cpu0 policy | 3a | Draft only; live `default.rego` |
+| path×role + cpu0 policy | 3a | **LIVE (2026-09-18)** — `nim/eastwest/resource-policy.rego` seeded; positive/negative probes verified |
 | gpu0 + initdata digest | 3b | Blocked on RVPS VBIOS/driver |
 | Sealed NGC/HF | 4 | Not done |
 | LUKS / encrypted weights | 4 / #1 | Not done — agent hardcodes `empty` |
 | Five-actor ops | 5 | Not done |
 | HAProxy sidecar restore | 6 | **COMPLETE (2026-09-17)** — rolled on all 10 CC pods, `3.4.4-alpine` + h2, on the `fix11649` shim overlay |
+| Client-facing attestation (endpoint + inline) | 8 | **COMPLETE (2026-09-18)** — `GET /v1/attestation` + `X-KubeTEE-Nonce` inline evidence live on the gateway; client guide: [CLIENT-FACING-ATTESTATION.md](./CLIENT-FACING-ATTESTATION.md) |
 | Miner backends | 7 | Blocked on Phase 2 |
 | NRAS Remote | — | **Shipped** — do not revert |
 | Guest-pull as TDX default | — | **Ignored** |
@@ -575,7 +602,11 @@ L4 passthrough only.
 ## Later (not this plan)
 
 - Same mTLS pattern on remaining Oakland models (Kimi, Qwen, MiMo).
-- Public-hop RA-TLS for clients that attest `llm.kubetee.ai`.
+- Public-hop RA-TLS for clients that attest `llm.kubetee.ai` — the
+  **nonce-bound quote endpoint** (Phase 8) covers the client-facing need
+  without a custom TLS stack; RA-TLS remains a later option.
+- Per-request GPU quotes from inference backends (current contract: boot-time
+  attestation + backend identity headers — see Phase 8 scope decisions).
 - Short-lived certs with CDH refresh after model load.
 - In-guest keygen + `report_data` binding if a future profile requires keys
   that never exist in Trustee.

@@ -188,9 +188,27 @@ When #11649 is actually fixed in the **stock** `containerd-shim-kata-v2` (a kata
 - Same pattern on remaining models on `na-us-oakland-56`.
 - Miner-cluster backends — spec below. Do not start this until KBS resource fetch is attested or TLS-pinned.
 - NIM containers: reuse Trustee + LiteLLM sidecar; add Operator sidecar or native `NIM_SSL_MODE=mtls` only if that NIM actually requires client certs.
-- Public-hop RA-TLS (quote bound to the Let’s Encrypt / terminator key) for clients that attest `llm.kubetee.ai`.
+- Per-request GPU quotes from inference backends (current contract: boot-time attestation + backend identity headers).
 - Short-lived certs with CDH refresh after model load.
 - In-guest keygen + `report_data` binding if a future profile requires keys that never exist in Trustee.
+
+## Client-facing attestation — SHIPPED (2026-09-18)
+
+Clients of `llm.kubetee.ai` can request cryptographic proof that responses
+come from a TDX confidential gateway guest. Full client contract (API surface,
+nonce semantics, Intel Trust Authority + local DCAP verification paths):
+[CLIENT-FACING-ATTESTATION.md](./CLIENT-FACING-ATTESTATION.md).
+
+- `GET /v1/attestation?nonce=<64 hex>` — fresh TDX quote with `SHA512(nonce)`
+  bound into `REPORTDATA` (pod field pins the minting replica).
+- `X-KubeTEE-Nonce: <64 hex>` request header on `/v1/chat/completions` —
+  response carries `X-KubeTEE-Attestation-Quote` + backend identity headers
+  on the same response (streaming and non-streaming).
+- Gateway prompt logging is off (`turn_off_message_logging`); the guest runs
+  a measured container allowlist (agent policy in `cc_init_data`).
+
+Public-hop RA-TLS (quote bound to the terminator key) remains a later
+hardening option on top of this.
 
 ## Later: miner-cluster backends
 
