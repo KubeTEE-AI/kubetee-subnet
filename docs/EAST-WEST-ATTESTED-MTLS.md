@@ -239,13 +239,36 @@ of the in-cluster ClusterIP URL. Fleet bundle
   (auth → attest → resource: fetched the 1854-byte east-west CA over TLS).
   Oakland's own guests keep the in-cluster URL (no hairpin through traefik).
 - Production guests bake `https://kbs.kubetee.ai` into `cc_init_data` /
-  kernel params at their first CC rollout (michigan has zero CC pods today,
-  so nothing to re-encode yet). The measured agent-policy allowlist in
+  kernel params at their first CC rollout (done for the michigan image-gen
+  backends 2026-09-19: klein `mi-h100-167/170` + cosmos3 `mi-h200-160` both
+  run the public-endpoint initdata, role `image-gen`). The measured agent-policy allowlist in
   `cc_init_data` is per-deployment (same encode-initdata.py flow).
 
-## Later: miner-cluster backends
+## Miner-cluster backends — SHIPPED (2026-09-19): two michigan-97 backends live
 
 LiteLLM stays on the infra cluster (`na-us-oakland-56`). Miner clusters run models (e.g. DSV4-Flash-0731) in TEE and do **not** run LiteLLM. LiteLLM’s `api_base` points at the remote guest over the WAN. Same CoCo pattern as this cut: Trustee issues TLS after attestation; apps speak ordinary mTLS. The miner host, kubelet, and CNI stay untrusted.
+
+**This is no longer hypothetical.** Two remote backends run in production on `na-us-michigan-97` (production miner cluster, 7-node RKE2, TDX + PPCIE/native-CC H100/H200, kata 4.2.0):
+
+| Backend | Node | Runtime | LB port | DNS (all ext. IPs) | LiteLLM path |
+|---------|------|---------|---------|--------------------|--------------|
+| `flux2-klein-4b-sglang-h100` (FLUX.2-klein-4B, SGLang diffusion) | `mi-h100-167/170` (`cc.mode=on`, single-GPU native CC) | `kata-qemu-nvidia-gpu-tdx-runtime-rs` | `8443` | `flux2-klein-4b.na-us-michigan-97.inference.kubetee.ai` | `model_list` row (mode `image`), `/v1/images/generations` |
+| `cosmos3-super` (Cosmos3-Super NIM, 8×H200 TP8) | `mi-h200-160` (`cc.mode=ppcie`) | `kata-qemu-nvidia-gpu-tdx-runtime-rs` | `9443` | `cosmos3.na-us-michigan-97.inference.kubetee.ai` | `pass_through_endpoints` `/cosmos3` |
+
+Verified live 2026-09-19 end-to-end through `llm.kubetee.ai`: klein T2I 200 (b64_json delivery), cosmos3 T2I 200 (`b64_image`), mTLS client-cert gate 401s without a key (both paths), 3/3 LiteLLM replicas.
+
+**klipper port lesson (hit deploying cosmos3):** each LoadBalancer Service claims its port on **every** node via `svclb` pods. A second `:8443` Service on the same cluster collides — it cannot schedule its `svclb` pod on the backend node ("node didn't have free ports") and all `:8443` traffic silently routes to the **first** service that claimed it. One LB port per service on a cluster (cosmos3 got `:9443`), firewall the extra ports accordingly.
+
+### Image-generation path (2026-09-19, two-path decision)
+
+Two image models, two API shapes — the deliberate choice ("Option 1"):
+
+- **klein** — OpenAI Images API compatible (`POST /v1/images/generations`, model `black-forest-labs/flux.2-klein-4b`). SGLang speaks this natively.
+- **cosmos3** — native NIM API only (`POST /v1/infer`, `model_mode`-discriminated body; **not** OpenAI images/videos schema). Exposed via LiteLLM `pass_through_endpoints` at `https://llm.kubetee.ai/cosmos3`. The mTLS client cert is inherited automatically (passthrough handler uses `get_async_httpx_client()` → process-global `ssl_verify=/certs/ca.pem` → `sitecustomize.py` east-west chain — verified in vendored 1.97.0).
+
+**klein b64 delivery fix (the row-level `response_format` trap):** SGLang's image protocol defaults `response_format: "url"` for models without a `default_image_response_format()` override (klein's `Flux2KleinSamplingParams` has none) → relative `/v1/images/<id>/content` URL that **404s through LiteLLM** (no such route; content lives in the SGLang pod). Worse, the row carried `additional_drop_params: ["response_format"]`, so even explicit client `response_format` was stripped. Fix (row-only, live `/model/update`): deployment `model: openai/dall-e-2` — the DALL-E 2 dialect whitelists `response_format` (the GPT-image config used for unknown models does not) — plus row default `response_format: b64_json`. SGLang ignores the `model` body field (protocol `Optional`), so the dialect choice is a pure LiteLLM-side param-validation selection. Result: param-less clients get b64 via the row default; explicit requests override; `url` dead-end impossible.
+
+**Why not one endpoint for both:** Cosmos3's `/v1/infer` is a discriminated-union schema (`model_mode: text2image|text2video|image2video|video2video`) that a normal `model_list` row cannot route to, and LiteLLM has no config-driven request/response translation for image providers. Rejected alternatives: translation sidecar in the cosmos3 pod (full OpenAI-compat for `/v1/images`, custom code to maintain), SGLang re-serve of cosmos3 (native `/v1/images`, loses the NIM's pinned super/fp8/tp8 latency profile). If SDK clients that only speak `openai.images.generate()` need cosmos3 later, the sidecar is the upgrade path.
 
 ```text
 LiteLLM guest (oakland, TEE)
@@ -287,8 +310,6 @@ SGLang
 
 Quote-in-handshake RA-TLS on LiteLLM→DSV4 is a later hardening (stolen Trustee leaf would not matter). Not required for the first remote backend if KBS release is attested and the leaf key never exists outside a guest.
 
-### LiteLLM cutover (when a miner is ready)
+### LiteLLM cutover (a miner backend — proven 2026-09-19)
 
-`/model/update` only — no LiteLLM deploy on the miner. Restate every `litellm_params` field. Same client cert, new server cert + passthrough:
-
-`https://dsv4-0731.<cluster>.inference.kubetee.ai/v1`
+`/model/update` only — no LiteLLM deploy on the miner. Restate every `litellm_params` field. Same client cert, new server cert + passthrough. The klein and cosmos3 rows on michigan-97 are the worked examples (see the table above).
