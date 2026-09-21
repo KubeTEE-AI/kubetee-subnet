@@ -240,24 +240,33 @@ of the in-cluster ClusterIP URL. Fleet bundle
   Oakland's own guests keep the in-cluster URL (no hairpin through traefik).
 - Production guests bake `https://kbs.kubetee.ai` into `cc_init_data` /
   kernel params at their first CC rollout (done for the michigan image-gen
-  backends 2026-09-19: klein `mi-h100-167/170` + cosmos3 `mi-h200-160` both
-  run the public-endpoint initdata, role `image-gen`). The measured agent-policy allowlist in
+  backends 2026-09-19: klein + cosmos3 both run the public-endpoint initdata,
+  role `image-gen`). The measured agent-policy allowlist in
   `cc_init_data` is per-deployment (same encode-initdata.py flow).
 
-## Miner-cluster backends — SHIPPED (2026-09-19): two michigan-97 backends live
+## Miner-cluster backends — SHIPPED (2026-09-19): michigan-97 backends live
 
 LiteLLM stays on the infra cluster (`na-us-oakland-56`). Miner clusters run models (e.g. DSV4-Flash-0731) in TEE and do **not** run LiteLLM. LiteLLM’s `api_base` points at the remote guest over the WAN. Same CoCo pattern as this cut: Trustee issues TLS after attestation; apps speak ordinary mTLS. The miner host, kubelet, and CNI stay untrusted.
 
-**This is no longer hypothetical.** Two remote backends run in production on `na-us-michigan-97` (production miner cluster, 7-node RKE2, TDX + PPCIE/native-CC H100/H200, kata 4.2.0):
+**This is no longer hypothetical.** Remote backends run in production on `na-us-michigan-97` (production miner cluster, 7-node RKE2, TDX + PPCIE/native-CC H100/H200, kata 4.2.0). **Ops detail (node names, LB ports, and the per-backend DNS names) is deliberately NOT recorded here** — it lives in the private runbooks (`nim/eastwest/` history + the per-model manifests in the infra repo) and in the live LiteLLM `model_list` DB. The east-west gate is mTLS against the Trustee CA regardless: the URLs are L4 LoadBalancers with per-service certs, not secret-bearing.
 
-| Backend | Node | Runtime | LB port | DNS (all ext. IPs) | LiteLLM path |
-|---------|------|---------|---------|--------------------|--------------|
-| `flux2-klein-4b-sglang-h100` (FLUX.2-klein-4B, SGLang diffusion) | `mi-h100-167/170` (`cc.mode=on`, single-GPU native CC) | `kata-qemu-nvidia-gpu-tdx-runtime-rs` | `8443` | `flux2-klein-4b.na-us-michigan-97.inference.kubetee.ai` | `model_list` row (mode `image`), `/v1/images/generations` |
-| `cosmos3-super` (Cosmos3-Super NIM, 8×H200 TP8) | `mi-h200-160` (`cc.mode=ppcie`) | `kata-qemu-nvidia-gpu-tdx-runtime-rs` | `9443` | `cosmos3.na-us-michigan-97.inference.kubetee.ai` | `pass_through_endpoints` `/cosmos3` |
+| Backend | Placement | Runtime | LiteLLM path |
+|---------|-----------|---------|--------------|
+| `flux2-klein-4b-sglang-h100` (FLUX.2-klein-4B, SGLang diffusion) | 2× single-GPU native-CC H100 nodes | `kata-qemu-nvidia-gpu-tdx-runtime-rs` | `model_list` row (mode `image`), `/v1/images/generations` |
+| `cosmos3-super` (Cosmos3-Super NIM, 8×H200 TP8) | 1 PPCIE H200 node | `kata-qemu-nvidia-gpu-tdx-runtime-rs` | `pass_through_endpoints` `/cosmos3` |
+| `minimax-h3` (MiniMax-H3 FL2VA joint video+audio, SGLang diffusion, 8×H200 Ulysses8) | 1 PPCIE H200 node (+1 spare) | `kata-qemu-nvidia-gpu-tdx-runtime-rs` | `model_list` row `minimax/h3` (mode `video_generation`), `/v1/videos` |
 
-Verified live 2026-09-19 end-to-end through `llm.kubetee.ai`: klein T2I 200 (b64_json delivery), cosmos3 T2I 200 (`b64_image`), mTLS client-cert gate 401s without a key (both paths), 3/3 LiteLLM replicas.
+Each backend uses a distinct ServiceLB port (one LB port per service per cluster — see the klipper lesson below) and a per-backend DNS name under the cluster's `inference.kubetee.ai` subdomain, resolvable to all node ExternalIPs.
 
-**klipper port lesson (hit deploying cosmos3):** each LoadBalancer Service claims its port on **every** node via `svclb` pods. A second `:8443` Service on the same cluster collides — it cannot schedule its `svclb` pod on the backend node ("node didn't have free ports") and all `:8443` traffic silently routes to the **first** service that claimed it. One LB port per service on a cluster (cosmos3 got `:9443`), firewall the extra ports accordingly.
+Verified live 2026-09-19 end-to-end through `llm.kubetee.ai`: klein T2I 200 (b64_json delivery), cosmos3 T2I 200 (`b64_image`), mTLS client-cert gate 401s without a key (both paths), 3/3 LiteLLM replicas. Added 2026-09-21: minimax-h3 t2va 200 — 5s/1344×768 MP4 with native stereo audio (`avc1`+`mp4a`) generated in-TEE and delivered through the gateway's `/v1/videos` (create → poll → content), billed at $0.08/s on the row.
+
+**MiniMax-H3 license authorization (2026-09-21).** The MiniMax H3 Community License Agreement excludes the US/EU/UK/KR from its Applicable Territory. MiniMax granted KubeTEE written authorization for US use via the license-application path on the model card. Confirmation received from minimax.io:
+
+> "This email is to confirm that MiniMax authorizes KubeTEE AI LTD to use MiniMax H3 and MiniMax H3 Works, subject to and conditioned upon KubeTEE AI LTD's continued compliance with the commitments and representations set forth in its request email."
+
+The deployment (`nim/minimax-h3-sglang-h200-cc.yaml`) relies on this authorization; if it lapses or is revoked, the pod and its LiteLLM row must be removed. The original email is kept out-of-band (not in git). Contrast: `qwen38-flash-next` was decommissioned 2026-09-04 for lacking an equivalent authorization (Qwen Community License 1.0 MaaS clause).
+
+**klipper port lesson (hit deploying cosmos3):** each LoadBalancer Service claims its port on **every** node via `svclb` pods. Two Services with the same port on the same cluster collide — the second cannot schedule its `svclb` pod on the backend node ("node didn't have free ports") and all traffic on that port silently routes to the **first** service that claimed it. One LB port per service per cluster; firewall the extra ports accordingly. (Actual port assignments live in the private runbooks / live cluster state, not here.)
 
 ### Image-generation path (2026-09-19, two-path decision)
 
