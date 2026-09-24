@@ -14,6 +14,7 @@ Buyer-visible SKUs on sayGM, served from `llm.kubetee.ai` (LiteLLM in TDX). GLM-
 | `glm-5.3` | `kubetee/z-ai/glm-5.3` | dynamic | `glm-5-3-flash` sibling backend (see `nim/CLAUDE.md`) |
 | `z-ai/glm-5.3-flash` | `kubetee/z-ai/glm-5.3-flash` | dynamic | `glm-5-3-flash-sglang-h200` (H200, FP8) |
 | `ornith/ornith-1.5-397b` | `kubetee/ornith/ornith-1.5-397b` | dynamic (sole provider) | `ornith-1-5-397b-fp8-sglang-h200` (H200, FP8; retargeted 2026-08-28) |
+| `xiaomi/mimo-v2.6-pro-ultraspeed` | `kubetee/xiaomi/mimo-v2.6-pro` | dynamic (sole provider; bootstrap 10% 2026-09-24) | `mimo-v2-6-pro-rl-sglang-b200-cc` (B200 CC, DFLASH spec decode; declared 2026-09-24) |
 
 Pricing adjusts to the market; per-offer prices are visible on sayGM.
 
@@ -29,9 +30,10 @@ Every SKU offered through sayGM must clear a **license gate before it can be dec
 |---|---|---|
 | `z-ai/glm-5.2`, `glm-5.3`, `glm-5.3-flash` (zai-org) | Permissive (zai-org releases) | ✅ declared, serving |
 | `ornith/ornith-1.5-397b` (Ornith) | Apache-2.0 lineage (Qwen3.5-base) | ✅ declared, serving |
+| `xiaomi/mimo-v2.6-pro` (XiaomiMiMo, MiMo-V2.6-Pro-RL) | **MIT** (verified on HF 2026-09-24) | ✅ declared 2026-09-24 (`xiaomi/mimo-v2.6-pro-ultraspeed`) |
 | `deepseek/deepseek-v4-flash-0731` | Permissive (DeepSeek) | ⚠️ withdrawn 2026-08-27 (`withdrawn_by_miner`) — not re-declared |
 | `qwen/qwen3.8-flash-next` | **Qwen Community License 1.0 — requires a separate Qwen MaaS license for ANY commercial MaaS use (no revenue threshold)** | ❌ decommissioned 2026-09-04 (SKU + manifests, weights retained). Do not re-declare without a signed Qwen license |
-| `moonshotai/kimi-k3`, `qwen/qwen3.5-397b-a17b`, `xiaomi/mimo-v2.5` | various | ❌ not in the offer set (backend gone or never offered; kimi is probe-only in the miner's local streaming check) |
+| `moonshotai/kimi-k3`, `qwen/qwen3.5-397b-a17b`, `xiaomi/mimo-v2.5` | various | ❌ not in the offer set (backend gone or never offered; kimi is probe-only in the miner's local streaming check; MiMo-V2.5 superseded by the V2.6-Pro declare) |
 | `black-forest-labs/flux.2-klein-4b` | Apache-2.0 | ✅ Factory gateway only (`/v1/images`) — not a sayGM SKU |
 | `nvidia/Cosmos3-Super` (NIM + passthrough) | NVIDIA OpenMDW-1.1 (commercial OK) | ✅ Factory gateway only (`/cosmos3` passthrough) — not a sayGM SKU |
 | `MiniMaxAI/MiniMax-H3` | **MiniMax H3 Community License — Applicable Territory excludes US/EU/UK/KR** | ✅ serving on the Factory gateway (`minimax/h3`, `/v1/videos`) **under written US authorization from MiniMax** (received 2026-09-21; see [EAST-WEST-ATTESTED-MTLS.md](./EAST-WEST-ATTESTED-MTLS.md)). Revocation of that authorization would require removing the deployment. Not a sayGM SKU (video generation, chat-network shape mismatch) |
