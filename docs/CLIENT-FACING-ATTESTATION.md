@@ -12,6 +12,7 @@
 |-------|----------|
 | The response was produced by a genuine Intel TDX confidential VM (guest debug off) | TDX quote in the response, verified against Intel-signed DCAP collateral |
 | The quote was minted **fresh** (not replayed) and is bound to this request | Client-supplied 64-hex nonce is hashed into the quote's `REPORTDATA` |
+| The guest that minted the quote is the one terminating **your TLS session** | The guest signs your nonce with the pod's TLS private key; you verify the signature against the leaf cert from your own TLS session (`tls_possession` / `X-KubeTEE-TLS-*`) |
 | The gateway guest runs an unmodified container set | The measured container allowlist is part of the guest's initdata (`cc_init_data`), which is measured into the TD; the AS extraction surfaces `agent_policy_claims` |
 | Which replica minted it | `pod` field (endpoint payload) / replica identity headers |
 | Which inference backend served the request (boot-time attested) | `X-KubeTEE-Backend*` headers on inline evidence |
@@ -43,9 +44,42 @@ Response (200):
   "cc_eventlog": "<base64 eventlog or null>",
   "tee": "tdx",
   "runtime_class": "kata-qemu-tdx-runtime-rs",
+  "tls_possession": {
+    "tls_signature": "<base64 RSA signature>",
+    "tls_signature_alg": "RS256",
+    "tls_signature_input": "sha256(nonce)",
+    "tls_cert_sha256": "<sha256 of the serving cert's DER>"
+  },
   "pod": "litellm-6d48d45cbc-xgj7w"
 }
 ```
+
+**TLS-possession proof (what `tls_possession` is):** `llm.kubetee.ai` is TLS **passthrough** — your TLS session terminates inside the same TDX guest that served this payload. The guest signed your nonce with the private key of the certificate your TLS session used. Verify it against the leaf certificate from **your own TLS session** (`ssl.get_server_certificate` / `openssl s_client`), and check the reported `tls_cert_sha256` matches that same cert:
+
+```python
+import base64, hashlib, ssl, socket
+from cryptography import x509
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import padding
+
+# 1. leaf cert straight from your TLS session
+pem = ssl.get_server_certificate(("llm.kubetee.ai", 443))
+cert = x509.load_pem_x509_certificate(pem.encode())
+
+# 2. fingerprint must equal tls_cert_sha256
+der = base64.b64decode("".join(l for l in pem.splitlines() if "CERTIFICATE" not in l))
+assert hashlib.sha256(der).hexdigest() == payload["tls_possession"]["tls_cert_sha256"]
+
+# 3. verify the nonce signature with the session cert's public key
+cert.public_key().verify(
+    base64.b64decode(payload["tls_possession"]["tls_signature"]),
+    payload["nonce"].encode(),
+    padding.PKCS1v15(),
+    hashes.SHA256(),
+)
+```
+
+If both checks pass, the TDX guest that minted the quote holds the private key of the exact certificate you are connected to — the quote and the TLS endpoint are the **same machine**, not just the same fleet.
 
 - 400 if the nonce is not exactly 64 hex characters.
 - 502 if the in-guest attestation service is unavailable (fail-closed for evidence, fail-open for the gateway itself — chat keeps working).
@@ -73,6 +107,10 @@ Response headers (both streaming and non-streaming):
 | `X-KubeTEE-Nonce` | your nonce, echoed (lowercase hex) |
 | `X-KubeTEE-Attestation-Quote` | base64 TDX quote minted on this replica for this request |
 | `X-KubeTEE-Attestation-Tee` | `tdx` |
+| `X-KubeTEE-TLS-Signature` | base64 RSA signature of your nonce, made with the private key of the cert your TLS session is using (RS256) — verify against your session's leaf cert |
+| `X-KubeTEE-TLS-Signature-Alg` | `RS256` |
+| `X-KubeTEE-TLS-Signature-Input` | `sha256(nonce)` |
+| `X-KubeTEE-TLS-Cert-SHA256` | sha256 of the serving cert's DER — must match your session's leaf cert |
 | `X-KubeTEE-Backend` | model name that served (e.g. `z-ai/glm-5.3-flash`) |
 | `X-KubeTEE-Backend-Endpoint` | the backend Service the gateway routed to |
 | `X-KubeTEE-Backend-Attested` | `boot-time (Trustee EAR; east-west mTLS)` — the backend's TLS cert was issued only after its TDX quote passed Trustee appraisal |
@@ -209,9 +247,10 @@ The endpoint contract is plain HTTP + JSON/headers. Verification path B needs an
 
 | Endpoint / header | Type | Description |
 |---|---|---|
-| `GET /v1/attestation?nonce=<64hex>` | HTTP | Fresh TDX quote, JSON payload, nonce bound as SHA512 into REPORTDATA |
+| `GET /v1/attestation?nonce=<64hex>` | HTTP | Fresh TDX quote, JSON payload, nonce bound as SHA512 into REPORTDATA, plus TLS-possession signature |
 | `X-KubeTEE-Nonce: <64hex>` (request) | header | Opt-in inline evidence on any chat completion (streaming + non-streaming) |
 | `X-KubeTEE-Attestation-Quote` (response) | header | base64 TDX quote minted for this request |
+| `X-KubeTEE-TLS-Signature` (+`-Alg`/`-Input`/`Cert-SHA256`) (response) | header | Nonce signed with the serving TLS key — proves the quote minted is the cert holder you're connected to |
 | `X-KubeTEE-Backend*` (response) | header | Backend identity + boot-time attestation signal |
 | `X-KubeTEE-Attestation-Error` (response) | header | Failure reason when evidence could not be minted |
 
