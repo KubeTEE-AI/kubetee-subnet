@@ -20,6 +20,7 @@ This page documents **only how our serving differs**.
 | Output 768P / 2K | **768 short-edge only** — no 2K; other short edges are **rejected**, never silently coerced |
 | Duration 4–15 s, integer values only | 4–15 s, **fractional allowed**; frame count snaps up to the 17n+5 grid (≤ +16 frames ≈ 0.67 s extra, **not billed**) |
 | List / cancel / delete task endpoints | **Not offered** — `GET /v1/videos` (list) returns 404 by design; artifacts expire on a **1 h in-memory TTL** (the TTL is the deletion) |
+| Synchronous single-shot generation | **Not offered through the gateway** — the serving stack's raw-MP4 `/v1/videos/sync` exists but is not routed; async create → poll → download only |
 | H3-Context-IR prompt-enhancement tasks | Not offered |
 | 2K regeneration from a 768P source | Not offered |
 | — | Opt-in long-video extensions: 30 s (`long_video_mode=full`), 300 s ref2va continuation |
