@@ -17,7 +17,9 @@ surfaces table in the [README](../README.md#litellm-gateway--the-multi-service-f
 | | |
 |---|---|
 | Served model name | `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning` (the single entry on `GET /v1/models`) |
-| Architecture | ~30B total parameters, **~3B active** hybrid Transformer-Mamba MoE, 128k context |
+| Architecture | Mamba2-Transformer hybrid MoE — Nemotron 3 Nano LLM (30B A3B) + **CRADIO v4-H** vision encoder + **Parakeet** speech encoder (31B A3B, ~3B active) |
+| Context | **256k** model maximum ([model card](https://build.nvidia.com/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning/modelcard)); our serve runs `max_model_len 131072` → **128k effective** |
+| Weights | BF16 (61.5 GB) / FP8 (32.8 GB) / NVFP4 (20.9 GB), released 2026-04-28 on HF + NGC |
 | Serving container | NVIDIA NIM `nvcr.io/nim/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:1.7.0-variant`, digest-pinned |
 | Hardware | **1× H100 80GB** — the point of the 3B-active design: a multimodal understanding-and-reasoning serve on one card |
 | LiteLLM route | `model: nvidia/nemotron-3-nano-omni` → `POST https://llm.kubetee.ai/v1/chat/completions` |
@@ -221,13 +223,17 @@ print(resp.choices[0].message.content)
 | Part | Shape | Notes |
 |------|-------|-------|
 | Text | `{"type":"text","text":"…"}` (or a plain string) | |
-| Image | `{"type":"image_url","image_url":{"url":"data:image/png;base64,…"}}` | `data:` URI **or** a live `https://` URL — fetched server-side (some CDNs reject the fetcher's bot policy, e.g. Wikimedia returns 403; raw.githubusercontent works). PNG/JPEG verified |
-| Audio | `{"type":"input_audio","input_audio":{"data":"<b64>","format":"wav"}}` | ⚠️ `data` is **RAW base64** — **no** `data:audio/…;base64,` prefix (that prefix belongs on `image_url` / `video_url` URLs only). A URI-prefixed value fails `400 Incorrect padding` |
-| Video | `{"type":"video_url","video_url":{"url":"data:video/mp4;base64,…"}}` | Real H.264/AAC MP4 (ffmpeg-muxed) — uncompressed AVI and hand-rolled MP4 muxes are rejected (`Could not open video stream`). Practical ceiling is the 4 GiB in-guest `/dev/shm`; an 18 MB clip is fine |
+| Image | `{"type":"image_url","image_url":{"url":"data:image/png;base64,…"}}` | `data:` URI **or** a live `https://` URL — fetched server-side (some CDNs reject the fetcher's bot policy, e.g. Wikimedia returns 403; raw.githubusercontent works). PNG/JPEG RGB (the card's image formats) |
+| Audio | `{"type":"input_audio","input_audio":{"data":"<b64>","format":"wav"}}` | ⚠️ `data` is **RAW base64** — **no** `data:audio/…;base64,` prefix (that prefix belongs on `image_url` / `video_url` URLs only). A URI-prefixed value fails `400 Incorrect padding`. Card formats: **wav/mp3**, up to **1 hour**, ≥8 kHz. The card's examples use `{"type":"audio_url","audio_url":{"url":"…"}}` instead — both shapes reach the same encoder |
+| Video | `{"type":"video_url","video_url":{"url":"data:video/mp4;base64,…"}}` | Real H.264/AAC MP4 (ffmpeg-muxed) — uncompressed AVI and hand-rolled MP4 muxes are rejected (`Could not open video stream`). Card cap: **2 minutes** (sampled ~1 fps / 128 frames at 1080p; 2 fps / 256 frames at 720p). Practical ceiling is the 4 GiB in-guest `/dev/shm`; an 18 MB clip is fine. Pull the clip's audio track with `mm_processor_kwargs: {"use_audio_in_video": true}` |
 
 Multi-image, multi-audio, and mixed-modality turns are all verified (two
 images in one turn → *"2 images: 1st is red, 2nd is blue"*; two audio clips →
 *"You received two short tones."*).
+
+**Outputs** (model card): text only, with JSON structured output,
+chain-of-thought reasoning, tool calling, and **word-level timestamps for
+transcription**. Input language is **English only**.
 
 For large payloads POST the JSON from a file (`curl -d @payload.json`) — a
 base64 video inlined in argv hits "argument list too long" past ~2 MB.
@@ -243,15 +249,36 @@ The thinking trace comes back as **`message.reasoning`** (Nemotron/vLLM style)
   `provider_specific_fields.reasoning`.
 
 Toggle with `chat_template_kwargs: {"enable_thinking": true|false}` (extra body
-parameter; LiteLLM passes it through).
+parameter; LiteLLM passes it through). Reasoning is **on when the key is
+omitted**. Splitting the trace into its own field depends on the server's
+reasoning parser (`--reasoning-parser nemotron_v3`, baked into our NIM);
+without a parser the trace stays inline in `content`.
 
-### Budget the thinking trace — or turn it off
+### Budget the thinking trace — cap it, or turn it off
 
 With `enable_thinking` on (the default), a small `max_tokens` is consumed by
 the trace: `content: null`, `finish_reason: "length"`, and the caller sees "no
-answer". Give **≥512 `max_tokens`** when thinking is on, or send
-`chat_template_kwargs: {"enable_thinking": false}` for short deterministic
-answers (the fast path used by the modality probes).
+answer". Three ways out:
+
+1. **Cap the trace** — the model card's Budget-Controlled Reasoning
+   (`reasoning_budget` + `grace_period` inside `chat_template_kwargs`; their
+   sum goes in `thinking_token_budget`):
+   ```json
+   "max_tokens": 20480,
+   "thinking_token_budget": 17408,
+   "chat_template_kwargs": {"enable_thinking": true, "reasoning_budget": 16384}
+   ```
+2. **Leave room** — the card recommends `max_tokens` **≥20480** for multimodal
+   reasoning, up to 131072 for hard math/programming.
+3. **Turn it off** — `chat_template_kwargs: {"enable_thinking": false}` for
+   short deterministic answers (the fast path used by the modality probes).
+
+### Recommended sampling (model card)
+
+| Mode | `temperature` | `top_p` | `top_k` | `max_tokens` | `reasoning_budget` | `grace_period` |
+|---|---|---|---|---|---|---|
+| Thinking (long-doc / multimodal reasoning) | 0.6 | 0.95 | — | 20480 | 16384 | 1024 |
+| Instruct (general + ASR transcription) | 0.2 | — | 1 | 1024 | — | — |
 
 ### Streaming (`stream: true`)
 
@@ -276,9 +303,11 @@ natural-language answer.
 
 ### Long context
 
-128k is the effective serve ceiling (the 1M figure is the paper's). Verified:
-a needle at ~10.5k prompt tokens (~32k characters, 60% depth) retrieved
-correctly in 24 s.
+The model card gives a **256k** maximum context; our serve runs
+`max_model_len 131072`, so **128k is the effective limit on this endpoint**
+(`max_tokens` caps only the completion, and prompt + completion together
+cannot exceed `max_model_len`). Verified: a needle at ~10.5k prompt tokens
+(~32k characters, 60% depth) retrieved correctly in 24 s.
 
 ---
 
@@ -317,17 +346,30 @@ exotic codecs beyond WAV audio / H.264 MP4 video / PNG-JPEG images.
    `image_url` / `video_url` URLs makes audio fail with `400 Incorrect padding`.
 2. **Reasoning lives in `message.reasoning`**, not `reasoning_content` — unless
    you call through LiteLLM, which remaps it.
-3. **Thinking eats small token budgets** — `enable_thinking: false` for short
-   answers, or budget ≥512 tokens.
-4. **Video containers are narrow** — ffmpeg-muxed H.264/AAC MP4 only.
+3. **Thinking eats small token budgets** — cap it with `reasoning_budget` /
+   `thinking_token_budget`, send `enable_thinking: false`, or give
+   `max_tokens` ≥20480 (the card's multimodal-reasoning recommendation).
+4. **Video is narrow and short** — ffmpeg-muxed H.264/AAC MP4 only, and the
+   model card caps clips at **2 minutes** (~128 frames at 1080p).
 5. **Remote media URLs are fetched server-side** and are subject to the remote
    host's bot policy (Wikimedia 403s the fetcher — that is not a NIM limit).
 6. **First-boot NGC manifest flake** — one `ManifestDownloadError` on the very
    first container start, self-healed on the second start; the engine then
    builds and persists on the NIM cache volume.
+7. **No raw PDFs** — the API takes images, not PDF documents; render each page
+   to PNG and send it as `image_url` (the card ships a `pdf_vlm_chat.py`
+   recipe for exactly this).
+8. **Audio inside a video is opt-in** — control it with
+   `mm_processor_kwargs: {"use_audio_in_video": true|false}`.
 
 ## Follow-ups / flags
 
-- **License grant** (NVIDIA commercial grant) is the gate for commercial / miner serving.
+- **Commercial use is granted** per the NVIDIA model card (2026-04-28: "This
+  model is available for commercial use", governed by the **NVIDIA Open Model
+  Agreement**; the hosted trial API is separately under the NVIDIA API Trial
+  Terms). The remaining gate is narrower than it was: confirm decentralized
+  **miner** serving and sublicensing fit the Open Model Agreement's
+  redistribution terms (plus the NGC terms on the NIM container) before
+  exposing this model to miners.
 - **Second replica** on the other H100 is deferred (1 replica by directive,
   2026-10-08) — the load envelope above is single-card by design.
