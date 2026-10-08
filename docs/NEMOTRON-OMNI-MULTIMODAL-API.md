@@ -18,11 +18,11 @@ surfaces table in the [README](../README.md#litellm-gateway--the-multi-service-f
 |---|---|
 | Served model name | `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning` (the single entry on `GET /v1/models`) |
 | Architecture | Mamba2-Transformer hybrid MoE — Nemotron 3 Nano LLM (30B A3B) + **CRADIO v4-H** vision encoder + **Parakeet** speech encoder (31B A3B, ~3B active) |
-| Context | **256k** model maximum ([model card](https://build.nvidia.com/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning/modelcard)); our serve runs `max_model_len 131072` → **128k effective** |
+| Context | **256k** (262,144 tokens) — [model card](https://build.nvidia.com/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning/modelcard) maximum, **served and verified** (the shipped `max_sequence_length: 131072` cap is lifted via `NIM_MAX_MODEL_LEN=262144`; boundary-tested 2026-10-08) |
 | Weights | BF16 (61.5 GB) / FP8 (32.8 GB) / NVFP4 (20.9 GB), released 2026-04-28 on HF + NGC |
-| Serving container | NVIDIA NIM `nvcr.io/nim/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:1.7.0-variant`, digest-pinned |
+| Serving container | NVIDIA NIM `nvcr.io/nim/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:2.0.13`, digest-pinned (GA line, vLLM 0.27.1 backend, FP8 profile auto-selected) |
 | Hardware | **1× H100 80GB** — the point of the 3B-active design: a multimodal understanding-and-reasoning serve on one card |
-| LiteLLM route | `model: nvidia/nemotron-3-nano-omni` → `POST https://llm.kubetee.ai/v1/chat/completions` |
+| LiteLLM route | `model: nvidia/nemotron-3-nano-omni-30b-a3b-reasoning` → `POST https://llm.kubetee.ai/v1/chat/completions` |
 | SNI base URL | `https://nemotron-omni.na-us-michigan-97.inference.kubetee.ai` (house mTLS client pair required) |
 | Live since | 2026-10-08 (deployment, contract smoke, and load battery same day) |
 
@@ -30,7 +30,7 @@ surfaces table in the [README](../README.md#litellm-gateway--the-multi-service-f
 
 **1. LiteLLM gateway — `https://llm.kubetee.ai`** (Bearer auth): standard
 OpenAI `POST /v1/chat/completions` with
-`model: nvidia/nemotron-3-nano-omni`. Virtual keys, budgets, and spend
+`model: nvidia/nemotron-3-nano-omni-30b-a3b-reasoning`. Virtual keys, budgets, and spend
 tracking are enforced on this route as on every gateway route. The gateway's
 `hosted_vllm` provider normalizes one field on the way out — see
 [Reasoning field](#reasoning-field-name-is-non-standard).
@@ -57,7 +57,7 @@ curl -s https://llm.kubetee.ai/v1/chat/completions \
   -H "Authorization: Bearer sk-<virtual-key>" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "nvidia/nemotron-3-nano-omni",
+    "model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
     "messages": [{"role": "user", "content": "Explain TDX attestation in two sentences."}],
     "max_tokens": 512
   }'
@@ -71,7 +71,7 @@ curl -s https://llm.kubetee.ai/v1/chat/completions \
   -H "Authorization: Bearer sk-<virtual-key>" \
   -H "Content-Type: application/json" \
   -d "{
-    \"model\": \"nvidia/nemotron-3-nano-omni\",
+    \"model\": \"nvidia/nemotron-3-nano-omni-30b-a3b-reasoning\",
     \"messages\": [{\"role\": \"user\", \"content\": [
       {\"type\": \"text\", \"text\": \"Describe this image.\"},
       {\"type\": \"image_url\", \"image_url\": {\"url\": \"data:image/png;base64,$IMG\"}}
@@ -95,7 +95,7 @@ curl -s https://llm.kubetee.ai/v1/chat/completions \
   -H "Authorization: Bearer sk-<virtual-key>" \
   -H "Content-Type: application/json" \
   -d "{
-    \"model\": \"nvidia/nemotron-3-nano-omni\",
+    \"model\": \"nvidia/nemotron-3-nano-omni-30b-a3b-reasoning\",
     \"messages\": [{\"role\": \"user\", \"content\": [
       {\"type\": \"text\", \"text\": \"Transcribe what you hear.\"},
       {\"type\": \"input_audio\", \"input_audio\": {\"data\": \"$AUDIO\", \"format\": \"wav\"}}
@@ -113,7 +113,7 @@ curl -s https://llm.kubetee.ai/v1/chat/completions \
   -H "Authorization: Bearer sk-<virtual-key>" \
   -H "Content-Type: application/json" \
   -d "{
-    \"model\": \"nvidia/nemotron-3-nano-omni\",
+    \"model\": \"nvidia/nemotron-3-nano-omni-30b-a3b-reasoning\",
     \"messages\": [{\"role\": \"user\", \"content\": [
       {\"type\": \"text\", \"text\": \"Summarize this video.\"},
       {\"type\": \"video_url\", \"video_url\": {\"url\": \"data:video/mp4;base64,$VID\"}}
@@ -142,7 +142,7 @@ curl -sN https://llm.kubetee.ai/v1/chat/completions \
   -H "Authorization: Bearer sk-<virtual-key>" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "nvidia/nemotron-3-nano-omni",
+    "model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
     "messages": [{"role": "user", "content": "Count from 1 to 10."}],
     "max_tokens": 128, "stream": true,
     "chat_template_kwargs": {"enable_thinking": false}
@@ -156,7 +156,7 @@ curl -s https://llm.kubetee.ai/v1/chat/completions \
   -H "Authorization: Bearer sk-<virtual-key>" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "nvidia/nemotron-3-nano-omni",
+    "model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
     "messages": [{"role": "user", "content": "What is the weather in Paris?"}],
     "max_tokens": 128,
     "chat_template_kwargs": {"enable_thinking": false},
@@ -179,7 +179,7 @@ curl -s https://llm.kubetee.ai/v1/chat/completions \
   -H "Authorization: Bearer sk-<virtual-key>" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "nvidia/nemotron-3-nano-omni",
+    "model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
     "messages": [{"role": "user", "content": "Extract: Ada was born in 1815 in London."}],
     "max_tokens": 128,
     "chat_template_kwargs": {"enable_thinking": false},
@@ -200,7 +200,7 @@ from openai import OpenAI
 client = OpenAI(base_url="https://llm.kubetee.ai/v1", api_key="sk-<virtual-key>")
 
 resp = client.chat.completions.create(
-    model="nvidia/nemotron-3-nano-omni",
+    model="nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
     messages=[{"role": "user", "content": "Describe this image."}],
     max_tokens=256,
     extra_body={"chat_template_kwargs": {"enable_thinking": False}},
@@ -303,11 +303,15 @@ natural-language answer.
 
 ### Long context
 
-The model card gives a **256k** maximum context; our serve runs
-`max_model_len 131072`, so **128k is the effective limit on this endpoint**
-(`max_tokens` caps only the completion, and prompt + completion together
-cannot exceed `max_model_len`). Verified: a needle at ~10.5k prompt tokens
-(~32k characters, 60% depth) retrieved correctly in 24 s.
+The full **256k (262,144-token) window is served and verified** (2026-10-08,
+NIM 2.0.13). The window is shared: **prompt + completion ≤ 262,144**
+(enforced exactly — 205,041 + 57,103 = 262,144 accepted, one token more →
+HTTP 400). There is no separate input or output cap; `max_tokens` only caps
+the completion. Verified retrieval past the old 128k ceiling: a needle at
+**~205k prompt tokens** was retrieved correctly (`ZEBRA-7` HIT, 9 s), as was
+one at ~105k and ~10.5k. The 256k unlock requires `NIM_MAX_MODEL_LEN=262144`
+on the container — the checkpoint's `max_sequence_length: 131072` otherwise
+caps the engine at 128k despite `max_position_embeddings: 262144`.
 
 ---
 
@@ -335,7 +339,7 @@ claim: the confidential boundary is a security property, not a performance tax.
 multi-audio, and mixed turns, remote-URL fetch, streaming in both thinking
 modes, JSON-schema output, tool calling + round-trip, and a ~10.5k-token
 needle are smoke-verified; concurrency verified to 128 in-flight. **Not yet
-stress-tested:** multi-hour soak and failover, the 128k ceiling under load, and
+stress-tested:** multi-hour soak and failover, the 256k ceiling under load, and
 exotic codecs beyond WAV audio / H.264 MP4 video / PNG-JPEG images.
 
 ---
