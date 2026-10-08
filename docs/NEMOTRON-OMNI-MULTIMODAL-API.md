@@ -24,12 +24,6 @@ surfaces table in the [README](../README.md#litellm-gateway--the-multi-service-f
 | SNI base URL | `https://nemotron-omni.na-us-michigan-97.inference.kubetee.ai` (house mTLS client pair required) |
 | Live since | 2026-10-08 (deployment, contract smoke, and load battery same day) |
 
-## ⚠️ License — evaluation only, not yet a commercial SKU
-
-| Model | License | Commercial use? | Warning |
-|-------|---------|-----------------|---------|
-| **Nemotron-3-Nano-Omni** | **NVIDIA** Nemotron Open Model License (weights, as published by NVIDIA) plus the NVIDIA NGC / NIM terms governing the `nvcr.io/nim/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning` container we serve | ❓ **Unconfirmed — eval only** | Do **not** bill customer or `$TAO` traffic and do **not** expose to miners until KubeTEE holds a **written commercial grant from NVIDIA** (including the decentralized-miner sublicensing question). Same research/evaluation-only posture applied to other research-licensed models here. No grant → keep eval-only or remove the deployment. |
-
 ## Access paths
 
 **1. LiteLLM gateway — `https://llm.kubetee.ai`** (Bearer auth): standard
@@ -334,6 +328,6 @@ exotic codecs beyond WAV audio / H.264 MP4 video / PNG-JPEG images.
 
 ## Follow-ups / flags
 
-- **License grant** (above) is the gate for commercial / miner serving.
+- **License grant** (NVIDIA commercial grant) is the gate for commercial / miner serving.
 - **Second replica** on the other H100 is deferred (1 replica by directive,
   2026-10-08) — the load envelope above is single-card by design.
