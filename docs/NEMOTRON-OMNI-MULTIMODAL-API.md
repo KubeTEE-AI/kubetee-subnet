@@ -28,7 +28,7 @@ surfaces table in the [README](../README.md#litellm-gateway--the-multi-service-f
 
 | Model | License | Commercial use? | Warning |
 |-------|---------|-----------------|---------|
-| **Nemotron-3-Nano-Omni** | Nemotron custom license (`license:other` on the HF checkpoint); the NIM container's NGC terms may differ | ❓ **Unconfirmed — eval only** | Do **not** bill customer or `$TAO` traffic and do **not** expose to miners until KubeTEE holds a **written commercial grant** (including the decentralized-miner sublicensing question). Same research/evaluation-only posture applied to other research-licensed models here. No grant → keep eval-only or remove the deployment. |
+| **Nemotron-3-Nano-Omni** | **NVIDIA** Nemotron Open Model License (weights, as published by NVIDIA) plus the NVIDIA NGC / NIM terms governing the `nvcr.io/nim/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning` container we serve | ❓ **Unconfirmed — eval only** | Do **not** bill customer or `$TAO` traffic and do **not** expose to miners until KubeTEE holds a **written commercial grant from NVIDIA** (including the decentralized-miner sublicensing question). Same research/evaluation-only posture applied to other research-licensed models here. No grant → keep eval-only or remove the deployment. |
 
 ## Access paths
 
