@@ -48,6 +48,177 @@ everything else requires the client certificate.
 
 ---
 
+## How to use it (runnable quick-start)
+
+All examples use the LiteLLM gateway (`https://llm.kubetee.ai`) with a virtual
+key — the shortest path. Swap in the SNI base URL + `--cacert/--cert/--key` for
+the direct path.
+
+### Text chat
+
+```bash
+curl -s https://llm.kubetee.ai/v1/chat/completions \
+  -H "Authorization: Bearer sk-<virtual-key>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "nvidia/nemotron-3-nano-omni",
+    "messages": [{"role": "user", "content": "Explain TDX attestation in two sentences."}],
+    "max_tokens": 512
+  }'
+```
+
+### Image input (base64 data URI)
+
+```bash
+IMG=$(base64 < photo.png | tr -d '\n')
+curl -s https://llm.kubetee.ai/v1/chat/completions \
+  -H "Authorization: Bearer sk-<virtual-key>" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"model\": \"nvidia/nemotron-3-nano-omni\",
+    \"messages\": [{\"role\": \"user\", \"content\": [
+      {\"type\": \"text\", \"text\": \"Describe this image.\"},
+      {\"type\": \"image_url\", \"image_url\": {\"url\": \"data:image/png;base64,$IMG\"}}
+    ]}],
+    \"max_tokens\": 256,
+    \"chat_template_kwargs\": {\"enable_thinking\": false}
+  }"
+```
+
+A live `https://` URL also works in `image_url.url` (fetched server-side):
+
+```json
+{"type": "image_url", "image_url": {"url": "https://example.com/cat.jpg"}}
+```
+
+### Audio input (raw base64 WAV — no data: URI prefix!)
+
+```bash
+AUDIO=$(base64 < clip.wav | tr -d '\n')
+curl -s https://llm.kubetee.ai/v1/chat/completions \
+  -H "Authorization: Bearer sk-<virtual-key>" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"model\": \"nvidia/nemotron-3-nano-omni\",
+    \"messages\": [{\"role\": \"user\", \"content\": [
+      {\"type\": \"text\", \"text\": \"Transcribe what you hear.\"},
+      {\"type\": \"input_audio\", \"input_audio\": {\"data\": \"$AUDIO\", \"format\": \"wav\"}}
+    ]}],
+    \"max_tokens\": 512,
+    \"chat_template_kwargs\": {\"enable_thinking\": false}
+  }"
+```
+
+### Video input (data URI MP4)
+
+```bash
+VID=$(base64 < clip.mp4 | tr -d '\n')
+curl -s https://llm.kubetee.ai/v1/chat/completions \
+  -H "Authorization: Bearer sk-<virtual-key>" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"model\": \"nvidia/nemotron-3-nano-omni\",
+    \"messages\": [{\"role\": \"user\", \"content\": [
+      {\"type\": \"text\", \"text\": \"Summarize this video.\"},
+      {\"type\": \"video_url\", \"video_url\": {\"url\": \"data:video/mp4;base64,$VID\"}}
+    ]}],
+    \"max_tokens\": 256,
+    \"chat_template_kwargs\": {\"enable_thinking\": false}
+  }"
+```
+
+> Big payload? Inline base64 breaks the shell past ~2 MB ("argument list too
+> long"). Put the request JSON in a file and use `curl -d @payload.json`.
+
+### Mixed modalities in one turn
+
+Combine parts freely — image + audio + text, multiple images, multiple audio
+clips, all in one `content` array (all verified).
+
+### Streaming (SSE)
+
+Add `"stream": true` — deltas arrive as `data:` events terminated by
+`data: [DONE]`. With thinking on you get `reasoning` deltas first, then
+`content` deltas; with `"enable_thinking": false`, `content` deltas only.
+
+```bash
+curl -sN https://llm.kubetee.ai/v1/chat/completions \
+  -H "Authorization: Bearer sk-<virtual-key>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "nvidia/nemotron-3-nano-omni",
+    "messages": [{"role": "user", "content": "Count from 1 to 10."}],
+    "max_tokens": 128, "stream": true,
+    "chat_template_kwargs": {"enable_thinking": false}
+  }'
+```
+
+### Tool calling
+
+```bash
+curl -s https://llm.kubetee.ai/v1/chat/completions \
+  -H "Authorization: Bearer sk-<virtual-key>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "nvidia/nemotron-3-nano-omni",
+    "messages": [{"role": "user", "content": "What is the weather in Paris?"}],
+    "max_tokens": 128,
+    "chat_template_kwargs": {"enable_thinking": false},
+    "tools": [{"type": "function", "function": {
+      "name": "get_weather",
+      "description": "Get current weather for a city",
+      "parameters": {"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]}
+    }}],
+    "tool_choice": "auto"
+  }'
+```
+
+The response contains `message.tool_calls`; send the result back as a
+`role: "tool"` message to get the final natural-language answer.
+
+### JSON-schema output (structured extraction)
+
+```bash
+curl -s https://llm.kubetee.ai/v1/chat/completions \
+  -H "Authorization: Bearer sk-<virtual-key>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "nvidia/nemotron-3-nano-omni",
+    "messages": [{"role": "user", "content": "Extract: Ada was born in 1815 in London."}],
+    "max_tokens": 128,
+    "chat_template_kwargs": {"enable_thinking": false},
+    "response_format": {"type": "json_schema", "json_schema": {
+      "name": "person", "strict": true,
+      "schema": {"type": "object", "properties": {"name": {"type": "string"}, "year": {"type": "integer"}}, "required": ["name", "year"], "additionalProperties": false}
+    }}
+  }'
+```
+
+Returns schema-conformant JSON (e.g. `{"name": "Ada", "year": 1815}`).
+
+### Python (OpenAI SDK)
+
+```python
+from openai import OpenAI
+
+client = OpenAI(base_url="https://llm.kubetee.ai/v1", api_key="sk-<virtual-key>")
+
+resp = client.chat.completions.create(
+    model="nvidia/nemotron-3-nano-omni",
+    messages=[{"role": "user", "content": "Describe this image."}],
+    max_tokens=256,
+    extra_body={"chat_template_kwargs": {"enable_thinking": False}},
+)
+print(resp.choices[0].message.content)
+# With thinking ON, the trace is resp.choices[0].message.reasoning_content
+# (and provider_specific_fields["reasoning"]).
+```
+
+`extra_body` is how any extra parameters (`chat_template_kwargs`,
+`response_format`, `tools`) pass through the SDK.
+
+---
+
 ## Request contract (verified 2026-10-08)
 
 `POST /v1/chat/completions` — OpenAI JSON. Multimodal input is a `content`
