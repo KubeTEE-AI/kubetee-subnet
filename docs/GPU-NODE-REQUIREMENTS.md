@@ -8,7 +8,7 @@
 > **Phase 1 roadmap** item: the requirements and verification commands below are
 > kept for reference so miners can pre-qualify hardware, but SEV-SNP is not yet
 > supported by the KubeTEE runtime classes and the validator does not score it.
-> **Phase 1** will also introduce **RTX 5000 Pro Server Edition** testing on the
+> **Phase 1** will also introduce **NVIDIA RTX PRO 6000 Blackwell Server Edition** testing on the
 > staging cluster. See the README roadmap for the multi-arch TEE timeline.
 
 ---
@@ -300,7 +300,7 @@ lspci | grep -i nvidia | grep -i "3D controller\|VGA" | wc -l
 lspci -nn | grep -i nvidia
 # All should show one of:
 #   [10de:2901]/[10de:2909] (B200), [10de:3182] (B300)
-#   ([10de:2330]/[10de:2331] = H100/H200 — deprecated, existing nodes only)
+#   ([10de:2330]/[10de:2331] = H100/H200 — deprecated hardware, existing nodes only)
 
 # 5. Verify firmware (DGX systems)
 nvfwupd --query
@@ -375,9 +375,9 @@ lspci | grep nvidia | wc -l
 ### ❌ Mixed GPU Models
 
 ```bash
-# BAD: 4x H100 + 4x H200
+# BAD: NVIDIA DGX H100 + NVIDIA HGX H200 (mixed systems)
 lspci -nn | grep nvidia
-# Shows: [10de:2330] and [10de:2331]  ← NOT SUPPORTED
+# Shows: [10de:2330] and [10de:2331]  ← MIXED MODELS NOT SUPPORTED
 ```
 
 ### ❌ Pre-existing NVIDIA Software

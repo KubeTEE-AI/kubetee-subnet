@@ -1,7 +1,7 @@
 # East-west attested mTLS (LiteLLM ↔ inference guests)
 
-**Status:** deployed on staging `na-us-oakland-56` (2026-08-15; rows synced 2026-09-11, GLM-5.2 row retargeted 2026-10-13). Five east-west backends, all 2 replicas: `glm-5-2-fp8-sglang-h200` (H200 FP8, michigan-97 since 2026-10-12; replaced `glm-5-2-nvfp4-sglang` B200, deleted 2026-10-13), `glm-5-3-flash-sglang-h200`, `ornith-1-5-397b-fp8-sglang-h200`, `dsv41-flash-sglang-h200` (H200), `glm-5-3-sglang-b200-cc` (B200). Services expose `:8443` only. SGLang binds `127.0.0.1:8000` (pod IP `:8000` connection refused). Kubelet HTTPS probes use `:8443` `/health` and `/health_generate` (HAProxy `verify optional` on those GET paths only; all other paths need a verified client cert). LiteLLM presents the Trustee client cert via `sitecustomize.py` (httpx 0.28 ignores `ssl_certificate`). Public hop is still Let’s Encrypt + Traefik. KBS resource policy is still upstream `default.rego` — path×role + cpu0-affirming 401s after attest 200.  
-**Date:** 2026-08-15 (rows synced 2026-09-11, GLM-5.2 row retargeted 2026-10-13)  
+**Status:** deployed on staging `na-us-oakland-56` and production `na-us-michigan-97` (first cut 2026-08-15; rows synced 2026-10-16). East-west backends — live STS counts 2026-10-16: `glm-5-2-fp8-sglang-h200` (H200 FP8, michigan-97 since 2026-10-12, 3 replicas; replaced `glm-5-2-nvfp4-sglang` B200, deleted 2026-10-13), `glm-5-3-flash-sglang-h200` (H200, 5 replicas — 4→5 burst canary 2026-10-16), `glm-5-3-radixark-nvfp4-sglang-b200-cc` (B200 **RadixArk NVFP4**, 2 replicas — the `z-ai/glm-5.3` backend since 2026-10-13), `ornith-1-5-397b-fp8-sglang-h200` (H200 FP8, michigan-97, 1 replica), `dsv41-flash-sglang-h200` (H200, 1 replica — scaled 2→1), `mimo-v2-6-pro-rl-sglang-b200-cc` (B200 CC, 2 replicas). `glm-5-3-sglang-b200-cc` (FP8) and `glm-5-3-nvfp4-sglang-b200-cc` (NVIDIA ModelOpt NVFP4) sit at 0 replicas as warm fallbacks. Nemotron-Omni / MiniMax-H3 / MiniMax-Music3 on michigan-97 run the same in-guest HAProxy terminator behind the east-west Gateway's L4/SNI passthrough (`*.na-us-michigan-97.inference.kubetee.ai`). Services expose `:8443` only. SGLang binds `127.0.0.1:8000` (pod IP `:8000` connection refused). Kubelet HTTPS probes use `:8443` `/health` and `/health_generate` (HAProxy `verify optional` on those GET paths only; all other paths need a verified client cert). LiteLLM presents the Trustee client cert via `sitecustomize.py` (httpx 0.28 ignores `ssl_certificate`). Public hop is still Let’s Encrypt + Traefik. KBS resource policy is the KubeTEE `resource-policy.rego` (**LIVE** since 2026-09-18, replacing upstream `default.rego`) — path×role + cpu0-affirming 401s after attest 200.  
+**Date:** 2026-08-15 (rows synced 2026-10-16 — GLM-5.2 retargeted 2026-10-12/13, GLM-5.3 cut over to RadixArk NVFP4 2026-10-13)  
 **Approach:** CoCo Confidential AI — Trustee issues TLS credentials after attestation. Apps speak ordinary mTLS. No quote parsing in LiteLLM or SGLang.  
 **Roadmap:** remaining gaps (HTTPS KBS, durable Trustee, gpu0/RVPS, sealed NGC) live in [EAST-WEST-ATTESTED-MTLS-PLAN.md](./EAST-WEST-ATTESTED-MTLS-PLAN.md).
 
@@ -49,18 +49,19 @@ CoCo reference: [Confidential AI / federated learning](https://confidentialconta
 
 ## First-cut workloads
 
-Live LiteLLM `api_base` rows (HTTPS `:8443`), synced 2026-09-11 against `GET /v1/model/info` + the `nemo` StatefulSets (GLM-5.2 row retargeted 2026-10-13). Public names: `z-ai/glm-5.2`, `z-ai/glm-5.3`, `z-ai/glm-5.3-flash`, `ornith/ornith-1.5-397b`, `deepseek/deepseek-v4.1-flash`, `xiaomi/mimo-v2.6-pro-ultraspeed`. **This table is a point-in-time record** — the live catalog is the model-catalog header in `fleet-gitops/infrastructure/litellm/staging/values.yaml` + `nim/CLAUDE.md`.
+Live LiteLLM `api_base` rows (HTTPS `:8443`), synced 2026-10-16 against the `nemo` StatefulSets (GLM-5.2 row retargeted 2026-10-12/13; GLM-5.3 row cut over to RadixArk NVFP4 2026-10-13). Public names: `z-ai/glm-5.2`, `z-ai/glm-5.3`, `z-ai/glm-5.3-flash`, `ornith/ornith-1.5-397b`, `deepseek/deepseek-v4.1-flash`, `xiaomi/mimo-v2.6-pro-ultraspeed`. **This table is a point-in-time record** — the live catalog is the model-catalog header in `fleet-gitops/infrastructure/litellm/staging/values.yaml` + `nim/CLAUDE.md`.
 
 | LiteLLM `model_name` | Service (TLS hostname) | Manifest | Public |
 |--------------|------------------------|----------|--------|
-| `z-ai/glm-5.2` | `glm-5-2-fp8-sglang-h200.nemo.svc.cluster.local` | `nim/glm-5-2-fp8-sglang-h200-cc.yaml` (H200 CC FP8, michigan-97, 2 replicas; since 2026-10-12. B200 NVFP4 `nim/glm-5-2-nvfp4-sglang-cc.yaml` deleted 2026-10-13) | yes |
-| `z-ai/glm-5.3-flash` | `glm-5-3-flash-sglang-h200.nemo.svc.cluster.local` | `nim/glm-5-3-flash-sglang-h200-cc.yaml` (H200 CC, 2 replicas, 2026-08-27) | yes |
-| `z-ai/glm-5.3` | `glm-5-3-sglang-b200-cc.nemo.svc.cluster.local` | `nim/glm-5-3-sglang-b200-cc.yaml` (B200 CC, 2 replicas; retargeted from non-CC `:8000` 2026-09-11) | yes |
-| `ornith/ornith-1.5-397b` | `ornith-1-5-397b-fp8-sglang-h200.nemo.svc.cluster.local` | `nim/ornith-1.5-397b-fp8-sglang-h200-cc.yaml` (H200 CC, 2 replicas; short name retargeted 2026-08-28) | yes (SayGM) |
-| `deepseek/deepseek-v4.1-flash` | `dsv41-flash-sglang-h200.nemo.svc.cluster.local` | `nim/deepseek-v4-1-flash-sglang-h200-cc.yaml` (H200 CC, 2 replicas 2026-09-11) | yes |
-| `moonshotai/kimi-k3` | `kimi-k3-sglang-cc.nemo.svc.cluster.local:8000` | `nim/kimi-k3-sglang-b300.yaml` (B300, non-CC) — **row is stale: Service deleted, backend gone; do not route to it** | no |
+| `z-ai/glm-5.2` | `glm-5-2-fp8-sglang-h200.nemo.svc.cluster.local` | `nim/glm-5-2-fp8-sglang-h200-cc.yaml` (H200 CC FP8, michigan-97, 3 replicas; since 2026-10-12. B200 NVFP4 `nim/glm-5-2-nvfp4-sglang-cc.yaml` deleted 2026-10-13) | yes |
+| `z-ai/glm-5.3-flash` | `glm-5-3-flash-sglang-h200.nemo.svc.cluster.local` | `nim/glm-5-3-flash-sglang-h200-cc.yaml` (H200 CC, 5 replicas — 4→5 burst canary 2026-10-16; 2 since 2026-08-27) | yes |
+| `z-ai/glm-5.3` | `glm-5-3-radixark-nvfp4-sglang-b200-cc.nemo.svc.cluster.local` | `nim/glm-5-3-radixark-nvfp4-sglang-b200-cc.yaml` (B200 CC **RadixArk NVFP4**, 2 replicas; production since 2026-10-13. FP8 `nim/glm-5-3-sglang-b200-cc.yaml` + NVIDIA NVFP4 `nim/glm-5-3-nvfp4-sglang-b200-cc.yaml` parked at 0/1 replicas as fallback) | yes |
+| `ornith/ornith-1.5-397b` | `ornith-1-5-397b-fp8-sglang-h200.nemo.svc.cluster.local` | `nim/ornith-1.5-397b-fp8-sglang-h200-cc.yaml` (H200 CC FP8, michigan-97, 1 replica; short name retargeted 2026-08-28) | yes (SayGM) |
+| `deepseek/deepseek-v4.1-flash` | `dsv41-flash-sglang-h200.nemo.svc.cluster.local` | `nim/deepseek-v4-1-flash-sglang-h200-cc.yaml` (H200 CC, 1 replica — scaled 2→1 2026-10-16) | yes |
+| `xiaomi/mimo-v2.6-pro-ultraspeed` | `mimo-v2-6-pro-rl-sglang-b200-cc.nemo.svc.cluster.local` | `nim/mimo-v2-6-pro-rl-sglang-b200-cc.yaml` (B200 CC, 2 replicas since 2026-10-13; DFLASH spec decode) | yes (SayGM) |
+| `moonshotai/kimi-k3` | `kimi-k3-sglang-cc.nemo.svc.cluster.local:8000` | `nim/kimi-k3-sglang-b300.yaml` (B300, non-CC) — **row is stale: model row deleted 2026-10-05, Service deleted, backend gone; do not route to it** | no |
 
-GLM HA uses the **existing Service**, not per-pod DNS. Both replicas attest independently and receive the same NIM server cert (SAN = Service FQDN). ClusterIP load-balances TCP; a stream stays on one pod. Kubernetes readiness is pod-wide: a replica must not be Ready until HTTPS `:8443` `/health` succeeds (HAProxy up and SGLang healthy on loopback).
+GLM HA uses the **existing Service**, not per-pod DNS. Each replica attests independently and receives the same NIM server cert (SAN = Service FQDN). ClusterIP load-balances TCP; a stream stays on one pod. Kubernetes readiness is pod-wide: a replica must not be Ready until HTTPS `:8443` `/health` succeeds (HAProxy up and SGLang healthy on loopback).
 
 NVIDIA NIM containers would not change Trustee, LiteLLM sidecar, or Service SAN. They would only change NIM-side TLS (optional `NIM_SSL_MODE=mtls` if that LLM NIM implements it) and how a sidecar is injected (`NIMService` vs StatefulSet). Out of scope for this cut.
 
@@ -89,9 +90,13 @@ NIM server cert SANs (explicit, not a wildcard):
 - `glm-5-2-fp8-sglang-h200.nemo.svc.cluster.local` (since 2026-10-12; `glm-5-2-nvfp4-sglang…` SAN retired with the B200 deployment 2026-10-13)
 - `dsv4-0731-sglang-h200.nemo.svc.cluster.local` (STOPPED — backend deleted, replaced by V4.1-Flash; SAN kept)
 - `ornith-1-5-397b-fp8-sglang-h200.nemo.svc.cluster.local`
-- `glm-5-3-flash-sglang-h200.nemo.svc.cluster.local` (added 2026-08-27)
+- `glm-5-3-flash-sglang-h200.nemo.svc.cluster.local` (added 2026-08-27) + per-pod `-0`…`-4` SANs (added 2026-10-16 for the 5-replica burst canary)
 - `glm-5-3-sglang-b200-cc.nemo.svc.cluster.local` (added 2026-09-11)
 - `dsv41-flash-sglang-h200.nemo.svc.cluster.local` (added 2026-09-10)
+- `mimo-v2-6-pro-rl-sglang-b200-cc.nemo.svc.cluster.local` (added for MiMo-V2.6-Pro, 2026-09-24)
+- `glm-5-3-nvfp4-sglang-b200-cc.nemo.svc.cluster.local` + `glm-5-3-radixark-nvfp4-sglang-b200-cc.nemo.svc.cluster.local` (added 2026-10-13, the RadixArk production cutover)
+
+The authoritative SAN list is `nim/eastwest/gen-certs.sh` — add a SAN there and re-sign `nim.crt` with the existing CA (never regenerate `ca.key`) whenever a new `:8443` Service is created. Legacy SANs for stopped backends (dsv4-pro-0813, glm-45-air, qwen38-flash-next, glm-5-2-nvfp4) remain in the cert but are not listed here.
 
 Generate the CA and leaf certs once, load them into Trustee with `kbs-client` and an admin JWT. Admin mode is `AuthenticatedAuthorization`; rotate and Fleet config live in the Trustee bundle `infrastructure/trustee/KubeTEE.md` (`kubetee-fleet`). Never commit the keys. Cert lifetime for this cut: ~90 days. Rotate by replacing KBS material and rolling guests. Short-lived refresh is a later cut (GLM/DSV4 boots take hours).
 

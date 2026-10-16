@@ -561,8 +561,8 @@ lspci | grep -i nvidia
 # For B300: Device ID 3182
 # For RTX PRO 6000: Device ID 2c2e / 2c33
 # For Vera Rubin: check lspci device IDs against the NVIDIA Secure AI Matrix
-# For H100 [DEPRECATED]: Device ID 2330 or 2331
-# For H200 [DEPRECATED]: Device ID 2331
+# For H100 (deprecated — existing nodes only): Device ID 2330 or 2331
+# For H200 (deprecated — existing nodes only): Device ID 2331
 ```
 
 **Note**: Do NOT install NVIDIA drivers or CUDA. The GPU Operator will install drivers automatically after the node joins the cluster.
@@ -930,11 +930,11 @@ nc -zv <node-ip> 10250  # kubelet
 ### GPU Nodes (with TDX/SNP)
 ```bash
 # FIRST: Verify confidential computing support (MANDATORY)
-# For Intel TDX (5th or 6th Gen Xeon):
+# For Intel TDX (6th Gen Xeon — required for new nodes; 5th Gen deprecated):
 dmesg | grep -i tdx
-lscpu | grep -i "Model name"  # MUST show Emerald Rapids or Granite Rapids
+lscpu | grep -i "Model name"  # MUST show Granite Rapids; Emerald Rapids = deprecated (existing nodes only)
 
-# For AMD SEV-SNP (4th or 5th Gen EPYC):
+# For AMD SEV-SNP (6th Gen EPYC — required for new nodes; 4th/5th Gen deprecated):
 dmesg | grep -i "sev-snp\|snp"  # Look specifically for SEV-SNP, not just SEV
 lscpu | grep -i "Model name"  # MUST show EPYC 9006 (Venice/Verano); 9xx4 (Genoa) / 9xx5 (Turin) = deprecated
 
@@ -946,7 +946,7 @@ lspci | grep -i nvidia | grep -i "3D controller\|VGA" | wc -l  # MUST output: 8
 lspci -nn | grep -i nvidia
 # For B200: Look for [10de:2901] or [10de:2909]; B300: [10de:3182]
 # For RTX PRO 6000: [10de:2c2e] or [10de:2c33]; Vera Rubin: check the NVIDIA Secure AI Matrix
-# For H100 [DEPRECATED]: [10de:2330] or [10de:2331]; H200 [DEPRECATED]: [10de:2331]
+# For H100 (deprecated — existing nodes only): [10de:2330] or [10de:2331]; H200 (deprecated): [10de:2331]
 # All 8 GPUs must have the same device ID
 
 # Label GPU node for VM passthrough (only if all requirements verified)

@@ -13,8 +13,10 @@ practices into KubeTEE’s already-shipped Trustee-issued east-west mTLS — sea
 NGC/HF, HTTPS KBS, durable Trustee storage, gpu0+initdata policy, five-actor
 ops — without copying SNP YAML or making guest-pull the TDX default.
 
-**Already built:** Trustee-issued mTLS on LiteLLM → GLM-5.2 and LiteLLM →
-DeepSeek-V4-Flash-0731 on `na-us-oakland-56`. Spec:
+**Already built:** Trustee-issued mTLS across the LiteLLM ↔ inference-guest hop
+— GLM-5.2, GLM-5.3 (RadixArk NVFP4), GLM-5.3-Flash, Ornith-1.5-397B,
+MiMo-V2.6-Pro, and DeepSeek-V4.1-Flash (which replaced the withdrawn
+`deepseek-v4-flash-0731`) on `na-us-oakland-56` + `na-us-michigan-97`. Spec:
 [EAST-WEST-ATTESTED-MTLS.md](./EAST-WEST-ATTESTED-MTLS.md).
 
 **Cluster:** `--context na-us-oakland-56-direct`
@@ -87,9 +89,10 @@ steal items below are what we do **next**.
 - [x] LiteLLM outbound mTLS via `sitecustomize.py` (httpx 0.28 ignores
       `ssl_certificate`); `api_base` is `https://<svc>:8443/v1`
 - [x] Gateway chat **200** for `z-ai/glm-5.2` and
-      `deepseek/deepseek-v4-flash-0731`
-- [x] Draft `nim/eastwest/resource-policy.rego` (cpu0 + path×role) — **not
-      applied**; live is still `default.rego`
+      `deepseek/deepseek-v4.1-flash` (the `deepseek-v4-flash-0731` SKU was
+      withdrawn 2026-08-27 and its backend deleted; V4.1-Flash live 2026-09-21)
+- [x] Draft `nim/eastwest/resource-policy.rego` (cpu0 + path×role) — **LIVE
+      since 2026-09-18** (seeded via the KBS admin API, replacing `default.rego`)
 
 Inbound terminator: the **HAProxy sidecar is rolled on all 10 CC pods** (2026-09-17,
 kata#11649 fixed via the MINIMAL `v4.2.0-fix11649` shim overlay on both clusters
@@ -112,7 +115,7 @@ decision 2026-09-16: permanent terminator, image `haproxy:3.4.4-alpine`)
 | `nim/eastwest/kubetee_attestation.py` | Client-facing attestation module (Phase 8): `GET /v1/attestation` + inline `X-KubeTEE-Nonce` evidence. Embedded in the litellm `eastwest-fetch-certs` ConfigMap. |
 | `kubetee-subnet/docs/CLIENT-FACING-ATTESTATION.md` | Client guide (Phase 8): API surface, nonce semantics, ITA + local DCAP verification paths. |
 | `nim/glm-5-2-fp8-sglang-h200-cc.yaml` | GLM STS + Service `:8443` (michigan-97; replaced `nim/glm-5-2-nvfp4-sglang-cc.yaml`, deleted 2026-10-13) |
-| `nim/deepseek-v4-flash-0731-sglang-h200-cc.yaml` | DSV4 STS + Service `:8443` |
+| `nim/deepseek-v4-1-flash-sglang-h200-cc.yaml` | DSV41 STS + Service `:8443` (replaced the withdrawn `deepseek-v4-flash-0731` manifest, deleted) |
 | `fleet-gitops/infrastructure/litellm/staging/values-litellm-na-us-oakland-56.yaml` | LiteLLM TDX overlay (LE public hop + east-west client cert) |
 | `fleet-gitops/infrastructure/trustee/` | Operator v0.21.0 + KbsConfig (Fleet). Manual `kbs-auth-public-key`. |
 | Live Trustee ConfigMaps / KBS resources | Policy + `set-resource`. No K8s Secrets for east-west private keys. |
@@ -604,7 +607,7 @@ Implementation notes for future phases:
 
 ## Later (not this plan)
 
-- Same mTLS pattern on remaining Oakland models (Kimi, Qwen, MiMo).
+- Same mTLS pattern on remaining Oakland models (Qwen-class backends when deployed; MiMo already runs it — 2026-09-24).
 - Public-hop RA-TLS for clients that attest `llm.kubetee.ai` — the
   **nonce-bound quote endpoint** (Phase 8) covers the client-facing need
   without a custom TLS stack; RA-TLS remains a later option.
