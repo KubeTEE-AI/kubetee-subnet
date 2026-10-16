@@ -21,8 +21,8 @@ Before registering your node, ensure the infrastructure setup is complete:
    - Minimum storage: 1.92 TB OS disk in RAID 1 + 21 TB raw block device (unpartitioned, unformatted)
 3. ✅ **Network connectivity** to Rancher management cluster
 4. ✅ **GPU worker nodes** (at least one for production eligibility):
-   - **CPU with TDX (Intel 5th/6th Gen) or SEV-SNP (AMD 4th/5th Gen)** - MANDATORY for GPU nodes
-   - **Exactly 8x NVIDIA H100, H200, B200, B300, or 8x RTX PRO 6000 Blackwell Server Edition GPUs** - MANDATORY for GPU nodes
+   - **CPU with TDX (Intel 6th Gen Xeon "Granite Rapids") or SEV-SNP (AMD 6th Gen EPYC 9006 Series "Venice" / "Verano")** - MANDATORY for GPU nodes (Intel 5th Gen "Emerald Rapids", AMD 5th Gen "Turin" and AMD 4th Gen "Genoa" are DEPRECATED — existing nodes only)
+   - **Exactly 8x NVIDIA B200, B300, RTX PRO 6000 Blackwell Server Edition, or Vera Rubin GPUs** - MANDATORY for GPU nodes (Hopper H100/H200 deprecated — existing nodes only, removed as new Blackwell nodes are onboarded, target November 2026)
    - **Latest firmware installed** - See [NVIDIA DGX Firmware Guide](https://docs.nvidia.com/dgx/dgxh100-fw-update-guide/)
    - VFIO/IOMMU configured for passthrough
 5. ✅ **100 TAO deposit** held as on-chain registration collateral on the mining
@@ -47,7 +47,7 @@ metagraph and validates the Rancher cluster/node inventory. The production
 profile requires at least 7 active Ready nodes (5 combined control-plane +
 etcd + worker nodes and 2+ dedicated GPU workers), a schedulable worker, at
 least 96 CPU cores and 2 TiB per active node, and at
-least one schedulable eight-GPU H100/H200/B200/B300/RTX PRO 6000 worker with
+least one schedulable eight-GPU B200/B300/RTX PRO 6000/Vera Rubin worker with
 `vm-passthrough` and `kata-qemu-nvidia-gpu-tdx-runtime-rs`. Any explicit missing,
 malformed, ambiguous, or unhealthy evidence scores **0**. A Rancher outage
 skips the whole weight cycle instead of blaming miners.
@@ -398,19 +398,21 @@ The infrastructure team handles all storage configuration:
 ### GPU Node Requirements Summary
 
 **✅ MUST Have ALL of:**
-1. **CPU**: Intel 5th/6th Gen Xeon OR AMD EPYC 4th/5th Gen
+1. **CPU**: Intel 6th Gen Xeon (Granite Rapids) OR AMD 6th Gen EPYC 9006 Series ("Venice" / "Verano") — Intel 5th Gen (Emerald Rapids), AMD 5th Gen (Turin) and AMD 4th Gen (Genoa) are DEPRECATED (existing nodes only)
 2. **Confidential Computing**: 
-   - **Intel**: TDX (Trust Domain Extensions)
-   - **AMD**: SEV-SNP **ONLY** (Secure Encrypted Virtualization - Secure Nested Paging)
+   - **Intel**: TDX (Trust Domain Extensions) — **6th Gen Xeon (Granite Rapids)** required for new nodes
+   - **AMD**: SEV-SNP **ONLY** (Secure Encrypted Virtualization - Secure Nested Paging) — **6th Gen EPYC 9006 Series ("Venice" / "Verano")** required for new nodes
      - ⚠️ Older AMD SEV and SEV-ES are NOT supported (use SEV-SNP only)
-3. **GPU Model**: NVIDIA H100, H200, B200, B300, or RTX PRO 6000 Blackwell Server Edition (Hopper/Blackwell architecture)
+     - ⛔ Intel 5th Gen (Emerald Rapids), AMD 5th Gen (Turin), AMD 4th Gen (Genoa) are **DEPRECATED** — existing capacity only
+3. **GPU Model**: NVIDIA B200, B300, RTX PRO 6000 Blackwell Server Edition, or Vera Rubin (Blackwell/Rubin architecture) — Hopper H100/H200 **DEPRECATED** (existing nodes only; removed as new Blackwell nodes are onboarded, target November 2026)
 4. **GPU Count**: Exactly 8 GPUs (all same model)
-5. **Latest Firmware**: Updated per [NVIDIA DGX H100/H200 Firmware Update Guide](https://docs.nvidia.com/dgx/dgxh100-fw-update-guide/)
+5. **Latest Firmware**: Updated per [NVIDIA DGX H100/H200 Firmware Update Guide](https://docs.nvidia.com/dgx/dgxh100-fw-update-guide/) (Hopper) or your OEM/HGX procedure (Blackwell/Vera Rubin)
 6. **GPU Mode**: PPCIe (Protected PCIe) enabled
 7. **VFIO/IOMMU**: Enabled for GPU passthrough
 
 **❌ NOT Supported:**
 - Older CPUs (Intel 4th Gen, AMD 3rd Gen or earlier)
+- ⛔ Deprecated CPUs (Intel 5th Gen Emerald Rapids, AMD 5th Gen Turin, AMD 4th Gen Genoa) — existing nodes only, not accepted for new nodes
 - Other GPU models (A100, V100, RTX series, etc.)
 - Nodes with fewer or more than 8 GPUs
 - Mixed GPU models (e.g., 4x H100 + 4x H200)
@@ -422,11 +424,12 @@ The infrastructure team handles all storage configuration:
 
 | Vendor | Technology | Generation | Codename | Series | Status |
 |--------|------------|------------|----------|--------|--------|
-| **Intel** | **TDX** | **6th Gen Xeon Scalable** | **Granite Rapids** | Xeon 6xxx | ✅ Supported |
-| **Intel** | **TDX** | **5th Gen Xeon Scalable** | **Emerald Rapids** | Xeon 5xxx | ✅ Supported |
+| **Intel** | **TDX** | **6th Gen Xeon Scalable** | **Granite Rapids** | Xeon 6xxx | ✅ Supported (required for new nodes) |
+| Intel | TDX | 5th Gen Xeon Scalable | Emerald Rapids | Xeon 5xxx | ⛔ DEPRECATED (existing nodes only) |
 | Intel | TDX | 4th Gen Xeon Scalable | Sapphire Rapids | - | ❌ NOT Supported |
-| **AMD** | **SEV-SNP** | **5th Gen EPYC** | **Turin** | **EPYC 9xx5** | ✅ Supported |
-| **AMD** | **SEV-SNP** | **4th Gen EPYC** | **Genoa** | **EPYC 9xx4** | ✅ Supported |
+| **AMD** | **SEV-SNP** | **6th Gen EPYC** | **Venice / Verano** | **EPYC 9006** | ✅ Supported (required for new nodes) |
+| AMD | SEV-SNP | 5th Gen EPYC | Turin | EPYC 9xx5 | ⛔ DEPRECATED (existing nodes only) |
+| AMD | SEV-SNP | 4th Gen EPYC | Genoa | EPYC 9xx4 | ⛔ DEPRECATED (existing nodes only) |
 | AMD | SEV / SEV-ES | 3rd Gen EPYC | Milan | EPYC 7xx3 | ❌ NOT Supported |
 
 **GPU nodes MUST have one of the supported CPU generations listed above.**
@@ -436,18 +439,21 @@ The infrastructure team handles all storage configuration:
 - SEV-ES (Encrypted State) - ❌ NOT Supported - Older technology with vulnerabilities
 - SEV (Basic) - ❌ NOT Supported - Deprecated, has known security issues
 
-**Only AMD EPYC 4th/5th Gen with SEV-SNP are accepted.** Earlier EPYC generations (1st-3rd Gen) with older SEV/SEV-ES are NOT supported.
+**Only AMD 6th Gen EPYC 9006 Series ("Venice" / "Verano") with SEV-SNP is accepted for new nodes.** 4th Gen (Genoa) and 5th Gen (Turin) are DEPRECATED (existing capacity only); earlier EPYC generations (1st-3rd Gen) with older SEV/SEV-ES are NOT supported.
 
 If your node has NVIDIA GPUs with confidential computing support (TDX or SNP) that will be used for **confidential VM workloads** (GPU passthrough), you need to label the node appropriately.
 
 ### GPU Hardware Requirements
 
-**Supported GPU Models**:
-- ✅ **NVIDIA H100 (Hopper)** - 80GB HBM3
-- ✅ **NVIDIA H200 (Hopper)** - 141GB HBM3e
+**Supported GPU Models (new capacity)**:
 - ✅ **NVIDIA B200 (Blackwell)** - 180GB HBM3e
-- ✅ **NVIDIA B300 (Blackwell)** - 288GB HBM3e
+- ✅ **NVIDIA B300 (Blackwell Ultra)** - 288GB HBM3e
 - ✅ **NVIDIA RTX PRO 6000 Blackwell Server Edition** - 96GB GDDR7 ECC (CC mode on)
+- ✅ **NVIDIA Vera Rubin** (Rubin generation) — confirm the exact GPU + VBIOS + CC-mode combination against the [NVIDIA Secure AI Compatibility Matrix](https://docs.nvidia.com/nvtrust/index.html#guides)
+
+**Deprecated (existing nodes only — NOT accepted for new nodes; removed as new Blackwell nodes are onboarded, target November 2026)**:
+- ⛔ **NVIDIA H100 (Hopper)** - 80GB HBM3
+- ⛔ **NVIDIA H200 (Hopper)** - 141GB HBM3e
 
 **Requirements**:
 - **Exactly 8 GPUs per node** - No more, no less
@@ -455,15 +461,14 @@ If your node has NVIDIA GPUs with confidential computing support (TDX or SNP) th
 - **All GPUs must be the same model** - No mixing models
 
 **Examples of Valid Configurations**:
-- ✅ 8x NVIDIA H100 80GB
-- ✅ 8x NVIDIA H200 141GB
 - ✅ 8x NVIDIA B200 180GB
 - ✅ 8x NVIDIA B300 288GB
 - ✅ 8x NVIDIA RTX PRO 6000 96GB GDDR7 ECC
-- ❌ 4x NVIDIA H100 (not enough GPUs)
+- ✅ 8x NVIDIA Vera Rubin
+- ⛔ 8x NVIDIA H100 80GB / 8x NVIDIA H200 141GB — DEPRECATED (existing nodes only)
+- ❌ 4x NVIDIA B200 (not enough GPUs)
 - ❌ 8x NVIDIA A100 (wrong GPU model)
 - ❌ 4x H100 + 4x H200 (mixed models)
-- ❌ 8x NVIDIA A100 (wrong GPU model)
 
 
 
@@ -483,11 +488,11 @@ dmesg | grep -i tdx
 # Expected output should show TDX initialization
 # Example: "tdx: TDX module initialized"
 
-# Verify CPU is 5th or 6th Gen Xeon (MANDATORY)
+# Verify CPU is 6th Gen Xeon (MANDATORY — 5th Gen is deprecated, existing nodes only)
 lscpu | grep -i "Model name"
 # MUST show one of:
-# - Intel(R) Xeon(R) ... (Emerald Rapids) - 5th Gen
-# - Intel(R) Xeon(R) ... (Granite Rapids) - 6th Gen
+# - Intel(R) Xeon(R) ... (Emerald Rapids) - 5th Gen [DEPRECATED]
+# - Intel(R) Xeon(R) ... (Granite Rapids) - 6th Gen [required for new nodes]
 
 # Check CPU family/model
 cat /proc/cpuinfo | grep -E "cpu family|model\s|model name" | head -3
@@ -505,34 +510,38 @@ dmesg | grep -i "sev-snp\|snp"
 cat /sys/module/kvm_amd/parameters/sev_snp
 # Should output: Y or 1
 
-# Verify CPU is 4th or 5th Gen EPYC (MANDATORY)
+# Verify CPU is 6th Gen EPYC 9006 Series (MANDATORY — 4th/5th Gen are deprecated)
 lscpu | grep -i "Model name"
 # MUST show one of:
-# - AMD EPYC 9xx4 series (Genoa) - 4th Gen
-# - AMD EPYC 9xx5 series (Turin) - 5th Gen
+# - AMD EPYC 9xx4 series (Genoa) - 4th Gen [DEPRECATED]
+# - AMD EPYC 9xx5 series (Turin) - 5th Gen [DEPRECATED]
+# - AMD EPYC 9006 series (Venice / Verano) - 6th Gen [required for new nodes]
 
 # Check CPU family/model
 cat /proc/cpuinfo | grep -E "cpu family|model\s|model name" | head -3
 ```
 
-**⚠️ Important**: KubeTEE requires **SEV-SNP** specifically. Older AMD SEV and SEV-ES technologies are NOT supported due to known security vulnerabilities. Only EPYC 4th Gen (Genoa) and 5th Gen (Turin) with SEV-SNP are accepted.
+**⚠️ Important**: KubeTEE requires **SEV-SNP** specifically. Older AMD SEV and SEV-ES technologies are NOT supported due to known security vulnerabilities. Only 6th Gen EPYC 9006 Series ("Venice" / "Verano") with SEV-SNP is accepted for new nodes — 4th Gen (Genoa) and 5th Gen (Turin) are DEPRECATED (existing nodes only).
 
 **2. NVIDIA GPU Requirements (MANDATORY)**
 
 KubeTEE has specific GPU requirements:
 
-**Supported GPUs**:
-- ✅ **NVIDIA H100 (Hopper)** with PPCIe protected mode
-- ✅ **NVIDIA H200 (Hopper)** with PPCIe protected mode
+**Supported GPUs (new capacity)**:
 - ✅ **NVIDIA B200 (Blackwell)** with CC mode on
-- ✅ **NVIDIA B300 (Blackwell)** with CC mode on
+- ✅ **NVIDIA B300 (Blackwell Ultra)** with CC mode on
 - ✅ **NVIDIA RTX PRO 6000 Blackwell Server Edition** with CC mode on
+- ✅ **NVIDIA Vera Rubin** — CC mode per the [NVIDIA Secure AI Compatibility Matrix](https://docs.nvidia.com/nvtrust/index.html#guides)
+
+**Deprecated (existing nodes only — NOT accepted for new nodes; removed as new Blackwell nodes are onboarded, target November 2026)**:
+- ⛔ **NVIDIA H100 (Hopper)** with PPCIe protected mode
+- ⛔ **NVIDIA H200 (Hopper)** with PPCIe protected mode
 - ❌ Other GPU models - Not supported
 
 **GPU Configuration Requirements**:
 - **Exactly 8 GPUs per node** (MANDATORY)
 - **PPCIe (Protected PCIe) mode enabled** (MANDATORY)
-- **Latest firmware installed** (MANDATORY) - See [NVIDIA DGX H100/H200 Firmware Update Guide](https://docs.nvidia.com/dgx/dgxh100-fw-update-guide/)
+- **Latest firmware installed** (MANDATORY) - See [NVIDIA DGX H100/H200 Firmware Update Guide](https://docs.nvidia.com/dgx/dgxh100-fw-update-guide/) (deprecated Hopper; for Blackwell/Vera Rubin use your OEM/HGX procedure)
 - GPUs must support confidential computing
 
 ```bash
@@ -544,12 +553,16 @@ lspci | grep -i nvidia | grep -i "3D controller\|VGA" | wc -l
 lspci | grep -i nvidia
 
 # Expected output (8 GPUs):
-# 17:00.0 3D controller: NVIDIA Corporation Device 2330 (rev a1)  ← H100
-# 65:00.0 3D controller: NVIDIA Corporation Device 2330 (rev a1)
+# 17:00.0 3D controller: NVIDIA Corporation Device 2901 (rev a1)  ← B200 (example)
+# 65:00.0 3D controller: NVIDIA Corporation Device 2901 (rev a1)
 # ... (6 more lines for total of 8 GPUs)
 
-# For H100: Device ID 2330 or 2331
-# For H200: Device ID 2331 (check lspci -nn for device IDs)
+# For B200: Device ID 2901 / 2909 (HGX B200)
+# For B300: Device ID 3182
+# For RTX PRO 6000: Device ID 2c2e / 2c33
+# For Vera Rubin: check lspci device IDs against the NVIDIA Secure AI Matrix
+# For H100 [DEPRECATED]: Device ID 2330 or 2331
+# For H200 [DEPRECATED]: Device ID 2331
 ```
 
 **Note**: Do NOT install NVIDIA drivers or CUDA. The GPU Operator will install drivers automatically after the node joins the cluster.
@@ -560,7 +573,7 @@ lspci | grep -i nvidia
 
 ```bash
 # Check current firmware version (if nvfwupd is available on DGX systems)
-# For DGX H100/H200 systems:
+# For DGX H100/H200 systems (deprecated Hopper):
 nvfwupd --query
 
 # Update firmware following the official guide:
@@ -574,9 +587,9 @@ nvfwupd --query
 - PCIe switches and retimers
 - Network adapter firmware (ConnectX-7 or equivalent Ethernet NIC — RoCE-capable is a plus; InfiniBand-only HCAs are not required for CC inference)
 
-**Refer to the official guide**: [NVIDIA DGX H100/H200 Firmware Update Guide](https://docs.nvidia.com/dgx/dgxh100-fw-update-guide/)
+**Refer to the official guide**: [NVIDIA DGX H100/H200 Firmware Update Guide](https://docs.nvidia.com/dgx/dgxh100-fw-update-guide/) (deprecated Hopper systems)
 
-**Important**: Firmware updates are typically done on DGX systems. If you're using custom-built servers with H100/H200 GPUs, consult with your hardware vendor for firmware update procedures.
+**Important**: Firmware updates are typically done on DGX/HGX systems. For Blackwell (HGX B200/B300) and Vera Rubin systems, follow your OEM/HGX firmware update procedure (BIOS/BMC, GPU firmware, PCIe switches and retimers); for custom-built servers with H100/H200 GPUs (deprecated), consult with your hardware vendor.
 
 **4. VFIO/IOMMU enabled** (for GPU passthrough)
 ```bash
@@ -600,18 +613,19 @@ dmesg | grep -i "AMD-Vi"
 
 **What you MUST do**:
 - ✅ **Verify CPU is one of the supported generations** (MANDATORY):
-  - Intel 5th Gen Xeon (Emerald Rapids) OR 6th Gen Xeon (Granite Rapids)
-  - AMD EPYC 4th Gen (Genoa 9xx4) OR 5th Gen (Turin 9xx5)
+  - Intel 6th Gen Xeon (Granite Rapids) — 5th Gen (Emerald Rapids) is DEPRECATED (existing nodes only)
+  - AMD 6th Gen EPYC 9006 Series ("Venice" / "Verano") — 4th Gen (Genoa 9xx4) and 5th Gen (Turin 9xx5) are **DEPRECATED** (existing nodes only)
 - ✅ **Verify TDX or SEV-SNP is enabled in BIOS** (MANDATORY)
 - ✅ **Verify TDX or SEV-SNP support in kernel** (MANDATORY)
-- ✅ **Verify exactly 8 NVIDIA H100, H200, B200, B300, or RTX PRO 6000 Blackwell Server Edition GPUs are installed** (MANDATORY)
-- ✅ **Update to latest firmware** (MANDATORY) - [NVIDIA DGX H100/H200 Firmware Update Guide](https://docs.nvidia.com/dgx/dgxh100-fw-update-guide/)
+- ✅ **Verify exactly 8 NVIDIA B200, B300, RTX PRO 6000 Blackwell Server Edition, or Vera Rubin GPUs are installed** (MANDATORY — Hopper H100/H200 deprecated, existing nodes only)
+- ✅ **Update to latest firmware** (MANDATORY) - [NVIDIA DGX H100/H200 Firmware Update Guide](https://docs.nvidia.com/dgx/dgxh100-fw-update-guide/) (Hopper) or your OEM/HGX procedure
 - ✅ Enable VFIO/IOMMU in BIOS and kernel
 - ✅ Label the node after registration
 
 **⚠️ CRITICAL**: 
 - Older CPU generations (Intel 4th Gen Xeon, AMD 3rd Gen EPYC or earlier) are NOT supported
-- Only H100/H200 GPUs with PPCIe mode are supported
+- New nodes require **Intel 6th Gen Xeon (Granite Rapids)** or **AMD 6th Gen EPYC 9006 Series ("Venice" / "Verano")** — Intel 5th Gen (Emerald Rapids), AMD 5th Gen (Turin) and AMD 4th Gen (Genoa) are DEPRECATED (existing nodes only)
+- New GPU nodes require **B200/B300/RTX PRO 6000 Blackwell or Vera Rubin** — H100/H200 (Hopper) are DEPRECATED (existing nodes only; PPCIe mode on those nodes). Existing Hopper nodes are removed as new Blackwell nodes are onboarded — target November 2026
 - Nodes MUST have exactly 8 GPUs (no more, no less)
 - Latest firmware MUST be installed before registration
 
@@ -922,7 +936,7 @@ lscpu | grep -i "Model name"  # MUST show Emerald Rapids or Granite Rapids
 
 # For AMD SEV-SNP (4th or 5th Gen EPYC):
 dmesg | grep -i "sev-snp\|snp"  # Look specifically for SEV-SNP, not just SEV
-lscpu | grep -i "Model name"  # MUST show EPYC 9xx4 (Genoa) or 9xx5 (Turin)
+lscpu | grep -i "Model name"  # MUST show EPYC 9006 (Venice/Verano); 9xx4 (Genoa) / 9xx5 (Turin) = deprecated
 
 # SECOND: Verify GPU requirements (MANDATORY)
 # Must have exactly 8 GPUs
@@ -930,8 +944,9 @@ lspci | grep -i nvidia | grep -i "3D controller\|VGA" | wc -l  # MUST output: 8
 
 # Verify GPU model via PCI device ID
 lspci -nn | grep -i nvidia
-# For H100: Look for Device ID [10de:2330] or [10de:2331]
-# For H200: Look for Device ID [10de:2331]
+# For B200: Look for [10de:2901] or [10de:2909]; B300: [10de:3182]
+# For RTX PRO 6000: [10de:2c2e] or [10de:2c33]; Vera Rubin: check the NVIDIA Secure AI Matrix
+# For H100 [DEPRECATED]: [10de:2330] or [10de:2331]; H200 [DEPRECATED]: [10de:2331]
 # All 8 GPUs must have the same device ID
 
 # Label GPU node for VM passthrough (only if all requirements verified)

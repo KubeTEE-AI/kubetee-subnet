@@ -2,11 +2,11 @@
 
 **Quick Reference**: This document lists ALL requirements for GPU nodes in KubeTEE clusters.
 
-> **Early Access status (2026-07):** only **Intel TDX** (Intel 5th/6th Gen Xeon)
+> **Early Access status (2026-07):** only **Intel TDX** (Intel 6th Gen Xeon)
 > ships in the Early Access release — the validator and runtime classes are
-> tested and live on TDX. **AMD SEV-SNP** (AMD EPYC 4th/5th Gen) is a **Phase 1
-> roadmap** item: the requirements and verification commands below are kept for
-> reference so miners can pre-qualify hardware, but SEV-SNP is not yet
+> tested and live on TDX. **AMD SEV-SNP** (AMD 6th Gen EPYC 9006 Series) is a
+> **Phase 1 roadmap** item: the requirements and verification commands below are
+> kept for reference so miners can pre-qualify hardware, but SEV-SNP is not yet
 > supported by the KubeTEE runtime classes and the validator does not score it.
 > **Phase 1** will also introduce **RTX 5000 Pro Server Edition** testing on the
 > staging cluster. See the README roadmap for the multi-arch TEE timeline.
@@ -19,14 +19,23 @@ GPU nodes MUST meet **ALL** of these requirements:
 
 ### ✅ 1. CPU Platform (MANDATORY)
 
-**Supported CPUs**:
+> **CPU acceptance policy (2026-10-16):** new nodes require **Intel 6th Gen Xeon
+> (Granite Rapids)** or **AMD 6th Gen EPYC 9006 Series ("Venice" / "Verano")**.
+> Intel 5th Gen (Emerald Rapids), AMD 5th Gen EPYC (Turin), and AMD 4th Gen
+> EPYC (Genoa) are **DEPRECATED** — existing capacity only, not accepted for new
+> nodes — mirroring the GPU policy in section 2 below.
+
+**Supported CPUs (new nodes)**:
 
 | Vendor | Generation | Codename | Series | Technology |
 |--------|------------|----------|--------|------------|
 | **Intel** | 6th Gen Xeon Scalable | Granite Rapids | Xeon 6xxx | TDX |
-| **Intel** | 5th Gen Xeon Scalable | Emerald Rapids | Xeon 5xxx | TDX |
-| **AMD** | 5th Gen EPYC | Turin | EPYC 9xx5 | **SEV-SNP** (Phase 1 — not in Early Access) |
-| **AMD** | 4th Gen EPYC | Genoa | EPYC 9xx4 | **SEV-SNP** (Phase 1 — not in Early Access) |
+| **AMD** | 6th Gen EPYC | Venice / Verano | EPYC 9006 | **SEV-SNP** (Phase 1 — not in Early Access) |
+
+**Deprecated (existing capacity only — NOT accepted for new nodes)**:
+- ⛔ Intel 5th Gen Xeon Scalable (Emerald Rapids) - Xeon 5xxx
+- ⛔ AMD 5th Gen EPYC (Turin) - EPYC 9xx5
+- ⛔ AMD 4th Gen EPYC (Genoa) - EPYC 9xx4
 
 **NOT Supported**:
 - ❌ Intel 4th Gen Xeon (Sapphire Rapids) or older
@@ -39,13 +48,13 @@ GPU nodes MUST meet **ALL** of these requirements:
 # Intel TDX
 dmesg | grep -i tdx
 lscpu | grep -i "Model name"
-# MUST show: Emerald Rapids or Granite Rapids
+# MUST show: Granite Rapids (Emerald Rapids = deprecated, existing nodes only)
 
 # AMD SEV-SNP (MUST be SNP, not older SEV/SEV-ES)
 dmesg | grep -i "sev-snp\|snp"
 cat /sys/module/kvm_amd/parameters/sev_snp  # Should output: Y or 1
 lscpu | grep -i "Model name"
-# MUST show: EPYC 9xx4 (Genoa) or 9xx5 (Turin)
+# MUST show: EPYC 9006 (Venice/Verano); 9xx4 (Genoa) / 9xx5 (Turin) = deprecated
 ```
 
 **⚠️ AMD SEV Evolution**:
@@ -59,12 +68,22 @@ KubeTEE requires the latest SEV-SNP for maximum security.
 
 ### ✅ 2. GPU Model (MANDATORY)
 
-**Supported GPUs**:
-- ✅ **NVIDIA H100** (Hopper) - 80GB HBM3
-- ✅ **NVIDIA H200** (Hopper) - 141GB HBM3e
+> **Hardware acceptance policy (2026-10-16):** from now on, **only NVIDIA
+> Blackwell and NVIDIA Vera Rubin nodes are accepted** as new cluster capacity.
+> Hopper (H100/H200) is **DEPRECATED** — no new Hopper nodes are accepted —
+> so that every unit of cluster capacity is maximized for subnet miner
+> emissions. Existing Hopper nodes will be **removed as new Blackwell nodes are
+> onboarded** — target completion **November 2026**.
+
+**Supported GPUs (new capacity)**:
 - ✅ **NVIDIA B200** (Blackwell) - 192GB HBM3e
 - ✅ **NVIDIA B300** (Blackwell Ultra) - 288GB HBM3e
 - ✅ **NVIDIA RTX PRO 6000 Blackwell Server Edition** - 96GB GDDR7 ECC, CC mode on, PCIe Gen5, 600W configurable
+- ✅ **NVIDIA Vera Rubin** (Rubin generation) - confirm the exact GPU + VBIOS + CC-mode combination against the [NVIDIA Secure AI Compatibility Matrix](https://docs.nvidia.com/nvtrust/index.html#guides) before registering; do not assume a Hopper-era CC-mode recipe carries over
+
+**Deprecated (existing capacity only — NOT accepted for new nodes; removed as new Blackwell nodes are onboarded, target November 2026)**:
+- ⛔ **NVIDIA H100** (Hopper) - 80GB HBM3
+- ⛔ **NVIDIA H200** (Hopper) - 141GB HBM3e
 
 **NOT Supported**:
 - ❌ NVIDIA A100 (Ampere architecture)
@@ -77,11 +96,12 @@ KubeTEE requires the latest SEV-SNP for maximum security.
 # Check GPU via PCI device ID (no drivers needed)
 lspci -nn | grep -i nvidia
 
-# For H100: Look for [10de:2330] or [10de:2331]
-# For H200: Look for [10de:2331]
 # For B200: Look for [10de:2901] (B200) or [10de:2909] (HGX B200)
 # For B300: Look for [10de:3182] (B300 SXM6)
+# For Vera Rubin: check lspci device IDs against the NVIDIA Secure AI Matrix
 # For RTX PRO 6000: Look for [10de:2c2e] or [10de:2c33] (Blackwell Server)
+# For H100 [DEPRECATED]: Look for [10de:2330] or [10de:2331]
+# For H200 [DEPRECATED]: Look for [10de:2331]
 ```
 
 
@@ -107,12 +127,15 @@ lspci | grep -i nvidia | grep -i "3D controller\|VGA" | wc -l
 
 **Requirement**: All 8 GPUs MUST be the same model
 
-**Supported**:
-- ✅ 8x NVIDIA H100 (Hopper) - 80GB HBM3
-- ✅ 8x NVIDIA H200 (Hopper) - 141GB HBM3e
+**Supported (new capacity)**:
 - ✅ 8x NVIDIA B200 (Blackwell) - 180GB HBM3e
 - ✅ 8x NVIDIA B300 (Blackwell Ultra) - 288GB HBM3e
 - ✅ 8x NVIDIA RTX PRO 6000 Blackwell Server Edition - 96GB GDDR7 ECC, CC mode on, PCIe Gen5, 600W configurable
+- ✅ 8x NVIDIA Vera Rubin (Rubin generation)
+
+**Deprecated (existing capacity only — NOT accepted for new nodes; removed as new Blackwell nodes are onboarded, target November 2026)**:
+- ⛔ 8x NVIDIA H100 (Hopper) - 80GB HBM3
+- ⛔ 8x NVIDIA H200 (Hopper) - 141GB HBM3e
 
 **NOT Supported**:
 - ❌ 4x H100 + 4x H200 (mixed models)
@@ -129,25 +152,25 @@ lspci -nn | grep -i nvidia | awk -F'[][]' '{print $2}' | sort -u
 
 ### ✅ 5. Latest Firmware (MANDATORY)
 
-**Requirement**: Latest firmware for DGX H100/H200 and HGX B200/B300 systems
+**Requirement**: Latest firmware for HGX B200/B300 and Vera Rubin systems (DGX H100/H200 firmware guidance is kept for deprecated Hopper nodes)
 
 **Update firmware BEFORE node registration** using the official guide:
-- **[NVIDIA DGX H100/H200 Firmware Update Guide](https://docs.nvidia.com/dgx/dgxh100-fw-update-guide/)**
-- For HGX B200/B300 systems, follow your OEM/HGX firmware update procedure (BIOS/BMC, GPU firmware, PCIe switches and retimers)
+- **[NVIDIA DGX H100/H200 Firmware Update Guide](https://docs.nvidia.com/dgx/dgxh100-fw-update-guide/)** (deprecated Hopper nodes)
+- For HGX B200/B300 and Vera Rubin systems, follow your OEM/HGX firmware update procedure (BIOS/BMC, GPU firmware, PCIe switches and retimers)
 
 **Confidential Computing firmware compatibility** (authoritative source: **[NVIDIA Trusted Computing Solutions — Guides](https://docs.nvidia.com/nvtrust/index.html#guides)**, including the Secure AI Compatibility Matrix):
 
 The Compatibility Matrix is the source of truth for supported **GPU + VBIOS + CUDA driver + Confidential Computing mode** combinations (and RIM / VBIOS_RIM status). The node operator is responsible for the **GPU VBIOS** and **CC mode** (firmware/BIOS level); the **CUDA driver** is deployed by the GPU Operator after registration. Before registering a node, confirm your GPU's **VBIOS** and chosen **CC mode** (Protected PCIe / CC-Aux / APM) are listed as supported, and that the matrix's supported **CUDA driver** version matches what the GPU Operator will deploy. Key guidance from NVIDIA:
 - **Protected PCIe (PPCIe) mode** — use **HGX Hopper FW 1.7.0**; avoid HGX Hopper FW 1.6.0, which has a known issue that can cause the GPU to fall off the bus during boot when PPCIe is enabled.
 - **Secure AI with HGX Hopper FW 1.8.0 or later** — rollback to FW 1.7.1 or earlier is **not supported**; plan firmware forward-only.
-- For **Blackwell (B200) / Blackwell Ultra (B300)**, check the matrix for the required VBIOS + CUDA driver + CC mode combination before labeling the node.
+- **Blackwell (B200) / Blackwell Ultra (B300) and Vera Rubin**, check the matrix for the required VBIOS + CUDA driver + CC mode combination before labeling the node.
 
 **Critical firmware components**:
 - BMC (Baseboard Management Controller)
 - BIOS/UEFI
 - GPU firmware
 - PCIe switches and retimers
-- Network adapter firmware (ConnectX-7 or equivalent Ethernet NIC — RoCE-capable is a plus, InfiniBand-only HCAs are not required; see the Networking note under Cluster Architecture)
+- Network adapter firmware (ConnectX-7 or equivalent Ethernet NIC — RoCE-capable is a plus; see the Networking note under Cluster Architecture)
 - PSUs, CPLDs, and other components
 
 **For DGX Systems**:
@@ -165,9 +188,9 @@ nvfwupd --query
 
 ---
 
-### ✅ 6. PPCIe Mode (MANDATORY) H100/H200 nodes
+### ✅ 6. PPCIe Mode (MANDATORY) H100/H200 nodes (DEPRECATED hardware — kept for existing Hopper capacity)
 
-**Requirement**: PPCIe (Protected PCIe) mode enabled on all GPUs
+**Requirement**: PPCIe (Protected PCIe) mode enabled on all GPUs on H100/H200 (Hopper) nodes — deprecated hardware, requirement kept for existing capacity. Blackwell and Vera Rubin use their own CC modes (see the NVIDIA Secure AI Compatibility Matrix).
 
 **What is PPCIe?**
 - Protected PCIe mode for confidential computing
@@ -276,7 +299,8 @@ lspci | grep -i nvidia | grep -i "3D controller\|VGA" | wc -l
 # 4. Verify GPU model via device ID
 lspci -nn | grep -i nvidia
 # All should show one of:
-#   [10de:2330]/[10de:2331] (H100/H200), [10de:2901]/[10de:2909] (B200), [10de:3182] (B300)
+#   [10de:2901]/[10de:2909] (B200), [10de:3182] (B300)
+#   ([10de:2330]/[10de:2331] = H100/H200 — deprecated, existing nodes only)
 
 # 5. Verify firmware (DGX systems)
 nvfwupd --query
@@ -306,7 +330,7 @@ which nvcc        # Should return: not found
 Is your node a GPU node?
 ├─ NO → Skip GPU requirements, proceed with standard registration
 └─ YES → Check all requirements:
-    ├─ CPU: Intel 5th/6th Gen OR AMD EPYC 4th/5th Gen? 
+    ├─ CPU: Intel 6th Gen (Granite Rapids) OR AMD 6th Gen EPYC 9006 (Venice/Verano)? 
     │   ├─ NO → Node NOT supported ❌
     │   └─ YES → Continue
     ├─ TDX or SEV-SNP enabled?
@@ -315,7 +339,7 @@ Is your node a GPU node?
     ├─ Exactly 8 GPUs?
     │   ├─ NO → Node NOT supported ❌
     │   └─ YES → Continue
-    ├─ All GPUs are H100, H200, B200, or B300?
+    ├─ All GPUs are B200, B300, RTX PRO 6000 Blackwell, or Vera Rubin?
     │   ├─ NO → Node NOT supported ❌
     │   └─ YES → Continue
     ├─ All GPUs same model?
@@ -324,7 +348,7 @@ Is your node a GPU node?
     ├─ Latest firmware installed?
     │   ├─ NO → Update firmware first
     │   └─ YES → Continue
-    ├─ PPCIe mode enabled?
+    ├─ PPCIe mode enabled? (H100/H200 nodes — deprecated hardware)
     │   ├─ NO → Enable in BIOS/firmware
     │   └─ YES → Continue
     ├─ VFIO/IOMMU enabled?
@@ -389,13 +413,13 @@ nvfwupd --query
 
 | Requirement | Valid Options | NOT Supported |
 |-------------|---------------|---------------|
-| **CPU** | Intel 5th/6th Gen, AMD 4th/5th Gen EPYC | Intel ≤4th Gen, AMD ≤3rd Gen |
+| **CPU** | Intel 6th Gen (Granite Rapids), AMD 6th Gen EPYC 9006 (Venice/Verano) | Intel 5th Gen (deprecated), AMD 5th/4th Gen (deprecated), Intel ≤4th Gen, AMD ≤3rd Gen |
 | **Confidential Computing** | TDX (Intel), SEV-SNP ONLY (AMD) | No TDX/SNP, older SEV/SEV-ES |
-| **GPU Model** | H100, H200, B200, B300 | A100, V100, others |
+| **GPU Model** | B200, B300, RTX PRO 6000 Blackwell, Vera Rubin | H100/H200 (deprecated — existing nodes only), A100, V100, others |
 | **GPU Count** | Exactly 8 | 1-7, 9+ |
 | **GPU Uniformity** | All same model | Mixed models |
 | **Firmware** | Latest (25.10.1+) | Outdated versions |
-| **GPU Mode** | PPCIe enabled | Standard PCIe |
+| **GPU Mode** | PPCIe enabled (Hopper) / CC mode per NVIDIA matrix (Blackwell, Vera Rubin) | Standard PCIe |
 | **IOMMU** | Enabled | Disabled |
 | **OS** | Ubuntu 26.04 (clean, kernel 7.0.0-38-generic pin; `-31`+ acceptable) | Pre-existing NVIDIA software |
 | **OS Disk** | 800 GB+ | <800 GB |
@@ -413,14 +437,14 @@ nvfwupd --query
 |---|---|---|
 | **Total nodes** | **7 minimum** (5 control-plane+etcd+worker combined, 2+ dedicated GPU workers per GPU type) | 5 nodes run the control plane, etcd, and the tech stack (GPU Operator, Kata/CoCo, Longhorn, NeMo Microservices, Armada Executor, monitoring) while also serving inference; 3+ dedicated 8-GPU workers **per GPU type** run AI job workloads. Fewer nodes cannot simultaneously host the tech stack and serve inference with HA. |
 | **Control-plane + etcd nodes** | **5** (combined control-plane + etcd + worker role) | 5 nodes give etcd quorum with 2-node failure tolerance. These nodes run the control plane AND double as workers — they host the tech stack and can serve inference workloads, so they are not "wasted" on control-plane duty alone. |
-| **Dedicated GPU worker nodes** | **3+ per GPU type** (8x H100/H200/B200/B300 per node) | **3 nodes of each GPU type** is the minimum for HA — if a cluster serves H200 and B200 workloads, it needs 3 H200 nodes + 3 B200 nodes (4 dedicated GPU workers). A single-GPU-type cluster needs 3; a mixed-GPU cluster needs 3 per type. Each 8-GPU worker can run one large confidential workload or multiple smaller ones. |
+| **Dedicated GPU worker nodes** | **3+ per GPU type** (8x B200/B300/Vera Rubin per node — Hopper deprecated) | **3 nodes of each GPU type** is the minimum for HA — if a cluster serves B300 and Vera Rubin workloads, it needs 3 B300 nodes + 3 Vera Rubin nodes (4 dedicated GPU workers). A single-GPU-type cluster needs 3; a mixed-GPU cluster needs 3 per type. Each 8-GPU worker can run one large confidential workload or multiple smaller ones. |
 | **Co-location** | All nodes in a **single data center** | Multi-GPU NVLink/NVSwitch passthrough requires low latency; cross-DC NVLink is unsupported. One cluster = one DC. |
 | **Network** | All nodes on the same L2 / low-latency fabric | VFIO passthrough, Kata sandbox creation, and in-guest NVLink all depend on local fabric; high-latency cross-DC links cause sandbox timeouts and degraded GPU topology |
 
 ### Why 7 nodes minimum
 
 - **5 control-plane + etcd + worker nodes**: RKE2 etcd needs an odd number for quorum. 5 nodes give 2-node failure tolerance (survive losing 2 of 5 and still have quorum). These 5 nodes are **not idle control-plane nodes** — they run the tech stack (GPU Operator, Kata/CoCo runtime classes, Longhorn storage, NeMo Microservices, monitoring, Armada Executor) and can serve inference workloads, so their GPU capacity counts toward the fleet. A 3-node control plane tolerates only 1 failure; 5 is the minimum where a cluster can lose 2 nodes and still serve.
-- **3 dedicated GPU workers per GPU type**: the tech stack on the 5 control-plane+worker nodes consumes CPU/memory and some GPU capacity for NeMo services and inference. 3 dedicated 8-GPU workers **per GPU type** ensure enough bare-metal GPU capacity to run AI services and Armada jobs (inference, fine-tuning, batch) without competing with the tech stack for resources, and keep HA for that GPU type (losing 1 of 2 leaves 1 dedicated worker serving that GPU type). **A mixed-GPU cluster needs 3 per type**: e.g. 3 H200 + 3 B200 = 6 dedicated GPU workers + 5 control-plane.
+- **3 dedicated GPU workers per GPU type**: the tech stack on the 5 control-plane+worker nodes consumes CPU/memory and some GPU capacity for NeMo services and inference. 3 dedicated 8-GPU workers **per GPU type** ensure enough bare-metal GPU capacity to run AI services and Armada jobs (inference, fine-tuning, batch) without competing with the tech stack for resources, and keep HA for that GPU type (losing 1 of 2 leaves 1 dedicated worker serving that GPU type). **A mixed-GPU cluster needs 3 per type**: e.g. 3 B300 + 3 Vera Rubin = 6 dedicated GPU workers + 5 control-plane.
 - **7 total (single GPU type)**: 5 (control-plane+etcd+worker, running tech stack + inference) + 2 (dedicated GPU workers of one type, running AI jobs) = 7 nodes minimum for a single-GPU-type cluster. A mixed-GPU cluster adds 2 per additional GPU type.
 
 ### Scaling beyond the minimum
@@ -433,7 +457,7 @@ nvfwupd --query
 | **Large** | 24+ | 5 control-plane+etcd+worker + 19+ dedicated GPU workers | 19+ | High-bandwidth Ethernet (100/400GbE, jumbo-frame capable) |
 | **HGX Cluster** | 32+ | 5 control-plane+etcd+worker + 27+ dedicated GPU workers (full HGX racks) | 27+ | High-bandwidth Ethernet (100/400GbE, jumbo-frame capable) |
 
-> **InfiniBand is not a hard requirement.** High-bandwidth Ethernet (100/400GbE) is the baseline at every scale. If a miner provides an RDMA-capable fabric anyway, it **must be RoCE (RDMA over Converged Ethernet), not InfiniBand**: kernel-bypass RDMA into Confidential Computing guest memory does not work until **TDX Connect is GA on 6th-Generation Intel Xeon (Granite Rapids)**. Our 2026-09-15/16 HCA-passthrough PoC on 8×H200 TDX + PPCIE (kata 4.1.0 and 4.2.0) proved the full device pipeline works (vfio-pci bind → device plugin → CDI → 4×CX7 ACTIVE at 400 Gb/s NDR → NCCL NET/IB transport with QPs + ECE) but the first `ibv_reg_mr_iova2` fails with `EFAULT` — the NIC cannot DMA into encrypted guest memory. Until the TDX Connect hardware path is GA, confidential workloads run over ordinary TCP (NCCL NET/Socket) on the Ethernet fabric; enable jumbo frames for throughput (measured on our 8×H200 fleet: MTU 9000 gives 5.8× non-CC and 3.1× CC pod-to-pod over the Calico overlay).
+> **Networking: high-bandwidth Ethernet is the fabric.** 100/400GbE is the baseline at every scale. If a miner provides an RDMA-capable fabric anyway, it **must be RoCE (RDMA over Converged Ethernet)**. Kernel-bypass RDMA into Confidential Computing guest memory does not work until **TDX Connect is GA on 6th-Generation Intel Xeon (Granite Rapids)**. Our 2026-09-15/16 HCA-passthrough PoC on 8×H200 TDX + PPCIE (kata 4.1.0 and 4.2.0) proved the full device pipeline works (vfio-pci bind → device plugin → CDI → 4×CX7 ACTIVE at 400 Gb/s NDR) but the first memory-registration call on the NIC fails with `EFAULT` — the NIC cannot DMA into encrypted guest memory. Until the TDX Connect hardware path is GA, confidential workloads run over ordinary TCP (NCCL NET/Socket) on the Ethernet fabric; enable jumbo frames for throughput (measured on our 8×H200 fleet: MTU 9000 gives 5.8× non-CC and 3.1× CC pod-to-pod over the Calico overlay).
 
 > **One cluster per hotkey.** A miner may operate multiple clusters, but each cluster must have its own Bittensor hotkey (one cluster per hotkey, enforced by the validator's `kubetee.ai/hotkey` label binding). Multiple clusters = multiple hotkeys = multiple DCs.
 
@@ -445,7 +469,7 @@ See [Node Registration](NODE-REGISTRATION.md) for the RKE2 node registration com
 
 ### Official Documentation
 
-- **[NVIDIA DGX H100/H200 Firmware Update Guide](https://docs.nvidia.com/dgx/dgxh100-fw-update-guide/)** - MANDATORY reading for firmware updates
+- **[NVIDIA DGX H100/H200 Firmware Update Guide](https://docs.nvidia.com/dgx/dgxh100-fw-update-guide/)** - firmware updates (Hopper; for Blackwell/Vera Rubin use your OEM/HGX procedure)
 - **[NVIDIA Trusted Computing Solutions — Guides](https://docs.nvidia.com/nvtrust/index.html#guides)** — Secure AI Compatibility Matrix and related CC guides (GPU + VBIOS + CUDA driver + Confidential Computing mode; source of truth for CC firmware compatibility)
 - **[NODE-REGISTRATION.md](NODE-REGISTRATION.md)** - Complete registration guide
 
@@ -460,9 +484,9 @@ See [Node Registration](NODE-REGISTRATION.md) for the RKE2 node registration com
 
 **To register a GPU node to KubeTEE**:
 
-1. ✅ **Hardware**: 8x H100, H200, B200, or B300 GPUs on Intel 5th/6th Gen Xeon OR AMD EPYC 4th/5th Gen
-2. ✅ **Firmware**: Latest version from [NVIDIA DGX Firmware Guide](https://docs.nvidia.com/dgx/dgxh100-fw-update-guide/)
-3. ✅ **BIOS**: TDX/SEV-SNP, PPCIe mode, VFIO/IOMMU enabled
+1. ✅ **Hardware**: 8x B200, B300, RTX PRO 6000 Blackwell, or Vera Rubin GPUs on Intel 6th Gen Xeon (Granite Rapids) OR AMD 6th Gen EPYC 9006 ("Venice" / "Verano") — Hopper H100/H200 GPUs and Intel 5th Gen, AMD 5th Gen (Turin), AMD 4th Gen (Genoa) CPUs are **deprecated** and not accepted for new nodes (existing Hopper nodes are removed as Blackwell nodes are onboarded — target November 2026)
+2. ✅ **Firmware**: Latest version from [NVIDIA DGX Firmware Guide](https://docs.nvidia.com/dgx/dgxh100-fw-update-guide/) (Hopper) or your OEM/HGX procedure
+3. ✅ **BIOS**: TDX/SEV-SNP, CC mode per GPU generation (PPCIe on Hopper; see NVIDIA matrix for Blackwell/Vera Rubin), VFIO/IOMMU enabled
 4. ✅ **OS**: Ubuntu 26.04 clean, kernel 7.0.0-3x pin (GPU Operator manages all GPU software)
 5. ✅ **Storage**: 800GB OS + 3TB data disks
 6. ✅ **Register**: Run registration command with network addresses
@@ -473,7 +497,7 @@ See [Node Registration](NODE-REGISTRATION.md) for the RKE2 node registration com
 
 ---
 
-**Last Updated**: 2026-07-18  
+**Last Updated**: 2026-10-16  
 **NVIDIA Firmware Version**: 25.10.1+  
 **Status**: ✅ Production Ready
 

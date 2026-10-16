@@ -211,8 +211,8 @@ Supply-chain CI (SAST, Trustee secrets, image CVE, IaC) is designed, not yet aut
 **Trusted Execution Environment (TEE)**
 - Kata Containers for workload isolation
 - Confidential Containers with Workload Identity Validation
-- Intel TDX/SGX
-- NVIDIA Hopper/Blackwell/Vera Rubin
+- Intel TDX (6th Gen Xeon Granite Rapids) with TDX/SGX; AMD SEV-SNP (6th Gen EPYC 9006) from [Phase 1](#phase-1--expansion)
+- NVIDIA Blackwell / Vera Rubin — Hopper (H100/H200) is deprecated (existing nodes only; removed as new Blackwell nodes are onboarded, target November 2026)
 
 Confidential services execute under the TEE runtime classes in the [Overview](#overview). On staging, every node is TEE CC capable; Kata guest debug is off and CoCo Trustee attests those guests. CC can be turned off on a staging node for debug. Batch jobs use the same runtime classes; see [Armada Multi-Cluster Batch Scheduling](#armada-multi-cluster-batch-scheduling) for that secondary path.
 
@@ -302,7 +302,7 @@ flowchart LR
         ArmadaServer["Armada Server\nscheduler + queues\nPulsar/Redis/Postgres"]
     end
     subgraph staging["KubeTEE Staging Cluster — subnet-owner"]
-        NodeTEE["CC-capable TDX GPU nodes (H200 / B200)<br/>kata-qemu-nvidia-gpu-tdx-runtime-rs<br/>guest debug off; Trustee attests<br/>CC can be turned off for debug"]
+        NodeTEE["CC-capable TDX GPU nodes (B200 / B300)<br/>kata-qemu-nvidia-gpu-tdx-runtime-rs<br/>guest debug off; Trustee attests<br/>CC can be turned off for debug"]
     end
     subgraph clusterA["Miner Cluster — BTLABS (UID 97), 1 hotkey, 1 DC (USA)"]
         ExecA["Armada Executor"]
@@ -619,8 +619,8 @@ public repository.
 
 > KubeTEE is a decentralized multi-cluster architecture. Miners must provide the minimum requirements below to allow high availability, deploy the full tech stack, and have enough nodes to run SOTA AI services and enhanced services for enterprises. These minimum requirements are written and enforced in Phase 0.
 
-- **7 nodes minimum per cluster** (5 control-plane + etcd + worker combined, 2+ dedicated 8-GPU workers **per GPU type**) — all co-located in a single data center. The 5 combined nodes run the tech stack (GPU Operator, Kata/CoCo, Longhorn, NeMo, Armada Executor, monitoring) and serve inference; **3 dedicated GPU workers per GPU type** keep HA for each GPU type (a mixed-GPU cluster needs 3 per type, e.g. 3 H200 + 3 B200). Fewer nodes cannot simultaneously host the tech stack and serve inference with HA. Full topology + scaling table: [GPU Node Requirements — Cluster Architecture & HA](./docs/GPU-NODE-REQUIREMENTS.md#cluster-architecture--high-availability)
-- Intel TDX (AMD SEV-SNP, Phase 1) compatible nodes with NVIDIA H100/H200/B200/B300; BIOS + kernel TDX/SGX enabled; one cluster per miner; cluster registered with Rancher for Fleet management
+- **7 nodes minimum per cluster** (5 control-plane + etcd + worker combined, 2+ dedicated 8-GPU workers **per GPU type**) — all co-located in a single data center. The 5 combined nodes run the tech stack (GPU Operator, Kata/CoCo, Longhorn, NeMo, Armada Executor, monitoring) and serve inference; **3 dedicated GPU workers per GPU type** keep HA for each GPU type (a mixed-GPU cluster needs 3 per type, e.g. 3 B200 + 3 B300). Fewer nodes cannot simultaneously host the tech stack and serve inference with HA. Full topology + scaling table: [GPU Node Requirements — Cluster Architecture & HA](./docs/GPU-NODE-REQUIREMENTS.md#cluster-architecture--high-availability)
+- Intel TDX 6th Gen Xeon (Granite Rapids) or AMD SEV-SNP 6th Gen EPYC 9006 Series ("Venice" / "Verano") nodes — Intel 5th Gen (Emerald Rapids), AMD 5th Gen (Turin) and AMD 4th Gen (Genoa) are deprecated (existing capacity only) — with 8x NVIDIA B200/B300/RTX PRO 6000 Blackwell or Vera Rubin GPUs (Hopper H100/H200 deprecated; existing Hopper nodes are removed as new Blackwell nodes are onboarded — target November 2026); BIOS + kernel TDX/SEV-SNP enabled; one cluster per miner; cluster registered with Rancher for Fleet management
 - Production Rancher inventory passes the infrastructure-readiness policy (readiness, HA topology, CPU/memory, eight-GPU workers, passthrough wiring, confidential runtime handler)
 - A **100 TAO deposit** held as on-chain registration collateral on the mining hotkey — see [Miner deposit (registration collateral)](#miner-deposit-registration-collateral)
 

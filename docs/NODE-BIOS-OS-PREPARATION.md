@@ -30,7 +30,7 @@ A node in this state is ready to receive the RKE2 registration command.
 ## 1. Hardware baseline
 
 - Dell PowerEdge XE9680, 8× NVIDIA H100 SXM5 80GB (or H200/B200/B300 per [GPU-NODE-REQUIREMENTS.md](GPU-NODE-REQUIREMENTS.md))
-- Intel Xeon 5th/6th Gen with TDX support (Emerald/Granite Rapids)
+- Intel Xeon 6th Gen with TDX support (Granite Rapids) — 5th Gen (Emerald Rapids) is DEPRECATED (existing nodes only)
 - OS disk: ≥1.92 TB mirrored (RAID 1)
 - Data disks: ≥14 TB raw block across NVMe, no filesystem
 - BMC (iDRAC) reachable over Redfish; credentials on hand
@@ -38,7 +38,7 @@ A node in this state is ready to receive the RKE2 registration command.
 Verify the platform before starting:
 
 ```bash
-lscpu | grep -i "Model name"   # Xeon 5xxx/6xxx (Emerald/Granite Rapids)
+lscpu | grep -i "Model name"   # Xeon 6xxx (Granite Rapids) — 5th Gen Xeon 5xxx (Emerald Rapids) is deprecated
 lspci -nn | grep -i nvidia     # 8× [10de:2330]/[10de:2331] 3D controllers
 ```
 
@@ -134,7 +134,7 @@ This section describes the target state; operators automate with `site-2604.yaml
 
 - `kvm_intel.tdx=1` and `nohibernate` on the kernel command line (via a GRUB drop-in, not inline `GRUB_CMDLINE_LINUX` — avoid duplication).
 - IOMMU enabled for the GPU passthrough: VT-d active (BIOS `snoop control` etc. is fine, Intel-VIOMMU activated by default on these kernels).
-- Install the **Intel TDX module** (SEAM) — 2.0.18 for Xeon 6th Gen (Granite Rapids), 1.5.34 for 5th Gen (Emerald Rapids) — into `/boot/efi/EFI/TDX/TDX-SEAM.so` **and** `/lib/firmware/intel/tdx/` (kernel 7.0+ `request_firmware` path). One boot after install, verify:
+- Install the **Intel TDX module** (SEAM) — 2.0.18 for Xeon 6th Gen (Granite Rapids; 1.5.34 for 5th Gen Emerald Rapids, deprecated) — into `/boot/efi/EFI/TDX/TDX-SEAM.so` **and** `/lib/firmware/intel/tdx/` (kernel 7.0+ `request_firmware` path). One boot after install, verify:
 
 ```bash
 journalctl -k -b --no-pager | grep -i tdx
