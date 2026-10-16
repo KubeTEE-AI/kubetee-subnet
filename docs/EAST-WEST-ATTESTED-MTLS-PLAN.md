@@ -92,7 +92,8 @@ steal items below are what we do **next**.
       applied**; live is still `default.rego`
 
 Inbound terminator: the **HAProxy sidecar is rolled on all 10 CC pods** (2026-09-17,
-kata#11649 fixed via the MINIMAL `v4.2.0-fix11649` shim overlay on both clusters —
+kata#11649 fixed via the MINIMAL `v4.2.0-fix11649` shim overlay on both clusters
+(superseded 2026-10-03/13 by `v4.2.0-fix11649-fix16-tx`) —
 decision 2026-09-16: permanent terminator, image `haproxy:3.4.4-alpine`)
 
 ---
@@ -110,7 +111,7 @@ decision 2026-09-16: permanent terminator, image `haproxy:3.4.4-alpine`)
 | `nim/eastwest/resource-policy.rego` | **LIVE** KBS policy (seeded 2026-09-18 via admin API): cpu0 affirming + path×role incl. `proxy-*` for the alpha-recycler. |
 | `nim/eastwest/kubetee_attestation.py` | Client-facing attestation module (Phase 8): `GET /v1/attestation` + inline `X-KubeTEE-Nonce` evidence. Embedded in the litellm `eastwest-fetch-certs` ConfigMap. |
 | `kubetee-subnet/docs/CLIENT-FACING-ATTESTATION.md` | Client guide (Phase 8): API surface, nonce semantics, ITA + local DCAP verification paths. |
-| `nim/glm-5-2-nvfp4-sglang-cc.yaml` | GLM STS + Service `:8443` |
+| `nim/glm-5-2-fp8-sglang-h200-cc.yaml` | GLM STS + Service `:8443` (michigan-97; replaced `nim/glm-5-2-nvfp4-sglang-cc.yaml`, deleted 2026-10-13) |
 | `nim/deepseek-v4-flash-0731-sglang-h200-cc.yaml` | DSV4 STS + Service `:8443` |
 | `fleet-gitops/infrastructure/litellm/staging/values-litellm-na-us-oakland-56.yaml` | LiteLLM TDX overlay (LE public hop + east-west client cert) |
 | `fleet-gitops/infrastructure/trustee/` | Operator v0.21.0 + KbsConfig (Fleet). Manual `kbs-auth-public-key`. |
@@ -494,7 +495,8 @@ owner.
 
 **Status (2026-09-17): COMPLETE.** #11649 was reproduced deterministically on
 stock kata 4.2.0 (ornith-1 `am-h200-29`, glm-5-3-flash `am-h200-23`) and the
-MINIMAL `v4.2.0-fix11649` overlay (idempotent `blockdev-add` only) is live on
+MINIMAL `v4.2.0-fix11649` overlay (idempotent `blockdev-add` only) was live on
+(superseded 2026-10-03/13 by `v4.2.0-fix11649-fix16-tx`)
 **both** clusters (oakland staging, michigan production; fleet commits
 `7c2defe`/`9f765e2`). The sidecar roll then completed: **all 10 CC pods** on
 `na-us-oakland-56` run `fetch-certs` init + `haproxy` sidecar + SGLang,
@@ -525,7 +527,8 @@ The sidecar is a second container in the same sandbox. See spec
 [Follow-up: restore HAProxy sidecar](./EAST-WEST-ATTESTED-MTLS.md#follow-up-restore-haproxy-sidecar-kata11649).
 
 - [x] `v4.2.0-fix11649` overlay on **every CC node of both clusters** (2026-09-17;
-      oakland 10/10 + michigan 7/7, shim sha `15d32291507e…` verified per node) —
+      oakland 10/10 + michigan 7/7, shim sha `15d32291507e…` verified per node;
+      superseded 2026-10-03/13 by `v4.2.0-fix11649-fix16-tx`, sha `75411dfabc50343e…`) —
       init + sidecar rolls no longer hit `Duplicate nodes with node-name='drive-N'`.
 - [x] Sidecar + `fetch-certs` init restored; in-process fetch/HAProxy dropped
       from `start-sglang.sh`.

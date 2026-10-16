@@ -1,7 +1,7 @@
 # East-west attested mTLS (LiteLLM ↔ inference guests)
 
-**Status:** deployed on staging `na-us-oakland-56` (2026-08-15; rows synced 2026-09-11). Five east-west backends, all 2 replicas: `glm-5-2-nvfp4-sglang` (B200), `glm-5-3-flash-sglang-h200`, `ornith-1-5-397b-fp8-sglang-h200`, `dsv41-flash-sglang-h200` (H200), `glm-5-3-sglang-b200-cc` (B200). Services expose `:8443` only. SGLang binds `127.0.0.1:8000` (pod IP `:8000` connection refused). Kubelet HTTPS probes use `:8443` `/health` and `/health_generate` (HAProxy `verify optional` on those GET paths only; all other paths need a verified client cert). LiteLLM presents the Trustee client cert via `sitecustomize.py` (httpx 0.28 ignores `ssl_certificate`). Public hop is still Let’s Encrypt + Traefik. KBS resource policy is still upstream `default.rego` — path×role + cpu0-affirming 401s after attest 200.  
-**Date:** 2026-08-15 (rows synced 2026-09-11)  
+**Status:** deployed on staging `na-us-oakland-56` (2026-08-15; rows synced 2026-09-11, GLM-5.2 row retargeted 2026-10-13). Five east-west backends, all 2 replicas: `glm-5-2-fp8-sglang-h200` (H200 FP8, michigan-97 since 2026-10-12; replaced `glm-5-2-nvfp4-sglang` B200, deleted 2026-10-13), `glm-5-3-flash-sglang-h200`, `ornith-1-5-397b-fp8-sglang-h200`, `dsv41-flash-sglang-h200` (H200), `glm-5-3-sglang-b200-cc` (B200). Services expose `:8443` only. SGLang binds `127.0.0.1:8000` (pod IP `:8000` connection refused). Kubelet HTTPS probes use `:8443` `/health` and `/health_generate` (HAProxy `verify optional` on those GET paths only; all other paths need a verified client cert). LiteLLM presents the Trustee client cert via `sitecustomize.py` (httpx 0.28 ignores `ssl_certificate`). Public hop is still Let’s Encrypt + Traefik. KBS resource policy is still upstream `default.rego` — path×role + cpu0-affirming 401s after attest 200.  
+**Date:** 2026-08-15 (rows synced 2026-09-11, GLM-5.2 row retargeted 2026-10-13)  
 **Approach:** CoCo Confidential AI — Trustee issues TLS credentials after attestation. Apps speak ordinary mTLS. No quote parsing in LiteLLM or SGLang.  
 **Roadmap:** remaining gaps (HTTPS KBS, durable Trustee, gpu0/RVPS, sealed NGC) live in [EAST-WEST-ATTESTED-MTLS-PLAN.md](./EAST-WEST-ATTESTED-MTLS-PLAN.md).
 
@@ -49,11 +49,11 @@ CoCo reference: [Confidential AI / federated learning](https://confidentialconta
 
 ## First-cut workloads
 
-Live LiteLLM `api_base` rows (HTTPS `:8443`), synced 2026-09-11 against `GET /v1/model/info` + the `nemo` StatefulSets. Public names: `z-ai/glm-5.2`, `z-ai/glm-5.3`, `z-ai/glm-5.3-flash`, `ornith/ornith-1.5-397b`, `deepseek/deepseek-v4.1-flash`.
+Live LiteLLM `api_base` rows (HTTPS `:8443`), synced 2026-09-11 against `GET /v1/model/info` + the `nemo` StatefulSets (GLM-5.2 row retargeted 2026-10-13). Public names: `z-ai/glm-5.2`, `z-ai/glm-5.3`, `z-ai/glm-5.3-flash`, `ornith/ornith-1.5-397b`, `deepseek/deepseek-v4.1-flash`, `xiaomi/mimo-v2.6-pro-ultraspeed`. **This table is a point-in-time record** — the live catalog is the model-catalog header in `fleet-gitops/infrastructure/litellm/staging/values.yaml` + `nim/CLAUDE.md`.
 
 | LiteLLM `model_name` | Service (TLS hostname) | Manifest | Public |
 |--------------|------------------------|----------|--------|
-| `z-ai/glm-5.2` | `glm-5-2-nvfp4-sglang.nemo.svc.cluster.local` | `nim/glm-5-2-nvfp4-sglang-cc.yaml` (StatefulSet, 2 replicas, one Service) | yes |
+| `z-ai/glm-5.2` | `glm-5-2-fp8-sglang-h200.nemo.svc.cluster.local` | `nim/glm-5-2-fp8-sglang-h200-cc.yaml` (H200 CC FP8, michigan-97, 2 replicas; since 2026-10-12. B200 NVFP4 `nim/glm-5-2-nvfp4-sglang-cc.yaml` deleted 2026-10-13) | yes |
 | `z-ai/glm-5.3-flash` | `glm-5-3-flash-sglang-h200.nemo.svc.cluster.local` | `nim/glm-5-3-flash-sglang-h200-cc.yaml` (H200 CC, 2 replicas, 2026-08-27) | yes |
 | `z-ai/glm-5.3` | `glm-5-3-sglang-b200-cc.nemo.svc.cluster.local` | `nim/glm-5-3-sglang-b200-cc.yaml` (B200 CC, 2 replicas; retargeted from non-CC `:8000` 2026-09-11) | yes |
 | `ornith/ornith-1.5-397b` | `ornith-1-5-397b-fp8-sglang-h200.nemo.svc.cluster.local` | `nim/ornith-1.5-397b-fp8-sglang-h200-cc.yaml` (H200 CC, 2 replicas; short name retargeted 2026-08-28) | yes (SayGM) |
@@ -86,7 +86,7 @@ Resources (illustrative URIs; keep the `default` repository unless Trustee layou
 
 NIM server cert SANs (explicit, not a wildcard):
 
-- `glm-5-2-nvfp4-sglang.nemo.svc.cluster.local`
+- `glm-5-2-fp8-sglang-h200.nemo.svc.cluster.local` (since 2026-10-12; `glm-5-2-nvfp4-sglang…` SAN retired with the B200 deployment 2026-10-13)
 - `dsv4-0731-sglang-h200.nemo.svc.cluster.local` (STOPPED — backend deleted, replaced by V4.1-Flash; SAN kept)
 - `ornith-1-5-397b-fp8-sglang-h200.nemo.svc.cluster.local`
 - `glm-5-3-flash-sglang-h200.nemo.svc.cluster.local` (added 2026-08-27)
@@ -138,7 +138,7 @@ LiteLLM 1.96 `ssl_certificate` is ignored by httpx 0.28. Live outbound mTLS is `
 
 | Upstream Service | Live `api_base` |
 |------------------|-----------------|
-| GLM | `https://glm-5-2-nvfp4-sglang.nemo.svc.cluster.local:8443/v1` |
+| GLM | `https://glm-5-2-fp8-sglang-h200.nemo.svc.cluster.local:8443/v1` |
 
 `model_list` in the ConfigMap stays `[]`. Flip `api_base` via `/model/update` and **re-include** every `litellm_params` field (known gotcha: unspecified list fields are nulled). Scripts: `nim/scripts/litellm-glm52-https-8443.py`, `nim/scripts/litellm-dsv4-https-8443.py`.
 
@@ -155,18 +155,18 @@ A leftover Terminating LiteLLM pod from an earlier sidecar experiment must be le
 
 ## Tests
 
-- Chat completion + streaming via `llm.kubetee.ai` for `z-ai/glm-5.2` and `deepseek/deepseek-v4-flash-0731`.
+- Chat completion + streaming via `llm.kubetee.ai` for `z-ai/glm-5.2` and `deepseek/deepseek-v4.1-flash` (the withdrawn `deepseek-v4-flash-0731` SKU was smoke-tested 2026-09-11 and retired 2026-08-27).
 - Request to `:8443` without a client cert → HAProxy rejects (`403`) except `GET /health` and `/health_generate`.
 - Guest with debug on or wrong initdata role → CDH denies; pod not Ready on `:8443`.
 - One GLM replica not Ready → Service has the other; no 8443 traffic to the unready pod.
 
 ## Follow-up: restore HAProxy sidecar (kata#11649) — DONE
 
-**Status (2026-09-17): complete.** The sidecar is the **permanent inbound terminator** (decision 2026-09-16) and is rolled on all 10 CC pods on `na-us-oakland-56` — every confidential pod now runs `fetch-certs` init + `haproxy` sidecar + SGLang in the same sandbox, on the MINIMAL `v4.2.0-fix11649` shim overlay.
+**Status (2026-09-17): complete.** The sidecar is the **permanent inbound terminator** (decision 2026-09-16) and is rolled on all 10 CC pods on `na-us-oakland-56` — every confidential pod now runs `fetch-certs` init + `haproxy` sidecar + SGLang in the same sandbox, on the `v4.2.0-fix11649-fix16-tx` shim overlay (current since 2026-10-03; the MINIMAL `v4.2.0-fix11649` tag it replaced carried #11649 only).
 
 History: live GLM-1 on `na-us-oakland-56` (2026-08-14) hit QEMU `Duplicate nodes with node-name='drive-5'` after an init/sidecar EROFS unplug — [kata-containers#11649](https://github.com/kata-containers/kata-containers/issues/11649). Root cause (not a parallel-Create race): `wait_for_device_deleted` reset QMP `SO_RCVTIMEO` to **250ms**; the next container's multi-layer EROFS `blockdev-add` then returned `WouldBlock` after QEMU had already created `drive-N`; CreateContainer retry → Duplicate. The sidecar was pulled out until the shim carried a fix.
 
-**The fix is deployed (2026-09-17):** #11649 was reproduced **deterministically on stock kata 4.2.0** (ornith-1 on `am-h200-29`, glm-5-3-flash on `am-h200-23`: `duplicate QEMU block device ID drive-5` CrashLoopBackOff after every `fetch-certs` init unplug), and the MINIMAL `v4.2.0-fix11649` overlay (idempotent `blockdev-add` — pre-check `query_named_block_nodes`, delete orphaned backend, treat duplicate/timeout as success-or-continue, keep a 60s hotplug-sized QMP read timeout) is live on **both** oakland (staging) and michigan-97 (production). With it, the init + sidecar + main-container sequence boots clean; both wedged pods recovered on the fixed shim. Upstream: [#13635](https://github.com/kata-containers/kata-containers/pull/13635) was **closed unmerged** (2026-09-13, issues-only policy); the issue is OPEN with our live-repro comment (2026-09-17) — no fix in flight. Keep the overlay until an official kata-deploy tag contains the fix.
+**The fix is deployed (2026-09-17):** #11649 was reproduced **deterministically on stock kata 4.2.0** (ornith-1 on `am-h200-29`, glm-5-3-flash on `am-h200-23`: `duplicate QEMU block device ID drive-5` CrashLoopBackOff after every `fetch-certs` init unplug), and the MINIMAL `v4.2.0-fix11649` overlay (idempotent `blockdev-add` — pre-check `query_named_block_nodes`, delete orphaned backend, treat duplicate/timeout as success-or-continue, keep a 60s hotplug-sized QMP read timeout) went live on **both** oakland (staging) and michigan-97 (production) on 2026-09-17. Superseded 2026-10-03/13 by `v4.2.0-fix11649-fix16-tx` (adds #13641 + T15/T16 fix classes). With it, the init + sidecar + main-container sequence boots clean; both wedged pods recovered on the fixed shim. Upstream: [#13635](https://github.com/kata-containers/kata-containers/pull/13635) was **closed unmerged** (2026-09-13, issues-only policy); the issue is OPEN with our live-repro comment (2026-09-17) — no fix in flight. Keep the overlay until an official kata-deploy tag contains the fix.
 
 Upstream fix status (as of 2026-09-17):
 
@@ -181,7 +181,7 @@ gh issue view 11649 --repo kata-containers/kata-containers --json state,closedAt
 gh pr list --repo kata-containers/kata-containers --search "11649" --state all
 ```
 
-When #11649 is actually fixed in the **stock** `containerd-shim-kata-v2` (a kata-deploy tag containing the idempotent `blockdev-add`), retire the `v4.2.0-fix11649` overlay and re-verify a sidecar roll on stock. Until then the overlay is load-bearing for every CC pod with an init container.
+When #11649, #13641, and T15/T16 are all fixed in the **stock** `containerd-shim-kata-v2` (a kata-deploy tag containing idempotent `blockdev-add`, the off-runtime inotify close, and the missing-task `stop_vm` handling), retire the `v4.2.0-fix11649-fix16-tx` overlay and re-verify a sidecar roll on stock. Until then the overlay is load-bearing for every CC pod with an init container.
 
 ## Later (not this cut)
 
