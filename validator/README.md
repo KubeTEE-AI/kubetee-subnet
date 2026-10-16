@@ -229,7 +229,7 @@ VALIDATOR_HOTKEY_SEED=<mnemonic> python scripts/smoke_proxy.py
 | `Dockerfile` | Image definition (python:3.14-slim, non-root) |
 | `docker-compose.yaml` | One-command deploy (owner or reader) |
 | `.env.example` | Full env var template with inline comments |
-| `tests/` | Pytest unit tests (70+ tests, no bittensor_core needed) |
+| `tests/` | Pytest unit tests (96 tests, no bittensor_core needed) |
 | `scripts/smoke_finney.py` | Read-only Finney + Rancher sanity check |
 | `scripts/smoke_proxy.py` | Reader-side proxy smoke test |
 
