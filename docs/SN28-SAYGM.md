@@ -10,8 +10,8 @@ Buyer-visible SKUs on sayGM, served from `llm.kubetee.ai` (LiteLLM in TDX). GLM-
 
 | Buyer model | Miner offer | Pricing | Backend |
 |---|---|---|---|
-| `glm-5.2` | `kubetee/z-ai/glm-5.2` | dynamic | `glm-5-2-nvfp4-sglang` (B200, NVFP4) |
-| `glm-5.3` | `kubetee/z-ai/glm-5.3` | dynamic | `glm-5-3-flash` sibling backend (see `nim/CLAUDE.md`) |
+| `glm-5.2` | `kubetee/z-ai/glm-5.2` | dynamic | `glm-5-2-fp8-sglang-h200` (H200, FP8, michigan-97 — since 2026-10-12; was `glm-5-2-nvfp4-sglang` B200 NVFP4 until 2026-10-13, decommissioned) |
+| `glm-5.3` | `kubetee/z-ai/glm-5.3` | dynamic | `glm-5-3-radixark-nvfp4-sglang-b200-cc` (B200, RadixArk NVFP4, `am-b200-59` — production since 2026-10-13; B200 FP8 build parked as fallback) |
 | `z-ai/glm-5.3-flash` | `kubetee/z-ai/glm-5.3-flash` | dynamic | `glm-5-3-flash-sglang-h200` (H200, FP8) |
 | `ornith/ornith-1.5-397b` | `kubetee/ornith/ornith-1.5-397b` | dynamic (sole provider) | `ornith-1-5-397b-fp8-sglang-h200` (H200, FP8; retargeted 2026-08-28) |
 | `xiaomi/mimo-v2.6-pro-ultraspeed` | `kubetee/xiaomi/mimo-v2.6-pro` | dynamic (sole provider; bootstrap 10% 2026-09-24) | `mimo-v2-6-pro-rl-sglang-b200-cc` (B200 CC, DFLASH spec decode; declared 2026-09-24) |
