@@ -241,11 +241,11 @@ Once every node passes §6, proceed to [NODE-REGISTRATION.md](NODE-REGISTRATION.
 
 Cluster-side minimums (documented in [GPU-NODE-REQUIREMENTS.md](GPU-NODE-REQUIREMENTS.md#cluster-architecture--high-availability) and enforced by the validator):
 
-- **7 nodes minimum** per cluster — 5 control-plane+etcd+worker combined nodes + 2 dedicated 8-GPU workers (per GPU type)
+- **3 nodes minimum** per cluster — 3 same-GPU-type 8-GPU workers, each a combined control-plane+etcd+worker node (3 nodes per additional GPU type for mixed-GPU clusters)
 - All nodes in a single data center, same L2/low-latency fabric
 - One cluster per hotkey
 
-### Decision record — 7-node minimum (2026-09-13)
+### Decision record — 7-node minimum (2026-09-13; superseded 2026-10-19 by the 3-node same-GPU-type minimum above)
 
 The minimum cluster topology was reduced from 8 to 7 nodes: Rationale: the 5-node combined core remains the minimum for etcd quorum with 2-failure tolerance and tech-stack hosting; 2 dedicated GPU workers keep HA for the GPU type (losing 1 of 2 leaves 1 dedicated worker serving) while lowering the entry capital cost for production clusters. The first production cluster (`na-us-michigan-97` — BTLABS, UID 97) registered with 7-node shape with the two additional workers.
 

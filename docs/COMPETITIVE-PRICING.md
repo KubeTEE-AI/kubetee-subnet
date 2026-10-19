@@ -7,7 +7,6 @@ This document is the full design behind the README [Validator Scoring & Attestat
 > v1 reads `https://stats.targon.com/api/miners` each cycle, takes the
 > **highest** miner `$/card` per GPU class, and clamps the GPU price card downward
 > (fail-soft: live → cache → card). It also fetches TAO/USD from the
-> (fail-soft: live → cache → card). It also fetches TAO/USD from the
 > Taostats API and reads alpha→TAO directly from the on-chain metagraph
 > (`mg.price`, zero delay) to size the miner share in USD; a Taostats
 > feed failure skips the cycle and the previous on-chain weights persist

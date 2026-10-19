@@ -429,37 +429,37 @@ nvfwupd --query
 
 ## Cluster Architecture & High Availability
 
-> KubeTEE is a **decentralized multi-cluster architecture**. Each miner operates one RKE2 cluster (one hotkey per cluster), and the full tech stack — GPU Operator, Kata/CoCo runtime classes, NeMo Microservices, Armada Executor, Longhorn storage, monitoring — is deployed onto it via Rancher Fleet GitOps. Miners must provide the minimum cluster shape below to allow high availability, deploy the tech stack, and have enough nodes to run SOTA AI services and enhanced services for enterprises. These minimum requirements are written and enforced in Phase 0.
+> KubeTEE is a **decentralized multi-cluster architecture**. Each miner operates one RKE2 cluster (one hotkey per cluster), and the full tech stack — GPU Operator, Kata/CoCo runtime classes, NeMo Microservices, Armada Executor, Longhorn storage, monitoring — is deployed onto it via Rancher Fleet GitOps. Miners must provide the minimum cluster shape below to allow high availability, deploy the tech stack, and have enough nodes to run SOTA AI services and enhanced services for enterprises. The minimum is **3 nodes of the same GPU type per cluster** (reduced from 7 as the fleet moves to Blackwell-only, multi-cluster operation). These minimum requirements are written and enforced in Phase 0.
 
 ### Minimum cluster topology
 
 | Requirement | Minimum | Why |
 |---|---|---|
-| **Total nodes** | **7 minimum** (5 control-plane+etcd+worker combined, 2+ dedicated GPU workers per GPU type) | 5 nodes run the control plane, etcd, and the tech stack (GPU Operator, Kata/CoCo, Longhorn, NeMo Microservices, Armada Executor, monitoring) while also serving inference; 3+ dedicated 8-GPU workers **per GPU type** run AI job workloads. Fewer nodes cannot simultaneously host the tech stack and serve inference with HA. |
-| **Control-plane + etcd nodes** | **5** (combined control-plane + etcd + worker role) | 5 nodes give etcd quorum with 2-node failure tolerance. These nodes run the control plane AND double as workers — they host the tech stack and can serve inference workloads, so they are not "wasted" on control-plane duty alone. |
-| **Dedicated GPU worker nodes** | **3+ per GPU type** (8x B200/B300/Vera Rubin per node — Hopper deprecated) | **3 nodes of each GPU type** is the minimum for HA — if a cluster serves B300 and Vera Rubin workloads, it needs 3 B300 nodes + 3 Vera Rubin nodes (4 dedicated GPU workers). A single-GPU-type cluster needs 3; a mixed-GPU cluster needs 3 per type. Each 8-GPU worker can run one large confidential workload or multiple smaller ones. |
+| **Total nodes** | **3 minimum** — 3 nodes of the **same GPU type** | A cluster is 3 nodes of one GPU type. Each node is a combined control-plane + etcd + worker that runs the tech stack (GPU Operator, Kata/CoCo, Longhorn, NeMo Microservices, Armada Executor, monitoring), serves inference, and runs AI job workloads. Three is the etcd-quorum minimum and the HA minimum for that GPU type. Fewer nodes cannot hold quorum or survive a node loss. |
+| **Control-plane + etcd nodes** | **3** (combined control-plane + etcd + worker role — the same 3 GPU nodes) | 3 nodes give etcd quorum with 1-node failure tolerance (lose 1 of 3 and still have quorum). These nodes are **not** idle control-plane nodes — every one is an 8-GPU worker that runs the tech stack and serves inference, so none of the cluster's GPU capacity is "wasted" on control-plane duty alone. |
+| **GPU worker nodes — one GPU type** | **3 nodes of the same GPU type** (8x B200/B300/RTX PRO 6000 Blackwell/Vera Rubin per node — Hopper deprecated) | Every node carries the **same GPU type** so NVLink/NVSwitch topology, the CC firmware path, and scheduling stay uniform. A cluster that serves more than one GPU type needs **3 nodes per type** (e.g. 3 B300 + 3 Vera Rubin = 6 nodes). Each 8-GPU node can run one large confidential workload or several smaller ones. |
 | **Co-location** | All nodes in a **single data center** | Multi-GPU NVLink/NVSwitch passthrough requires low latency; cross-DC NVLink is unsupported. One cluster = one DC. |
 | **Network** | All nodes on the same L2 / low-latency fabric | VFIO passthrough, Kata sandbox creation, and in-guest NVLink all depend on local fabric; high-latency cross-DC links cause sandbox timeouts and degraded GPU topology |
 
-### Why 7 nodes minimum
+### Why 3 nodes minimum (one GPU type)
 
-- **5 control-plane + etcd + worker nodes**: RKE2 etcd needs an odd number for quorum. 5 nodes give 2-node failure tolerance (survive losing 2 of 5 and still have quorum). These 5 nodes are **not idle control-plane nodes** — they run the tech stack (GPU Operator, Kata/CoCo runtime classes, Longhorn storage, NeMo Microservices, monitoring, Armada Executor) and can serve inference workloads, so their GPU capacity counts toward the fleet. A 3-node control plane tolerates only 1 failure; 5 is the minimum where a cluster can lose 2 nodes and still serve.
-- **3 dedicated GPU workers per GPU type**: the tech stack on the 5 control-plane+worker nodes consumes CPU/memory and some GPU capacity for NeMo services and inference. 3 dedicated 8-GPU workers **per GPU type** ensure enough bare-metal GPU capacity to run AI services and Armada jobs (inference, fine-tuning, batch) without competing with the tech stack for resources, and keep HA for that GPU type (losing 1 of 2 leaves 1 dedicated worker serving that GPU type). **A mixed-GPU cluster needs 3 per type**: e.g. 3 B300 + 3 Vera Rubin = 6 dedicated GPU workers + 5 control-plane.
-- **7 total (single GPU type)**: 5 (control-plane+etcd+worker, running tech stack + inference) + 2 (dedicated GPU workers of one type, running AI jobs) = 7 nodes minimum for a single-GPU-type cluster. A mixed-GPU cluster adds 2 per additional GPU type.
+- **3 nodes of the same GPU type**: RKE2 etcd needs an odd number for quorum. 3 nodes give 1-node failure tolerance (survive losing 1 of 3 and still have quorum) — the minimum that can lose a node and keep serving. All 3 are **combined control-plane + etcd + worker** nodes running the tech stack (GPU Operator, Kata/CoCo runtime classes, Longhorn storage, NeMo Microservices, monitoring, Armada Executor) **and** serving inference and AI jobs, so no node is idle on control-plane duty and all of the cluster's GPU capacity counts toward the fleet.
+- **One GPU type per cluster**: every node carries the same GPU (8x B200, B300, RTX PRO 6000 Blackwell, or Vera Rubin), which keeps NVLink/NVSwitch topology, the CC firmware path, and scheduling uniform across the cluster. A cluster that serves more than one GPU type needs **3 nodes per type** — e.g. 3 B300 + 3 Vera Rubin = 6 nodes.
+- **3 total (single GPU type)**: 3 combined control-plane+etcd+worker nodes, all one GPU type. This replaces the earlier 7-node shape (5 combined + 2 dedicated) — the tech stack no longer needs its own node pool, so the HA floor is simply 3 same-type GPU nodes. A mixed-GPU cluster adds 3 per additional GPU type.
 
 ### Scaling beyond the minimum
 
 | Scale | Total nodes | Topology | Concurrent 8-GPU workloads | Networking |
 |---|---|---|---|
-| **Minimum** | 7 | 5 control-plane+etcd+worker (tech stack + inference) + 2 dedicated GPU workers | 2+ (dedicated) + inference on the 5 combined | Ethernet OK |
-| **Small** | 12 | 5 control-plane+etcd+worker + 7 dedicated GPU workers | 7+ | Ethernet OK |
-| **Production** | 16+ | 5 control-plane+etcd+worker + 11+ dedicated GPU workers | 11+ | High-bandwidth Ethernet (100/400GbE, jumbo-frame capable) |
-| **Large** | 24+ | 5 control-plane+etcd+worker + 19+ dedicated GPU workers | 19+ | High-bandwidth Ethernet (100/400GbE, jumbo-frame capable) |
-| **HGX Cluster** | 32+ | 5 control-plane+etcd+worker + 27+ dedicated GPU workers (full HGX racks) | 27+ | High-bandwidth Ethernet (100/400GbE, jumbo-frame capable) |
+| **Minimum** | 3 | 3 combined control-plane+etcd+worker 8-GPU nodes — one GPU type (tech stack + inference + jobs) | up to 3 | Ethernet OK |
+| **Small** | 6 | 3 combined + 3 dedicated 8-GPU workers — one GPU type | 3+ (dedicated) + inference on the 3 combined | Ethernet OK |
+| **Production** | 12+ | 3 combined + 9+ dedicated 8-GPU workers — one GPU type | 9+ | High-bandwidth Ethernet (100/400GbE, jumbo-frame capable) |
+| **Large** | 24+ | 3 combined + 21+ dedicated 8-GPU workers — one GPU type | 21+ | High-bandwidth Ethernet (100/400GbE, jumbo-frame capable) |
+| **HGX Cluster** | 32+ | 3 combined + 29+ dedicated 8-GPU workers (full HGX racks, one GPU type) | 29+ | High-bandwidth Ethernet (100/400GbE, jumbo-frame capable) |
 
 > **Networking: high-bandwidth Ethernet is the fabric.** 100/400GbE is the baseline at every scale. If a miner provides an RDMA-capable fabric anyway, it **must be RoCE (RDMA over Converged Ethernet)**. Kernel-bypass RDMA into Confidential Computing guest memory does not work until **TDX Connect is GA on 6th-Generation Intel Xeon (Granite Rapids)**. Our 2026-09-15/16 HCA-passthrough PoC on 8×H200 TDX + PPCIE (kata 4.1.0 and 4.2.0) proved the full device pipeline works (vfio-pci bind → device plugin → CDI → 4×CX7 ACTIVE at 400 Gb/s NDR) but the first memory-registration call on the NIC fails with `EFAULT` — the NIC cannot DMA into encrypted guest memory. Until the TDX Connect hardware path is GA, confidential workloads run over ordinary TCP (NCCL NET/Socket) on the Ethernet fabric; enable jumbo frames for throughput (measured on our 8×H200 fleet: MTU 9000 gives 5.8× non-CC and 3.1× CC pod-to-pod over the Calico overlay).
 
-> **One cluster per hotkey.** A miner may operate multiple clusters, but each cluster must have its own Bittensor hotkey (one cluster per hotkey, enforced by the validator's `kubetee.ai/hotkey` label binding). Multiple clusters = multiple hotkeys = multiple DCs.
+> **One cluster per hotkey.** A miner may operate multiple clusters, but each cluster must have its own Bittensor hotkey (one cluster per hotkey, enforced by the validator's `kubetee.ai/hotkey` label binding). Multiple clusters = multiple hotkeys = multiple DCs. As the fleet moves to **Blackwell-only nodes and multi-cluster operation**, new clusters are Blackwell (B200/B300/RTX PRO 6000/Vera Rubin) at the **3-node same-type** minimum above; existing Hopper clusters are windowed out as Blackwell clusters come online (target November 2026).
 
 See [Node Registration](NODE-REGISTRATION.md) for the RKE2 node registration command and the full enrolled-cluster binding contract, and the README [For Miners (Infrastructure)](../README.md#for-miners-infrastructure) section for the onboarding flow.
 
@@ -476,7 +476,7 @@ See [Node Registration](NODE-REGISTRATION.md) for the RKE2 node registration com
 ### KubeTEE Documentation
 
 - **Node Registration**: [NODE-REGISTRATION.md](NODE-REGISTRATION.md)
-- **Cluster Creation**: see the Rancher documentation for cluster provisioning; KubeTEE miners register existing RKE2 clusters via the node registration command
+- **Cluster Creation**: see the Rancher documentation for cluster provisioning; KubeTEE miners register existing RKE2 clusters via the node registration command. Miners are **not** given Rancher access at cluster creation — a read-only `miner-readonly` account is created manually as an exception only.
 
 ---
 
@@ -484,7 +484,7 @@ See [Node Registration](NODE-REGISTRATION.md) for the RKE2 node registration com
 
 **To register a GPU node to KubeTEE**:
 
-1. ✅ **Hardware**: 8x B200, B300, RTX PRO 6000 Blackwell, or Vera Rubin GPUs on Intel 6th Gen Xeon (Granite Rapids) OR AMD 6th Gen EPYC 9006 ("Venice" / "Verano") — Hopper H100/H200 GPUs and Intel 5th Gen, AMD 5th Gen (Turin), AMD 4th Gen (Genoa) CPUs are **deprecated** and not accepted for new nodes (existing Hopper nodes are removed as Blackwell nodes are onboarded — target November 2026)
+1. ✅ **Hardware**: 8x B200, B300, RTX PRO 6000 Blackwell, or Vera Rubin GPUs on Intel 6th Gen Xeon (Granite Rapids) OR AMD 6th Gen EPYC 9006 ("Venice" / "Verano") — Hopper H100/H200 GPUs and Intel 5th Gen, AMD 5th Gen (Turin), AMD 4th Gen (Genoa) CPUs are **deprecated** and not accepted for new nodes (existing Hopper nodes are removed as Blackwell nodes are onboarded — target November 2026). **3 nodes of the same GPU type per cluster** (see [Cluster Architecture & High Availability](#cluster-architecture--high-availability))
 2. ✅ **Firmware**: Latest version from [NVIDIA DGX Firmware Guide](https://docs.nvidia.com/dgx/dgxh100-fw-update-guide/) (Hopper) or your OEM/HGX procedure
 3. ✅ **BIOS**: TDX/SEV-SNP, CC mode per GPU generation (PPCIe on Hopper; see NVIDIA matrix for Blackwell/Vera Rubin), VFIO/IOMMU enabled
 4. ✅ **OS**: Ubuntu 26.04 clean, kernel 7.0.0-3x pin (GPU Operator manages all GPU software)

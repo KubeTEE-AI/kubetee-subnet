@@ -1,11 +1,11 @@
 # Miner Deposit (Registration Collateral)
 
-Every KubeTEE miner posts a **100 TAO deposit**, held as on-chain registration
-collateral on its own mining hotkey. It exists so that a miner accepting
-confidential workloads has capital committed to the SLA it agreed to, and it is
-the same amount for every miner. This document is the full reference: what the
-primitive is, what it can and cannot do, and the runbooks for the subnet owner,
-miners, and validators.
+Every KubeTEE miner posts a **10 TAO per node deposit** (e.g. 30 TAO on a
+3-node cluster), held as on-chain registration collateral on its own mining
+hotkey. It exists so that a miner accepting confidential workloads has capital
+committed to the SLA it agreed to, and it is the same rate for every miner.
+This document is the full reference: what the primitive is, what it can and
+cannot do, and the runbooks for the subnet owner, miners, and validators.
 
 Summary for the impatient: the deposit is **not** a fee, **not** custodial, and
 **not** slashable. It sits on the miner's own hotkey — KubeTEE never holds it
@@ -56,10 +56,10 @@ deposit **freezes** on the miner's own hotkey until scoring resumes. Because no
 one is enriched by another miner's failure, the mechanism creates no incentive
 to get rivals disqualified.
 
-**Not expressible as "100 TAO" on chain.** `p` is a fraction of the floating
-registration price, capped at 95%. If registration costs τ5, the chain can lock
-at most τ4.75. Any deposit larger than that share is **voluntary** — the miner
-calls `add_collateral` — and the only thing that makes it mandatory is
+**Not expressible as "10 TAO per node" on chain.** `p` is a fraction of the
+floating registration price, capped at 95%. If registration costs τ5, the chain
+can lock at most τ4.75. Any deposit larger than that share is **voluntary** —
+the miner calls `add_collateral` — and the only thing that makes it mandatory is
 validators declining to score a miner who is short. That is a KubeTEE policy the
 chain merely holds.
 
@@ -73,25 +73,31 @@ EMA the pallet uses to value standing collateral.
 
 | Layer | Who sets it | What it does | When |
 |---|---|---|---|
-| Validator | Every validator | Enforces the 100 TAO floor by withholding score | **Phase 0** |
+| Validator | Every validator | Enforces the 10 TAO/node floor by withholding score | **Phase 1** |
 | Chain | Subnet owner, once | `p` and `k` make registration itself partly bonded | **Phase 1** |
 
-The validator layer is what actually produces a 100 TAO deposit, because the
-chain cannot express one. It ships first: it needs no chain change, is
+The validator layer is what actually produces a 10 TAO-per-node deposit, because
+the chain cannot express one. It ships first: it needs no chain change, is
 reversible, and can run in measure-only mode.
 
 The chain layer bonds a slice of the entry price automatically, on top of that.
 It lands in [Phase 1](../README.md#phase-1--expansion) because `collateral_drain_ratio`
 can only be sized against observed per-miner emission — see §3.
 
+> **Early Access carries no deposit.** Both layers are **Phase 1** items —
+> Early Access registration is hand-reviewed and no deposit is collected (or
+> measured) today. The validator gate in §5 ships with its enforcement switch
+> off (`ENFORCE=false`, `REQUIRED_TAO=0`) until Phase 1 turns it on.
+
 ---
 
 ## 3. Owner runbook (chain layer — Phase 1)
 
-> **Not applied in Phase 0.** This section is the prepared runbook for when the
-> chain layer is enabled; `collateral_drain_ratio` is sized against real
-> emission data first. Nothing below needs to run for the 100 TAO deposit to be
-> enforced — that is the validator gate in §5.
+> **Not applied yet.** This section is the prepared runbook for when the
+> chain layer is enabled in Phase 1; `collateral_drain_ratio` is sized against
+> real emission data first. Nothing below needs to run in Early Access — the
+> deposit itself (validator gate, §5) is also a Phase 1 item and is not
+> collected today.
 
 Both extrinsics are owner-or-root, rate limited, and must be submitted outside
 the weights window.
@@ -127,19 +133,20 @@ validators stop scoring them, just to break even. Lower `k` raises that bar and
 lengthens the lockup; higher `k` releases faster.
 
 **Both chain values are set in [Phase 1](../README.md#phase-1--expansion), not
-now.** `k` is only meaningful against a real per-miner emission rate, and Phase 0
-does not yet have one — picking a number before that would be guessing at the
-single parameter that decides how long a miner's capital stays committed. Phase
-0 therefore runs the deposit through the validator gate alone (§5), which needs
-no chain change and is reversible.
+now.** `k` is only meaningful against a real per-miner emission rate, and Early
+Access does not yet have one — picking a number before that would be guessing at
+the single parameter that decides how long a miner's capital stays committed.
+Phase 1 therefore runs the deposit through the validator gate alone (§5), which
+needs no chain change and is reversible.
 
 When the emission data exists, size it directly: with expected emission `E` alpha
 per tempo and a deposit `D` alpha, wind-down is `D / (k × E)` tempos — solve for
 `k` against the term you want. The target is that an honest exit takes roughly
 one rental term, so a miner who stops mining recovers the deposit over a period
 comparable to the hardware commitment they made, not years. For scale: at
-`k = 1`, a 100 TAO deposit against a miner earning the equivalent of τ1/day
-implies about a 100-day wind-down, which is very likely too long.
+`k = 1`, a 30 TAO deposit (3 contributed nodes) against a miner earning the
+equivalent of τ1/day implies about a 30-day wind-down, which may still be too
+long.
 
 ### What p does to tokenomics
 
@@ -181,8 +188,8 @@ Setting the floor at the requirement is the low-maintenance choice: it keeps the
 position compliant without manual top-ups as the alpha price drifts.
 
 **A falling alpha price raises the alpha you must hold**, because the
-requirement is pegged to TAO. Validators export every miner's coverage, so the
-gap is visible before it becomes a problem.
+requirement is pegged to TAO (10 TAO per contributed node). Validators export
+every miner's coverage, so the gap is visible before it becomes a problem.
 
 ---
 
@@ -221,7 +228,8 @@ SDK, runtime, or price feed changed shape.
 Enforcement must ship *after* miners can comply, or the first cycle zeroes
 everyone.
 
-1. **Measure.** Set `REQUIRED_TAO=100`, leave `ENFORCE=false`. Read
+1. **Measure.** Set `REQUIRED_TAO` to the fleet requirement (10 TAO per
+   contributed node), leave `ENFORCE=false`. Read
    `kubetee_miner_collateral_coverage` and
    `kubetee_miner_collateral_status{status="delinquent"}` to see exactly who
    would be affected.
@@ -231,7 +239,8 @@ everyone.
    compliant.
 4. **Bond the entry price — Phase 1.** Set `collateral_lock_share` and
    `collateral_drain_ratio` on chain (§3), once `k` has been sized against real
-   emission data. Steps 1–3 are Phase 0 and do not depend on this.
+   emission data. Steps 1–3 are Phase 1 rollout steps and do not depend on
+   this; nothing here runs during Early Access.
 
 ---
 

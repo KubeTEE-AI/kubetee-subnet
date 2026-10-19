@@ -14,6 +14,7 @@ Buyer-visible SKUs on sayGM, served from `llm.kubetee.ai` (LiteLLM in TDX). GLM-
 | `glm-5.3` | `kubetee/z-ai/glm-5.3` | dynamic | `glm-5-3-radixark-nvfp4-sglang-b200-cc` (B200, RadixArk NVFP4, `am-b200-59` — production since 2026-10-13; B200 FP8 build parked as fallback) |
 | `z-ai/glm-5.3-flash` | `kubetee/z-ai/glm-5.3-flash` | dynamic | `glm-5-3-flash-sglang-h200` (H200, FP8) |
 | `ornith/ornith-1.5-397b` | `kubetee/ornith/ornith-1.5-397b` | dynamic (sole provider) | `ornith-1-5-397b-fp8-sglang-h200` (H200, FP8; retargeted 2026-08-28) |
+| `deepseek-v4.1-flash` / `deepseek-v4.1-flash-tee` | `kubetee/deepseek/deepseek-v4.1-flash` (alias; `-1017` route `kubetee/deepseek/deepseek-v4.1-flash-1017` → `deepseek-v4.1-flash-1017-tee` DECLARED 2026-10-17 at 10% — standing, eligibility gated on the gm-miner worker image roll carrying `verified_models`/`TARGETS` + `-1017`) | dynamic | `deepseek-v4-1-flash-sglang-h200-cc` (H200, FP8, `am-h200-27`) — **DeepSeek-V4.1-Flash-1017 weights since 2026-10-17** (same `deepseek-v4.1-flash` source name kept during the dual-name transition so the baked gm-miner envoy gate keeps serving) |
 | `xiaomi/mimo-v2.6-pro-ultraspeed` | `kubetee/xiaomi/mimo-v2.6-pro` | dynamic (sole provider; bootstrap 10% 2026-09-24) | `mimo-v2-6-pro-rl-sglang-b200-cc` (B200 CC, 2 replicas since 2026-10-13; DFLASH spec decode; declared 2026-09-24) |
 
 Pricing adjusts to the market; per-offer prices are visible on sayGM.

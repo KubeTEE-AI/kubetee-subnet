@@ -34,7 +34,7 @@ Miner clusters keep CC on with guest debug off. Trustee attests those guests.
 
 ## Supply-chain CI
 
-Ordinary supply-chain CI (SAST, image CVE, IaC, provenance) is designed, not yet automated. It is not a staging lane.
+Ordinary supply-chain CI (SAST, image CVE, IaC, provenance) is a **design reference** (manual/advisory practice).
 
 ### Secrets and images
 

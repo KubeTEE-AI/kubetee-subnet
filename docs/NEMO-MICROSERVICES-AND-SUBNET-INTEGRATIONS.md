@@ -90,7 +90,7 @@ KubeTEE treats this as an **open set**: any Bittensor subnet with a SOTA, verifi
 
 ## 6. Stage 0 — Supply-Chain Security Gate
 
-> **Status: designed, not yet automated.** Gate rules below are supply-chain CI, not a staging promotion workflow. See [Deploying in a TEE](./TEE-DEPLOYMENT-AND-CICD.md#supply-chain-ci). Automation is a Phase 0/1 item.
+> **Status: design reference (manual/advisory practice).** Gate rules below are supply-chain CI, not a staging promotion workflow. See [Deploying in a TEE](./TEE-DEPLOYMENT-AND-CICD.md#supply-chain-ci).
 
 Stage 0 scans the workload's **code, container image, and deploying IaC** — not the confidential data the workload will process in production — so the production TEE boundary stays intact.
 

@@ -20,18 +20,20 @@ Before registering your node, ensure the infrastructure setup is complete:
    - Minimum resources: 8 CPU cores, 16 GB RAM
    - Minimum storage: 1.92 TB OS disk in RAID 1 + 21 TB raw block device (unpartitioned, unformatted)
 3. ✅ **Network connectivity** to Rancher management cluster
-4. ✅ **GPU worker nodes** (at least one for production eligibility):
+4. ✅ **GPU worker nodes** — **3 nodes of the same GPU type per cluster** (3 more per additional GPU type for a mixed-GPU cluster) for production eligibility:
    - **CPU with TDX (Intel 6th Gen Xeon "Granite Rapids") or SEV-SNP (AMD 6th Gen EPYC 9006 Series "Venice" / "Verano")** - MANDATORY for GPU nodes (Intel 5th Gen "Emerald Rapids", AMD 5th Gen "Turin" and AMD 4th Gen "Genoa" are DEPRECATED — existing nodes only)
    - **Exactly 8x NVIDIA B200, B300, RTX PRO 6000 Blackwell Server Edition, or Vera Rubin GPUs** - MANDATORY for GPU nodes (Hopper H100/H200 deprecated — existing nodes only, removed as new Blackwell nodes are onboarded, target November 2026)
    - **Latest firmware installed** - See [NVIDIA DGX Firmware Guide](https://docs.nvidia.com/dgx/dgxh100-fw-update-guide/)
    - VFIO/IOMMU configured for passthrough
-5. ✅ **100 TAO deposit** held as on-chain registration collateral on the mining
-   hotkey — see [Miner deposit](../README.md#miner-deposit-registration-collateral).
-   The deposit stays on your own hotkey (KubeTEE never holds it and cannot move
-   it) and is released back to withdrawable stake as the hotkey earns emission.
-   A hotkey below the requirement is scored 0 after a grace window, which stops
-   emission and therefore freezes the deposit until you top up — nothing is
-   confiscated, and the freeze reverses as soon as you are back in compliance.
+5. ✅ **10 TAO per node deposit** as on-chain registration collateral on the mining
+   hotkey — see [Miner deposit](../README.md#miner-deposit-registration-collateral)
+   (e.g. 30 TAO on a 3-node cluster). **Not collected during Early Access** —
+   it is implemented in Phase 1. When in effect, the deposit stays on your own
+   hotkey (KubeTEE never holds it and cannot move it) and is released back to
+   withdrawable stake as the hotkey earns emission. A hotkey below the
+   requirement is scored 0 after a grace window, which stops emission and
+   therefore freezes the deposit until you top up — nothing is confiscated, and
+   the freeze reverses as soon as you are back in compliance.
 
 ## Enrolled Cluster Binding and Validation
 
