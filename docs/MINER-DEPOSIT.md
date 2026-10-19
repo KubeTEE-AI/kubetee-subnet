@@ -152,7 +152,7 @@ long.
 
 A locked alpha is not a recycled one, so a higher `p` means proportionally less
 of each registration returning to unissued supply. See
-[Tokenomics — Registration collateral changes where the registration fee goes](./TOKENOMICS.md#registration-collateral-changes-where-the-registration-fee-goes).
+[Tokenomics — Registration collateral can change where the registration fee goes](./TOKENOMICS.md#registration-collateral-can-change-where-the-registration-fee-goes-phase-1).
 
 ---
 

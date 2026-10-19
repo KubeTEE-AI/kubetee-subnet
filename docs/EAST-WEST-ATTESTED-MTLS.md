@@ -20,7 +20,7 @@ Encrypt LiteLLM → inference traffic so cleartext never exists on the host or t
 - Switching GLM / DSV4 from SGLang to NVIDIA NIM containers
 - Short-lived cert refresh during a multi-hour model boot
 - Trustee-held data-encryption keys for the weight path
-- Miner-cluster backends (see [Later: miner-cluster backends](#later-miner-cluster-backends))
+- Miner-cluster backends (see [Miner-cluster backends](#miner-cluster-backends))
 
 ## Threat model
 
@@ -249,6 +249,8 @@ of the in-cluster ClusterIP URL. Fleet bundle
   backends 2026-09-19: klein + cosmos3 both run the public-endpoint initdata,
   role `image-gen`). The measured agent-policy allowlist in
   `cc_init_data` is per-deployment (same encode-initdata.py flow).
+
+<a id="miner-cluster-backends"></a>
 
 ## Miner-cluster backends — SHIPPED (2026-09-19): michigan-97 backends live
 

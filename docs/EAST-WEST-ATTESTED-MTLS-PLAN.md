@@ -512,7 +512,7 @@ carries the fix.
 
 **Decision (2026-09-16): the sidecar is the permanent terminator, not a stopgap.**
 In-process TLS inside SGLang was evaluated and **rejected** — see the spec's
-[decision record](./EAST-WEST-ATTESTED-MTLS.md#inbound) for the evidence
+[decision record](./EAST-WEST-ATTESTED-MTLS.md#nim-guest-inbound) for the evidence
 (Granian `ssl_verify=False` hardcoded at both call sites; uvicorn
 `CERT_NONE`; rustls `allow_unauthenticated()` unreachable without patching
 the image, which KubeTEE policy forbids). The sidecar is stack-agnostic: the
@@ -527,7 +527,7 @@ requires authenticated `dhi.io` pulls and our CC guest-pull is anonymous.
 See spec [image standard](./EAST-WEST-ATTESTED-MTLS.md).
 
 The sidecar is a second container in the same sandbox. See spec
-[Follow-up: restore HAProxy sidecar](./EAST-WEST-ATTESTED-MTLS.md#follow-up-restore-haproxy-sidecar-kata11649).
+[Follow-up: restore HAProxy sidecar](./EAST-WEST-ATTESTED-MTLS.md#follow-up-restore-haproxy-sidecar-kata11649--done).
 
 - [x] `v4.2.0-fix11649` overlay on **every CC node of both clusters** (2026-09-17;
       oakland 10/10 + michigan 7/7, shim sha `15d32291507e…` verified per node;
@@ -552,7 +552,7 @@ This is independent of sealed NGC. Do not block Phase 1–2 on it.
 ## Phase 7: Miner-cluster backends (blocked)
 
 **Blocked on Phase 2** (HTTPS KBS or attested KBS channel). Spec:
-[Later: miner-cluster backends](./EAST-WEST-ATTESTED-MTLS.md#later-miner-cluster-backends).
+[Miner-cluster backends](./EAST-WEST-ATTESTED-MTLS.md#miner-cluster-backends).
 
 Do not start until CDH no longer fetches `eastwest-nim/tls.key` over plaintext
 HTTP. One Trustee (KubeTEE). Per-cluster server cert + initdata `cluster`.

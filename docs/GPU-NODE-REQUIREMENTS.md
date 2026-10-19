@@ -450,7 +450,7 @@ nvfwupd --query
 ### Scaling beyond the minimum
 
 | Scale | Total nodes | Topology | Concurrent 8-GPU workloads | Networking |
-|---|---|---|---|
+|---|---|---|---|---|
 | **Minimum** | 3 | 3 combined control-plane+etcd+worker 8-GPU nodes — one GPU type (tech stack + inference + jobs) | up to 3 | Ethernet OK |
 | **Small** | 6 | 3 combined + 3 dedicated 8-GPU workers — one GPU type | 3+ (dedicated) + inference on the 3 combined | Ethernet OK |
 | **Production** | 12+ | 3 combined + 9+ dedicated 8-GPU workers — one GPU type | 9+ | High-bandwidth Ethernet (100/400GbE, jumbo-frame capable) |
