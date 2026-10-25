@@ -35,7 +35,15 @@ classifiers = [
     "Topic :: System :: Distributed Computing",
 ]
 dependencies = [
-    "bittensor @ file:./subtensor/sdk/python",
+    # OFFICIAL PyPI release -- not the vendored `subtensor/sdk/python` tree.
+    # The vendored copy carries a `11.x.y.dev0` version and (from subtensor
+    # v478 on) a `bittensor-core>=0.1.6` dep that has no stable PyPI wheel, so
+    # a plain `pip install` of it fails. 11.3.0 is the newest official stable
+    # and pulls the prebuilt `bittensor-core==0.1.5` wheel -- no Rust build.
+    # Verified against live Finney spec_version 484 (2026-10-25): metagraph
+    # reads, hyperparameters, weights_rate_limit and hotkey derivation all
+    # behave identically to the vendored 11.3.1.dev0.
+    "bittensor==11.3.0",
     "httpx>=0.27",
     "prometheus-client>=0.20",
 ]

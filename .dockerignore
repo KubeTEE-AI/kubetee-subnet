@@ -5,24 +5,10 @@
 .github
 .gitmodules
 .gitignore
-subtensor/.git
-subtensor/.gitmodules
-# Cargo/maturin artifacts and non-code subtensor trees. The build needs the
-# subtensor CARGO WORKSPACE intact (root Cargo.toml + Cargo.lock +
-# rust-toolchain.toml + every member and every `[patch]` target under vendor/)
-# because `sdk/bittensor-core-py` is a workspace member -- its `sp-core` and
-# `w3f-bls` deps resolve through the root manifest. Only non-code paths may be
-# dropped here; trimming any listed member or vendor/ target breaks resolution.
-subtensor/target/
-subtensor/docs/
-subtensor/website/
-subtensor/ts-tests/
-subtensor/.github/
-subtensor/.claude/
-subtensor/.agents/
-subtensor/.openai/
-subtensor/.vscode/
-subtensor/.maintain/
+# The chain source reference is not needed at image build time -- the SDK is
+# installed from the official PyPI release (see validator/Dockerfile). Dropping
+# it here keeps the build context to just validator/ + this repo's own files.
+subtensor/
 kubetee_subnet.egg-info/
 .pytest_cache
 docs/

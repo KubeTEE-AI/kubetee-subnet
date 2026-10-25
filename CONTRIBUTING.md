@@ -9,7 +9,7 @@ on-chain emissions.
 ## Development setup
 
 ```bash
-# Clone with submodules (the vendored bittensor SDK lives in subtensor/)
+# Clone with submodules (subtensor/ is the chain source reference; the Python SDK comes from PyPI)
 git clone --recurse-submodules https://github.com/KubeTEE-AI/kubetee-subnet.git
 cd kubetee-subnet
 
