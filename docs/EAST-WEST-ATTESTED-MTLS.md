@@ -140,7 +140,7 @@ Service: port `8443` only (`https`). Pod IP `:8000` is not listening.
 
 Public hop unchanged: Let’s Encrypt on `:4000`, Traefik TLS passthrough, Cloudflare grey-cloud.
 
-LiteLLM 1.96 `ssl_certificate` is ignored by httpx 0.28. Live outbound mTLS is `sitecustomize.py` in ConfigMap `eastwest-fetch-certs`: it loads `/certs/tls.crt` + `/certs/tls.key` into the default `SSLContext`. `api_base` is the Service HTTPS URL (not loopback HAProxy):
+LiteLLM `ssl_certificate` is ignored by httpx 0.28 (still true at 1.103.9). Live outbound mTLS is `sitecustomize.py` in ConfigMap `eastwest-fetch-certs`: it loads `/certs/tls.crt` + `/certs/tls.key` into the default `SSLContext`. `api_base` is the Service HTTPS URL (not loopback HAProxy):
 
 | Upstream Service | Live `api_base` |
 |------------------|-----------------|
@@ -281,7 +281,7 @@ The deployment (`nim/minimax-h3-sglang-h200-cc.yaml`) relies on this authorizati
 Two image models, two API shapes — the deliberate choice ("Option 1"):
 
 - **klein** — OpenAI Images API compatible (`POST /v1/images/generations`, model `black-forest-labs/flux.2-klein-4b`). SGLang speaks this natively.
-- **cosmos3** — native NIM API only (`POST /v1/infer`, `model_mode`-discriminated body; **not** OpenAI images/videos schema). Exposed via LiteLLM `pass_through_endpoints` at `https://llm.kubetee.ai/cosmos3`. The mTLS client cert is inherited automatically (passthrough handler uses `get_async_httpx_client()` → process-global `ssl_verify=/certs/ca.pem` → `sitecustomize.py` east-west chain — verified in vendored 1.97.0).
+- **cosmos3** — native NIM API only (`POST /v1/infer`, `model_mode`-discriminated body; **not** OpenAI images/videos schema). Exposed via LiteLLM `pass_through_endpoints` at `https://llm.kubetee.ai/cosmos3`. The mTLS client cert is inherited automatically (passthrough handler uses `get_async_httpx_client()` → process-global `ssl_verify=/certs/ca.pem` → `sitecustomize.py` east-west chain — verified in vendored 1.97.0, still true at 1.103.9).
 
 **klein b64 delivery fix (the row-level `response_format` trap):** SGLang's image protocol defaults `response_format: "url"` for models without a `default_image_response_format()` override (klein's `Flux2KleinSamplingParams` has none) → relative `/v1/images/<id>/content` URL that **404s through LiteLLM** (no such route; content lives in the SGLang pod). Worse, the row carried `additional_drop_params: ["response_format"]`, so even explicit client `response_format` was stripped. Fix (row-only, live `/model/update`): deployment `model: openai/dall-e-2` — the DALL-E 2 dialect whitelists `response_format` (the GPT-image config used for unknown models does not) — plus row default `response_format: b64_json`. SGLang ignores the `model` body field (protocol `Optional`), so the dialect choice is a pure LiteLLM-side param-validation selection. Result: param-less clients get b64 via the row default; explicit requests override; `url` dead-end impossible.
 

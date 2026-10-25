@@ -26,7 +26,7 @@ KubeTEE follows the CoCo Confidential AI pattern: **Trustee issues TLS credentia
 
 That is not classic quote-in-handshake RA-TLS, and it is not in-guest keygen. Trustee is the relying party (trusted zone). A later profile can bind `report_data` to a guest-generated pubkey if keys must never exist in Trustee; that is not the first cut.
 
-SGLang (and most LLM NIMs) cannot require a client certificate, so the terminator is a second container in the **same** Kata sandbox (HAProxy, not Envoy/Traefik), proxying to the model server on guest loopback. LiteLLM 1.96 `ssl_certificate` is ignored by httpx 0.28; outbound mTLS is `sitecustomize.py` loading the Trustee client cert into the default SSL context. Kubernetes **Service** DNS is the TLS hostname: replicas share one cert SAN; they do not need per-pod endpoints.
+SGLang (and most LLM NIMs) cannot require a client certificate, so the terminator is a second container in the **same** Kata sandbox (HAProxy, not Envoy/Traefik), proxying to the model server on guest loopback. LiteLLM `ssl_certificate` is ignored by httpx 0.28 (still true at 1.103.9); outbound mTLS is `sitecustomize.py` loading the Trustee client cert into the default SSL context. Kubernetes **Service** DNS is the TLS hostname: replicas share one cert SAN; they do not need per-pod endpoints.
 
 **Public hop.** Grey-cloud DNS plus Traefik TLS passthrough is ordinary Let’s Encrypt into the LiteLLM guest (`kata-qemu-tdx-runtime-rs`). Client-attested RA-TLS on `llm.kubetee.ai` is later. If an L7 relay returns to the path, OHTTP+SKR is the attested relay design.
 

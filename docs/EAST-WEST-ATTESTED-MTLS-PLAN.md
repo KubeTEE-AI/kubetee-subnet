@@ -168,7 +168,7 @@ Docker Compose Trustee walkthrough. We steal **practices**, not YAML.
 | SNP `HOST_DATA` / `sev-snp-measure` / live QEMU scrape | TDX MRTD/RTMR + initdata claims. We already bind `role` in initdata (`litellm` vs `nim-terminator`). Pin digest in policy when RVPS is filled — do not scrape QEMU on the GPU node. |
 | 1 GPU SNP (`nvidia.com/pgpu: "1"`, `kata-qemu-nvidia-gpu-snp`) | 8 GPU TDX + PPCIE + NVSwitch. Hopper: `nvidia.com/nvswitch: "4"`, `cc.mode=ppcie`. Blackwell: `cc.mode=on`. Runtime: `kata-qemu-nvidia-gpu-tdx-runtime-rs` only. |
 | Guest-pull block PV (`/dev/trusted_store`, loop `/tmp`) | **kata-direct** for weights. Later CDH LUKS ([pamanseau/kubetee-ai#1](https://github.com/pamanseau/kubetee-ai/issues/1)). Agent `cdh_secure_mount` still hardcodes `sourceType: "empty"` and omits `key` — LUKS is **not** done. |
-| Raw NIM Pod + `genpolicy` on the worker | NIMService / SGLang StatefulSet + `fetch-certs` + HAProxy `:8443`. LiteLLM is Helm 1.96.2 (Fleet), not a Pod manifest. |
+| Raw NIM Pod + `genpolicy` on the worker | NIMService / SGLang StatefulSet + `fetch-certs` + HAProxy `:8443`. LiteLLM is Helm 1.103.2 (Fleet), not a Pod manifest. |
 | Docker Compose Trustee on the GPU node | Fleet operator v0.21.0 (already). Pin to the CoCo/Kata pair; no `latest`. Do not run Trustee on the workload node. |
 | Bitnami Postgres subchart (if we pick SQL) | CloudNativePG is the KubeTEE Postgres standard. Do not add Bitnami. |
 | Single NGC key for pull + runtime | Split: host `imagePullSecret` (CRI, host-pull/erofs) vs sealed runtime key in KBS (guest). |
