@@ -1,5 +1,12 @@
 [submodule "subtensor"]
 	path = subtensor
 	url = https://github.com/RaoFoundation/subtensor.git
+	# Pinned at tag v484 == runtime `spec_version: 484` (Finney active,
+	# verified 2026-10-25 via state_getRuntimeVersion on two endpoints).
+	# The pin itself is the gitlink SHA recorded in this repo's index -- do
+	# NOT put a tag here. `submodule.<n>.branch` must name a real remote
+	# branch: a tag makes `git submodule update --remote` fail with
+	# "Unable to find refs/remotes/origin/<tag>" (verified). `branch = main`
+	# is the tag train the releases are cut from.
 	branch = main
 	shallow = true
