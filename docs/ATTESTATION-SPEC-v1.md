@@ -14,7 +14,7 @@ KubeTEE attestation speaks standard building blocks; where a standard exists we 
 | Concept | Standard | As used by KubeTEE |
 |---|---|---|
 | Evidence | IETF RATS CTR (`conceptual-msg-wrap` / CoRIM evidence profile) — concretely an **Intel TDX quote** | TDX quote + TCG2 CCEL event log, served by the attestation endpoint |
-| Reference values | **CoRIM / CoMID** (`tee-reference-values`) | Published as `.well-known/tee-reference-values.cbor` (CoRIM, CBOR/COSE) + a signed JSON projection (below) |
+| Reference values | **CoRIM / CoMID** (`tee-reference-values`) | `.well-known/tee-reference-values.cbor` (CoRIM, CBOR/COSE) + a signed JSON projection (below) — **publication in progress** (§3 status; contact KubeTEE meanwhile) |
 | Appraisal results | **EAR / AR4SI** (EAT + AR4SI trustworthiness vector) | Trustee's appraisal token (AR4SI claims) is included in the evidence bundle |
 | Evidence↔response binding | — | **KubeTEE construction** (§4): SHA-256 of a fixed-template RFC 8785 JCS statement, zero-padded to 64 bytes into the quote's `REPORTDATA` |
 | Reference-value projection | — | **KubeTEE schema** (§3): `/.well-known/tee-measurements.json` (documented, signed) |
@@ -54,6 +54,8 @@ Implementation facts (for anyone recomputing it): `nim/eastwest/encode-initdata.
 
 ## 3. Reference-value publication (the partner-facing artifact)
 
+> **Publication status (2026-10-27): publication in progress — the shape below is the contract, the endpoints are not yet served.** `/.well-known/tee-measurements.json` and `/.well-known/tee-reference-values.cbor` do not answer today (HTTP 404 as of this date). **Contact KubeTEE for current reference values** until the endpoints go live — that is the interim path for verification-contract step 3's "published values". Treat every schema/lifecycle rule below as binding for what will be served.
+
 Three publications, one version, one lifecycle:
 
 ### 3.1 `/.well-known/tee-measurements.json` — signed JSON projection (human + automation)
@@ -91,7 +93,7 @@ The **KubeTEE measurement-projection schema** (this section defines it; partners
 }
 ```
 
-Signing: `signature.sig` is **Ed25519 over the RFC 8785 (JCS) canonicalized document with `signature` removed**. The verification public key and `key_id` are distributed **out-of-band** (partner onboarding); the key is offline (§5).
+Signing: `signature.sig` is **Ed25519 over the RFC 8785 (JCS) canonicalized document with `signature` removed**. The verification public key and `key_id` are carried in the attestation **keyset** (`signing_keys`, §5) — bound into the quote via `keyset_digest`, so a partner extracts and trusts it from verified evidence. **No out-of-band key distribution** (explicit design decision 2026-10-27: end-to-end east-west). The signing key itself is offline (§5).
 
 **Version lifecycle (strictly enforced by the signer, never rewritten):**
 
@@ -104,6 +106,8 @@ Signing: `signature.sig` is **Ed25519 over the RFC 8785 (JCS) canonicalized docu
 The same reference values as a standard **CoRIM/CoMID** (veraison `corim-rs` structure; RVPS ingests it natively) — this is the machine format; the JSON projection is its signed human/automation twin. The same CoRIM is pushed to the fleet RVPS (Phase 4 feed).
 
 ### 3.3 `ATTESTATION-REFERENCE-MEASURES.md` — human-readable twin
+
+> Pending — ships with the §3 publication (same version stream, same lifecycle).
 
 Full `cc_init_data` TOML + blob hash, MRTD/RTMR0-3 + MRCONFIGID values, OVMF/shim sha256, kata version, guest driver — everything a human needs to diff a fleet change against the published baseline.
 
@@ -156,7 +160,8 @@ switches the quote binding AND adds `keyset`/`bindings`/`evidence`/`appraisal`
 atomically. Rollback = unset the flag (the exact legacy shape returns; the
 `BindingGuard` fails mixed shapes closed in both directions — never ship v1
 fields with the legacy binding or vice versa). Reference-value rows in the
-publication schema are `active` as of this date.
+publication schema are **specified but not yet published** (§3 status:
+publication in progress).
 
 | Surface | Live binding | Status |
 |---|---|---|
@@ -193,7 +198,7 @@ The attestation bundle's `keyset` (served on the endpoint; bound into `report_da
 | Client TLS key (`llm.kubetee.ai`) | **K8s Secret `litellm-tls`** mounted at `/etc/tls` (fleet `values-litellm-na-us-oakland-56.yaml`) — external PKI / cert-manager issuance path is **retired history** (Vault/VSO removed 2026-07-23; `SECRET-MANAGEMENT-STRATEGY.md`) | **Phase 5 target:** per-boot P-256 keygen in memory → ACME DNS-01 (SANs: `llm.kubetee.ai` + a unique per-boot SAN vs LE's 5-duplicate limit) → cert+key only to container-local tmpfs `/run/kubetee-tls` → fail-closed. The per-boot SPKI feeds `tls_public_keys` and `keyset_digest` |
 | East-west keys (`eastwest-ca`, `eastwest-nim`, `eastwest-litellm`) | **KBS (Trustee) secret store** — seeded with `kbs-client set-resource` (`default/eastwest-ca`, `default/eastwest-nim`, `default/eastwest-litellm`), fetched in-guest via CDH (`fetch-certs.sh` → `http://127.0.0.1:8006/cdh/resource/…`) | Written to the host-shared `/certs` emptyDir **today**; Phase 5 same-roll scope moves the fetch into the using container's entrypoint → that container's tmpfs |
 | Signing keys (`signing_keys` in keyset) | Same custody class as east-west (KBS) unless a row documents otherwise | |
-| Reference-value signing key (`key_id: kubetee-measurements-2026`) | **Offline Ed25519** — private key never in cluster or repo; pubkey + `key_id` distributed to partners out-of-band | CoRIM signing uses COSE_Sign1 per the standard (evaluated at build time); the JSON projection's Ed25519 signature is as specified above |
+| Reference-value signing key (`key_id: kubetee-measurements-2026`) | **Offline Ed25519** — private key never in cluster or repo. The **public** key + `key_id` ride in the attestation keyset (`signing_keys`) and are quote-bound via `keyset_digest` — partners never receive them out-of-band (2026-10-27: out-of-band distribution rejected; east-west end to end) | The served keyset embeds the offline key's pubkey; a partner trusts it because the quote binds it. CoRIM signing uses COSE_Sign1 per the standard (evaluated at build time); the JSON projection's Ed25519 signature is as specified above |
 
 ### Verification contract (what a partner must check)
 
