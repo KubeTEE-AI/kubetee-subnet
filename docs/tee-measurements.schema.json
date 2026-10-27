@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kubetee.ai/.well-known/tee-measurements.schema.json",
+  "title": "kubetee.tee-measurements/1",
+  "description": "KubeTEE reference-value projection served at /.well-known/tee-measurements.json (signed twin of the CoRIM at /.well-known/tee-reference-values.cbor). Spec: ATTESTATION-SPEC-v1.md §3.",
+  "type": "object",
+  "required": ["schema", "version", "status", "not_before", "key_id", "measurements", "initdata", "guest", "signature"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": { "const": "kubetee.tee-measurements/1" },
+    "version": { "type": "integer", "minimum": 1, "description": "Strictly increasing per publication; history append-only." },
+    "status": { "enum": ["upcoming", "active", "revoked"] },
+    "not_before": { "type": "string", "format": "date-time" },
+    "key_id": { "type": "string", "description": "Reference-value signing key id (out-of-band pubkey distribution)." },
+    "measurements": {
+      "type": "object",
+      "required": ["mrtd", "rtmr0", "rtmr1", "rtmr2", "rtmr3", "mrconfigid"],
+      "additionalProperties": false,
+      "properties": {
+        "mrtd":      { "$ref": "#/$defs/hex48" },
+        "rtmr0":     { "$ref": "#/$defs/hex48" },
+        "rtmr1":     { "$ref": "#/$defs/hex48" },
+        "rtmr2":     { "$ref": "#/$defs/hex48" },
+        "rtmr3":     { "$ref": "#/$defs/hex48" },
+        "mrconfigid":{ "$ref": "#/$defs/hex48" }
+      }
+    },
+    "initdata": {
+      "type": "object",
+      "required": ["sha384", "algorithm", "files"],
+      "additionalProperties": false,
+      "properties": {
+        "sha384":   { "$ref": "#/$defs/hex48" },
+        "algorithm":{ "const": "sha384" },
+        "files": {
+          "type": "object",
+          "required": ["aa.toml", "cdh.toml", "policy.rego"],
+          "additionalProperties": { "type": "string" },
+          "properties": {
+            "aa.toml":     { "type": "string" },
+            "cdh.toml":    { "type": "string" },
+            "policy.rego": { "type": "string" }
+          }
+        }
+      }
+    },
+    "guest": {
+      "type": "object",
+      "required": ["kata_version", "ovmf_fd_sha256", "shim_sha256"],
+      "additionalProperties": true,
+      "properties": {
+        "kata_version":        { "type": "string" },
+        "ovmf_fd_sha256":      { "$ref": "#/$defs/hex64" },
+        "shim_sha256":         { "$ref": "#/$defs/hex64" },
+        "kernel":              { "type": "string" },
+        "nvidia_guest_driver": { "type": "string" }
+      }
+    },
+    "signature": {
+      "type": "object",
+      "required": ["alg", "key_id", "sig"],
+      "additionalProperties": false,
+      "properties": {
+        "alg":   { "const": "ed25519" },
+        "key_id":{ "type": "string" },
+        "sig":   { "type": "string", "contentEncoding": "base64",
+                  "description": "Ed25519 over RFC 8785 (JCS) of this document with `signature` removed." }
+      }
+    }
+  },
+  "$defs": {
+    "hex48": { "type": "string", "pattern": "^hex:[0-9a-f]{96}$", "description": "SHA-384 measurement register (48 bytes), hex-prefixed." },
+    "hex64": { "type": "string", "pattern": "^hex:[0-9a-f]{64}$", "description": "SHA-256 digest of a binary (e.g. OVMF fd, shim), hex-prefixed." }
+  }
+}

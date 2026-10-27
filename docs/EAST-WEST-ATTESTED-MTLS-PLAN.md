@@ -14,7 +14,7 @@ NGC/HF, HTTPS KBS, durable Trustee storage, gpu0+initdata policy, five-actor
 ops — without copying SNP YAML or making guest-pull the TDX default.
 
 **Already built:** Trustee-issued mTLS across the LiteLLM ↔ inference-guest hop
-— GLM-5.2, GLM-5.3 (RadixArk NVFP4), GLM-5.3-Flash, Ornith-1.5-397B,
+— GLM-5.2, GLM-5.3 (RadixArk NVFP4), Ornith-1.5-397B,
 MiMo-V2.6-Pro, and DeepSeek-V4.1-Flash (which replaced the withdrawn
 `deepseek-v4-flash-0731`) on `na-us-oakland-56` + `na-us-michigan-97`. Spec:
 [EAST-WEST-ATTESTED-MTLS.md](./EAST-WEST-ATTESTED-MTLS.md).
