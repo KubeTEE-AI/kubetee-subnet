@@ -2,7 +2,7 @@
 
 **Status:** live on staging `na-us-oakland-56` (2026-09-18) — endpoint + inline evidence shipped on the LiteLLM gateway (3 CPU-TDX replicas, `kata-qemu-tdx-runtime-rs`).
 **Audience:** miners and clients calling the KubeTEE inference API who want cryptographic proof that responses came from a TDX confidential guest.
-**Related:** [EAST-WEST-ATTESTED-MTLS.md](./EAST-WEST-ATTESTED-MTLS.md) (live east-west spec), [EAST-WEST-ATTESTED-MTLS-PLAN.md](./EAST-WEST-ATTESTED-MTLS-PLAN.md) (roadmap).
+**Related:** [EAST-WEST-ATTESTED-MTLS.md](./EAST-WEST-ATTESTED-MTLS.md) (live east-west spec + roadmap, merged 2026-10-27).
 
 > **`kubetee.attestation.v1` is the wire construction since 2026-10-27** — the
 > quote is bound to the v1 JCS statement (`bindings.report_data_statement` +
