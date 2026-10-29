@@ -1,6 +1,7 @@
-"""Lium marketplace pricing feed — DORMANT in v1.3.1 (default OFF).
+"""Lium marketplace pricing feed — selected by the price card (v1.3.3).
 
-When ``KUBETEE_MARKET_PRICING=1`` the effective per-class price becomes
+When the published price card's ``pricing.lium`` switch is on the effective
+per-class price becomes
 
     max(static floor, (1 + MARKET_MARKUP_FRAC) * highest(Lium, Targon))
 
@@ -25,12 +26,11 @@ The Targon half is the existing `TargonPayoutFeed` resolution (live
 `unitRate`; `maxPrice` fallback for unsupplied classes; `targetPrice` is
 never read).
 
-v1.3.1 ships this DORMANT: ``KUBETEE_MARKET_PRICING`` defaults to 0, no
-Lium request is ever made, and `TargonPayoutFeed.effective_card()` stays
-byte-identical to v1.3.0 (floor-clamped, card-capped). Activation is a
-coordinated env flip across every weight-setting validator — flipping
-only some makes their weights diverge (old: card-capped clamp; new:
-market + 10%, uncapped).
+v1.3.3 ships this DORMANT (card switch ``pricing.lium`` defaults to false):
+no Lium request is ever made, and `TargonPayoutFeed.effective_card()` stays
+byte-identical to v1.3.0 (floor-clamped, card-capped) until the owner flips
+the switch on the published card (`scripts/set_pricing_flags.py --lium on`)
+— every v1.3.3+ validator then adopts market + 10% on its next epoch read.
 """
 
 from __future__ import annotations

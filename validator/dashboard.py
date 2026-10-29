@@ -88,8 +88,9 @@ def build_html(snapshot: dict) -> str:
         _targon_chips = '<div class="gpu"><b>–</b>Targon feed off</div>'
 
     # Lium market medians chips (v1.3.2 display-only). The header shows
-    # whether the market+10% rule is LIVE (pricing flag on) or display
-    # only — the medians never touch weights until the coordinated flip.
+    # whether the market+10% rule is LIVE (card switch on) or display
+    # only — the medians never touch weights until the owner flips the
+    # published card's pricing.lium switch.
     lium_payout = snapshot.get("lium_payout", {}) or {}
     lium_pricing = bool(snapshot.get("lium_pricing", False))
     _lium_chips = ""
@@ -109,6 +110,12 @@ def build_html(snapshot: dict) -> str:
         "live — market + 10% pricing"
         if lium_pricing
         else "display only — weights unaffected"
+    )
+
+    # Targon panel header (v1.3.3): the card's pricing.targon switch.
+    targon_pricing = bool(snapshot.get("targon_pricing", True))
+    _targon_mode = (
+        "live — clamps pay toward SN4" if targon_pricing else "off — flat card"
     )
 
     # Miner table rows — all prices normalized per hour
@@ -219,7 +226,7 @@ tr:hover td{{background:rgba(79,156,255,0.04)}}
 </div>
 
 <div class="panel full">
-  <h2>Targon SN4 live payout (USD per card-hour) — {pricing_source}</h2>
+  <h2>Targon SN4 live payout (USD per card-hour) — {pricing_source} · {_targon_mode}</h2>
   <div class="gpus">
 {_targon_chips}  </div>
 </div>
@@ -288,6 +295,7 @@ def build_dashboard_json(snapshot: dict) -> dict:
         "targon_payout": dict(snapshot.get("targon_payout", {}) or {}),
         "lium_payout": dict(snapshot.get("lium_payout", {}) or {}),
         "lium_pricing": bool(snapshot.get("lium_pricing", False)),
+        "targon_pricing": bool(snapshot.get("targon_pricing", True)),
         "miners": miners,
         "fleet_gpus": dict(snapshot.get("fleet_gpus", {})),
         "miner_usd": round(total_earned, 2),

@@ -186,11 +186,13 @@ def test_parse_price_card_extracts_floors_and_envelopes_them():
         }
     )
     assert parsed is not None
-    card, got_floors = parsed
+    card, got_floors, pricing = parsed
     assert card == {"H100": 3.0, "H200": 3.5}
     assert got_floors is not None
     assert got_floors["H200"] == pytest.approx(3.95)
     assert got_floors["B300"] == pytest.approx(9.5)
+    # no pricing object -> v1.3.3 defaults
+    assert pricing == {"targon": True, "lium": False}
 
 
 def test_parse_price_card_floor_envelope():
@@ -229,6 +231,7 @@ def test_parse_price_card_rejects_unknown_class_and_bad_values():
     assert ok is not None
     assert ok[0] == {"H100": 3.0, "H200": 3.5}
     assert ok[1] is None  # v1.2.0-shaped card: no floors
+    assert ok[2] == {"targon": True, "lium": False}  # no pricing: defaults
 
 
 def test_parse_price_card_drops_invalid_floors_individually():
@@ -255,12 +258,18 @@ def test_resolve_card_without_floors_keeps_cache_floors():
     def fetch_none():
         raise RuntimeError("store down")
 
-    card, floors, source = resolve_card(
-        fetch_none, fallback=({"H100": 3.3}, {"H100": 2.5})
+    card, floors, pricing, source = resolve_card(
+        fetch_none,
+        fallback=(
+            {"H100": 3.3},
+            {"H100": 2.5},
+            {"targon": True, "lium": True},
+        ),
     )
     assert source == "cache"
     assert card == {"H100": 3.3}
     assert floors == {"H100": 2.5}
+    assert pricing == {"targon": True, "lium": True}
 
 
 def test_resolve_card_published_without_floors_returns_none_floors():
@@ -270,10 +279,11 @@ def test_resolve_card_published_without_floors_returns_none_floors():
     def fetch_legacy():
         return {"usd_per_gpu_hour": {"H100": 4.0}, "version": 1}
 
-    card, floors, source = resolve_card(fetch_legacy)
+    card, floors, pricing, source = resolve_card(fetch_legacy)
     assert source == "published"
     assert card["H100"] == pytest.approx(4.0)
     assert floors is None
+    assert pricing == {"targon": True, "lium": False}  # v1.3.3 defaults
 
 
 def test_pricefeederror_is_runtimeerror():
@@ -505,3 +515,74 @@ def test_targon_published_failure_falls_to_card(tmp_path, monkeypatch):
     resolved, source = feed.resolve_per_card_usd()
     assert source == "card"
     assert resolved == DEFAULT_USD_CARD
+
+
+# --- pricing switches (v1.3.3: on the card, not the env) ---------------------
+
+
+def test_parse_price_card_extracts_pricing_switches():
+    parsed = parse_price_card(
+        {
+            "usd_per_gpu_hour": {"H100": 3.0},
+            "targon_pricing": False,
+            "lium_pricing": True,
+            "version": 1,
+        }
+    )
+    assert parsed is not None
+    assert parsed[2] == {"targon": False, "lium": True}
+
+
+def test_parse_price_card_pricing_drops_non_bool():
+    """Non-boolean switch values drop to the default for that switch;
+    the other switch survives."""
+    parsed = parse_price_card(
+        {
+            "usd_per_gpu_hour": {"H100": 3.0},
+            "targon_pricing": True,
+            "lium_pricing": "yes",  # non-bool: dropped -> default False
+            "version": 1,
+        }
+    )
+    assert parsed is not None
+    assert parsed[2] == {"targon": True, "lium": False}
+
+
+def test_parse_price_card_bad_pricing_values_use_defaults():
+    parsed = parse_price_card(
+        {
+            "usd_per_gpu_hour": {"H100": 3.0},
+            "targon_pricing": "on",  # not a bool: ignored
+            "lium_pricing": 1,  # not a bool: ignored
+            "version": 1,
+        }
+    )
+    assert parsed is not None
+    assert parsed[2] == {"targon": True, "lium": False}
+
+
+def test_build_price_carries_pricing_switches():
+    from price_card import build_price_card
+
+    card = build_price_card(
+        epoch=42,
+        usd_per_gpu_hour={"H100": 3.0},
+        floors={"H100": 2.5},
+        pricing={"targon": True, "lium": True},
+    )
+    assert card["targon_pricing"] is True
+    assert card["lium_pricing"] is True
+    # round-trip through the parser
+    parsed = parse_price_card(card)
+    assert parsed is not None
+    assert parsed[2] == {"targon": True, "lium": True}
+
+
+def test_build_price_card_writes_defaults_when_unset():
+    """No pricing -> the default switches are written flat (older readers
+    ignore the unknown fields)."""
+    from price_card import build_price_card
+
+    card = build_price_card(epoch=1, usd_per_gpu_hour={"H100": 3.0})
+    assert card["targon_pricing"] is True
+    assert card["lium_pricing"] is False

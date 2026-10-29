@@ -28,14 +28,15 @@ from hippius_store import (
 )
 from infrastructure_validation import node_posture, validate_miner
 from miner_scoring import MinerInput, compute_weights
-from price_card import build_price_card, require_card, resolve_card
+from price_card import (
+    DEFAULT_PRICING,
+    build_price_card,
+    require_card,
+    resolve_card,
+)
 from price_feed import PriceFeed, PriceFeedError
 from rancher_client import RancherClient, RancherEvidenceError, hotkey_of
-from targon_payout_feed import (
-    DEFAULT_FLOOR_FRAC,
-    TargonPayoutFeed,
-    market_pricing_enabled,
-)
+from targon_payout_feed import DEFAULT_FLOOR_FRAC, TargonPayoutFeed
 
 logging.basicConfig(
     level=os.environ.get("LOG_LEVEL", "INFO").upper(),
@@ -78,6 +79,7 @@ class Validator:
             )
         self._last_card: dict[str, float] | None = None
         self._last_floors: dict[str, float] | None = None
+        self._last_pricing: dict[str, bool] = dict(DEFAULT_PRICING)
         self._last_submitted_epoch = -1
         self._last_set_block: int | None = None
         self._last_targon_payout: dict[str, float] = {}
@@ -104,7 +106,7 @@ class Validator:
             metrics.record_skip("rancher")
             return
 
-        card, floors, card_source = self._resolve_card()
+        card, floors, pricing, card_source = self._resolve_card()
         try:
             require_card(card_source, self._first_cycle())
         except Exception as exc:
@@ -113,10 +115,14 @@ class Validator:
                 raise
         self._last_card = card
         self._last_floors = floors
+        self._last_pricing = pricing
         # The feed must clamp against the card the subnet actually
         # committed this epoch (manual per-class floors when the published
-        # card carries them; else the v1.2.0-equivalent 0.75 x card).
+        # card carries them; else the v1.2.0-equivalent 0.75 x card), and
+        # price in the MODE the card's switches select (v1.3.3: targon
+        # clamp on, lium market off — defaults).
         self.targon.set_manual_floors(floors)
+        self.targon.set_pricing_flags(pricing)
 
         effective_card, pricing_source, targon_age = self._targon_card()
         log.info(
@@ -368,7 +374,8 @@ class Validator:
                 "effective_card": effective_card,
                 "targon_payout": self._last_targon_payout or {},
                 "lium_payout": self.targon.lium_snapshot(),
-                "lium_pricing": market_pricing_enabled,
+                "lium_pricing": bool(pricing.get("lium", False)),
+                "targon_pricing": bool(pricing.get("targon", True)),
                 "chain_emissions": chain_emissions,
                 "pricing_source": pricing_source,
                 "card_source": card_source,
@@ -431,17 +438,45 @@ class Validator:
 
     def _resolve_card(
         self,
-    ) -> tuple[dict[str, float], dict[str, float] | None, str]:
+    ) -> tuple[
+        dict[str, float],
+        dict[str, float] | None,
+        dict[str, bool],
+        str,
+    ]:
         if self.hippius is not None:
             card = self.targon.card()
             floors = self._publisher_floors()
-            self._publish_card(card, floors)
-            return card, floors, "published"
-        card, floors, source = resolve_card(
+            pricing = self._publisher_pricing()
+            self._publish_card(card, floors, pricing)
+            return card, floors, pricing, "published"
+        card, floors, pricing, source = resolve_card(
             self._read_published_card,
-            (self._last_card, self._last_floors),
+            (self._last_card, self._last_floors, self._last_pricing),
         )
-        return card, floors, source
+        return card, floors, pricing, source
+
+    def _publisher_pricing(self) -> dict[str, bool]:
+        """The owner's pricing switches to publish (v1.3.3).
+
+        PRESERVES the currently published `pricing` object when it parses:
+        the owner flips the switches by editing price-card.json in S3
+        (scripts/set_pricing_flags.py), and the validator must not clobber
+        that deliberate act on its next re-publish. Only when the
+        published object is unreadable (or predates v1.3.3) do we fall
+        back to the defaults (targon on, lium off) — matching what every
+        reader computes for the same card.
+        """
+        try:
+            published = self._read_published_card()
+            from price_card import parse_price_card
+
+            parsed = parse_price_card(published)
+            if parsed is not None:
+                return parsed[2]
+        except Exception:  # noqa: BLE001 - unreadable => defaults
+            pass
+        return dict(DEFAULT_PRICING)
 
     def _publisher_floors(self) -> dict[str, float] | None:
         """The owner's manual per-class floors, in the published card.
@@ -506,6 +541,7 @@ class Validator:
         self,
         card: dict[str, float],
         floors: dict[str, float] | None = None,
+        pricing: dict[str, bool] | None = None,
     ) -> None:
         if self.dry_run:
             log.info("dry-run: skip publish price-card %s", card)
@@ -514,7 +550,10 @@ class Validator:
             self.hippius.put_json(
                 DEFAULT_CARD_KEY,
                 build_price_card(
-                    epoch=self._epoch(), usd_per_gpu_hour=card, floors=floors
+                    epoch=self._epoch(),
+                    usd_per_gpu_hour=card,
+                    floors=floors,
+                    pricing=pricing,
                 ),
             )
             metrics.record_publish("price-card", True)

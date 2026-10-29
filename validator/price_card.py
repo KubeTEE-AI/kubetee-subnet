@@ -9,6 +9,19 @@ compiled-in default, NOT to an operator override. A class the published card
 omits falls back to the compiled-in price (the designed fallback in the
 feed), not the local override, so two honest validators stay identical.
 
+The card also carries the **pricing switches** (v1.3.3): the flat fields
+`targon_pricing` (default `true`) and `lium_pricing` (default `false`)
+move the per-epoch pricing MODE onto the consensus object itself,
+replacing the v1.3.1 `KUBETEE_MARKET_PRICING` env flag (readers
+upgrading across versions never edit their `.env`, so an env flag could
+never be flipped fleet-wide). Defaults reproduce v1.3.0 pricing exactly;
+the owner flips them by editing the published card
+(`scripts/set_pricing_flags.py`) and every v1.3.3+ validator adopts the
+new mode on its next epoch read. A card that omits them (any pre-v1.3.3
+writer) parses to the defaults, so old and new validators agree in both
+directions — until the owner flips a switch, which is a deliberate act
+gated on every weight-setting validator running v1.3.3+.
+
 The card also carries **manual per-class floors** (`floors`): the USD values
 below which the live Targon payout can never pull a class. They replace the
 old global `floor_frac x card` (v1.2.0, `KUBETEE_TARGON_PRICE_FLOOR_FRAC`).
@@ -34,7 +47,7 @@ from __future__ import annotations
 
 import time
 
-from targon_payout_feed import DEFAULT_USD_CARD
+from targon_payout_feed import DEFAULT_PRICING, DEFAULT_USD_CARD
 
 CARD_ENVELOPE_MIN_FRAC = 0.8
 CARD_ENVELOPE_MAX_FRAC = 1.25
@@ -55,12 +68,16 @@ def build_price_card(
     epoch: int,
     usd_per_gpu_hour: dict[str, float],
     floors: dict[str, float] | None = None,
+    pricing: dict[str, bool] | None = None,
 ) -> dict:
-    """The exact published price-card.json shape (v1.3.0 adds `floors`).
+    """The exact published price-card.json shape (v1.3.0 adds `floors`,
+    v1.3.3 adds the `targon_pricing`/`lium_pricing` switches).
 
-    `floors` is optional and omitted when empty, so a v1.2.0 reader (which
-    does not know the field) and a v1.3.0 reader both accept the object
-    (version stays 1; each side's parser skips unknown fields).
+    `floors` is optional and omitted when empty, so older readers and newer
+    ones both accept the object (version stays 1; each side's parser skips
+    unknown fields). The pricing switches (`targon_pricing` default true,
+    `lium_pricing` default false) are written as FLAT fields; a reader that
+    predates v1.3.3 ignores them and keeps its compiled-in behavior.
     """
     card: dict = {
         "epoch": epoch,
@@ -72,6 +89,13 @@ def build_price_card(
     }
     if floors:
         card["floors"] = {str(k).upper(): float(v) for k, v in floors.items()}
+    switches = dict(DEFAULT_PRICING)
+    if pricing:
+        for key, value in pricing.items():
+            name = str(key).lower()
+            if name in switches and isinstance(value, bool):
+                switches[name] = value
+    card.update({f"{name}_pricing": value for name, value in switches.items()})
     return card
 
 
@@ -99,15 +123,34 @@ def _floors_from_payload(payload: dict) -> dict[str, float] | None:
     return floors or None
 
 
+def _pricing_from_payload(payload: dict) -> dict[str, bool]:
+    """Extract the `targon_pricing`/`lium_pricing` switches, or the
+    defaults if absent/invalid.
+
+    Non-boolean values drop to the default for that switch; a payload
+    without either field parses to the defaults (targon on, lium off) —
+    exactly what every pre-v1.3.3 card means.
+    """
+    pricing = dict(DEFAULT_PRICING)
+    for name, default in DEFAULT_PRICING.items():
+        raw = payload.get(f"{name}_pricing")
+        if isinstance(raw, bool):
+            pricing[name] = raw
+    return pricing
+
+
 def parse_price_card(
     payload: object,
-) -> tuple[dict[str, float], dict[str, float] | None] | None:
-    """Validate a published card; return ({class: usd}, {class: floor}).
+) -> tuple[dict[str, float], dict[str, float] | None, dict[str, bool]] | None:
+    """Validate a published card; return ({class: usd}, {class: floor},
+    {switch: on/off}).
 
     Returns None if the payload is not a valid v1 card. The floors half is
     None when the card carries no floors (pre-v1.3.0 shape) — consumers then
     default to `0.75 x card` per class, which is exactly what v1.2.0 does,
-    keeping the two versions in sync during the transition.
+    keeping the two versions in sync during the transition. The pricing
+    half defaults to (targon on, lium off) when the card carries no
+    `pricing` object (pre-v1.3.3 shape).
     """
     if not isinstance(payload, dict):
         return None
@@ -126,7 +169,7 @@ def parse_price_card(
         out[klass] = float(value)
     if not out:
         return None
-    return out, _floors_from_payload(payload)
+    return out, _floors_from_payload(payload), _pricing_from_payload(payload)
 
 
 def clamp_to_envelope(published: dict[str, float]) -> dict[str, float]:
@@ -146,16 +189,26 @@ def clamp_to_envelope(published: dict[str, float]) -> dict[str, float]:
 
 def resolve_card(
     published_fetcher,
-    fallback: tuple[dict[str, float], dict[str, float] | None] | None = None,
-) -> tuple[dict[str, float], dict[str, float] | None, str]:
-    """Resolve the working (card, floors) pair from the published object.
+    fallback: (
+        tuple[
+            dict[str, float],
+            dict[str, float] | None,
+            dict[str, bool],
+        ]
+        | None
+    ) = None,
+) -> tuple[dict[str, float], dict[str, float] | None, dict[str, bool], str]:
+    """Resolve the working (card, floors, pricing) triple from the
+    published object.
 
     The card half is validated + envelope-clamped; the floors half is
     extracted + floor-envelope-clamped (or None when the card predates
     v1.3.0, mapping to the v1.2.0-equivalent `0.75 x card` default in the
-    feed). Returns (card, floors, source). On any fetch/parse failure uses
-    `fallback` (the previous epoch's pair) or, at startup, the compiled-in
-    default with no floors. The caller refuses to START
+    feed); the pricing half defaults to (targon on, lium off) when the card
+    predates v1.3.3. Returns (card, floors, pricing, source). On any
+    fetch/parse failure uses `fallback` (the previous epoch's triple) or,
+    at startup, the compiled-in default with no floors and default
+    pricing. The caller refuses to START
     (CardUnavailableError) when a fresh validator has nothing at all;
     mid-run it keeps the previous card.
     """
@@ -166,18 +219,24 @@ def resolve_card(
         except Exception:  # noqa: BLE001 - any fetch failure is a fallback
             published = None
     if published is not None:
-        card, floors = published
-        return clamp_to_envelope(card), floors, "published"
+        card, floors, pricing = published
+        return clamp_to_envelope(card), floors, pricing, "published"
     if fallback is not None and fallback[0]:
         return (
             dict(fallback[0]),
             (dict(fallback[1]) if fallback[1] else None),
+            dict(fallback[2]),
             "cache",
         )
     # Fresh validator, nothing cached, published object unavailable: fall
     # back to the trust root but signal it loudly so the caller can refuse
     # to start. Mid-run the caller passes its previous card as `fallback`.
-    return dict(DEFAULT_USD_CARD), None, "default"
+    return (
+        dict(DEFAULT_USD_CARD),
+        None,
+        dict(DEFAULT_PRICING),
+        "default",
+    )
 
 
 def require_card(card_source: str, is_first_cycle: bool) -> None:

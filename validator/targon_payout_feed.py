@@ -18,11 +18,13 @@ the transition changes nothing until the owner retunes the floors.
 Always on. Degrades live -> last known (cached on disk) -> published
 (S3) -> card, and never skips a cycle.
 
-v1.3.1: the Lium "market + 10%" rule (KUBETEE_MARKET_PRICING, default
-OFF — see market_pricing.py) layers on top of the Targon resolution:
-when the coordinated flag lands, effective_card() prices each class at
-max(floor, 1.10 x highest(Lium median, Targon live)) with no card cap.
-With the flag off this module is byte-identical to v1.3.0.
+v1.3.1: the Lium "market + 10%" rule layers on top of the Targon
+resolution: when the card's `pricing.lium` switch is on, effective_card()
+prices each class at max(floor, 1.10 x highest(Lium median, Targon live))
+with no card cap. v1.3.3 moved the switch from the KUBETEE_MARKET_PRICING
+env var (which readers never edit when upgrading) onto the published
+price card itself; the default (lium off) keeps this module
+byte-identical to v1.3.0.
 """
 
 from __future__ import annotations
@@ -34,9 +36,9 @@ import urllib.request
 
 from config import Config
 
-# v1.3.1: dormant Lium market pricing (see market_pricing.py). Imported
-# lazily inside the enabled path only — with the flag off (default) this
-# module never touches Lium and stays byte-identical to v1.3.0.
+# v1.3.1: dormant Lium market pricing (see market_pricing.py). v1.3.3:
+# the activation switch lives on the published price card
+# (`pricing.lium`), set per-cycle via set_pricing_flags — no env var.
 
 # The /api/miners REST endpoint is retired: it only listed classes with
 # supplied capacity, so B200/RTX6000 had no live price at all. The snapshot
@@ -61,17 +63,14 @@ DEFAULT_USD_CARD: dict[str, float] = {
 # published card's floors.
 DEFAULT_FLOOR_FRAC = 0.75
 
-# v1.3.1: Lium market pricing ("market + 10%") ships DORMANT. When the
-# coordinated env flip lands (KUBETEE_MARKET_PRICING=1 on every
-# weight-setting validator, together), effective_card() prices each class
-# at max(floor, 1.10 x highest(Lium median, Targon)) with no card cap
-# (owner decision 2026-10-29). Until then this is dead code: no Lium
-# request is made and pricing is byte-identical to v1.3.0.
-market_pricing_enabled = bool(
-    os.environ.get("KUBETEE_MARKET_PRICING", "").strip()
-    and os.environ.get("KUBETEE_MARKET_PRICING", "").strip().lower()
-    in {"1", "true", "yes", "on"}
-)
+# v1.3.1: Lium market pricing ("market + 10%") ships DORMANT. v1.3.3 moved
+# the activation switch onto the published price card (`pricing.lium`), set
+# per-cycle by validator.py from the card every validator reads each epoch
+# (owner decision 2026-10-29: readers upgrading across versions never edit
+# their .env, so an env flag could never be flipped fleet-wide). Until the
+# owner flips the card's switch this is dead code: no Lium request is made
+# and pricing is byte-identical to v1.3.0.
+DEFAULT_PRICING: dict[str, bool] = {"targon": True, "lium": False}
 
 CACHE_PATH = os.environ.get(
     "KUBETEE_TARGON_CACHE",
@@ -192,9 +191,29 @@ class TargonPayoutFeed:
         # floors each cycle so the feed always prices against the card
         # the subnet actually committed this epoch.
         self._manual_floors: dict[str, float] | None = None
+        self._pricing_flags: dict[str, bool] = dict(DEFAULT_PRICING)
         self._fetcher = per_card_fetcher
         # v1.3.1 market-pricing diagnostics: "live" | "cache" | "off"
         self.last_lium_source = "off"
+
+    def set_pricing_flags(self, pricing: dict[str, bool] | None) -> None:
+        """Inject the resolved price card's pricing switches (v1.3.3).
+
+        validator.py calls this each cycle right after resolving the card,
+        so the mode follows the published object — flip once in S3 and
+        every v1.3.3+ validator adopts it on its next epoch read. None
+        resets to the defaults (targon on, lium off).
+        """
+        if pricing:
+            self._pricing_flags = {
+                str(k).lower(): bool(v) for k, v in pricing.items()
+            }
+        else:
+            self._pricing_flags = dict(DEFAULT_PRICING)
+
+    def pricing_flags(self) -> dict[str, bool]:
+        """The active pricing switches (card-injected or defaults)."""
+        return dict(self._pricing_flags)
 
     def lium_snapshot(self) -> dict[str, float]:
         """DISPLAY-ONLY Lium market medians (v1.3.2): one request per
@@ -202,10 +221,10 @@ class TargonPayoutFeed:
 
         Fetches live, degrading to the on-disk cache; never raises
         (fail-soft — an empty dict means "Lium feed off" on the page).
-        When KUBETEE_MARKET_PRICING is on this returns the same medians
+        When the card's lium switch is on this returns the same medians
         the pricing path already fetched (no double request).
         """
-        if market_pricing_enabled:
+        if self._pricing_flags.get("lium"):
             return dict(getattr(self, "_lium_used", {}) or {})
         from market_pricing import (  # noqa: PLC0415 - lazy: display only
             fetch_lium_per_card_usd,
@@ -282,15 +301,22 @@ class TargonPayoutFeed:
     def effective_card(self) -> tuple[dict[str, float], str]:
         """Card clamped to [manual floor, card] per class, and source.
 
-        v1.3.1: when KUBETEE_MARKET_PRICING is on (coordinated flip; DORMANT
-        by default), each class instead prices at
+        v1.3.3: when the published card's `pricing.lium` switch is on,
+        each class instead prices at
         ``max(floor, 1.10 x highest(Lium median, Targon live))`` with NO
-        card cap (owner decision 2026-10-29). With the flag off (v1.3.0
-        behavior) this is byte-identical to v1.3.0.
+        card cap (owner decision 2026-10-29). With the switch off
+        (default) this is byte-identical to v1.3.0.
+
+        The `targon` switch (default on) gates the supply-side clamp
+        itself: off = pay the flat card, no feed pull-down.
         """
         resolved, source = self.resolve_per_card_usd()
-        if market_pricing_enabled:
+        if self._pricing_flags.get("lium"):
             return self._market_effective_card(resolved), source
+        if not self._pricing_flags.get("targon", True):
+            # Targon clamp off: pay the flat card (floors still hold via
+            # min(card, ...) trivially — the card IS the price).
+            return self.card(), source
         effective: dict[str, float] = {}
         for klass, card_price in self.card().items():
             floor = self.floor_for(klass, card_price)
@@ -305,8 +331,8 @@ class TargonPayoutFeed:
         """max(floor, 1.10 x highest(Lium, Targon)) per class — uncapped.
 
         The static floor still holds when both feeds price a class below
-        it (or neither feed covers the class). This path only runs under
-        KUBETEE_MARKET_PRICING=1; it never caps at the card.
+        it (or neither feed covers the class). This path only runs when
+        the card's `pricing.lium` switch is on; it never caps at the card.
         """
         lium: dict[str, float] | None = None
         lium_source = "off"
