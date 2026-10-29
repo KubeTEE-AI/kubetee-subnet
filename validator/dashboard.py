@@ -40,9 +40,9 @@ def build_html(snapshot: dict) -> str:
     fleet_gpus = snapshot.get("fleet_gpus", {})
     miners = snapshot.get("miners", [])
     published_at = float(snapshot.get("published_at", time.time()))
-    from datetime import datetime
+    from datetime import datetime, timezone
 
-    pub_str = datetime.utcfromtimestamp(published_at).strftime(
+    pub_str = datetime.fromtimestamp(published_at, timezone.utc).strftime(
         "%Y-%m-%d %H:%M:%S UTC"
     )
     age_min = int((time.time() - published_at) / 60)
@@ -86,6 +86,30 @@ def build_html(snapshot: dict) -> str:
             _targon_chips += f'<div class="gpu"><b>{html.escape(str(klass))} {html.escape(str(arrow))}</b>${_fmt(price)}/card/hr</div>\n'
     if not _targon_chips:
         _targon_chips = '<div class="gpu"><b>–</b>Targon feed off</div>'
+
+    # Lium market medians chips (v1.3.2 display-only). The header shows
+    # whether the market+10% rule is LIVE (pricing flag on) or display
+    # only — the medians never touch weights until the coordinated flip.
+    lium_payout = snapshot.get("lium_payout", {}) or {}
+    lium_pricing = bool(snapshot.get("lium_pricing", False))
+    _lium_chips = ""
+    for klass in _GPU_ORDER:
+        if klass in lium_payout:
+            price = float(lium_payout[klass])
+            committed = float(effective_card.get(klass, 0.0))
+            arrow = (
+                "down"
+                if price < committed
+                else ("up" if price > committed else "=")
+            )
+            _lium_chips += f'<div class="gpu"><b>{html.escape(str(klass))} {html.escape(str(arrow))}</b>${_fmt(price)}/card/hr</div>\n'
+    if not _lium_chips:
+        _lium_chips = '<div class="gpu"><b>–</b>Lium feed off</div>'
+    _lium_mode = (
+        "live — market + 10% pricing"
+        if lium_pricing
+        else "display only — weights unaffected"
+    )
 
     # Miner table rows — all prices normalized per hour
     hours_per_epoch = float(snapshot.get("hours_per_epoch", 1.2))
@@ -201,6 +225,12 @@ tr:hover td{{background:rgba(79,156,255,0.04)}}
 </div>
 
 <div class="panel full">
+  <h2>Lium market — median of rented nodes (USD per card-hour) — {_lium_mode}</h2>
+  <div class="gpus">
+{_lium_chips}  </div>
+</div>
+
+<div class="panel full">
   <h2>GPU inventory this cycle</h2>
   <div class="gpus">
 {gpu_chips}  </div>
@@ -255,6 +285,9 @@ def build_dashboard_json(snapshot: dict) -> dict:
         "card": dict(snapshot.get("card", {})),
         "floors": dict(snapshot.get("floors", {}) or {}),
         "effective_card": dict(snapshot.get("effective_card", {})),
+        "targon_payout": dict(snapshot.get("targon_payout", {}) or {}),
+        "lium_payout": dict(snapshot.get("lium_payout", {}) or {}),
+        "lium_pricing": bool(snapshot.get("lium_pricing", False)),
         "miners": miners,
         "fleet_gpus": dict(snapshot.get("fleet_gpus", {})),
         "miner_usd": round(total_earned, 2),

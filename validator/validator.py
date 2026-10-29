@@ -31,7 +31,11 @@ from miner_scoring import MinerInput, compute_weights
 from price_card import build_price_card, require_card, resolve_card
 from price_feed import PriceFeed, PriceFeedError
 from rancher_client import RancherClient, RancherEvidenceError, hotkey_of
-from targon_payout_feed import DEFAULT_FLOOR_FRAC, TargonPayoutFeed
+from targon_payout_feed import (
+    DEFAULT_FLOOR_FRAC,
+    TargonPayoutFeed,
+    market_pricing_enabled,
+)
 
 logging.basicConfig(
     level=os.environ.get("LOG_LEVEL", "INFO").upper(),
@@ -363,6 +367,8 @@ class Validator:
                 "floors": floors or {},
                 "effective_card": effective_card,
                 "targon_payout": self._last_targon_payout or {},
+                "lium_payout": self.targon.lium_snapshot(),
+                "lium_pricing": market_pricing_enabled,
                 "chain_emissions": chain_emissions,
                 "pricing_source": pricing_source,
                 "card_source": card_source,

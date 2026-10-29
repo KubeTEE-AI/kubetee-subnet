@@ -287,3 +287,92 @@ def test_on_flag_default_floors_match_v130_when_no_manual(monkeypatch):
     live = {"H200": 1.0}
     effective, _ = _feed(fetcher=lambda: live).effective_card()
     assert effective["H200"] == pytest.approx(5.5 * DEFAULT_FLOOR_FRAC)
+
+
+# --- v1.3.2 display-only Lium snapshot --------------------------------------
+
+
+def test_lium_snapshot_display_only_no_flag(monkeypatch):
+    """Flag off: lium_snapshot() fetches for DISPLAY, never touches
+    effective_card() — weights stay byte-identical to v1.3.0."""
+    monkeypatch.setattr(targon_payout_feed, "market_pricing_enabled", False)
+    import market_pricing as mp
+
+    monkeypatch.setattr(
+        mp,
+        "fetch_lium_per_card_usd",
+        lambda: {"H200": 3.9, "B200": 6.025},
+    )
+    feed = _feed(fetcher=lambda: {"H200": 1.0})
+    snap = feed.lium_snapshot()
+    assert snap == {"H200": 3.9, "B200": 6.025}
+    # pricing unchanged: floor 0.75 x 5.5 = 4.125 lifts live 1.0
+    effective, _ = feed.effective_card()
+    assert effective["H200"] == pytest.approx(4.125)
+
+
+def test_lium_snapshot_reuses_market_fetch_when_flag_on(monkeypatch):
+    """Flag on: lium_snapshot() returns the same medians the pricing
+    path fetched (no second Lium request)."""
+    monkeypatch.setattr(targon_payout_feed, "market_pricing_enabled", True)
+    import market_pricing as mp
+
+    calls = []
+
+    def _fetch():
+        calls.append(1)
+        return {"H200": 3.9}
+
+    monkeypatch.setattr(mp, "fetch_lium_per_card_usd", _fetch)
+    feed = _feed(fetcher=lambda: {"H200": 3.5})
+    feed.effective_card()  # pricing fetch #1
+    snap = feed.lium_snapshot()
+    assert snap == {"H200": 3.9}
+    assert len(calls) == 1  # display reused the pricing fetch
+
+
+def test_lium_snapshot_fail_soft_off(monkeypatch):
+    """Lium down + no cache -> empty dict (page shows 'Lium feed off')."""
+    monkeypatch.setattr(targon_payout_feed, "market_pricing_enabled", False)
+    import market_pricing as mp
+
+    monkeypatch.setenv("KUBETEE_LIUM_CACHE", "/nonexistent/lium.json")
+    monkeypatch.setattr(
+        mp,
+        "fetch_lium_per_card_usd",
+        lambda: (_ for _ in ()).throw(MarketFeedError("down")),
+    )
+    feed = _feed(fetcher=lambda: {})
+    assert feed.lium_snapshot() == {}
+
+
+def test_dashboard_renders_lium_panel():
+    import dashboard as _dashboard
+
+    snapshot = {
+        "epoch": 1,
+        "block": 1,
+        "tempo": 360,
+        "hours_per_epoch": 1.2,
+        "usd_per_alpha": 4.2,
+        "card": {"H200": 5.5},
+        "floors": {"H200": 4.125},
+        "effective_card": {"H200": 4.125},
+        "targon_payout": {"H200": 3.5},
+        "lium_payout": {"H200": 3.9},
+        "lium_pricing": False,
+        "miners": [],
+        "fleet_gpus": {"H200": 8},
+        "miner_usd": 0.0,
+        "owner_usd": 0.0,
+        "total_pool_usd": 0.0,
+        "published_at": 1793000000.0,
+    }
+    html_out = _dashboard.build_html(snapshot)
+    assert "Lium market" in html_out
+    assert "median of rented nodes" in html_out
+    assert "display only" in html_out
+    assert "$3.90" in html_out
+    blob = _dashboard.build_dashboard_json(snapshot)
+    assert blob["lium_payout"] == {"H200": 3.9}
+    assert blob["lium_pricing"] is False

@@ -196,6 +196,31 @@ class TargonPayoutFeed:
         # v1.3.1 market-pricing diagnostics: "live" | "cache" | "off"
         self.last_lium_source = "off"
 
+    def lium_snapshot(self) -> dict[str, float]:
+        """DISPLAY-ONLY Lium market medians (v1.3.2): one request per
+        cycle for the dashboard, zero pricing impact.
+
+        Fetches live, degrading to the on-disk cache; never raises
+        (fail-soft — an empty dict means "Lium feed off" on the page).
+        When KUBETEE_MARKET_PRICING is on this returns the same medians
+        the pricing path already fetched (no double request).
+        """
+        if market_pricing_enabled:
+            return dict(getattr(self, "_lium_used", {}) or {})
+        from market_pricing import (  # noqa: PLC0415 - lazy: display only
+            fetch_lium_per_card_usd,
+            load_lium_cache,
+            save_lium_cache,
+        )
+
+        try:
+            per_card = fetch_lium_per_card_usd()
+            save_lium_cache(per_card)
+            return per_card
+        except Exception:  # noqa: BLE001 - display only, fail-soft
+            cached = load_lium_cache()
+            return dict(cached) if cached else {}
+
     def card(self) -> dict[str, float]:
         """The committed card (compiled-in default + operator override)."""
         return dict(self._card)
@@ -301,6 +326,7 @@ class TargonPayoutFeed:
             if lium:
                 lium_source = "cache"
         self.last_lium_source = lium_source
+        self._lium_used = dict(lium or {})
         effective: dict[str, float] = {}
         for klass, card_price in self.card().items():
             floor = self.floor_for(klass, card_price)
