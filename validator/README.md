@@ -96,6 +96,7 @@ A reader validator:
 - Does **not** serve the proxy (port 9101 is unused)
 - Does **not** publish to S3 (no Hippius keys)
 - Runs the same Targon supply-side clamp as the owner (always on)
+- Market pricing (`KUBETEE_MARKET_PRICING`) must match the owner's flip — see [v1.3.1 market pricing](#v131-market-pricing-dormant)
 
 A reader needs only: a valid Bittensor hotkey registered on SN90 with `validator_permit=True` + a Taostats API key. No Rancher account, no manual onboarding.
 
@@ -108,6 +109,24 @@ The subnet-owner validator runs with additional credentials (`RANCHER_BEARER_TOK
 - **Serves the Rancher proxy** on port 9101 — third-party validators authenticate with their hotkey signature and the proxy injects the bearer token upstream
 - **Publishes** the price card, payout snapshot, and dashboard to Hippius S3
 - Runs the same Targon supply-side clamp as readers (pulls the GPU card down toward SN4 payouts)
+
+## v1.3.1 market pricing (dormant)
+
+The **market + 10%** rule ships DORMANT in v1.3.1 behind `KUBETEE_MARKET_PRICING` (default **off**). With the flag off, pricing is byte-identical to v1.3.0 — floors kept, card-capped, Targon-only, **no Lium request is ever made**.
+
+With the flag on, each GPU class prices at:
+
+```
+max(static floor, 1.10 × highest(Lium median of rented nodes, Targon live payout))
+```
+
+- **Lium input**: the `Median of rented nodes` field from Lium's public Grafana ([provider-pricing dashboard](https://grafana.lium.io/d/provider-pricing-v1/price-your-gpus)), latest snapshot, anonymous read
+- **SKU rule**: one card class maps to several Lium GPU types (e.g. `NVIDIA B300 SXM6 AC` / `NVIDIA B300 SXM6 PC`); the class takes the **highest** SKU value
+- **Fallback**: a GPU type with no rented nodes uses the median over **all** listed nodes
+- **No card cap** (owner decision 2026-10-29): a market above the card pays market + 10%
+- **Static floor holds**: when both feeds price a class below the floor, the class pays the floor
+
+**Do not enable on a single validator.** Flipping only some weight-setting validators makes their weights diverge (old: card-capped clamp; new: market + 10%, uncapped). Upgrade every weight-setting validator to v1.3.1 first, then flip `KUBETEE_MARKET_PRICING=1` on all of them together. Fail-soft: a Lium outage degrades to the on-disk cache, then per-class Targon-only pricing; a class absent from both feeds pays the floor.
 
 ## Environment variables
 
@@ -126,6 +145,7 @@ See [`.env.example`](./.env.example) for the full list with inline comments. Sum
 | `KUBETEE_HIPPIUS_SECRET_KEY` | owner only | key | — | S3 publish (publisher role) |
 | `KUBETEE_PROXY_PORT` | no | 9101 | — | Proxy listen port (owner only) |
 | `KUBETEE_METRICS_PORT` | no | 9100 | 9100 | Prometheus metrics port |
+| `KUBETEE_MARKET_PRICING` | no | 0 | 0 | Lium market + 10% pricing (v1.3.1, **dormant** — flip on all validators together, see [market pricing](#v131-market-pricing-dormant)) |
 | `DRY_RUN` | no | — | — | Set to `1` to skip `set_weights` |
 | `ONCE` | no | — | — | Set to `1` to run a single cycle and exit |
 
@@ -150,6 +170,7 @@ Whatever miners do not earn is set as weight on the **owner UID** — the protoc
 | TAO/USD | Taostats live | CoinGecko public `simple/price` (no key) → cache → S3 `payout.json["tao_usd"]` | skip cycle |
 | Alpha→TAO | Chain metagraph `mg.price` | S3 `payout.json["alpha_to_tao"]` | skip cycle |
 | GPU card (Targon) | Live API | local disk cache | S3 `payout.json["per_card_usd"]` → compiled default |
+| GPU card (Lium, v1.3.1 dormant) | Live Grafana query | local disk cache | per-class Targon-only → static floor |
 | Rancher evidence | Owner: direct / Reader: proxy | — | skip cycle (stale evidence mis-scores) |
 | Chain metagraph | Finney subtensor | — | skip cycle (chain is source of truth) |
 
@@ -222,6 +243,7 @@ VALIDATOR_HOTKEY_SEED=<mnemonic> python scripts/smoke_proxy.py
 | `miner_scoring.py` | USD-denominated proportional weight computation |
 | `price_feed.py` | TAO/USD (Taostats → CoinGecko → cache) + alpha→TAO (chain) + S3 fallback |
 | `targon_payout_feed.py` | Targon SN4 live per-card USD + 4-tier fallback |
+| `market_pricing.py` | Lium market feed + the dormant market+10% rule (v1.3.1) |
 | `price_card.py` | Build/parse/clamp the GPU price card |
 | `hippius_store.py` | SigV4-signed S3 client (publish + anonymous read) |
 | `dashboard.py` | Static HTML dashboard generator (baked-in data) |
@@ -229,7 +251,7 @@ VALIDATOR_HOTKEY_SEED=<mnemonic> python scripts/smoke_proxy.py
 | `Dockerfile` | Image definition (python:3.14-slim, non-root) |
 | `docker-compose.yaml` | One-command deploy (owner or reader) |
 | `.env.example` | Full env var template with inline comments |
-| `tests/` | Pytest unit tests (96 tests, no bittensor_core needed) |
+| `tests/` | Pytest unit tests (131 tests, no bittensor_core needed) |
 | `scripts/smoke_finney.py` | Read-only Finney + Rancher sanity check |
 | `scripts/smoke_proxy.py` | Reader-side proxy smoke test |
 

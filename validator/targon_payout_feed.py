@@ -17,6 +17,12 @@ manual floor fall back to 0.75 x card — exactly the v1.2.0 floor, so
 the transition changes nothing until the owner retunes the floors.
 Always on. Degrades live -> last known (cached on disk) -> published
 (S3) -> card, and never skips a cycle.
+
+v1.3.1: the Lium "market + 10%" rule (KUBETEE_MARKET_PRICING, default
+OFF — see market_pricing.py) layers on top of the Targon resolution:
+when the coordinated flag lands, effective_card() prices each class at
+max(floor, 1.10 x highest(Lium median, Targon live)) with no card cap.
+With the flag off this module is byte-identical to v1.3.0.
 """
 
 from __future__ import annotations
@@ -27,6 +33,10 @@ import urllib.error
 import urllib.request
 
 from config import Config
+
+# v1.3.1: dormant Lium market pricing (see market_pricing.py). Imported
+# lazily inside the enabled path only — with the flag off (default) this
+# module never touches Lium and stays byte-identical to v1.3.0.
 
 # The /api/miners REST endpoint is retired: it only listed classes with
 # supplied capacity, so B200/RTX6000 had no live price at all. The snapshot
@@ -50,6 +60,18 @@ DEFAULT_USD_CARD: dict[str, float] = {
 # v1.2.0 validator agree on the floor until the owner retunes the
 # published card's floors.
 DEFAULT_FLOOR_FRAC = 0.75
+
+# v1.3.1: Lium market pricing ("market + 10%") ships DORMANT. When the
+# coordinated env flip lands (KUBETEE_MARKET_PRICING=1 on every
+# weight-setting validator, together), effective_card() prices each class
+# at max(floor, 1.10 x highest(Lium median, Targon)) with no card cap
+# (owner decision 2026-10-29). Until then this is dead code: no Lium
+# request is made and pricing is byte-identical to v1.3.0.
+market_pricing_enabled = bool(
+    os.environ.get("KUBETEE_MARKET_PRICING", "").strip()
+    and os.environ.get("KUBETEE_MARKET_PRICING", "").strip().lower()
+    in {"1", "true", "yes", "on"}
+)
 
 CACHE_PATH = os.environ.get(
     "KUBETEE_TARGON_CACHE",
@@ -171,6 +193,8 @@ class TargonPayoutFeed:
         # the subnet actually committed this epoch.
         self._manual_floors: dict[str, float] | None = None
         self._fetcher = per_card_fetcher
+        # v1.3.1 market-pricing diagnostics: "live" | "cache" | "off"
+        self.last_lium_source = "off"
 
     def card(self) -> dict[str, float]:
         """The committed card (compiled-in default + operator override)."""
@@ -231,8 +255,17 @@ class TargonPayoutFeed:
         return self.card(), "card"
 
     def effective_card(self) -> tuple[dict[str, float], str]:
-        """Card clamped to [manual floor, card] per class, and source."""
+        """Card clamped to [manual floor, card] per class, and source.
+
+        v1.3.1: when KUBETEE_MARKET_PRICING is on (coordinated flip; DORMANT
+        by default), each class instead prices at
+        ``max(floor, 1.10 x highest(Lium median, Targon live))`` with NO
+        card cap (owner decision 2026-10-29). With the flag off (v1.3.0
+        behavior) this is byte-identical to v1.3.0.
+        """
         resolved, source = self.resolve_per_card_usd()
+        if market_pricing_enabled:
+            return self._market_effective_card(resolved), source
         effective: dict[str, float] = {}
         for klass, card_price in self.card().items():
             floor = self.floor_for(klass, card_price)
@@ -240,3 +273,40 @@ class TargonPayoutFeed:
             clamped = min(card_price, max(floor, live))
             effective[klass] = clamped
         return effective, source
+
+    def _market_effective_card(
+        self, targon: dict[str, float]
+    ) -> dict[str, float]:
+        """max(floor, 1.10 x highest(Lium, Targon)) per class — uncapped.
+
+        The static floor still holds when both feeds price a class below
+        it (or neither feed covers the class). This path only runs under
+        KUBETEE_MARKET_PRICING=1; it never caps at the card.
+        """
+        lium: dict[str, float] | None = None
+        lium_source = "off"
+        from market_pricing import (  # noqa: PLC0415 - lazy: dormant path only
+            fetch_lium_per_card_usd,
+            load_lium_cache,
+            market_price,
+            save_lium_cache,
+        )
+
+        try:
+            lium = fetch_lium_per_card_usd()
+            save_lium_cache(lium)
+            lium_source = "live"
+        except Exception:  # noqa: BLE001 - fail-soft to cache
+            lium = load_lium_cache()
+            if lium:
+                lium_source = "cache"
+        self.last_lium_source = lium_source
+        effective: dict[str, float] = {}
+        for klass, card_price in self.card().items():
+            floor = self.floor_for(klass, card_price)
+            market = market_price(klass, lium, targon)
+            if market is None:
+                effective[klass] = floor
+                continue
+            effective[klass] = max(floor, market)
+        return effective
