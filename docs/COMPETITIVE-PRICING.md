@@ -115,10 +115,7 @@ Two bounds then apply, both enforced in the payout-feed price derivation:
 - **Cap at the card.** The committed card is the target *max*: a live payout
   can only pull SN90 pay **down** toward SN4, never above it. If Targon raised
   B300 to $12.00, SN90 would stay at $10.00.
-- **Floor at `floor_frac x card`** (default 0.75, `KUBETEE_TARGON_PRICE_FLOOR_FRAC`).
-  A class can be a single Targon node — B200 is exactly one today — so without
-  a floor one miner could drag a whole class down. It doubles as the bound
-  that makes an unauthenticated feed safe to consume.
+- **Floor: manual per-class USD values on the published price card** (v1.3.0+). A class can be a single Targon node — B200 is exactly one today — so without a floor one miner could drag a whole class down. It doubles as the bound that makes an unauthenticated feed safe to consume. Floors default to `0.75 × card` per class (the exact v1.2.0 floor, `KUBETEE_TARGON_PRICE_FLOOR_FRAC` semantics), are bounded to `[0.5x, 1.25x]` of the compiled-in default, and the owner retunes them via `KUBETEE_GPU_USD_FLOOR_PRICES`.
 
 ### The card itself is published too (and envelope-bounded)
 
@@ -168,7 +165,8 @@ A class with no usable live price falls back to the card, which covers both a
 ### Losing a source: fatal at startup, survivable afterwards
 
 The Targon clamp is always on: SN4 payouts may pull pay *down* toward the
-live feed, floored at `KUBETEE_TARGON_PRICE_FLOOR_FRAC` of the card. The card
+live feed, floored at the per-class manual floor on the published card
+(default `0.75 × card` — v1.2.0 parity). The card
 is what every validator prices with in the first place. Every validator
 therefore reads `price-card.json` on every cycle, and the degradation rules
 differ by *when* the failure happens:
