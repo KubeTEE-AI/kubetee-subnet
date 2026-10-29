@@ -1,10 +1,21 @@
 """Targon (SN4) supply-side payout feed — FAIL-SOFT.
 
-Reads live per-card USD per GPU class from stats.targon.com/api/miners
-(highest miner $/card in that class, not a weighted average) and clamps
-the committed GPU price card DOWNWARD only (never above the card),
-floored at `floor_frac x card` so a single Targon node cannot drag a class
-down. Always on. Degrades live -> last known (cached on disk) -> published
+Reads live per-card USD per GPU class from Targon's snapshot API
+(`stats.targon.com/api/trpc/statistics.getSnapshot` — the same endpoint
+the stats site's /targets page consumes) and clamps the committed GPU
+price card DOWNWARD only (never above the card). Per class, the live
+value is the highest miner $/card Targon lists for it
+(`compute[].unitRate`); a class with NO supplied capacity (`unitRate`
+null — e.g. B200 today) resolves to Targon's published MAXIMUM payout
+(`compute[].maxPrice`) instead of having no price at all. The Targon
+"target price" (`targetPrice`) is deliberately never read.
+
+Each class is floored at its manually-committed per-GPU floor (set by
+the subnet owner on the published price card; see `set_manual_floors`),
+so a single Targon node cannot drag a class below it. Classes without a
+manual floor fall back to 0.75 x card — exactly the v1.2.0 floor, so
+the transition changes nothing until the owner retunes the floors.
+Always on. Degrades live -> last known (cached on disk) -> published
 (S3) -> card, and never skips a cycle.
 """
 
@@ -17,7 +28,12 @@ import urllib.request
 
 from config import Config
 
-_TARGON_MINERS_URL = "https://stats.targon.com/api/miners"
+# The /api/miners REST endpoint is retired: it only listed classes with
+# supplied capacity, so B200/RTX6000 had no live price at all. The snapshot
+# API carries every class incl. maxPrice; it answers plain urllib GETs.
+_TARGON_SNAPSHOT_URL = (
+    "https://stats.targon.com/api/trpc/statistics.getSnapshot"
+)
 _USER_AGENT = "kubetee-validator/0.1"
 
 DEFAULT_USD_CARD: dict[str, float] = {
@@ -27,6 +43,13 @@ DEFAULT_USD_CARD: dict[str, float] = {
     "B300": 10.00,
     "RTX6000": 2.50,
 }
+
+# Per-class floor as a fraction of the card, used ONLY when the price card
+# carries no manual floor for a class. This is exactly the v1.2.0 floor
+# (KUBETEE_TARGON_PRICE_FLOOR_FRAC=0.75), so a v1.3.0 validator and a
+# v1.2.0 validator agree on the floor until the owner retunes the
+# published card's floors.
+DEFAULT_FLOOR_FRAC = 0.75
 
 CACHE_PATH = os.environ.get(
     "KUBETEE_TARGON_CACHE",
@@ -46,47 +69,67 @@ def _gpu_class_of(compute_type: str) -> str | None:
     return None
 
 
-def _per_card_from_miners(miners: list) -> dict[str, float]:
-    """Highest miner $/card/hour per GPU class (not a weighted average)."""
-    per_card: dict[str, float] = {}
-    for miner in miners:
-        if not isinstance(miner, dict):
+def _per_class_from_snapshot(compute: list) -> dict[str, float]:
+    """Per-class live $/card/hr from the snapshot's compute[] rows.
+
+    `unitRate` is the highest live miner $/card in that class (the same
+    statistic the /api/miners reader used); when it is null (no supplied
+    capacity — B200 today), fall back to that class' `maxPrice` (the
+    Targon network MAXIMUM payout) so every GPU class resolves to a live
+    number. `targetPrice` is deliberately never read. CPU rows are
+    skipped; multiple rows of one class collapse to the highest rate.
+    """
+    per_class: dict[str, float] = {}
+    for row in compute:
+        if not isinstance(row, dict):
             continue
-        klass = _gpu_class_of(str(miner.get("compute_type", "")))
+        if str(row.get("kind", "gpu")) != "gpu":
+            continue
+        klass = _gpu_class_of(str(row.get("key", "")))
         if klass is None:
             continue
+        rate = row.get("unitRate")
+        if rate is None:
+            rate = row.get("maxPrice")
         try:
-            payout = float(miner.get("payout", 0) or 0)
-            cards = float(miner.get("cards", 0) or 0)
+            rate = float(rate)
         except (TypeError, ValueError):
             continue
-        if cards <= 0 or payout <= 0:
+        if rate <= 0:
             continue
-        rate = payout / cards
-        prev = per_card.get(klass)
+        prev = per_class.get(klass)
         if prev is None or rate > prev:
-            per_card[klass] = rate
-    return per_card
+            per_class[klass] = rate
+    return per_class
 
 
 def fetch_live_per_card_usd() -> dict[str, float]:
-    """Live $/card/hour per GPU class (highest miner rate in that class)."""
+    """Live $/card/hour per GPU class from the Targon snapshot API."""
     request = urllib.request.Request(
-        _TARGON_MINERS_URL,
+        _TARGON_SNAPSHOT_URL,
         headers={"Accept": "application/json", "User-Agent": _USER_AGENT},
         method="GET",
     )
     with urllib.request.urlopen(request, timeout=30) as response:
         payload = json.loads(response.read())
 
-    miners = payload.get("data") if isinstance(payload, dict) else payload
-    if not isinstance(miners, list):
-        raise TargonFeedError("targon api/miners: unexpected payload")
+    # tRPC/superjson response envelope: result.data.json (with plain-dict
+    # fallbacks so a subtle envelope change degrades loudly, not silently).
+    result = payload.get("result") if isinstance(payload, dict) else None
+    data = (
+        result.get("data") if isinstance(result, dict) else None
+    ) or payload
+    snapshot = (data.get("json") if isinstance(data, dict) else None) or data
+    if not isinstance(snapshot, dict):
+        raise TargonFeedError("targon snapshot api: unexpected payload")
+    compute = snapshot.get("compute")
+    if not isinstance(compute, list):
+        raise TargonFeedError("targon snapshot api: no compute rows")
 
-    per_card = _per_card_from_miners(miners)
-    if not per_card:
-        raise TargonFeedError("targon api/miners: no usable per-card data")
-    return per_card
+    per_class = _per_class_from_snapshot(compute)
+    if not per_class:
+        raise TargonFeedError("targon snapshot api: no usable per-class data")
+    return per_class
 
 
 def _load_cache() -> dict[str, float] | None:
@@ -120,19 +163,44 @@ class TargonPayoutFeed:
         config: Config,
         per_card_fetcher=fetch_live_per_card_usd,
     ) -> None:
-        self._floor_frac = config.targon_floor_frac
         self._card = dict(DEFAULT_USD_CARD)
         self._card.update(config.usd_card_override)
+        # Per-class manual floors from the price card. None until the
+        # resolved card supplies them; validator.py injects the card's
+        # floors each cycle so the feed always prices against the card
+        # the subnet actually committed this epoch.
+        self._manual_floors: dict[str, float] | None = None
         self._fetcher = per_card_fetcher
 
     def card(self) -> dict[str, float]:
         """The committed card (compiled-in default + operator override)."""
         return dict(self._card)
 
+    def set_manual_floors(self, floors: dict[str, float] | None) -> None:
+        """Inject the resolved price card's manual per-class floors."""
+        self._manual_floors = (
+            {
+                str(k).upper(): float(v)
+                for k, v in floors.items()
+                if float(v) > 0
+            }
+            if floors
+            else None
+        )
+
+    def floor_for(self, klass: str, card_price: float) -> float:
+        """The floor for one class: the card's manual floor if set, else
+        the v1.2.0-compatible default (0.75 x card)."""
+        manual = (self._manual_floors or {}).get(klass)
+        if manual is not None and manual > 0:
+            return min(manual, card_price)
+        return card_price * DEFAULT_FLOOR_FRAC
+
     def resolve_per_card_usd(self) -> tuple[dict[str, float], str]:
         """The per-card USD per class, plus the source that supplied it.
 
-        Degrades live -> cache -> published (S3) -> card. Never raises (fail-soft).
+        Degrades live -> cache -> published (S3) -> card. Never raises
+        (fail-soft).
         """
         try:
             per_card = self._fetcher()
@@ -163,11 +231,11 @@ class TargonPayoutFeed:
         return self.card(), "card"
 
     def effective_card(self) -> tuple[dict[str, float], str]:
-        """Card clamped to [floor_frac x card, card] per class, and source."""
+        """Card clamped to [manual floor, card] per class, and source."""
         resolved, source = self.resolve_per_card_usd()
         effective: dict[str, float] = {}
         for klass, card_price in self.card().items():
-            floor = card_price * self._floor_frac
+            floor = self.floor_for(klass, card_price)
             live = resolved.get(klass, card_price)
             clamped = min(card_price, max(floor, live))
             effective[klass] = clamped

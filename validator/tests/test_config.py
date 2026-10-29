@@ -24,8 +24,8 @@ _ALL_KEYS = [
     "KUBETEE_CYCLE_SECONDS",
     "KUBETEE_WINDOW_HOURS",
     "KUBETEE_GPU_USD_PRICES",
+    "KUBETEE_GPU_USD_FLOOR_PRICES",
     "KUBETEE_EMISSION_USD_PER_HOUR",
-    "KUBETEE_TARGON_PRICE_FLOOR_FRAC",
     "KUBETEE_HIPPIUS_ACCESS_KEY",
     "KUBETEE_HIPPIUS_SECRET_KEY",
     "KUBETEE_METRICS_PORT",
@@ -69,6 +69,21 @@ def test_usd_card_override(monkeypatch):
 
 def test_bad_usd_card(monkeypatch):
     _set(monkeypatch, KUBETEE_GPU_USD_PRICES="not-json")
+    with pytest.raises(ConfigError):
+        load_config()
+
+
+def test_usd_floor_override(monkeypatch):
+    _set(
+        monkeypatch,
+        KUBETEE_GPU_USD_FLOOR_PRICES='{"H200": 3.95, "B300": 9.5}',
+    )
+    cfg = load_config()
+    assert cfg.usd_floor_override == {"H200": 3.95, "B300": 9.5}
+
+
+def test_bad_usd_floor_override(monkeypatch):
+    _set(monkeypatch, KUBETEE_GPU_USD_FLOOR_PRICES='{"H200": "low"}')
     with pytest.raises(ConfigError):
         load_config()
 

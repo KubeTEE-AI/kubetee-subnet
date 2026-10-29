@@ -31,7 +31,7 @@ from miner_scoring import MinerInput, compute_weights
 from price_card import build_price_card, require_card, resolve_card
 from price_feed import PriceFeed, PriceFeedError
 from rancher_client import RancherClient, RancherEvidenceError, hotkey_of
-from targon_payout_feed import TargonPayoutFeed
+from targon_payout_feed import DEFAULT_FLOOR_FRAC, TargonPayoutFeed
 
 logging.basicConfig(
     level=os.environ.get("LOG_LEVEL", "INFO").upper(),
@@ -73,6 +73,7 @@ class Validator:
                 config.hippius_access_key, config.hippius_secret_key
             )
         self._last_card: dict[str, float] | None = None
+        self._last_floors: dict[str, float] | None = None
         self._last_submitted_epoch = -1
         self._last_set_block: int | None = None
         self._last_targon_payout: dict[str, float] = {}
@@ -99,7 +100,7 @@ class Validator:
             metrics.record_skip("rancher")
             return
 
-        card, card_source = self._resolve_card()
+        card, floors, card_source = self._resolve_card()
         try:
             require_card(card_source, self._first_cycle())
         except Exception as exc:
@@ -107,6 +108,11 @@ class Validator:
             if self.hippius is None:
                 raise
         self._last_card = card
+        self._last_floors = floors
+        # The feed must clamp against the card the subnet actually
+        # committed this epoch (manual per-class floors when the published
+        # card carries them; else the v1.2.0-equivalent 0.75 x card).
+        self.targon.set_manual_floors(floors)
 
         effective_card, pricing_source, targon_age = self._targon_card()
         log.info(
@@ -115,6 +121,8 @@ class Validator:
             pricing_source,
             effective_card,
         )
+        if floors:
+            log.info("price floors: %s", floors)
 
         # Price feed: live Taostats (cached on 429) + chain, else S3 snapshot.
         published_payout = fetch_published_payout()
@@ -352,6 +360,7 @@ class Validator:
                 "hours_per_epoch": hours_per_epoch,
                 "usd_per_alpha": usd_per_alpha,
                 "card": card,
+                "floors": floors or {},
                 "effective_card": effective_card,
                 "targon_payout": self._last_targon_payout or {},
                 "chain_emissions": chain_emissions,
@@ -414,12 +423,38 @@ class Validator:
             except Exception as exc:  # noqa: BLE001
                 log.warning("dashboard publish failed: %s", exc)
 
-    def _resolve_card(self) -> tuple[dict[str, float], str]:
+    def _resolve_card(
+        self,
+    ) -> tuple[dict[str, float], dict[str, float] | None, str]:
         if self.hippius is not None:
             card = self.targon.card()
-            self._publish_card(card)
-            return card, "published"
-        return resolve_card(self._read_published_card, self._last_card)
+            floors = self._publisher_floors()
+            self._publish_card(card, floors)
+            return card, floors, "published"
+        card, floors, source = resolve_card(
+            self._read_published_card,
+            (self._last_card, self._last_floors),
+        )
+        return card, floors, source
+
+    def _publisher_floors(self) -> dict[str, float] | None:
+        """The owner's manual per-class floors, in the published card.
+
+        Defaults to exactly `DEFAULT_FLOOR_FRAC x card` per class (the
+        v1.2.0 floor) so the published card's floors never diverge from
+        what a still-on-v1.2.0 validator computes on its own — the
+        transition contract. The owner overrides per class via
+        KUBETEE_GPU_USD_FLOOR_PRICES once every validator runs v1.3.0.
+        """
+        card = self.targon.card()
+        override = self.config.usd_floor_override
+        floors: dict[str, float] = {}
+        for klass, price in card.items():
+            if klass in override and override[klass] > 0:
+                floors[klass] = float(override[klass])
+            else:
+                floors[klass] = round(price * DEFAULT_FLOOR_FRAC, 4)
+        return floors
 
     def _read_published_card(self) -> dict | None:
         store = self.hippius or HippiusStore("", "")
@@ -461,14 +496,20 @@ class Validator:
             float(alpha_to_tao),
         )
 
-    def _publish_card(self, card: dict[str, float]) -> None:
+    def _publish_card(
+        self,
+        card: dict[str, float],
+        floors: dict[str, float] | None = None,
+    ) -> None:
         if self.dry_run:
             log.info("dry-run: skip publish price-card %s", card)
             return
         try:
             self.hippius.put_json(
                 DEFAULT_CARD_KEY,
-                build_price_card(epoch=self._epoch(), usd_per_gpu_hour=card),
+                build_price_card(
+                    epoch=self._epoch(), usd_per_gpu_hour=card, floors=floors
+                ),
             )
             metrics.record_publish("price-card", True)
         except HippiusError as exc:

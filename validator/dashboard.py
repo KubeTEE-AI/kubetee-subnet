@@ -30,6 +30,7 @@ def build_html(snapshot: dict) -> str:
     tempo = int(snapshot.get("tempo", 360))
     usd_per_alpha = float(snapshot.get("usd_per_alpha", 0.0))
     card = snapshot.get("card", {})
+    floors = snapshot.get("floors", {}) or {}
     effective_card = snapshot.get("effective_card", {})
     pricing_source = snapshot.get("pricing_source", "")
     card_source = snapshot.get("card_source", "")
@@ -61,7 +62,12 @@ def build_html(snapshot: dict) -> str:
     for klass in _GPU_ORDER:
         if klass in effective_card:
             price = effective_card[klass]
-            _card_chips += f'<div class="gpu"><b>{html.escape(str(klass))}</b>${_fmt(price)}/GPU/hr</div>\n'
+            floor = float((floors or {}).get(klass, 0.0))
+            chip = f'<div class="gpu"><b>{html.escape(str(klass))}</b>${_fmt(price)}/GPU/hr'
+            if floor > 0:
+                chip += f' <span style="color:var(--muted);font-size:11px">(floor ${_fmt(floor)})</span>'
+            chip += "</div>\n"
+            _card_chips += chip
     if not _card_chips:
         _card_chips = '<div class="gpu"><b>–</b>no card</div>'
 
@@ -247,6 +253,7 @@ def build_dashboard_json(snapshot: dict) -> dict:
         "tempo": int(snapshot.get("tempo", 360)),
         "usd_per_alpha": round(usd_per_alpha, 2),
         "card": dict(snapshot.get("card", {})),
+        "floors": dict(snapshot.get("floors", {}) or {}),
         "effective_card": dict(snapshot.get("effective_card", {})),
         "miners": miners,
         "fleet_gpus": dict(snapshot.get("fleet_gpus", {})),

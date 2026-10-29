@@ -66,25 +66,23 @@ def _get_bool(name: str, default: bool = False) -> bool:
     raise ConfigError(f"{name} must be a boolean, got {raw!r}")
 
 
-def _parse_usd_card(raw: str) -> dict[str, float]:
-    """Parse the JSON GPU price card override into a {class: usd} map."""
+def _parse_usd_card(raw: str, env_name: str) -> dict[str, float]:
+    """Parse a JSON {class: usd} map (card or floors) from an env var."""
     if not raw:
         return {}
     try:
         parsed = json.loads(raw)
     except json.JSONDecodeError as exc:
-        raise ConfigError(
-            f"KUBETEE_GPU_USD_PRICES must be JSON: {exc}"
-        ) from exc
+        raise ConfigError(f"{env_name} must be JSON: {exc}") from exc
     if not isinstance(parsed, dict):
-        raise ConfigError("KUBETEE_GPU_USD_PRICES must be a JSON object")
+        raise ConfigError(f"{env_name} must be a JSON object")
     card: dict[str, float] = {}
     for key, value in parsed.items():
         try:
             card[str(key).upper()] = float(value)
         except (TypeError, ValueError) as exc:
             raise ConfigError(
-                f"KUBETEE_GPU_USD_PRICES[{key!r}] must be numeric, got {value!r}"
+                f"{env_name}[{key!r}] must be numeric, got {value!r}"
             ) from exc
     return card
 
@@ -104,9 +102,9 @@ class Config:
     window_hours: float
     taostats_api_key: str
     usd_card_override: dict[str, float]
+    usd_floor_override: dict[str, float]
     emission_usd_per_hour: float
     skip_rancher: bool
-    targon_floor_frac: float
     hippius_access_key: str
     hippius_secret_key: str
     metrics_port: int
@@ -144,10 +142,15 @@ def load_config() -> Config:
         cycle_seconds=_get_int("KUBETEE_CYCLE_SECONDS", 360),
         window_hours=_get_float("KUBETEE_WINDOW_HOURS", 1.0),
         taostats_api_key=_require("TAOSTATS_API_KEY"),
-        usd_card_override=_parse_usd_card(_optional("KUBETEE_GPU_USD_PRICES")),
+        usd_card_override=_parse_usd_card(
+            _optional("KUBETEE_GPU_USD_PRICES"), "KUBETEE_GPU_USD_PRICES"
+        ),
+        usd_floor_override=_parse_usd_card(
+            _optional("KUBETEE_GPU_USD_FLOOR_PRICES"),
+            "KUBETEE_GPU_USD_FLOOR_PRICES",
+        ),
         emission_usd_per_hour=_get_float("KUBETEE_EMISSION_USD_PER_HOUR", 0.0),
         skip_rancher=_get_bool("KUBETEE_SKIP_RANCHER", False),
-        targon_floor_frac=_get_float("KUBETEE_TARGON_PRICE_FLOOR_FRAC", 0.75),
         hippius_access_key=_optional("KUBETEE_HIPPIUS_ACCESS_KEY"),
         hippius_secret_key=_optional("KUBETEE_HIPPIUS_SECRET_KEY"),
         metrics_port=_get_int("KUBETEE_METRICS_PORT", 9100),
