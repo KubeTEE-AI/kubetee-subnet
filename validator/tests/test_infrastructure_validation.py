@@ -38,7 +38,7 @@ def _gpu_node(cls="H200"):
 def _healthy_cluster(hotkey=HOTKEY):
     cluster = {"id": "c-1", "labels": {"kubetee.ai/hotkey": hotkey}}
     cp = [
-        _node(32, "128Gi", ["etcd", "control-plane", "worker"])
+        _node(96, "1500Gi", ["etcd", "control-plane", "worker"])
         for _ in range(5)
     ]
     gpu = [_gpu_node() for _ in range(2)]
@@ -98,11 +98,14 @@ def test_no_gpu_worker_fails():
 
 def test_below_minimum_nodes_fails():
     clusters, nodes = _healthy_cluster()
-    # 6 nodes: drop one GPU worker from the 5+2 shape -> below the 7 minimum
-    nodes[clusters[0]["id"]] = nodes[clusters[0]["id"]][:-1]
+    # 4 active nodes (2 CP + 2 GPU): below the _MIN_ACTIVE_NODES=5 gate —
+    # the node-count reason fires while the other gates stay satisfied.
+    nodes[clusters[0]["id"]] = (
+        nodes[clusters[0]["id"]][:2] + nodes[clusters[0]["id"]][-2:]
+    )
     verdict = validate_miner(HOTKEY, clusters, nodes, _cid)
     assert not verdict.ready
-    assert any("7 minimum" in r for r in verdict.reasons)
+    assert any("5 minimum" in r for r in verdict.reasons)
 
 
 def test_gpu_node_without_passthrough_fails():
