@@ -3,13 +3,14 @@
 A miner's verdict is binary: every required signal must pass, else score 0.
 The doc contract (docs/NODE-REGISTRATION.md): eligible cluster carries a
 `kubetee.ai/hotkey` label matching the miner's registered hotkey (one cluster
-per hotkey), is not banned (`kubetee.ai/ban != "true"`), and is Ready with HA
-topology (at least 7 active nodes — 5 combined control-plane+etcd+worker
-nodes + 2 dedicated GPU workers per GPU type), >=96 CPU + >=2 TiB per active
-node, and at least one schedulable 8-GPU (H100/H200/B200/B300) worker with
-vm-passthrough plus a confidential kata runtime handler. Any explicit missing/
-malformed/ambiguous/unhealthy evidence is a failure. (A Rancher outage is
-handled upstream as a cycle skip, not a per-miner failure.)
+per hotkey), is not banned (`kubetee.ai/ban != "true"`), and has Ready active
+nodes with etcd + control-plane + worker roles, >=72 CPU + >=1024 GiB per
+active node, and at least one schedulable 8-GPU (H100/H200/B200/B300) worker
+with vm-passthrough plus a confidential kata runtime handler. There is NO
+minimum node-count gate (removed 2026-10-29 — the 3-node same-GPU-type
+topology in the docs is guidance, not a readiness gate). Any explicit
+missing/malformed/ambiguous/unhealthy evidence is a failure. (A Rancher
+outage is handled upstream as a cycle skip, not a per-miner failure.)
 """
 
 from __future__ import annotations
@@ -21,7 +22,6 @@ from rancher_client import hotkey_of, is_banned
 _GPU_CLASSES = ("H100", "H200", "B200", "B300", "RTX6000")
 _MIN_CPU_CORES = 72
 _MIN_MEM_GIB = 1024
-_MIN_ACTIVE_NODES = 5
 
 _ROLE_KEYWORDS = ("etcd", "control-plane", "worker")
 
@@ -226,12 +226,6 @@ def validate_miner(
     active = [p for p in postures if p.ready]
     if not active:
         reasons.append("no Ready nodes")
-
-    if len(active) < _MIN_ACTIVE_NODES:
-        reasons.append(
-            f"cluster has {len(active)} active nodes; "
-            f"{_MIN_ACTIVE_NODES} minimum"
-        )
 
     etcd = [p for p in active if "etcd" in p.roles]
     control_plane = [p for p in active if "control-plane" in p.roles]

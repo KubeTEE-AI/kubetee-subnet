@@ -96,16 +96,37 @@ def test_no_gpu_worker_fails():
     assert any("8-GPU" in r or "GPU" in r for r in verdict.reasons)
 
 
-def test_below_minimum_nodes_fails():
+def test_small_cluster_still_passes():
+    # No minimum node-count gate: a 3-node cluster (1 combined CP/etcd/
+    # worker + 2 GPU workers) is ready if every other gate passes.
     clusters, nodes = _healthy_cluster()
-    # 4 active nodes (2 CP + 2 GPU): below the _MIN_ACTIVE_NODES=5 gate —
-    # the node-count reason fires while the other gates stay satisfied.
-    nodes[clusters[0]["id"]] = (
-        nodes[clusters[0]["id"]][:2] + nodes[clusters[0]["id"]][-2:]
+    nodes[clusters[0]["id"]] = [
+        _node(96, "1500Gi", ["etcd", "control-plane", "worker"]),
+        _gpu_node(),
+        _gpu_node(),
+    ]
+    verdict = validate_miner(HOTKEY, clusters, nodes, _cid)
+    assert verdict.ready, verdict.reasons
+
+
+def test_single_node_cluster_still_passes():
+    # Even a 1-node all-in-one cluster is ready (docs describe the 3-node
+    # topology as guidance, not a validator gate).
+    clusters, nodes = _healthy_cluster()
+    nodes[clusters[0]["id"]] = [
+        _node(96, "1500Gi", ["etcd", "control-plane", "worker"]),
+    ]
+    # A 1-node cluster has no GPU worker → add the GPU class + CC runtime
+    # labels so the single node also satisfies the GPU gate.
+    nodes[clusters[0]["id"]][0]["labels"].update(
+        {
+            "nvidia.com/gpu.workload.config": "vm-passthrough",
+            "nvidia.com/gpu.model": "H200",
+            "kubetee.ai/runtime": "kata-qemu-nvidia-gpu-tdx",
+        }
     )
     verdict = validate_miner(HOTKEY, clusters, nodes, _cid)
-    assert not verdict.ready
-    assert any("5 minimum" in r for r in verdict.reasons)
+    assert verdict.ready, verdict.reasons
 
 
 def test_gpu_node_without_passthrough_fails():

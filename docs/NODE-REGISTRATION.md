@@ -46,11 +46,13 @@ These are operator-controlled trust metadata; miners must not hand-edit them.
 `kubetee.ai/binding-status=ENROLLED` confirms onboarding only. On every
 complete cycle, the subnet validator compares the binding to the fresh
 metagraph and validates the Rancher cluster/node inventory. The production
-profile requires at least 7 active Ready nodes (5 combined control-plane +
-etcd + worker nodes and 2+ dedicated GPU workers), a schedulable worker, at
-least 96 CPU cores and 2 TiB per active node, and at
-least one schedulable eight-GPU B200/B300/RTX PRO 6000/Vera Rubin worker with
-`vm-passthrough` and `kata-qemu-nvidia-gpu-tdx-runtime-rs`. Any explicit missing,
+profile requires Ready active nodes covering the etcd + control-plane +
+worker roles, a schedulable worker, at least 72 CPU cores and 1024 GiB
+per active node, and at least one schedulable eight-GPU
+B200/B300/RTX PRO 6000/Vera Rubin worker with `vm-passthrough` and
+`kata-qemu-nvidia-gpu-tdx-runtime-rs`. There is **no minimum node-count
+gate** — the 3-node same-GPU-type topology is guidance for quorum and HA,
+not a readiness gate (removed 2026-10-29). Any explicit missing,
 malformed, ambiguous, or unhealthy evidence scores **0**. A Rancher outage
 skips the whole weight cycle instead of blaming miners.
 

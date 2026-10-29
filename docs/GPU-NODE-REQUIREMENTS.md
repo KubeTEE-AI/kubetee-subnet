@@ -429,7 +429,7 @@ nvfwupd --query
 
 ## Cluster Architecture & High Availability
 
-> KubeTEE is a **decentralized multi-cluster architecture**. Each miner operates one RKE2 cluster (one hotkey per cluster), and the full tech stack — GPU Operator, Kata/CoCo runtime classes, NeMo Microservices, Armada Executor, Longhorn storage, monitoring — is deployed onto it via Rancher Fleet GitOps. Miners must provide the minimum cluster shape below to allow high availability, deploy the tech stack, and have enough nodes to run SOTA AI services and enhanced services for enterprises. The minimum is **3 nodes of the same GPU type per cluster** (reduced from 7 as the fleet moves to Blackwell-only, multi-cluster operation). These minimum requirements are written and enforced in Phase 0.
+> KubeTEE is a **decentralized multi-cluster architecture**. Each miner operates one RKE2 cluster (one hotkey per cluster), and the full tech stack — GPU Operator, Kata/CoCo runtime classes, NeMo Microservices, Armada Executor, Longhorn storage, monitoring — is deployed onto it via Rancher Fleet GitOps. Miners must provide the minimum cluster shape below to allow high availability, deploy the tech stack, and have enough nodes to run SOTA AI services and enhanced services for enterprises. The minimum is **3 nodes of the same GPU type per cluster** (reduced from 7 as the fleet moves to Blackwell-only, multi-cluster operation). These requirements are written in Phase 0; the node count is **topology guidance, not a validator gate** (the validator checks node readiness, roles, per-node resources, and 8-GPU passthrough wiring — it no longer enforces a minimum node count).
 
 ### Minimum cluster topology
 
