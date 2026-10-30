@@ -15,6 +15,14 @@ Buyer-visible SKUs on sayGM, served from `llm.kubetee.ai` (LiteLLM in TDX). GLM-
 | `ornith/ornith-1.5-397b` | `kubetee/ornith/ornith-1.5-397b` | dynamic (sole provider) | `ornith-1-5-397b-fp8-sglang-h200` (H200, FP8; retargeted 2026-08-28) |
 | `deepseek-v4.1-flash` / `deepseek-v4.1-flash-tee` | `kubetee/deepseek/deepseek-v4.1-flash` (alias; `-1017` route `kubetee/deepseek/deepseek-v4.1-flash-1017` → `deepseek-v4.1-flash-1017-tee` DECLARED 2026-10-17 at 10% — standing, eligibility gated on the gm-miner worker image roll carrying `verified_models`/`TARGETS` + `-1017`) | dynamic | `deepseek-v4-1-flash-sglang-h200-cc` (H200, FP8, `am-h200-27`) — **DeepSeek-V4.1-Flash-1017 weights since 2026-10-17** (same `deepseek-v4.1-flash` source name kept during the dual-name transition so the baked gm-miner envoy gate keeps serving) |
 | `xiaomi/mimo-v2.6-pro-ultraspeed` | `kubetee/xiaomi/mimo-v2.6-pro` | dynamic (sole provider; bootstrap 10% 2026-09-24) | `mimo-v2-6-pro-rl-sglang-b200-cc` (B200 CC, 2 replicas since 2026-10-13; DFLASH spec decode; declared 2026-09-24) |
+| `mistral-large-4` / `mistral-large-4-tee` | `kubetee/mistralai/mistral-large-4` (sole provider) | dynamic | `mistral-large-4` (Mistral-Large-4-1T-A52B-**NVFP4**, SGLang, `na-us-dallas-132`; declared 2026-10-30) |
+
+> **Buyer-id naming (mistral, hit 2026-10-30):** the buyer catalog ids are
+> `mistral-large-4` / `mistral-large-4-tee` — **no `mistral/` prefix**. Sending
+> `mistral/mistral-large-4-tee` returns `unknown model`. The prefix only lives in
+> the registry route (`kubetee/mistralai/mistral-large-4` source → buyer product
+> `mistral/mistral-large-4-tee`). Resolve ids from `GET /v1/models` on the buyer
+> gateway first.
 
 Pricing adjusts to the market; per-offer prices are visible on sayGM.
 
@@ -39,11 +47,21 @@ Every SKU offered through sayGM must clear a **license gate before it can be dec
 | `z-ai/glm-5.3-flash` | Permissive (zai-org) | ⚠️ withdrawn 2026-10-26 — removed from the offer set |
 | `qwen/qwen3.8-flash-next` | **Qwen Community License 1.0 — requires a separate Qwen MaaS license for ANY commercial MaaS use (no revenue threshold)** | ❌ decommissioned 2026-09-04 (SKU + manifests, weights retained). Do not re-declare without a signed Qwen license |
 | `moonshotai/kimi-k3`, `qwen/qwen3.5-397b-a17b`, `xiaomi/mimo-v2.5` | various | ❌ not in the offer set (backend gone or never offered; kimi is probe-only in the miner's local streaming check; MiMo-V2.5 superseded by the V2.6-Pro declare) |
+| `mistralai/Mistral-Large-4-1T-A52B` (served NVFP4) | **`license: other`** (Mistral Research License — **not** Apache-2.0, unlike Mistral-Large-3) | ⚠️ declared + serving sayGM 2026-10-30 (`mistral-large-4` / `mistral-large-4-tee`, sole provider) and Factory chat — **needs operator license sign-off** (see the note below the table). Not Apache/permissive; do NOT treat as cleared. |
 | `black-forest-labs/flux.2-klein-4b` | Apache-2.0 | ✅ Factory gateway only (`/v1/images`) — not a sayGM SKU |
 | `nvidia/Cosmos3-Super` (NIM + passthrough) | NVIDIA OpenMDW-1.1 (commercial OK) | ✅ Factory gateway only (`/cosmos3` passthrough) — not a sayGM SKU |
 | `MiniMaxAI/MiniMax-H3` | **MiniMax H3 Community License — Applicable Territory excludes US/EU/UK/KR** | ✅ Factory gateway (`minimax/h3`, `/v1/videos` — [H3-VIDEO-GENERATION-API.md](./H3-VIDEO-GENERATION-API.md)) **under written US authorization from MiniMax** (received 2026-09-21; see [EAST-WEST-ATTESTED-MTLS.md](./EAST-WEST-ATTESTED-MTLS.md)). Revocation of that authorization would require removing the deployment. **Also a declared sayGM offer AND buyer-routable** (`kubetee minimax/h3`, 10% floor). It is served on the buyer gateway's **video** path, not chat: `POST https://api.saygm.com/v1/videos` (with `X-GM-Providers: kubetee` + the buyer `SAYGM_API_KEY`) generates and settles — verified 2026-10-26, job `video_01M5VRRY3K7RPDWD0VDXF063ED` `completed`, `cost_nano_usd: 288000000`. Schema is `model, prompt, seconds, size, seed, image_reference` only (`task`/`aspect_ratio`/`duration` are rejected as `unsupported_video_parameter`). The **chat** surfaces do NOT route it: `POST /v1/chat/completions` returns `unknown model: minimax/h3` (message: "minimax/h3 is served on POST /v1/videos"), and the **worker data plane** rejects the source model (`missing or unsupported KubeTEE source model` — verified 2026-10-26 on the `997600e8…-8080s` worker, where chat models like `z-ai/glm-5.3` pass). So: buyer-video ✅, buyer-chat ✗, worker-data-plane ✗ (video, chat-network shape mismatch) — see "What SN90 is — and is not" below. |
 
 **Rule of record:** a model enters the offer set only if (1) its license permits commercial MaaS use in the US without additional paperwork, or we hold written authorization (MiniMax-H3 model), and (2) it runs on an existing chat backend with idle headroom. When in doubt, the answer is no — the Qwen decommission is the cost of getting this wrong.
+
+**⚠️ Mistral-Large-4 license gate is NOT documented as cleared (flagged 2026-10-30):** the served weights
+(`mistralai/Mistral-Large-4-1T-A52B-NVFP4`, base `Mistral-Large-4-1T-A52B`) are
+`license: other` — the Mistral Research License, which restricts commercial use.
+It is **declared and serving today** (sayGM + Factory chat), but under this rule
+it is in the same class as the Qwen case (separate commercial license required)
+until the operator confirms a commercial/MaaS grant or provides written
+authorization like the MiniMax-H3 path. Treat the sign-off as an open action —
+do not present Mistral-Large-4 as a cleared SKU.
 
 ## What SN90 is — and is not
 
