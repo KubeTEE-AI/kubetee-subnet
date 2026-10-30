@@ -47,21 +47,34 @@ Every SKU offered through sayGM must clear a **license gate before it can be dec
 | `z-ai/glm-5.3-flash` | Permissive (zai-org) | ⚠️ withdrawn 2026-10-26 — removed from the offer set |
 | `qwen/qwen3.8-flash-next` | **Qwen Community License 1.0 — requires a separate Qwen MaaS license for ANY commercial MaaS use (no revenue threshold)** | ❌ decommissioned 2026-09-04 (SKU + manifests, weights retained). Do not re-declare without a signed Qwen license |
 | `moonshotai/kimi-k3`, `qwen/qwen3.5-397b-a17b`, `xiaomi/mimo-v2.5` | various | ❌ not in the offer set (backend gone or never offered; kimi is probe-only in the miner's local streaming check; MiMo-V2.5 superseded by the V2.6-Pro declare) |
-| `mistralai/Mistral-Large-4-1T-A52B` (served NVFP4) | **`license: other`** (Mistral Research License — **not** Apache-2.0, unlike Mistral-Large-3) | ⚠️ declared + serving sayGM 2026-10-30 (`mistral-large-4` / `mistral-large-4-tee`, sole provider) and Factory chat — **needs operator license sign-off** (see the note below the table). Not Apache/permissive; do NOT treat as cleared. |
+| `mistralai/Mistral-Large-4-1T-A52B` (served NVFP4) | **Mistral Ecosystem Open-Weight License** (modified MIT — allows commercial use) **but §2 requires a separate commercial license for any "Model as a Service" use** | ⚠️ declared + serving sayGM 2026-10-30 (`mistral-large-4` / `mistral-large-4-tee`, sole provider) and Factory chat — **MaaS commercial license from Mistral REQUIRED before this is cleared** (exact clause + analysis below). Not cleared by the plain license. |
 | `black-forest-labs/flux.2-klein-4b` | Apache-2.0 | ✅ Factory gateway only (`/v1/images`) — not a sayGM SKU |
 | `nvidia/Cosmos3-Super` (NIM + passthrough) | NVIDIA OpenMDW-1.1 (commercial OK) | ✅ Factory gateway only (`/cosmos3` passthrough) — not a sayGM SKU |
 | `MiniMaxAI/MiniMax-H3` | **MiniMax H3 Community License — Applicable Territory excludes US/EU/UK/KR** | ✅ Factory gateway (`minimax/h3`, `/v1/videos` — [H3-VIDEO-GENERATION-API.md](./H3-VIDEO-GENERATION-API.md)) **under written US authorization from MiniMax** (received 2026-09-21; see [EAST-WEST-ATTESTED-MTLS.md](./EAST-WEST-ATTESTED-MTLS.md)). Revocation of that authorization would require removing the deployment. **Also a declared sayGM offer AND buyer-routable** (`kubetee minimax/h3`, 10% floor). It is served on the buyer gateway's **video** path, not chat: `POST https://api.saygm.com/v1/videos` (with `X-GM-Providers: kubetee` + the buyer `SAYGM_API_KEY`) generates and settles — verified 2026-10-26, job `video_01M5VRRY3K7RPDWD0VDXF063ED` `completed`, `cost_nano_usd: 288000000`. Schema is `model, prompt, seconds, size, seed, image_reference` only (`task`/`aspect_ratio`/`duration` are rejected as `unsupported_video_parameter`). The **chat** surfaces do NOT route it: `POST /v1/chat/completions` returns `unknown model: minimax/h3` (message: "minimax/h3 is served on POST /v1/videos"), and the **worker data plane** rejects the source model (`missing or unsupported KubeTEE source model` — verified 2026-10-26 on the `997600e8…-8080s` worker, where chat models like `z-ai/glm-5.3` pass). So: buyer-video ✅, buyer-chat ✗, worker-data-plane ✗ (video, chat-network shape mismatch) — see "What SN90 is — and is not" below. |
 
 **Rule of record:** a model enters the offer set only if (1) its license permits commercial MaaS use in the US without additional paperwork, or we hold written authorization (MiniMax-H3 model), and (2) it runs on an existing chat backend with idle headroom. When in doubt, the answer is no — the Qwen decommission is the cost of getting this wrong.
 
-**⚠️ Mistral-Large-4 license gate is NOT documented as cleared (flagged 2026-10-30):** the served weights
+**⚠️ Mistral-Large-4 license gate is NOT cleared — the MaaS clause is triggered (verified 2026-10-30):** the served weights
 (`mistralai/Mistral-Large-4-1T-A52B-NVFP4`, base `Mistral-Large-4-1T-A52B`) are
-`license: other` — the Mistral Research License, which restricts commercial use.
-It is **declared and serving today** (sayGM + Factory chat), but under this rule
-it is in the same class as the Qwen case (separate commercial license required)
-until the operator confirms a commercial/MaaS grant or provides written
-authorization like the MiniMax-H3 path. Treat the sign-off as an open action —
-do not present Mistral-Large-4 as a cleared SKU.
+under the **Mistral Ecosystem Open-Weight License** (a modified MIT license). HF
+tags it `license: other` (non-standard SPDX), so the tag alone is ambiguous — the
+license text is what governs. It permits commercial use **except** MaaS. LICENSE
+§2: *"If the Licensee or any of its affiliates operates a **Model as a Service**
+business, the Licensee must enter into a separate commercial license with
+Mistral before using the Model… for any commercial purpose."* MaaS is defined as
+giving a third party access to the Model for inference via API/hosted endpoints
+where they exercise meaningful control over the inputs/parameters.
+
+**KubeTEE's use is MaaS:** `llm.kubetee.ai` + sayGM expose Mistral-Large-4 as a
+hosted OpenAI-compatible inference API where buyers set the prompt and
+parameters. No carve-out applies — not internal use, not via Mistral's official
+products, not "mere relaying to models hosted by others" (we self-host the
+weights), not an end-user product embedded in a specific feature. **This is the
+Qwen class** (separate commercial MaaS license required). Under this doc's Rule
+of record, the SKU is **not cleared** until a commercial license is in hand from
+Mistral (`https://mistral.ai/contact/`). Treat obtaining that license (or
+withdrawing the SKU) as an open action — do not present Mistral-Large-4 as a
+cleared SKU.
 
 ## What SN90 is — and is not
 
