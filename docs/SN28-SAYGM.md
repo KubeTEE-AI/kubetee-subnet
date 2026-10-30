@@ -76,6 +76,16 @@ Mistral (`https://mistral.ai/contact/`). Treat obtaining that license (or
 withdrawing the SKU) as an open action — do not present Mistral-Large-4 as a
 cleared SKU.
 
+**Operator decision 2026-10-30: the SKU is HELD LIVE during the commercial-license
+negotiation with Mistral** (explicit user decision — the exposure is accepted
+while the request is in flight; revisit if Mistral declines or stalls). Getting
+the license: file via `https://mistral.ai/contact/` (LICENSE §2 names it as the
+request path), describe the MaaS use case (self-hosted NVFP4 on B200 in TDX+CC
+TEEs, exposed via `llm.kubetee.ai` + sayGM; retail-priced at Mistral's own API
+list; no derivatives/fine-tuning), negotiate fee/revenue-share + attribution,
+then flip this row to ✅ cleared with the agreement date (the MiniMax-H3
+written-authorization pattern).
+
 ## What SN90 is — and is not
 
 - **SN90 is not an inference subnet.** Same platform, better utilisation.
