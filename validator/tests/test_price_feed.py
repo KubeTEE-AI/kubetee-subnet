@@ -351,6 +351,101 @@ def test_tao_usd_caches_live_and_reuses_on_429(tmp_path, monkeypatch):
     assert feed.tao_usd() == pytest.approx(228.5)
 
 
+# --- Taostats v1 API shapes (old /api/* paths retire 2026-11-09) --------------
+
+
+def test_tao_usd_parses_v1_price_simple_envelope(tmp_path, monkeypatch):
+    """/v1/price/simple live response: {data: [{price: "238.01"}], pagination}.
+
+    Numbers are decimal strings; _extract_first must parse them.
+    """
+    from price_feed import PriceFeed
+
+    monkeypatch.setattr("price_feed.CACHE_PATH", str(tmp_path / "tao.json"))
+    feed = PriceFeed(_Cfg())
+    monkeypatch.setattr(
+        "price_feed._get_json",
+        lambda url, key="", label="taostats": {
+            "pagination": {
+                "current_page": 1,
+                "per_page": 1,
+                "total_items": 1,
+                "total_pages": 1,
+                "next_page": None,
+                "prev_page": None,
+            },
+            "data": [
+                {"timestamp": "2026-11-01T10:11:45.791Z", "price": "238.01"}
+            ],
+        },
+    )
+    assert feed.tao_usd() == pytest.approx(238.01)
+
+
+def test_alpha_to_tao_falls_back_to_v1_subnets_pools(tmp_path, monkeypatch):
+    """/v1/subnets/pools?netuid=N live response: RAO decimal strings.
+
+    `price` (alpha->TAO) is parsed directly; the alpha/tao ratio fallback
+    is scale-invariant (both fields same RAO scale).
+    """
+    from price_feed import PriceFeed
+
+    feed = PriceFeed(_Cfg(), chain_state=_NoChain())
+
+    captured = {}
+
+    def fake_get(url, key="", label="taostats"):
+        captured["url"] = url
+        return {
+            "pagination": {"total_items": 1},
+            "data": [
+                {
+                    "netuid": 90,
+                    "price": "0.016488585",
+                    "tao_in_pool": "5269606219737",
+                    "alpha_in_pool": "319591214772611",
+                }
+            ],
+        }
+
+    monkeypatch.setattr("price_feed._get_json", fake_get)
+    assert feed.alpha_to_tao() == pytest.approx(0.016488585)
+    assert captured["url"] == (
+        "https://api.taostats.io/v1/subnets/pools?netuid=90"
+    )
+
+    # price missing/zero -> ratio of alpha_in_pool / tao_in_pool (RAO scale
+    # cancels): 319591214772611 / 5269606219737 ~= 60.65 alpha per TAO —
+    # that is TAO-per-alpha inverted; the code computes alpha/tao directly.
+    def fake_get_noprice(url, key="", label="taostats"):
+        return {
+            "data": [
+                {
+                    "netuid": 90,
+                    "tao_in_pool": "5269606219737",
+                    "alpha_in_pool": "319591214772611",
+                }
+            ],
+        }
+
+    monkeypatch.setattr("price_feed._get_json", fake_get_noprice)
+    expected_ratio = 319591214772611 / 5269606219737
+    assert feed.alpha_to_tao() == pytest.approx(expected_ratio)
+
+
+class _NoChain:
+    """chain_state stub whose spot_price raises -> forces the pool fallback."""
+
+    def __init__(self):
+        self._netuid = None
+
+    def spot_price(self):
+        raise RuntimeError("chain down")
+
+    def metagraph(self, netuid):
+        self._netuid = netuid
+
+
 def test_tao_usd_coingecko_fallback(tmp_path, monkeypatch):
     from price_feed import PriceFeed
 

@@ -3,7 +3,8 @@
 The alpha->TAO rate is read directly from the chain's metagraph (`mg.price`)
 to avoid Taostats delay. TAO/USD (the chain doesn't know USD) is:
 
-  1. Taostats live (`api.taostats.io`, needs ``TAOSTATS_API_KEY``)
+  1. Taostats live v1 API (`/v1/price/simple`, needs ``TAOSTATS_API_KEY``;
+     the old `/api/*` paths retire 2026-11-09)
   2. CoinGecko public simple/price (no API key)
   3. Last good in-process / disk cache
   4. Caller then tries S3 payout.json
@@ -21,7 +22,8 @@ import urllib.request
 
 from config import Config
 
-_TAO_USD_URL = "https://api.taostats.io/api/price/latest/v1?asset=tao"
+_TAO_USD_URL = "https://api.taostats.io/v1/price/simple"
+_TAOSTATS_POOL_URL = "https://api.taostats.io/v1/subnets/pools"
 _COINGECKO_URL = "https://api.coingecko.com/api/v3/simple/price?ids=bittensor&vs_currencies=usd"
 
 _USER_AGENT = "kubetee-validator/0.1"
@@ -199,11 +201,10 @@ class PriceFeed:
             except Exception:
                 pass  # fall through to Taostats
 
-        # Fallback: Taostats pool API (may have delay)
-        url = (
-            "https://api.taostats.io/api/dtao/pool/latest/v1"
-            f"?netuid={self._netuid}"
-        )
+        # Fallback: Taostats pool API (may have delay). v1 API (the old
+        # /api/dtao/* paths retire 2026-11-09): {data: [{price,
+        # alpha_in_pool, tao_in_pool, ...}]} with decimal-string numbers.
+        url = f"{_TAOSTATS_POOL_URL}?netuid={self._netuid}"
         payload = _get_json(url, self._api_key)
         value = _extract_first(payload, ("price",))
         if value is None or value <= 0:
