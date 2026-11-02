@@ -350,11 +350,10 @@ Given the NIM Operator's current Kata/CoCo limitations, KubeTEE's thesis is that
 
 | NeMo layer | Bittensor subnet (potential partner) | What it could replace/augment |
 |---|---|---|
-| Data Designer | [Orion SN27](https://github.com/SILX-LABS/Orion) | Decentralized data discovery / generation / curation with on-chain quality validation |
 | Customizer (fine-tuning) | [Gradients SN56](https://www.gradients.io/) | AutoML tournaments — open-source SFT/DPO/GRPO training scripts |
 | Customizer (RL/reasoning) | [Affine SN120](https://www.affine.io/) | Incentivized RL "reason mining" — challenger-vs-champion duels |
 | Search | [Desearch SN22](https://desearch.ai/) | Decentralized real-time web + X/Twitter search for AI agents |
-| Retriever / RAG | [Rec4ll SN31](https://taostats.io/subnets/31) | Decentralized RAG — miners serve embeddings, vector search, and LLM inference; validators score retrieval accuracy and answer quality |
+| Retriever / RAG | *on hold* — SN31 rec4ll marked inactive (no public repo, repeated missed launches; revisit on serious news) | The decentralized-RAG fit (embed → retrieve → generate in the TEE) remains the target mechanism |
 | Video Search & Summarization | [Score SN44](https://github.com/score-technologies/turbovision) | Decentralized computer vision — object detection, tracking, structured annotations |
 | Inference + distributed training | [Chutes SN64](https://chutes.ai/) / Parallax | Serverless inference + decentralized MoE training (already fully TEE-only). Also a [LiteLLM TEE fallback](#inference-providers-and-tee-fallbacks) (Phase 1) |
 | Inference (LiteLLM provider) | [sayGM SN28](https://saygm.com/) | Connected to `llm.kubetee.ai` as an inference provider — models on the gateway; idle-capacity inbound from sayGM buyers. Fallbacks are other TEE networks, not a loop back through sayGM |
