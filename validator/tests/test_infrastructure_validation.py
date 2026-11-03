@@ -1,8 +1,19 @@
 """infrastructure_validation: fail-closed binary readiness policy."""
 
+from datetime import datetime, timedelta, timezone
+
 from infrastructure_validation import node_posture, validate_miner
 
 HOTKEY = "5EHotkeyAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+
+
+def _ago(seconds: float = 30.0) -> str:
+    """An RFC3339 heartbeat timestamp `seconds` in the past."""
+    return (
+        (datetime.now(timezone.utc) - timedelta(seconds=seconds))
+        .isoformat()
+        .replace("+00:00", "Z")
+    )
 
 
 def _labels(role_flags, extra=None):
@@ -13,13 +24,22 @@ def _labels(role_flags, extra=None):
     return labels
 
 
-def _node(cpu, mem, roles, labels=None, ready=True, schedulable=True):
+def _node(
+    cpu,
+    mem,
+    roles,
+    labels=None,
+    ready=True,
+    schedulable=True,
+    heartbeat_age=30.0,
+):
     base = _labels(roles, labels or {})
+    ready_cond = {"type": "Ready", "status": "True" if ready else "False"}
+    if heartbeat_age is not None:
+        ready_cond["lastHeartbeatTime"] = _ago(heartbeat_age)
     return {
         "labels": base,
-        "conditions": [
-            {"type": "Ready", "status": "True" if ready else "False"}
-        ],
+        "conditions": [ready_cond],
         "capacity": {"cpu": str(cpu), "memory": mem},
         "unschedulable": not schedulable,
     }
@@ -146,3 +166,132 @@ def test_unschedulable_worker_fails():
             node["unschedulable"] = True
     verdict = validate_miner(HOTKEY, clusters, nodes, _cid)
     assert not verdict.ready
+
+
+# --- freshness gates (na-us-dallas-132 incident, 2026-11-03) ----------------
+# A decommissioned node keeps its last `Ready: True` snapshot in Rancher
+# forever once the cluster agent disconnects. These pin the gates that stop
+# such a frozen snapshot from earning epoch weight.
+
+
+def test_stale_ready_condition_is_not_ready():
+    node = _node(96, "1500Gi", ["worker"], heartbeat_age=3600)
+    p = node_posture(node)
+    assert not p.ready
+    assert p.stale
+    assert p.ready_age_seconds >= 3599
+
+
+def test_fresh_ready_condition_is_ready():
+    node = _node(96, "1500Gi", ["worker"], heartbeat_age=60)
+    p = node_posture(node)
+    assert p.ready
+    assert not p.stale
+
+
+def test_ready_without_timestamp_fails_closed():
+    node = _node(96, "1500Gi", ["worker"])
+    del node["conditions"][0]["lastHeartbeatTime"]
+    p = node_posture(node)
+    assert not p.ready
+    assert p.stale
+
+
+def test_go_style_timestamp_is_parsed():
+    # Rancher serialises some conditions as Go time, not RFC3339.
+    node = _node(96, "1500Gi", ["worker"])
+    node["conditions"][0][
+        "lastHeartbeatTime"
+    ] = "2026-11-03 10:36:55 +0000 UTC"
+    p = node_posture(node)
+    assert p.ready_age_seconds is not None
+    assert p.stale  # 2026-11-03 is well past the 15 min window
+
+
+def test_decommissioned_cluster_scores_zero():
+    """Full replay of the incident: cluster disconnected, node frozen Ready."""
+    clusters, nodes = _healthy_cluster()
+    cid = clusters[0]["id"]
+    # Every node frozen >15 min ago and the cluster reports Ready=False.
+    for node in nodes[cid]:
+        node["conditions"][0]["lastHeartbeatTime"] = _ago(3400)
+    clusters[0]["conditions"] = [
+        {
+            "type": "Ready",
+            "status": "False",
+            "reason": "Disconnected",
+            "message": "Cluster agent is not connected",
+        }
+    ]
+    verdict = validate_miner(HOTKEY, clusters, nodes, _cid)
+    assert not verdict.ready
+    joined = "; ".join(verdict.reasons)
+    assert "stale heartbeat" in joined
+    assert "Cluster agent is not connected" in joined
+
+
+def test_disconnected_cluster_fails_even_with_fresh_nodes():
+    """Cluster-level Ready=False is disqualifying on its own."""
+    clusters, nodes = _healthy_cluster()
+    clusters[0]["conditions"] = [
+        {"type": "Ready", "status": "False", "reason": "Disconnected"}
+    ]
+    verdict = validate_miner(HOTKEY, clusters, nodes, _cid)
+    assert not verdict.ready
+    assert any(
+        "Connected" in r or "Disconnected" in r for r in verdict.reasons
+    )
+
+
+def test_cluster_without_ready_condition_still_scores():
+    """Older Rancher payloads omit the cluster Ready condition — don't regress."""
+    clusters, nodes = _healthy_cluster()
+    clusters[0].pop("conditions", None)
+    verdict = validate_miner(HOTKEY, clusters, nodes, _cid)
+    assert verdict.ready, verdict.reasons
+
+
+def test_duplicate_ready_conditions_use_newest_heartbeat():
+    """Rancher's v3 payload carries TWO Ready conditions on every node.
+
+    The legacy copy has only a Go-format lastTransitionTime (registration
+    time, days old) and no heartbeat; the Norman copy has the real
+    lastHeartbeatTime. Reading the first one would mark every healthy node
+    stale, so the newest timestamp must win.
+    """
+    node = _node(96, "1500Gi", ["worker"], heartbeat_age=30)
+    node["conditions"] = [
+        {
+            "type": "Ready",
+            "status": "True",
+            "reason": "KubeletReady",
+            "lastTransitionTime": _ago(5 * 24 * 3600),
+        },
+        {
+            "type": "Ready",
+            "status": "True",
+            "reason": "KubeletReady",
+            "lastHeartbeatTime": _ago(30),
+            "lastTransitionTime": _ago(5 * 24 * 3600),
+        },
+    ]
+    p = node_posture(node)
+    assert p.ready
+    assert not p.stale
+    assert p.ready_age_seconds < 120
+
+
+def test_duplicate_ready_conditions_both_stale_is_stale():
+    """Same duplicate shape, but the heartbeat itself is old → dead."""
+    node = _node(96, "1500Gi", ["worker"], heartbeat_age=3600)
+    node["conditions"] = [
+        {
+            "type": "Ready",
+            "status": "True",
+            "lastTransitionTime": _ago(5 * 24 * 3600),
+        },
+        {"type": "Ready", "status": "True", "lastHeartbeatTime": _ago(3600)},
+    ]
+    p = node_posture(node)
+    assert not p.ready
+    assert p.stale

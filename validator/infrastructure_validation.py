@@ -11,11 +11,23 @@ minimum node-count gate (removed 2026-10-29 — the 3-node same-GPU-type
 topology in the docs is guidance, not a readiness gate). Any explicit
 missing/malformed/ambiguous/unhealthy evidence is a failure. (A Rancher
 outage is handled upstream as a cycle skip, not a per-miner failure.)
+
+Two freshness gates keep a dead cluster from scoring off frozen evidence
+(added 2026-11-03 after na-us-dallas-132 kept earning 13.2% of the epoch
+pool for ~40 min after its node was decommissioned):
+
+1. A node counts as Ready only if its Ready condition is younger than
+   `_READY_MAX_AGE_SECONDS` (15 min; healthy nodes heartbeat every <5 min).
+   A disconnected cluster freezes its node CRs — including `Ready: True` —
+   in Rancher forever, so the timestamp is the load-bearing signal.
+2. A cluster whose own Ready condition is explicitly False (e.g. "Cluster
+   agent is not connected") disqualifies its nodes outright.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 
 from rancher_client import hotkey_of, is_banned
 
@@ -24,6 +36,70 @@ _MIN_CPU_CORES = 72
 _MIN_MEM_GIB = 1024
 
 _ROLE_KEYWORDS = ("etcd", "control-plane", "worker")
+
+# A Ready condition carries a kubelet heartbeat. When a cluster's agent
+# disconnects (or a node is decommissioned) Rancher stops refreshing the node
+# CR but leaves the last snapshot — including `Ready: True` — in place
+# forever. Healthy oakland nodes heartbeat every <5 min, so anything older
+# than this is treated as dead evidence, not as a live node. Without this
+# gate a stopped node keeps scoring: na-us-dallas-132 (tx-b200-16) was
+# decommissioned 2026-11-03 11:10Z yet kept earning 13.2% of the epoch pool
+# off a Ready condition frozen at 10:36:55Z.
+_READY_MAX_AGE_SECONDS = 900.0  # 15 min
+
+
+def _parse_timestamp(raw) -> datetime | None:
+    """Parse a Rancher/k8s condition timestamp; None if absent/unparseable."""
+    if not raw:
+        return None
+    text = str(raw).strip()
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        # Rancher sometimes serialises Go's "2026-11-03 10:36:55 +0000 UTC".
+        try:
+            parsed = datetime.strptime(
+                " ".join(text.split()[:2]) + " " + text.split()[-1],
+                "%Y-%m-%d %H:%M:%S %Z",
+            )
+        except (ValueError, IndexError):
+            return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+
+def _condition_timestamp(condition: dict) -> datetime | None:
+    """Newest timestamp a condition carries (heartbeat beats transition)."""
+    for key in ("lastHeartbeatTime", "lastUpdateTime", "lastTransitionTime"):
+        parsed = _parse_timestamp(condition.get(key))
+        if parsed is not None:
+            return parsed
+    return None
+
+
+def _ready_condition_age(
+    node: dict, now: datetime
+) -> tuple[bool, float | None]:
+    """(has_ready_true, age_seconds) for the node's Ready condition.
+
+    Rancher's v3 node payload carries DUPLICATE Ready conditions: a legacy
+    copy with only a Go-format `lastTransitionTime` (the node's registration
+    time, days old) and the Norman copy carrying a real `lastHeartbeatTime`.
+    Read every Ready/True condition and keep the NEWEST timestamp, otherwise
+    the legacy copy's registration time would make a healthy node look stale.
+    """
+    timestamps = [
+        _condition_timestamp(c)
+        for c in _conditions(node)
+        if c.get("type") == "Ready" and str(c.get("status")) == "True"
+    ]
+    usable = [t for t in timestamps if t is not None]
+    if not timestamps:
+        return False, None  # not Ready at all
+    if not usable:
+        return True, None  # Ready=True but no usable timestamp → fail closed
+    return True, (now - max(usable)).total_seconds()
 
 
 @dataclass(frozen=True)
@@ -44,6 +120,8 @@ class NodePosture:
     gpu_class: str | None  # e.g. "H200"; None if not a labeled GPU node
     vm_passthrough: bool
     kata_confidential_runtime: bool
+    ready_age_seconds: float | None = None  # None when no usable timestamp
+    stale: bool = False
 
 
 def _gi_to_gib(value: float, unit: str) -> float:
@@ -134,13 +212,29 @@ def _conditions(node: dict) -> list[dict]:
     return [c for c in conds if isinstance(c, dict)]
 
 
-def node_posture(node: dict) -> NodePosture:
-    """Distill a Rancher node object into scoring posture."""
+def node_posture(node: dict, *, now: datetime | None = None) -> NodePosture:
+    """Distill a Rancher node object into scoring posture.
+
+    `ready` is FALSE when the Ready condition is older than
+    `_READY_MAX_AGE_SECONDS` — a disconnected cluster keeps its last node
+    snapshot (including `Ready: True`) in Rancher indefinitely, so a stale
+    timestamp means the kubelet stopped reporting, not that the node is up.
+    A Ready/True condition with no usable timestamp at all is likewise not
+    live evidence and fails closed.
+    """
     labels = node.get("labels") or {}
-    ready = any(
-        c.get("type") == "Ready" and str(c.get("status")) == "True"
-        for c in _conditions(node)
-    )
+    now = now or datetime.now(timezone.utc)
+    has_ready, ready_age = _ready_condition_age(node, now)
+    if not has_ready:
+        ready, stale = False, False
+    elif ready_age is None:
+        # Ready=True with no usable timestamp: unverifiable freshness is not
+        # evidence of liveness, so fail closed.
+        ready, stale = False, True
+    elif ready_age > _READY_MAX_AGE_SECONDS:
+        ready, stale = False, True
+    else:
+        ready, stale = True, False
     schedulable = not node.get("unschedulable", False)
     roles = frozenset(r for r in _ROLE_KEYWORDS if _has_role(labels, r))
     capacity = (
@@ -162,6 +256,8 @@ def node_posture(node: dict) -> NodePosture:
             == "vm-passthrough"
         ),
         kata_confidential_runtime=_has_confidential_runtime(node),
+        ready_age_seconds=ready_age,
+        stale=stale,
     )
 
 
@@ -198,6 +294,41 @@ def _has_confidential_runtime(node: dict) -> bool:
     return False
 
 
+def _cluster_conditions(cluster: dict) -> list[dict]:
+    """Rancher cluster conditions (top-level `conditions`, else status)."""
+    conds = (
+        cluster.get("conditions")
+        or (cluster.get("status") or {}).get("conditions")
+        or []
+    )
+    return [c for c in conds if isinstance(c, dict)]
+
+
+def _cluster_state(cluster: dict) -> str:
+    """Human-readable cluster health for the log/verdict reason."""
+    for cond in _cluster_conditions(cluster):
+        if cond.get("type") == "Ready" and str(cond.get("status")) != "True":
+            message = str(cond.get("message") or cond.get("reason") or "")
+            return message or "not ready"
+    return "no Ready condition"
+
+
+def _cluster_healthy(cluster: dict) -> bool:
+    """False when Rancher reports the cluster agent/probe as not Ready.
+
+    A disconnected cluster cannot supply live node evidence. Its node CRs
+    freeze at the last successful sync, so an explicit `Ready: False` (e.g.
+    "Cluster agent is not connected") disqualifies the cluster regardless of
+    what those stale node objects still claim.
+    """
+    for cond in _cluster_conditions(cluster):
+        if cond.get("type") == "Ready":
+            return str(cond.get("status")) == "True"
+    # No Ready condition at all: older Rancher payloads omit it, so fall back
+    # to the node evidence rather than failing every cluster.
+    return True
+
+
 def validate_miner(
     hotkey: str,
     clusters: list[dict],
@@ -223,9 +354,32 @@ def validate_miner(
     nodes = nodes_by_cluster.get(cluster_id, [])
     postures = [node_posture(n) for n in nodes]
 
+    if not _cluster_healthy(cluster):
+        reasons.append(
+            "cluster not Ready/Connected in Rancher "
+            f"({_cluster_state(cluster)})"
+        )
+
     active = [p for p in postures if p.ready]
     if not active:
-        reasons.append("no Ready nodes")
+        stale = [p for p in postures if p.stale]
+        if stale:
+            ages = [
+                p.ready_age_seconds
+                for p in stale
+                if p.ready_age_seconds is not None
+            ]
+            detail = (
+                f"newest {max(ages) / 60:.0f} min old"
+                if ages
+                else "no usable heartbeat timestamp"
+            )
+            reasons.append(
+                f"no Ready nodes (stale heartbeat: {detail}, "
+                f"limit {_READY_MAX_AGE_SECONDS / 60:.0f} min)"
+            )
+        else:
+            reasons.append("no Ready nodes")
 
     etcd = [p for p in active if "etcd" in p.roles]
     control_plane = [p for p in active if "control-plane" in p.roles]
