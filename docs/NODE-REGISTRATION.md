@@ -56,6 +56,24 @@ not a readiness gate (removed 2026-10-29). Any explicit missing,
 malformed, ambiguous, or unhealthy evidence scores **0**. A Rancher outage
 skips the whole weight cycle instead of blaming miners.
 
+Readiness evidence must also be **fresh** (added 2026-11-03 in v1.3.4, after
+`na-us-dallas-132` kept earning 13.2% of the epoch pool for ~40 min once its
+node was decommissioned). A disconnected cluster freezes its Rancher node
+records at the last successful sync — including `Ready: True` — and never
+expires them, so two gates apply:
+
+- a node counts as Ready only if its Ready condition heartbeat is younger
+  than **15 minutes** (healthy nodes heartbeat every <5 min); a Ready
+  condition with no usable timestamp fails closed;
+- a cluster whose own Ready condition is explicitly `False` (for example
+  "Cluster agent is not connected") disqualifies its nodes outright.
+
+Practical consequence for operators: **stopping a node is not enough to stop
+its payout.** When a cluster is retired, remove its Rancher node record (or
+unbind the hotkey) as part of the decommission; until then the last snapshot
+remains eligible for up to 15 minutes, and a half-removed node can otherwise
+be re-read indefinitely by older validator versions.
+
 This infrastructure verdict does not prove current TEE attestation, a live
 tunnel and end-to-end probe, expected workload identity, Armada readiness,
 or an unexpired KeyLease. Those remain separate serving requirements. The
