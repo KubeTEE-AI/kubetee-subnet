@@ -144,6 +144,28 @@ def test_failure_is_unavailable_then_next_epoch_recovers_and_public_payload_is_s
     recovered = collector.snapshot(720, 360, 221.74)
     assert recovered["stale"] is False and recovered["bucket"] == 2
     assert recovered["per_class_usd"]["B300"] > 0
+    good = dict(recovered)
+    good["per_class_usd"] = dict(recovered["per_class_usd"])
+    good["samples"] = dict(recovered["samples"])
+
+    def unavailable(request):
+        return httpx.Response(503, text="next epoch is unavailable")
+
+    collector.client = httpx.Client(transport=httpx.MockTransport(unavailable))
+    stale = collector.snapshot(1080, 360, 221.74)
+    # A later failed fetch retains the whole last GOOD epoch, not raw rows
+    # or a mixture of freshly successful and failed inputs.
+    assert stale["stale"] is True
+    assert stale["bucket"] == good["bucket"] == 2
+    for key in (
+        "per_class_usd",
+        "samples",
+        "observed_at",
+        "tao_usd",
+        "observation_window",
+    ):
+        assert stale[key] == good[key]
+    assert set(recovered) == set(stale)
     assert set(recovered) == {
         "per_class_usd",
         "samples",
