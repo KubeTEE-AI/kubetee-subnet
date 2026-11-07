@@ -13,7 +13,7 @@ import time
 
 _DASHBOARD_VERSION = 1
 
-_GPU_ORDER = ["B300", "B200", "H100", "H200", "RTX6000"]
+_GPU_ORDER = ["B300", "B200", "H200", "H100", "RTX6000"]
 
 
 def _fmt(n, d=2):

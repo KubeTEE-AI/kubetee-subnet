@@ -51,7 +51,7 @@ def test_epoch_card_serializes_clamps_and_escapes():
     card = body.split("Chutes SN64 · median earnings", 1)[1].split(
         "GPU inventory", 1
     )[0]
-    order = ["B300", "B200", "H100", "H200", "RTX6000"]
+    order = ["B300", "B200", "H200", "H100", "RTX6000"]
     positions = [card.index(gpu) for gpu in order]
     assert positions == sorted(positions)
     assert "4 miner" in body
