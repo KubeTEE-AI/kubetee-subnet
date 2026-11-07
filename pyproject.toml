@@ -57,6 +57,7 @@ Changelog = "https://github.com/KubeTEE-AI/kubetee-subnet/releases"
 
 [project.optional-dependencies]
 dev = [
+    "aiohttp>=3.0",
     "pytest>=8.0",
     "black>=24.0",
 ]

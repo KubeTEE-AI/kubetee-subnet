@@ -112,6 +112,25 @@ def build_html(snapshot: dict) -> str:
         else "display only — weights unaffected"
     )
 
+    # Chutes is a read-only verification display: never part of card or weights.
+    chutes_earnings = snapshot.get("chutes_earnings")
+    _chutes_chips = ""
+    if isinstance(chutes_earnings, dict):
+        payout = chutes_earnings.get("per_class_usd") or {}
+        samples = chutes_earnings.get("samples") or {}
+        for klass in ("H200", "B200", "B300", "RTX6000"):
+            if klass in payout:
+                count = int(samples.get(klass, 0))
+                _chutes_chips += f'<div class="gpu"><b>{klass} · {count} miner{"s" if count != 1 else ""}</b>${float(payout[klass]):.2f}/GPU/hr</div>\n'
+    if not _chutes_chips:
+        _chutes_chips = '<div class="gpu"><b>Chutes unavailable</b>Awaiting first successful epoch snapshot</div>'
+    _chutes_observation = ""
+    if chutes_earnings:
+        observed = html.escape(str(chutes_earnings.get("observed_at", ""))[:19].replace("T", " "))
+        _chutes_observation = f'Observed {observed} UTC'
+        if chutes_earnings.get("stale"):
+            _chutes_observation += " · last successful snapshot; retry next epoch"
+
     # Targon panel header (v1.3.3): the card's pricing.targon switch.
     targon_pricing = bool(snapshot.get("targon_pricing", True))
     _targon_mode = (
@@ -238,6 +257,13 @@ tr:hover td{{background:rgba(79,156,255,0.04)}}
 </div>
 
 <div class="panel full">
+  <h2>Chutes SN64 · median earnings — current 24h (USD per GPU-hour)</h2>
+  <div style="font-size:13px;color:var(--muted);margin-bottom:10px">Verification only · once per epoch · no effect on KubeTEE weights or pricing</div>
+  <div class="gpus">{_chutes_chips}</div>
+  <div style="font-size:12px;color:var(--muted);margin-top:12px">{_chutes_observation}</div>
+</div>
+
+<div class="panel full">
   <h2>GPU inventory this cycle</h2>
   <div class="gpus">
 {gpu_chips}  </div>
@@ -295,6 +321,7 @@ def build_dashboard_json(snapshot: dict) -> dict:
         "targon_payout": dict(snapshot.get("targon_payout", {}) or {}),
         "lium_payout": dict(snapshot.get("lium_payout", {}) or {}),
         "lium_pricing": bool(snapshot.get("lium_pricing", False)),
+        "chutes_earnings": snapshot.get("chutes_earnings"),
         "targon_pricing": bool(snapshot.get("targon_pricing", True)),
         "miners": miners,
         "fleet_gpus": dict(snapshot.get("fleet_gpus", {})),

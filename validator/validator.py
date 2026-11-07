@@ -37,6 +37,7 @@ from price_card import (
 from price_feed import PriceFeed, PriceFeedError
 from rancher_client import RancherClient, RancherEvidenceError, hotkey_of
 from targon_payout_feed import DEFAULT_FLOOR_FRAC, TargonPayoutFeed
+from chutes_earnings_feed import ChutesEarningsFeed
 
 logging.basicConfig(
     level=os.environ.get("LOG_LEVEL", "INFO").upper(),
@@ -83,6 +84,15 @@ class Validator:
         self._last_submitted_epoch = -1
         self._last_set_block: int | None = None
         self._last_targon_payout: dict[str, float] = {}
+        # Read-only dashboard reference: publisher-only, at most once per epoch.
+        self.chutes_feed: ChutesEarningsFeed | None = None
+        if self.hippius is not None:
+            self.chutes_feed = ChutesEarningsFeed(config.taostats_api_key)
+
+    def _chutes_snapshot(self, block: int, tempo: int, tao_usd: float) -> dict | None:
+        if self.chutes_feed is None:
+            return None
+        return self.chutes_feed.snapshot(block, tempo, tao_usd)
 
     def _first_cycle(self) -> bool:
         return self._last_card is None
@@ -369,6 +379,9 @@ class Validator:
                 "tempo": tempo,
                 "hours_per_epoch": hours_per_epoch,
                 "usd_per_alpha": usd_per_alpha,
+                "chutes_earnings": self._chutes_snapshot(
+                    self._epoch(), tempo, tao_usd
+                ),
                 "card": card,
                 "floors": floors or {},
                 "effective_card": effective_card,
