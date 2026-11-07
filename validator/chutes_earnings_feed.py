@@ -21,6 +21,7 @@ METAGRAPH_URL = (
     "https://api.taostats.io/api/metagraph/latest/v1?netuid=64&limit=1000"
 )
 CLASS_LABELS = {
+    "H100": "H100",
     "H200": "H200",
     "B200": "B200",
     "B300": "B300",

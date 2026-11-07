@@ -18,8 +18,13 @@ def test_missing_chutes_has_no_zero_or_active_cards():
 def test_epoch_card_serializes_clamps_and_escapes():
     snapshot = {
         "chutes_earnings": {
-            "per_class_usd": {"H200": 1.2345, "B300": 99.0, "RTX6000": 1.5},
-            "samples": {"H200": 4, "B300": 1, "RTX6000": 3},
+            "per_class_usd": {
+                "H200": 1.2345,
+                "B300": 99.0,
+                "B200": 8.0,
+                "RTX6000": 1.5,
+            },
+            "samples": {"H200": 4, "B300": 1, "B200": 2, "RTX6000": 3},
             "observed_at": "2026-11-07T00:00Z",
             "observation_window": "current_24h",
             "stale": False,
@@ -36,6 +41,15 @@ def test_epoch_card_serializes_clamps_and_escapes():
     ):
         assert gpu in body and value in body
         assert "bad <script>" not in body
+    card = body.split("Chutes SN64 · median earnings", 1)[1].split(
+        "GPU inventory", 1
+    )[0]
+    positions = [
+        card.index(gpu)
+        for gpu in ("B300", "B200", "H200", "RTX6000")
+        if gpu in card
+    ]
+    assert positions == sorted(positions)
     assert "4 miner" in body
     assert json.loads(
         json.dumps(build_dashboard_json(snapshot)["chutes_earnings"])

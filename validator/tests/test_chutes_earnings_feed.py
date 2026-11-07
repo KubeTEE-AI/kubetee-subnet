@@ -1,36 +1,10 @@
 """Chutes display metrics vs reference input behavior; no network."""
 
+from dataclasses import dataclass, field
 from pathlib import Path
-import importlib.util
 import json
-import sys
-
 import pytest
-
 import chutes_earnings_feed as feed
-
-
-class _Response:
-    def __init__(self, data):
-        self.data = data
-
-    def raise_for_status(self):
-        pass
-
-    def json(self):
-        return self.data
-
-
-class _Client:
-    def __init__(self, get=None):
-        self.getter = get
-        self.calls = []
-
-    def get(self, url, headers, timeout):
-        self.calls.append((url, headers, timeout))
-        return _Response(
-            self.getter(url, headers, timeout) if self.getter else {}
-        )
 
 
 @pytest.fixture(scope="session")
@@ -42,13 +16,61 @@ def captured_input():
     }
 
 
+@dataclass
+class MinerGPU:
+    gpu_type: str
+    count: int = 0
+    tee_count: int = 0
+    non_tee_count: int = 0
+    chutes: list = field(default_factory=list)
+
+
+@dataclass
+class MinerInfo:
+    hotkey: str
+    uid: int = -1
+    emission: float = 0.0
+    tee_gpus: int = 0
+    tee_compute_24h: float = 0.0
+    gpus_by_type: dict = field(default_factory=dict)
+    compute_by_gpu_type: dict = field(default_factory=dict)
+    tee_chutes_24h: list = field(default_factory=list)
+    tee_chute_compute_24h: dict = field(default_factory=dict)
+
+
+def _is_tee(chute_id, name, catalog):
+    if chute_id in catalog:
+        return catalog[chute_id].get("tee", False)
+    return "tee" in name.lower() or "tee" in chute_id.lower()
+
+
+def reference_nodes(nodes_data, catalog):
+    """Self-contained math-only extraction from ``docs/miner_revenue.py``."""
+    miners = {}
+    for hotkey, data in nodes_data.items():
+        miner = MinerInfo(hotkey)
+        for node in data.get("provisioned", []):
+            kind = feed.normalize_gpu_type(node.get("gpu", "unknown"))
+            chute = node.get("chute", {})
+            chute_id = chute.get("chute_id", "")
+            tee = _is_tee(chute_id, chute.get("name", ""), catalog)
+            gpu = miner.gpus_by_type.setdefault(kind, MinerGPU(kind))
+            gpu.count += 1
+            gpu.chutes.append({"chute_id": chute_id})
+            if tee:
+                gpu.tee_count += 1
+                miner.tee_gpus += 1
+            else:
+                gpu.non_tee_count += 1
+        for kind, count in data.get("idle", {}).items():
+            kind = feed.normalize_gpu_type(kind)
+            gpu = miner.gpus_by_type.setdefault(kind, MinerGPU(kind))
+            gpu.count += count
+        miners[hotkey] = miner
+    return miners
+
+
 def reference_rows(inputs):
-    """The original script, not an independent copy of our rate formula."""
-    path = Path(__file__).parents[2] / "docs" / "miner_revenue.py"
-    spec = importlib.util.spec_from_file_location("miner_revenue_ref", path)
-    reference = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = reference
-    spec.loader.exec_module(reference)
     nodes = inputs["nodes"]
     catalog = {x["chute_id"]: x for x in inputs["catalog"]["items"]}
     names = {
@@ -57,11 +79,67 @@ def reference_rows(inputs):
         for n in data["provisioned"]
         if (n.get("chute") or {}).get("chute_id")
     }
-    miners = reference.process_nodes_data(nodes, catalog)
-    reference.process_per_chute_stats(miners, inputs["stats"], names, catalog)
-    reference.attribute_compute_by_gpu_type(miners)
-    reference.process_taostats_data(miners, inputs["rewards"]["data"])
-    miners = reference.filter_tee_miners(miners, True)
+    miners = reference_nodes(nodes, catalog)
+    for entry in inputs["stats"].get("past_day", {}).get("compute_units", []):
+        hotkey = entry.get("miner_hotkey")
+        if hotkey not in miners:
+            continue
+        miner = miners[hotkey]
+        cid = entry.get("chute_id", "")
+        if not _is_tee(
+            cid,
+            names.get(cid, catalog.get(cid, {}).get("name", "")),
+            catalog,
+        ):
+            continue
+        cu = entry.get("compute_units", 0.0)
+        if cid not in miner.tee_chutes_24h:
+            miner.tee_chutes_24h.append({"chute_id": cid})
+        stored = miner.tee_chute_compute_24h.setdefault(
+            cid, {"compute_units": 0.0}
+        )
+        stored["compute_units"] += cu
+        miner.tee_compute_24h += cu
+    for miner in miners.values():
+        chute_counts = {}
+        type_counts = {}
+        for kind, gpu in miner.gpus_by_type.items():
+            for chute in gpu.chutes:
+                cid = chute["chute_id"]
+                if not cid:
+                    continue
+                counts = chute_counts.setdefault(cid, {})
+                counts[kind] = counts.get(kind, 0) + 1
+                type_counts[kind] = type_counts.get(kind, 0) + 1
+        shares = {
+            cid: {
+                kind: count / (sum(per_type.values()) or 1)
+                for kind, count in per_type.items()
+            }
+            for cid, per_type in chute_counts.items()
+        }
+        total_nodes = sum(type_counts.values()) or 1
+        fallback = {
+            kind: count / total_nodes for kind, count in type_counts.items()
+        }
+        compute = {}
+        for cid, data in miner.tee_chute_compute_24h.items():
+            for kind, fraction in (shares.get(cid) or fallback).items():
+                compute[kind] = compute.get(kind, 0.0) + (
+                    data["compute_units"] * fraction
+                )
+        miner.compute_by_gpu_type = compute
+    for entry in inputs["rewards"]["data"]:
+        hotkey = entry.get("hotkey", {})
+        hotkey = hotkey.get("ss58", "") if isinstance(hotkey, dict) else hotkey
+        if hotkey in miners:
+            miners[hotkey].uid = entry.get("uid", -1)
+            miners[hotkey].emission = feed.get_emission(entry)
+    miners = {
+        key: miner
+        for key, miner in miners.items()
+        if miner.tee_gpus > 0 or miner.tee_compute_24h > 0
+    }
     tao_usd = 221.74
     total_usd = sum(m.emission for m in miners.values()) * tao_usd
     total_cu = sum(

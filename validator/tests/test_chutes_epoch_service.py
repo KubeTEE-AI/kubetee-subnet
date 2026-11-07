@@ -36,22 +36,28 @@ def test_four_bound_reads_and_raw_key_only_to_rewards(fixtures):
     client = httpx.Client(transport=httpx.MockTransport(handler))
     collector = feed.ChutesEarningsFeed("test-key", client=client)
     result = collector.snapshot(360, 360, 221.74)
-    assert len(str(calls)) > 0
-    assert len(calls) == 4
-    assert result["bucket"] == 1
-    assert result["stale"] is False
-    assert result["per_class_usd"]["B300"] > 0
-    assert "authorization" not in calls[0].headers
-    assert calls[-1].headers["Authorization"] == "test-key"
+    assert {call.url.path for call in calls} == {
+        "/nodes/",
+        "/miner/stats",
+        "/chutes/",
+        "/api/metagraph/latest/v1",
+    }
+    assert result["bucket"] == 1 and result["stale"] is False
+    for call in calls:
+        if "taostats" in str(call.url):
+            assert call.headers["Authorization"] == "test-key"
+        else:
+            assert "authorization" not in call.headers
 
 
 def test_epoch_guard_blocks_repeated_success_failure_and_no_price(fixtures):
     calls = []
+    failed = False
 
     def handler(request):
-        calls.append(request)
-        if len(calls) < 5:
+        if not failed:
             return httpx.Response(503, text="upstream")
+        calls.append(request)
         key = (
             "nodes"
             if "nodes" in str(request.url)
@@ -68,6 +74,7 @@ def test_epoch_guard_blocks_repeated_success_failure_and_no_price(fixtures):
     )
     assert collector.snapshot(100, 360, 221.74) is None
     assert collector.snapshot(359, 360, 221.74) is None
+    failed = True
     exact = len(calls)
     first = collector.snapshot(360, 360, 221.74)
     assert first and first["bucket"] == 1

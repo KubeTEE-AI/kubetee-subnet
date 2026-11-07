@@ -118,7 +118,7 @@ def build_html(snapshot: dict) -> str:
     if isinstance(chutes_earnings, dict):
         payout = chutes_earnings.get("per_class_usd") or {}
         samples = chutes_earnings.get("samples") or {}
-        for klass in ("H200", "B200", "B300", "RTX6000"):
+        for klass in _GPU_ORDER:
             if klass in payout:
                 count = int(samples.get(klass, 0))
                 _chutes_chips += f'<div class="gpu"><b>{klass} · {count} miner{"s" if count != 1 else ""}</b>${float(payout[klass]):.2f}/GPU/hr</div>\n'
@@ -126,10 +126,14 @@ def build_html(snapshot: dict) -> str:
         _chutes_chips = '<div class="gpu"><b>Chutes unavailable</b>Awaiting first successful epoch snapshot</div>'
     _chutes_observation = ""
     if chutes_earnings:
-        observed = html.escape(str(chutes_earnings.get("observed_at", ""))[:19].replace("T", " "))
-        _chutes_observation = f'Observed {observed} UTC'
+        observed = html.escape(
+            str(chutes_earnings.get("observed_at", ""))[:19].replace("T", " ")
+        )
+        _chutes_observation = f"Observed {observed} UTC"
         if chutes_earnings.get("stale"):
-            _chutes_observation += " · last successful snapshot; retry next epoch"
+            _chutes_observation += (
+                " · last successful snapshot; retry next epoch"
+            )
 
     # Targon panel header (v1.3.3): the card's pricing.targon switch.
     targon_pricing = bool(snapshot.get("targon_pricing", True))

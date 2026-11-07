@@ -89,7 +89,9 @@ class Validator:
         if self.hippius is not None:
             self.chutes_feed = ChutesEarningsFeed(config.taostats_api_key)
 
-    def _chutes_snapshot(self, block: int, tempo: int, tao_usd: float) -> dict | None:
+    def _chutes_snapshot(
+        self, block: int, tempo: int, tao_usd: float
+    ) -> dict | None:
         if self.chutes_feed is None:
             return None
         return self.chutes_feed.snapshot(block, tempo, tao_usd)
