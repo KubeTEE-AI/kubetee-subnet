@@ -15,8 +15,11 @@ from market_pricing import (
     MARKET_MARKUP_FRAC,
     MarketFeedError,
     _class_of_type,
+    fetch_lium_per_card_usd,
     market_price,
+    load_lium_cache,
     parse_market_response,
+    save_lium_cache,
 )
 from targon_payout_feed import (
     DEFAULT_FLOOR_FRAC,
@@ -106,13 +109,13 @@ def test_targon_switch_off_pays_flat_card(monkeypatch):
 
 def test_parse_response_maps_types_and_takes_highest_sku():
     frame = _frame(
-        ["type", "nodes", "median_rented", "median_all"],
+        ["GPU type", "Nodes", "Earned p75"],
         [
-            ("NVIDIA B300 SXM6 AC", 40, 8.0, 7.75),
-            ("NVIDIA B300 SXM6 PC", 21, 4.99, 4.99),
-            ("NVIDIA H200", 43, 3.9, 3.75),
-            ("NVIDIA H200 NVL", 6, 3.75, 3.75),
-            ("NVIDIA B200", 18, 6.025, 6.05),
+            ("NVIDIA B300 SXM6 AC", 40, 8.0),
+            ("NVIDIA B300 SXM6 PC", 21, 4.99),
+            ("NVIDIA H200", 43, 3.9),
+            ("NVIDIA H200 NVL", 6, 3.75),
+            ("NVIDIA B200", 18, 6.025),
         ],
     )
     per_class = parse_market_response(_payload(frame))
@@ -121,18 +124,69 @@ def test_parse_response_maps_types_and_takes_highest_sku():
     assert per_class["B200"] == pytest.approx(6.025)
 
 
-def test_parse_response_falls_back_to_all_nodes_median():
-    """Type with no rented nodes uses the all-nodes median."""
+def test_parse_response_does_not_use_asking_price_fallback():
+    """Only the seven-day Earned p75 feeds pricing, never asking prices."""
     frame = _frame(
-        ["type", "nodes", "median_rented", "median_all"],
         [
-            ("NVIDIA B300 SXM6 PC", 21, None, 4.99),
-            ("NVIDIA H200", 43, None, 3.75),
+            "GPU type",
+            "Nodes",
+            "Median of rented nodes",
+            "Median of idle nodes",
+        ],
+        [
+            ("NVIDIA B300 SXM6 PC", 21, 4.99, 4.75),
+            ("NVIDIA H200", 43, 3.9, 3.75),
         ],
     )
-    per_class = parse_market_response(_payload(frame))
-    assert per_class["B300"] == pytest.approx(4.99)
-    assert per_class["H200"] == pytest.approx(3.75)
+    with pytest.raises(MarketFeedError, match="no usable per-class data"):
+        parse_market_response(_payload(frame))
+
+
+def test_fetch_queries_seven_day_earned_p75_with_all_gpu_types(
+    monkeypatch,
+):
+    """The request matches Lium's Utilisation and earnings panel."""
+    captured = {}
+
+    class _Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+        def read(self):
+            return json.dumps(_payload(_frame({}, []))).encode()
+
+    def _urlopen(request, timeout):
+        captured.update(json.loads(request.data), timeout=timeout)
+        return _Response()
+
+    import market_pricing as mp
+
+    monkeypatch.setattr(mp.urllib.request, "urlopen", _urlopen)
+    with pytest.raises(MarketFeedError, match="no data frame"):
+        fetch_lium_per_card_usd()
+
+    query = captured["queries"][0]
+    assert query["rawSql"] == mp._EARNED_P75_SQL
+    assert "interval '7 days'" in query["rawSql"]
+    assert 'AS "Earned p75"' in query["rawSql"]
+    assert "('All' = 'All' OR gpu_type = 'All')" in query["rawSql"]
+    assert "Median of rented nodes" not in query["rawSql"]
+    assert captured["from"] == "now-7d"
+    assert captured["timeout"] == 30
+
+
+def test_legacy_median_cache_cannot_supply_earned_p75(monkeypatch, tmp_path):
+    """An upgrade must not fall back to the previous metric on an outage."""
+    cache = tmp_path / "lium.json"
+    cache.write_text(json.dumps({"per_card_usd": {"H200": 6.025}}))
+    monkeypatch.setenv("KUBETEE_LIUM_CACHE", str(cache))
+    assert load_lium_cache() is None
+
+    save_lium_cache({"H200": 3.55})
+    assert load_lium_cache() == {"H200": 3.55}
 
 
 def test_parse_response_rejects_empty_frames():
@@ -259,7 +313,7 @@ def test_lium_switch_on_floor_holds_when_market_below(monkeypatch):
 
 
 def test_lium_switch_on_lium_down_falls_back_to_cache(monkeypatch, tmp_path):
-    """Lium outage -> cached medians; still fail-soft per class."""
+    """Lium outage -> cached Earned p75s; still fail-soft per class."""
     import market_pricing as mp
 
     monkeypatch.setenv("KUBETEE_LIUM_CACHE", str(tmp_path / "lium.json"))
@@ -339,7 +393,7 @@ def test_lium_snapshot_display_only_switches_off(monkeypatch):
 
 
 def test_lium_snapshot_reuses_market_fetch_when_switch_on(monkeypatch):
-    """Switch on: lium_snapshot() returns the same medians the pricing
+    """Switch on: lium_snapshot() returns the same Earned p75s the pricing
     path fetched (no second Lium request)."""
     import market_pricing as mp
 
@@ -399,7 +453,9 @@ def test_dashboard_renders_lium_panel():
     }
     html_out = _dashboard.build_html(snapshot)
     assert "Lium market" in html_out
-    assert "median of rented nodes" in html_out
+    assert "Earned p75" in html_out
+    assert "last 7 days" in html_out
+    assert "median of rented nodes" not in html_out
     assert "display only" in html_out
     assert "$3.90" in html_out
     assert "live — clamps pay toward SN4" in html_out

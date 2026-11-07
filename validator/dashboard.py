@@ -87,9 +87,9 @@ def build_html(snapshot: dict) -> str:
     if not _targon_chips:
         _targon_chips = '<div class="gpu"><b>–</b>Targon feed off</div>'
 
-    # Lium market medians chips (v1.3.2 display-only). The header shows
-    # whether the market+10% rule is LIVE (card switch on) or display
-    # only — the medians never touch weights until the owner flips the
+    # Lium seven-day Earned p75 chips. The header shows whether the
+    # market+10% rule is LIVE (card switch on) or display only — the
+    # market values never touch weights until the owner flips the
     # published card's pricing.lium switch.
     lium_payout = snapshot.get("lium_payout", {}) or {}
     lium_pricing = bool(snapshot.get("lium_pricing", False))
@@ -232,7 +232,7 @@ tr:hover td{{background:rgba(79,156,255,0.04)}}
 </div>
 
 <div class="panel full">
-  <h2>Lium market — median of rented nodes (USD per card-hour) — {_lium_mode}</h2>
+  <h2>Lium market — Earned p75, last 7 days (USD per card-hour) — {_lium_mode}</h2>
   <div class="gpus">
 {_lium_chips}  </div>
 </div>

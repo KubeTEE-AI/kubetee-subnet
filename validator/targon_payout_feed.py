@@ -20,7 +20,8 @@ Always on. Degrades live -> last known (cached on disk) -> published
 
 v1.3.1: the Lium "market + 10%" rule layers on top of the Targon
 resolution: when the card's `pricing.lium` switch is on, effective_card()
-prices each class at max(floor, 1.10 x highest(Lium median, Targon live))
+prices each class at
+max(floor, 1.10 x highest(Lium seven-day Earned p75, Targon live))
 with no card cap. v1.3.3 moved the switch from the KUBETEE_MARKET_PRICING
 env var (which readers never edit when upgrading) onto the published
 price card itself; the default (lium off) keeps this module
@@ -216,12 +217,11 @@ class TargonPayoutFeed:
         return dict(self._pricing_flags)
 
     def lium_snapshot(self) -> dict[str, float]:
-        """DISPLAY-ONLY Lium market medians (v1.3.2): one request per
-        cycle for the dashboard, zero pricing impact.
+        """Lium seven-day Earned p75s: display-only when its switch is off.
 
         Fetches live, degrading to the on-disk cache; never raises
         (fail-soft — an empty dict means "Lium feed off" on the page).
-        When the card's lium switch is on this returns the same medians
+        When the card's lium switch is on this returns the same values
         the pricing path already fetched (no double request).
         """
         if self._pricing_flags.get("lium"):
@@ -303,8 +303,9 @@ class TargonPayoutFeed:
 
         v1.3.3: when the published card's `pricing.lium` switch is on,
         each class instead prices at
-        ``max(floor, 1.10 x highest(Lium median, Targon live))`` with NO
-        card cap (owner decision 2026-10-29). With the switch off
+        ``max(floor, 1.10 x highest(Lium seven-day Earned p75,
+        Targon live))`` with NO card cap (owner decision 2026-10-29).
+        With the switch off
         (default) this is byte-identical to v1.3.0.
 
         The `targon` switch (default on) gates the supply-side clamp

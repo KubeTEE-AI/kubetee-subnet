@@ -9,16 +9,14 @@ with NO card ceiling (owner decision 2026-10-29: an above-card market pays
 market + 10%). The static floor always holds: when both feeds price a
 class below the floor — or both are dark for it — the class pays the floor.
 
-Lium input (owner decisions 2026-10-29):
-- field: the provider-pricing dashboard's **median asking price of rented
-  nodes** ("Median of rented nodes", panel 6 of grafana.lium.io's
-  `price-your-gpus` dashboard), taken on the LATEST snapshot.
+Lium input (owner decision 2026-11-07):
+- field: **Earned p75** from "Utilisation and earnings by GPU type, last
+  7 days" (panel 7 of grafana.lium.io's `price-your-gpus` dashboard),
+  with its GPU type variable set to All. This is estimated rental earnings
+  per listed GPU-hour: 95% of asking price while rented; idle pay excluded.
 - SKU rule: one card class maps to several Lium GPU types (e.g.
   `NVIDIA B300 SXM6 AC` vs `NVIDIA B300 SXM6 PC`); the class takes the
   HIGHEST type value (B300 rule, applied to every multi-SKU class).
-- fallback: a GPU type with NO rented nodes uses the median over ALL its
-  listed nodes; a class no SKU rents therefore resolves to its
-  all-listed median.
 - source: Lium's public Grafana (`grafana.lium.io`), anonymous read —
   same query the dashboard runs against `executor_price_history`.
 
@@ -41,6 +39,7 @@ import urllib.request
 
 # The markup over the winning market price (the "+10%").
 MARKET_MARKUP_FRAC = 0.10
+CACHE_METRIC = "lium-earned-p75-7d"
 
 _LIUM_QUERY_URL = "https://grafana.lium.io/api/ds/query"
 _LIUM_DATASOURCE = {
@@ -49,20 +48,27 @@ _LIUM_DATASOURCE = {
 }
 _USER_AGENT = "kubetee-validator/0.1"
 
-# Lium's own "Market now" query (panel 6 of provider-pricing-v1), one row
-# per gpu_type on the latest snapshot: the median asking price of RENTED
-# nodes plus the median over ALL listed nodes (fallback when a type has no
-# rented nodes). Lium's display HAVING (>=3 nodes per type) is kept.
-_MARKET_SQL = """
-SELECT gpu_type AS "type",
-       count(*) AS "nodes",
-       (percentile_cont(0.5) WITHIN GROUP (ORDER BY asking_price_per_gpu) FILTER (WHERE rented))::float8 AS "median_rented",
-       (percentile_cont(0.5) WITHIN GROUP (ORDER BY asking_price_per_gpu))::float8 AS "median_all"
-FROM executor_price_history
-WHERE snapshot_time = (SELECT max(snapshot_time) FROM executor_price_history WHERE snapshot_time > now() - interval '1 day')
-  AND gpu_type IS NOT NULL
+# Lium's own panel-7 query with $gpu_type = 'All', reduced to the selected
+# Earned p75 column. Each node contributes its seven-day earned average;
+# the percentile is over nodes, grouped by GPU type. Keep Lium's listing
+# coverage (>=96 samples) and display minimum (>=3 nodes per type).
+_EARNED_P75_SQL = """
+WITH node7 AS (
+  SELECT executor_id, gpu_type, max(gpu_count) AS gpu_count,
+         avg(rented::int)::float8 AS rented_share,
+         0.95 * avg(CASE WHEN rented THEN asking_price_per_gpu ELSE 0 END)::float8 AS earned
+  FROM executor_price_history
+  WHERE snapshot_time > now() - interval '7 days' AND gpu_type IS NOT NULL AND ('All' = 'All' OR gpu_type = 'All')
+  GROUP BY 1, 2
+  HAVING count(*) >= 96
+)
+SELECT gpu_type AS "GPU type",
+       count(*) AS "Nodes",
+       percentile_cont(0.75) WITHIN GROUP (ORDER BY earned) AS "Earned p75"
+FROM node7
 GROUP BY 1
 HAVING count(*) >= 3
+ORDER BY sum(gpu_count) DESC
 """.strip()
 
 
@@ -87,17 +93,13 @@ def _class_of_type(raw_type: str) -> str | None:
 
 
 def _per_class_from_rows(rows: list[dict]) -> dict[str, float]:
-    """Collapse per-type medians to per-class: rented median preferred
-    (all-nodes median when the type has no rented nodes), highest SKU
-    per class wins."""
+    """Collapse per-type seven-day Earned p75s to the highest SKU/class."""
     per_class: dict[str, float] = {}
     for row in rows:
-        klass = _class_of_type(row.get("type", ""))
+        klass = _class_of_type(row.get("GPU type", ""))
         if klass is None:
             continue
-        value = row.get("median_rented")
-        if value is None:
-            value = row.get("median_all")
+        value = row.get("Earned p75")
         try:
             value = float(value)
         except (TypeError, ValueError):
@@ -138,7 +140,7 @@ def parse_market_response(payload: dict) -> dict[str, float]:
 
 
 def fetch_lium_per_card_usd() -> dict[str, float]:
-    """Live per-class market median ($/card/hr) from Lium's Grafana."""
+    """Live per-class seven-day Earned p75 ($/card/hr) from Lium."""
     body = json.dumps(
         {
             "queries": [
@@ -146,10 +148,10 @@ def fetch_lium_per_card_usd() -> dict[str, float]:
                     "refId": "A",
                     "datasource": _LIUM_DATASOURCE,
                     "format": "table",
-                    "rawSql": _MARKET_SQL,
+                    "rawSql": _EARNED_P75_SQL,
                 }
             ],
-            "from": "now-1h",
+            "from": "now-7d",
             "to": "now",
         }
     ).encode("utf-8")
@@ -178,11 +180,13 @@ def _cache_path() -> str:
 
 
 def load_lium_cache() -> dict[str, float] | None:
-    """Last known Lium medians from the on-disk cache, or None."""
+    """Last known Lium seven-day Earned p75s from the on-disk cache, or None."""
     try:
         with open(_cache_path(), "r", encoding="utf-8") as handle:
             payload = json.load(handle)
     except (OSError, json.JSONDecodeError):
+        return None
+    if payload.get("metric") != CACHE_METRIC:
         return None
     per_card = payload.get("per_card_usd")
     if not isinstance(per_card, dict):
@@ -199,7 +203,9 @@ def save_lium_cache(per_card: dict[str, float]) -> None:
     try:
         os.makedirs(os.path.dirname(_cache_path()), exist_ok=True)
         with open(_cache_path(), "w", encoding="utf-8") as handle:
-            json.dump({"per_card_usd": per_card}, handle)
+            json.dump(
+                {"metric": CACHE_METRIC, "per_card_usd": per_card}, handle
+            )
     except OSError:
         pass
 
@@ -211,8 +217,9 @@ def market_price(
 ) -> float | None:
     """(1 + MARKET_MARKUP_FRAC) x the market's best $/card for one class.
 
-    The market is the HIGHEST of the Lium median and the Targon live
-    payout for that class. Returns None when neither feed has a value
+    The market is the HIGHEST of the Lium seven-day Earned p75 and the
+    Targon live payout for that class. Returns None when neither feed has a
+    value
     (the caller then pays the static floor).
     """
     values: list[float] = []
