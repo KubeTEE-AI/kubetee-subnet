@@ -2,9 +2,9 @@
 
 A confidential pod is a virtual machine with an encrypted, attested memory boundary, not a namespaced process on the host. Workloads run on **miner clusters**. Every node on the subnet-owner **staging cluster** is TEE CC capable. Staging is a **debug target** when a workload fails — not a required promotion workflow.
 
-## Runtime classes (Kata 4.2.0)
+## Runtime classes (Kata 4.3.1)
 
-Production Kata is **4.2.0** (`kata-deploy` Fleet bundle, vendored chart `4.2.0+kubetee.1`, `updateStrategy: RollingUpdate`, `maxUnavailable: 1`; rolled 2026-09-15). KubeTEE uses **only** the runtime-rs classes — the Go shims (`kata-qemu-nvidia-gpu-tdx`, `kata-qemu-tdx`) are retired.
+Kata is **4.3.1** (`kata-deploy` Fleet bundle, vendored chart `4.3.1+kubetee.1`, `updateStrategy: RollingUpdate`, `maxUnavailable: 1`; Oakland since 2026-10-23, Luxembourg `lu-b300-40` verified 2026-11-03). KubeTEE uses **only** the runtime-rs classes — the Go shims (`kata-qemu-nvidia-gpu-tdx`, `kata-qemu-tdx`) are retired.
 
 | `runtimeClassName` | Workload |
 |--------------------|----------|
@@ -15,7 +15,7 @@ Keep CoCo `kata-as-coco-runtime` **disabled** — it duplicates these RuntimeCla
 
 TDX guests use **erofs + host-pull** (`IfNotPresent`). Nydus is installed only; do not select it for TDX shims. `#13482` (`WantedBy=rke2-server.service`) is in 4.1.0+ — do **not** restore `WantedBy=multi-user.target` or the retired `nydus-systemd-fix` drop-in.
 
-**Still overlayed on 4.2.0** (not in the tag): shim `v4.2.0-fix11649-fix16-tx` (current since 2026-10-03; three fix classes — kata-containers[#11649](https://github.com/kata-containers/kata-containers/issues/11649) idempotent `blockdev-add`, [#13641](https://github.com/kata-containers/kata-containers/issues/13641) inotify close-off-runtime, T15/T16 missing-task `stop_vm` ([#13665](https://github.com/kata-containers/kata-containers/issues/13665)/[#13746](https://github.com/kata-containers/kata-containers/issues/13746)); host shim sha256 `75411dfabc50343e…`. The earlier `v4.2.0-fix11649`-only "every other fix class proved moot" A/B verdict is superseded — fix16 was falsified 2026-09-23 and T15/T16 restored 2026-10-03 after live repros; see `nim/kata-shim-ab/README.md` + root `CLAUDE.md` overlay history), OVMF 202608 lazy-accept, CSI `-kubetee3`. **Retired overlays:** `kata-deploy-gpu-extension-overlay` (2026-08-24, `#13471` stock), `nydus-systemd-fix` (2026-08-24, `#13482` stock), `kata-deploy-base-overlay` (2026-09-15, NVRC v0.1.7 stock in 4.2.0).
+**Still overlayed on 4.3.1:** shim `v4.3.1-fix11649-t15t16` (fix15 for [#11649](https://github.com/kata-containers/kata-containers/issues/11649) plus T15/T16 missing-task `stop_vm` for [#13665](https://github.com/kata-containers/kata-containers/issues/13665)/[#13746](https://github.com/kata-containers/kata-containers/issues/13746); host shim sha256 `96bcd8efa4cb…`). **OVMF overlay retired:** stock 4.3.1 supplies lazy-accept `edk2-stable202608` through [#13717](https://github.com/kata-containers/kata-containers/pull/13717), sha256 `2a2dc271…`; [#13535](https://github.com/kata-containers/kata-containers/issues/13535) closed completed 2026-10-27. Other retired overlays: `kata-deploy-gpu-extension-overlay` (2026-08-24, `#13471` stock), `nydus-systemd-fix` (2026-08-24, `#13482` stock), `kata-deploy-base-overlay` (2026-09-15, NVRC v0.1.7 stock).
 
 Never `kubectl delete --force --grace-period=0` a Kata/CC pod. After a CC GPU node reboot, **cordon** until `kata-deploy` has finished extracting and the shim overlay hash is applied — a pod that starts on the stock shim can leave a leftover VM holding all GPUs.
 
