@@ -50,14 +50,25 @@ def test_four_bound_reads_and_raw_key_only_to_rewards(fixtures):
             assert "authorization" not in call.headers
 
 
+class InlineExecutor:
+    """Join all mock requests inside snapshot; concurrency is tested above."""
+
+    def submit(self, function, *arguments):
+        from concurrent.futures import Future
+
+        future = Future()
+        future.set_result(function(*arguments))
+        return future
+
+
 def test_epoch_guard_blocks_repeated_success_failure_and_no_price(fixtures):
     calls = []
     failed = False
 
     def handler(request):
+        calls.append(request)
         if not failed:
             return httpx.Response(503, text="upstream")
-        calls.append(request)
         key = (
             "nodes"
             if "nodes" in str(request.url)
@@ -72,6 +83,7 @@ def test_epoch_guard_blocks_repeated_success_failure_and_no_price(fixtures):
     collector = feed.ChutesEarningsFeed(
         "test-key", client=httpx.Client(transport=httpx.MockTransport(handler))
     )
+    collector.executor = InlineExecutor()
     assert collector.snapshot(100, 360, 221.74) is None
     assert collector.snapshot(359, 360, 221.74) is None
     failed = True
@@ -101,8 +113,6 @@ def test_failure_is_unavailable_then_next_epoch_recovers_and_public_payload_is_s
     def handler(request):
         # Mock failure by epoch, not count: request completion order is
         # intentionally nondeterministic under the four-worker concurrency.
-        if collector.attempted == 1:
-            return httpx.Response(503, text="upstream")
         calls.append(request)
         key = (
             "rewards"
@@ -122,6 +132,14 @@ def test_failure_is_unavailable_then_next_epoch_recovers_and_public_payload_is_s
     collector = feed.ChutesEarningsFeed(
         "test-key", client=httpx.Client(transport=httpx.MockTransport(handler))
     )
+
+    def fail_first(request):
+        if collector.attempted == 1:
+            return httpx.Response(503, text="upstream")
+        return handler(request)
+
+    collector.client = httpx.Client(transport=httpx.MockTransport(fail_first))
+    collector.executor = InlineExecutor()
     assert collector.snapshot(360, 360, 221.74) is None
     recovered = collector.snapshot(720, 360, 221.74)
     assert recovered["stale"] is False and recovered["bucket"] == 2
