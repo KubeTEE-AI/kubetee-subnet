@@ -122,13 +122,12 @@ The pricing **mode** — which feeds price the epoch — lives on the published 
 | Switch | Default | ON | OFF |
 |--------|---------|-----|-----|
 | `targon_pricing` | `true` | live SN4 clamp pulls pay DOWN toward Targon payouts, floored per class (v1.2.0+ behavior) | pay the flat card, no feed pull-down |
-| `lium_pricing` | `false` | **market + 10%**: each class pays `max(static floor, 1.10 × highest(Lium median of rented nodes, Targon live))`, **no card cap** | v1.3.0 pricing exactly — floors kept, card-capped, no Lium request ever made |
+| `lium_pricing` | `false` | **market + 10%**: each class pays `max(static floor, 1.10 × highest(Lium seven-day Earned p75, Targon live))`, **no card cap** | v1.3.0 pricing exactly — floors kept, card-capped, no Lium request ever made |
 
 When `lium_pricing` is **on**, the market formula reads the live Targon snapshot as one of its two market inputs regardless of `targon_pricing` — the `targon_pricing` switch only gates the *clamp* mode used when `lium_pricing` is off.
 
-- **Lium input**: the `Median of rented nodes` field from Lium's public Grafana ([provider-pricing dashboard](https://grafana.lium.io/d/provider-pricing-v1/price-your-gpus)), latest snapshot, anonymous read
+- **Lium input**: `Earned p75` from **Utilisation and earnings by GPU type, last 7 days** in Lium's public Grafana ([provider-pricing dashboard](https://grafana.lium.io/d/provider-pricing-v1/price-your-gpus)), with GPU type **All**, anonymous read. It estimates rental earnings per listed GPU-hour (95% of asking price while rented), excluding idle pay
 - **SKU rule**: one card class maps to several Lium GPU types (e.g. `NVIDIA B300 SXM6 AC` / `NVIDIA B300 SXM6 PC`); the class takes the **highest** SKU value
-- **Fallback**: a GPU type with no rented nodes uses the median over **all** listed nodes
 - **No card cap** when `lium` is on (owner decision 2026-10-29): a market above the card pays market + 10%
 - **Static floor holds**: when both feeds price a class below the floor, the class pays the floor
 
