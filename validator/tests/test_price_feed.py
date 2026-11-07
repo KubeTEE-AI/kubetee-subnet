@@ -36,8 +36,8 @@ def _feed(fetcher=None, floors=None):
 # --- snapshot parsing (tRPC compute[] rows) -------------------------------
 
 
-def test_snapshot_takes_unit_rate_and_falls_back_to_max_price():
-    """unitRate (highest live $/card) wins; null unitRate -> maxPrice."""
+def test_snapshot_uses_targets_unit_rate_and_never_max_price():
+    """/targets PAYOUT/h is unitRate; null must never fall back to maxPrice."""
     compute = [
         {
             "key": "TDX-VM-NVIDIA-H200",
@@ -51,7 +51,7 @@ def test_snapshot_takes_unit_rate_and_falls_back_to_max_price():
             "unitRate": 6.09,
             "maxPrice": 9.75,
         },
-        # B200 has no supply: unitRate null -> maxPrice
+        # No hourly payout: Maximum is unrelated and must not be used.
         {
             "key": "TDX-BLACKWELL-NVIDIA-B200",
             "kind": "gpu",
@@ -65,7 +65,7 @@ def test_snapshot_takes_unit_rate_and_falls_back_to_max_price():
     per_class = _per_class_from_snapshot(compute)
     assert per_class["H200"] == pytest.approx(3.0)
     assert per_class["B300"] == pytest.approx(6.09)
-    assert per_class["B200"] == pytest.approx(6.5)
+    assert "B200" not in per_class
     assert "RTX6000" not in per_class or per_class["RTX6000"] > 0
     assert all(
         k in ("H100", "H200", "B200", "B300", "RTX6000") for k in per_class
@@ -99,7 +99,7 @@ def test_snapshot_collapses_class_variants_to_highest():
 
 
 def test_snapshot_never_reads_target_price():
-    """A row with only targetPrice (no unitRate/maxPrice) yields nothing."""
+    """Only targetPrice (no PAYOUT/h) yields nothing; maxPrice is present."""
     compute = [
         {
             "key": "TDX-VM-NVIDIA-H200",
@@ -110,6 +110,37 @@ def test_snapshot_never_reads_target_price():
         },
     ]
     assert _per_class_from_snapshot(compute) == {}
+
+
+def test_targets_hourly_b300_capture_and_requested_floor():
+    """Live TDX-VM PAYOUT/h wins over BLACKWELL and SEV Maximum=9.75."""
+    compute = [
+        {
+            "key": "TDX-VM-NVIDIA-B300",
+            "kind": "gpu",
+            "unitRate": 6.010450726667784,
+            "maxPrice": 9.75,
+        },
+        {
+            "key": "TDX-BLACKWELL-NVIDIA-B300",
+            "kind": "gpu",
+            "unitRate": None,
+            "maxPrice": 6.5,
+        },
+        {
+            "key": "SEV-VM-NVIDIA-B300",
+            "kind": "gpu",
+            "unitRate": None,
+            "maxPrice": 9.75,
+        },
+    ]
+    per_class = _per_class_from_snapshot(compute)
+    assert per_class == {"B300": pytest.approx(6.010450726667784)}
+    effective, source = _feed(
+        fetcher=lambda: per_class, floors={"B300": 9.75}
+    ).effective_card()
+    assert source == "live"
+    assert effective["B300"] == pytest.approx(9.75)
 
 
 # --- manual floors (v1.3.0: replace KUBETEE_TARGON_PRICE_FLOOR_FRAC) --------

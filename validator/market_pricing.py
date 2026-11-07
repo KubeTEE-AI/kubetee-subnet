@@ -21,7 +21,7 @@ Lium input (owner decision 2026-11-07):
   same query the dashboard runs against `executor_price_history`.
 
 The Targon half is the existing `TargonPayoutFeed` resolution (live
-`unitRate`; `maxPrice` fallback for unsupplied classes; `targetPrice` is
+/targets PAYOUT/h `unitRate`; `maxPrice` ("Maximum") and `targetPrice` are
 never read).
 
 v1.3.3 ships this DORMANT (card switch ``pricing.lium`` defaults to false):

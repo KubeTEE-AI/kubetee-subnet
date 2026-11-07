@@ -4,11 +4,10 @@ Reads live per-card USD per GPU class from Targon's snapshot API
 (`stats.targon.com/api/trpc/statistics.getSnapshot` — the same endpoint
 the stats site's /targets page consumes) and clamps the committed GPU
 price card DOWNWARD only (never above the card). Per class, the live
-value is the highest miner $/card Targon lists for it
-(`compute[].unitRate`); a class with NO supplied capacity (`unitRate`
-null — e.g. B200 today) resolves to Targon's published MAXIMUM payout
-(`compute[].maxPrice`) instead of having no price at all. The Targon
-"target price" (`targetPrice`) is deliberately never read.
+value is the highest actual miner PAYOUT/h for it (`compute[].unitRate`),
+the same field rendered by Targon's /targets page. Its separately-labelled
+"Maximum" (`maxPrice`) and "Target price" (`targetPrice`) are never read.
+Unsupplied rows with a null hourly rate contribute no live observation.
 
 Each class is floored at its manually-committed per-GPU floor (set by
 the subnet owner on the published price card; see `set_manual_floors`),
@@ -43,7 +42,7 @@ from config import Config
 
 # The /api/miners REST endpoint is retired: it only listed classes with
 # supplied capacity, so B200/RTX6000 had no live price at all. The snapshot
-# API carries every class incl. maxPrice; it answers plain urllib GETs.
+# API carries every class; unitRate is its PAYOUT/h column (not Maximum).
 _TARGON_SNAPSHOT_URL = (
     "https://stats.targon.com/api/trpc/statistics.getSnapshot"
 )
@@ -94,12 +93,12 @@ def _gpu_class_of(compute_type: str) -> str | None:
 def _per_class_from_snapshot(compute: list) -> dict[str, float]:
     """Per-class live $/card/hr from the snapshot's compute[] rows.
 
-    `unitRate` is the highest live miner $/card in that class (the same
-    statistic the /api/miners reader used); when it is null (no supplied
-    capacity — B200 today), fall back to that class' `maxPrice` (the
-    Targon network MAXIMUM payout) so every GPU class resolves to a live
-    number. `targetPrice` is deliberately never read. CPU rows are
-    skipped; multiple rows of one class collapse to the highest rate.
+    `unitRate` is the highest actual hourly miner payout in that class,
+    rendered as PAYOUT/h on /targets. `maxPrice` (Maximum) and `targetPrice`
+    are separate columns and MUST NOT supply this value. A null rate (no
+    supplied capacity) contributes no live observation; cache resilience is
+    handled one level up. CPU rows are skipped; variants of one class
+    collapse to the highest hourly rate.
     """
     per_class: dict[str, float] = {}
     for row in compute:
@@ -111,8 +110,6 @@ def _per_class_from_snapshot(compute: list) -> dict[str, float]:
         if klass is None:
             continue
         rate = row.get("unitRate")
-        if rate is None:
-            rate = row.get("maxPrice")
         try:
             rate = float(rate)
         except (TypeError, ValueError):

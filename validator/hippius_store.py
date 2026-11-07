@@ -55,6 +55,14 @@ def fetch_published_payout() -> dict | None:
         return None
 
 
+def fetch_published_dashboard() -> dict | None:
+    """The owner's last public dashboard, or None on an unavailable read."""
+    try:
+        return _get_public("dashboard.json")
+    except HippiusError:
+        return None
+
+
 def _sign(key: bytes, message: str) -> bytes:
     return hmac.new(key, message.encode("utf-8"), hashlib.sha256).digest()
 

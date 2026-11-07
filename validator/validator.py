@@ -24,6 +24,7 @@ from hippius_store import (
     DEFAULT_PAYOUT_KEY,
     HippiusError,
     HippiusStore,
+    fetch_published_dashboard,
     fetch_published_payout,
 )
 from infrastructure_validation import node_posture, validate_miner
@@ -86,15 +87,44 @@ class Validator:
         self._last_targon_payout: dict[str, float] = {}
         # Read-only dashboard reference: publisher-only, at most once per epoch.
         self.chutes_feed: ChutesEarningsFeed | None = None
+        self._last_chutes_snapshot: dict | None = None
         if self.hippius is not None:
+            self._cache_published_chutes_snapshot()
             self.chutes_feed = ChutesEarningsFeed(config.taostats_api_key)
+            if self._last_chutes_snapshot is not None:
+                self.chutes_feed.last = dict(self._last_chutes_snapshot)
+
+    def _cache_published_chutes_snapshot(self) -> None:
+        """Seed the last-good reference card across publisher restarts."""
+        try:
+            published = fetch_published_dashboard()
+        except Exception:
+            published = None
+        if not isinstance(published, dict):
+            return
+        chutes = published.get("chutes_earnings")
+        if (
+            not isinstance(chutes, dict)
+            or not isinstance(chutes.get("per_class_usd"), dict)
+            or not chutes["per_class_usd"]
+        ):
+            return
+        snapshot = dict(chutes)
+        if snapshot.get("stale") is True:
+            snapshot["stale"] = False
+        self._last_chutes_snapshot = snapshot
 
     def _chutes_snapshot(
         self, block: int, tempo: int, tao_usd: float
     ) -> dict | None:
         if self.chutes_feed is None:
             return None
-        return self.chutes_feed.snapshot(block, tempo, tao_usd)
+        if self._last_chutes_snapshot is None:
+            self._cache_published_chutes_snapshot()
+        result = self.chutes_feed.snapshot(block, tempo, tao_usd)
+        if result is not None and result.get("per_class_usd"):
+            self._last_chutes_snapshot = dict(result)
+        return result
 
     def _first_cycle(self) -> bool:
         return self._last_card is None
@@ -802,6 +832,7 @@ class Validator:
                         "card": self.targon.card(),
                         "effective_card": {},
                         "targon_payout": {},
+                        "chutes_earnings": self._last_chutes_snapshot,
                         "pricing_source": pricing_source,
                         "card_source": "starting",
                         "miner_usd": 0.0,
