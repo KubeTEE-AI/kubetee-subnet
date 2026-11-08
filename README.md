@@ -23,7 +23,7 @@
 
 ## About
 
-**KubeTEE AI** is the **AI Factory** of the Bittensor network: it turns decentralized GPU clusters into a confidential factory for **SOTA AI services** and **enhanced services for enterprises**. Inference, NeMo microservices, retrieval, and agents run inside hardware-secured Trusted Execution Environments (TEE) using [Kata Containers](https://katacontainers.io/) and [Confidential Containers (CoCo)](https://github.com/confidential-containers/confidential-containers). **Batch jobs** (fine-tune, eval, multi-step pipelines) are one of those services — scheduled by [Armada](https://armadaproject.io/) when an agent needs
+**KubeTEE AI** is the **AI Factory** of the Bittensor network: it turns decentralized GPU clusters into a confidential factory for **SOTA AI services** and **enhanced services for enterprises**. Inference, NVIDIA NeMo Platform services, retrieval, and agents run inside hardware-secured Trusted Execution Environments (TEE) using [Kata Containers](https://katacontainers.io/) and [Confidential Containers (CoCo)](https://github.com/confidential-containers/confidential-containers). **Batch jobs** (fine-tune, eval, multi-step pipelines) are one of those services — scheduled by [Armada](https://armadaproject.io/) when an agent needs
 
 KubeTEE AI is registered with the [**NVIDIA Inception Program**](https://www.nvidia.com/startups/) and is an active contributor to both the [**Kata Containers**](https://katacontainers.io/) and [**Confidential Containers (CoCo)**](https://github.com/confidential-containers/confidential-containers) ecosystems. It also leverages [**CNCF**](https://www.cncf.io/) projects for cloud-native infrastructure.
 
@@ -55,7 +55,7 @@ As a member of the [Confidential Computing Consortium (CCC)](https://confidentia
 **Key Differentiators**:
 - **Security-First**: TEE-enabled infrastructure on a FIPS-validated RKE2 baseline with Kata Containers isolation
 - **Multi Cluster Scheduler**: multi-cluster batch scheduling with fair-use queuing, gang scheduling, and preemption across decentralized clusters
-- **SOTA AI services**: NeMo Microservices, NIM models, and AI Blueprints as first-class confidential enterprise services — and, where NVIDIA's own stack falls short (see [Kata / CoCo Limitations](./docs/NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md#4-kata--coco-limitations-nvidia)), SOTA [Bittensor subnet integrations](./docs/NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md#5-bittensor-subnet-integrations-sota-confidential-ready) running inside Kata + CoCo TEE instead
+- **SOTA AI services**: NVIDIA NeMo Platform, NIM models, and AI Blueprints as first-class confidential enterprise services — and, where NVIDIA's own stack falls short (see [Kata / CoCo Limitations](./docs/NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md#4-kata--coco-limitations-nvidia)), SOTA [Bittensor subnet integrations](./docs/NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md#5-bittensor-subnet-integrations-sota-confidential-ready) running inside Kata + CoCo TEE instead
 - **Decentralized**: one hotkey per cluster, nodes located in distinct data center, expanding across global regions
 - **Open Source**: Built on OpenInfra Foundation and CNCF projects with community-driven innovation
 
@@ -82,7 +82,7 @@ As a member of the [Confidential Computing Consortium (CCC)](https://confidentia
   - [Early Access Topology](#early-access-topology)
 - [Supported SOTA AI Services](#supported-sota-ai-services)
   - [Serving Configurations](#serving-configurations--every-service-requires-fast-inference)
-  - [NVIDIA NeMo Microservices & Bittensor Subnet Integrations](#nvidia-nemo-microservices--bittensor-subnet-integrations) — attestation-gated TLS, NIM Operator Kata/CoCo limits, SOTA Bittensor subnet substitutes, Stage 0 supply-chain CI
+  - [NVIDIA NeMo Platform & Bittensor Subnet Integrations](#nvidia-nemo-platform--bittensor-subnet-integrations) — attestation-gated TLS, NIM Operator Kata/CoCo limits, SOTA Bittensor subnet substitutes, Stage 0 supply-chain CI
 - [Subnet Economics](#subnet-economics)
   - [Incentive Mechanism: Infrastructure](#incentive-mechanism-infrastructure-early-access)
   - [Payment methods](#payment-methods)
@@ -324,7 +324,7 @@ flowchart LR
 
 ## Supported SOTA AI Services
 
-KubeTEE AI Factory hosts **SOTA AI services** and **enhanced services for enterprises** inside Kata + CoCo TEE pods — inference (NIM / SGLang), NeMo microservices, retrieval, and agents — shared HA per cluster. The Factory ships first-class templates on the NVIDIA AI stack — NeMo Microservices, NIM models, and AI Blueprints.
+KubeTEE AI Factory hosts **SOTA AI services** and **enhanced services for enterprises** inside Kata + CoCo TEE pods — inference (NIM / SGLang), retrieval, and agents — shared HA per cluster. NVIDIA NeMo Platform templates are a planned addition to the NVIDIA AI stack alongside NIM models and AI Blueprints; their confidential-runtime compatibility has not been validated.
 
 **Batch jobs** (fine-tune, eval, multi-step pipelines) are a secondary service on the same clusters. When an agent needs that path, the job is submitted to an Armada queue.
 
@@ -342,9 +342,9 @@ No single operating point serves an agentic tool-calling loop and a heavy-contex
 
 A consumer picks the configuration alongside the model at submission. Because the choice determines how much hardware the job occupies and for how long, it is the main lever a consumer has over the resources price per hour (see [Subnet Economics](#subnet-economics) and [Jobs MCP Server](#jobs-mcp-server)).
 
-### NVIDIA NeMo Microservices & Bittensor Subnet Integrations
+### NVIDIA NeMo Platform & Bittensor Subnet Integrations
 
-[NVIDIA NeMo Microservices](https://docs.nvidia.com/nemo/microservices/latest/about/index.html) (Customizer, Evaluator, Guardrails, Retriever, model endpoints) run as **cluster-resident services** that other SOTA AI services — and, secondarily, batch jobs — call inside the confidential boundary — shared HA per cluster, amortized across every consumer. Service-to-service traffic uses **attestation-gated TLS** (in-guest keypairs, certificates issued only against a valid TDX quote, verified through Intel Trust Authority, terminated inside the guest) — not cert-manager, not a service mesh, not host-level encryption, because the host is the adversary. The NVIDIA NIM Operator has **experimental** Kata sandbox + Dynamo support, but KubeTEE runs the **stable** `kata-qemu-nvidia-gpu-tdx-runtime-rs` / `kata-qemu-tdx-runtime-rs` classes instead and is working with NVIDIA to graduate the experimental paths (Phase 3).
+[NVIDIA NeMo Platform](https://docs.nvidia.com/nemo-platform/documentation/kubernetes-deployment/setup) (Customizer, Evaluator, Guardrails, and Retriever) is the **planned** shared platform that other SOTA AI services — and, secondarily, batch jobs — would call inside the confidential boundary, with shared HA per cluster. It supersedes the standalone NeMo Microservices suite; NIM inference remains a separate model-serving layer. NeMo Platform deployment and Kata + CoCo compatibility have **not been validated** and must not be assumed from the existing inference services. Any deployed confidential service-to-service traffic uses **attestation-gated TLS** — in-guest keypairs, certificates issued only against a valid attestation, and TLS termination inside the guest — not cert-manager, not a service mesh, not host-level encryption, because the host is the adversary. The NVIDIA NIM Operator deploys NIM inference workloads (the deprecated legacy NeMo-service CRDs are not the NeMo Platform installation path), and has **experimental** Kata sandbox + Dynamo support for **NIM inference**, but KubeTEE uses the **stable** `kata-qemu-nvidia-gpu-tdx-runtime-rs` / `kata-qemu-tdx-runtime-rs` classes and is working with NVIDIA to graduate the experimental paths (Phase 3).
 
 Given the NIM Operator's current Kata/CoCo limitations, KubeTEE's thesis is that **the Bittensor ecosystem already contains SOTA, verifiable substitutes** for several NeMo stack layers. Each subnet below exposes a verifiable feed (public API + on-chain metagraph) and is a **potential partnership** — a candidate integration, not a shipping integration — that could run inside `kata-qemu-nvidia-gpu-tdx-runtime-rs` / `kata-qemu-tdx-runtime-rs` with its outputs attested and persisted on confidential storage. This is the Bittensor-native path to a confidential AI Factory not locked to a single vendor's experimental stack.
 
@@ -360,11 +360,11 @@ Given the NIM Operator's current Kata/CoCo limitations, KubeTEE's thesis is that
 | Model routing — NVIDIA NeMo Switchyard | [Fugal SN70](https://www.fugalai.com/) — **potential partner** | Cost-aware LLM routers trained by competition (miners benchmark inside Intel TDX VMs). SN90 installs Switchyard as the routing layer, surfaced as a model the caller selects by name; Fugal is a potential replacement only if it proves SOTA |
 | Persistent storage | [Hippius SN75](https://hippius.com/) | S3-compatible + IPFS pinning (already ships AMD SEV-SNP CC) |
 
-This is an **open set**: any Bittensor subnet with a SOTA, verifiable solution for a NeMo stack layer is a candidate. The full table with SOTA roles, confidential-computing fit, and the "could replace/augment" mapping: [NeMo Microservices & Bittensor Subnet Integrations](./docs/NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md#5-bittensor-subnet-integrations-sota-confidential-ready).
+This is an **open set**: any Bittensor subnet with a SOTA, verifiable solution for a NeMo stack layer is a candidate. The full table with SOTA roles, confidential-computing fit, and the "could replace/augment" mapping: [NVIDIA NeMo Platform & Bittensor Subnet Integrations](./docs/NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md#5-bittensor-subnet-integrations-sota-confidential-ready).
 
 **Stage 0 is ordinary supply-chain CI**, not a Bittensor subnet. Workloads are gated on SAST, image CVE/SCA, IaC/Helm policy, and image provenance before they run on miner clusters. **Secrets live in CoCo Trustee / KBS** and are released only to an attested guest — they are not Kubernetes Secrets and must not appear in Git, Helm, or image layers ([supply-chain CI](./docs/TEE-DEPLOYMENT-AND-CICD.md#supply-chain-ci), [secrets and images](./docs/TEE-DEPLOYMENT-AND-CICD.md#secrets-and-images), [Stage 0 gate](./docs/NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md#6-stage-0--supply-chain-security-gate)).
 
-Full detail — the attestation-gated TLS protocol, the NIM Operator experimental paths and Kata/CoCo limitations, the subnet integrations table, and the Stage 0 gate: [NeMo Microservices & Bittensor Subnet Integrations](./docs/NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md).
+Full detail — the attestation-gated TLS protocol, the NIM Operator experimental paths and Kata/CoCo limitations, the subnet integrations table, and the Stage 0 gate: [NVIDIA NeMo Platform & Bittensor Subnet Integrations](./docs/NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md).
 
 ---
 
@@ -670,8 +670,8 @@ Full detail — the chain primitive, Alpha conversion, grace/recovery, `btcli` c
   - [ ] **Rerank** — retrieval reranking models on the gateway `/rerank` endpoint
   - [x] **Images** — **FLUX.2-klein-4B** (Apache-2.0) on the gateway `/v1/images/generations`, live 2026-09-19 (b64_json delivery through LiteLLM). Cosmos3-Super additionally available via the `/cosmos3` native passthrough.
   - [x] **Videos** — **MiniMax-H3** on the gateway `/v1/videos` (see the MiniMax-H3 row above), 5–15 s clips at 768p with native stereo audio, fully in-TEE. **Audio+video joint generation is the capability; the Cosmos3-Super SGLang path was evaluated and retired the same day** (no sound head, OOM on long prompts) — its NIM passthrough remains for native API consumers.
-  - [ ] **OCR (NeMo)** — document OCR served through [NeMo Microservices](#nvidia-nemo-microservices--bittensor-subnet-integrations)
-  - [ ] **Specialised models for vectorization, LLM-as-judge, and document retrieval** — served through [NeMo Microservices](#nvidia-nemo-microservices--bittensor-subnet-integrations) (NeMo Retriever + Evaluator)
+  - [ ] **OCR (NeMo)** — document OCR served through [NVIDIA NeMo Platform](#nvidia-nemo-platform--bittensor-subnet-integrations)
+  - [ ] **Specialised models for vectorization, LLM-as-judge, and document retrieval** — served through [NVIDIA NeMo Platform](#nvidia-nemo-platform--bittensor-subnet-integrations) (NeMo Retriever + Evaluator)
 - [x] **Deploy 2 US clusters** (one hotkey each, each cluster's nodes co-located in a single DC): subnet-owner staging (`na-us-oakland-56`, West Coast) + **first production miner cluster — BTLABS UID 97** (`na-us-michigan-97`, 7 nodes, 56 GPUs, H100 + H200). Onboarding validated end to end: registration, binding, infrastructure validation, scoring, emissions. *The fleet is moving to **Blackwell-only, multi-cluster** operation — new clusters are Blackwell at the 3-node same-type minimum, and Hopper clusters are windowed out as Blackwell clusters come online (target November 2026).*
 - [x] Armada Server Multi-cluster Scheduler on the subnet-owner control plane; Armada Executor on each miner cluster
 - [ ] Binary Infrastructure validator gate (hotkey binding identity, Rancher readiness, HA, capacity, GPU/runtime wiring, TEE attestations)
@@ -741,7 +741,7 @@ Full detail — the chain primitive, Alpha conversion, grace/recovery, `btcli` c
 - [Workflow Orchestration — Airflow & Metaflow](./docs/WORKFLOW-ORCHESTRATION.md) — orchestrating multi-step confidential pipelines on Armada
 - [Tokenomics — Utility Token & DePIN Model](./docs/TOKENOMICS.md) — recycle vs burn, securities posture, TAO-on-BASE (CCIP), cross-subnet consumption loop, DePIN subsidy trajectory
 - [Competitive Pricing & Miner Scoring](./docs/COMPETITIVE-PRICING.md) — pricing SN90 against Targon/Lium/Chutes and how price becomes weights
-- [NeMo Microservices & Bittensor Subnet Integrations](./docs/NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md) — attestation-gated TLS, NIM Operator Kata/CoCo limits, SOTA Bittensor subnet substitutes per NeMo layer, and the Stage 0 supply-chain security gate
+- [NVIDIA NeMo Platform & Bittensor Subnet Integrations](./docs/NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md) — attestation-gated TLS, NIM Operator Kata/CoCo limits, SOTA Bittensor subnet substitutes per NeMo layer, and the Stage 0 supply-chain security gate
 - [Client-Facing Attestation](./docs/CLIENT-FACING-ATTESTATION.md) — the `llm.kubetee.ai` attestation API for callers: nonce-bound TDX quotes (standalone endpoint + inline chat headers) and verification via Intel Trust Authority or local DCAP
 - [East-West Attested mTLS](./docs/EAST-WEST-ATTESTED-MTLS.md) — the live spec for Trustee-issued gateway↔backend TLS
 - [H3 Video Generation API](./docs/H3-VIDEO-GENERATION-API.md) — MiniMax-H3 on `llm.kubetee.ai/v1/videos`: the official MiniMax guide by reference, plus our serving differences (protocol, fixed grid, billing, TTL)

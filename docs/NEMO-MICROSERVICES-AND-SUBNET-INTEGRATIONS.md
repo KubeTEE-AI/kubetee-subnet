@@ -1,6 +1,6 @@
 # NVIDIA NeMo Platform, Bittensor Subnet Integrations & the Stage 0 Security Gate
 
-This document is the detailed reference behind the README [NVIDIA NeMo & Bittensor Subnet Integrations](../README.md#nvidia-nemo-microservices--bittensor-subnet-integrations) section. It covers: the NVIDIA NeMo platform on KubeTEE, the attestation-gated TLS protocol between services, the NVIDIA NIM Operator's experimental Kata/Dynamo support and its CoCo limitations, the SOTA Bittensor subnets that could replace or augment each NeMo layer inside a TEE, the Stage 0 supply-chain security gate, and (new, 2026-11-04) model routing — NVIDIA NeMo Switchyard installed, with Fugal (SN70) as a potential replacement if it proves SOTA.
+This document is the detailed reference behind the README [NVIDIA NeMo & Bittensor Subnet Integrations](../README.md#nvidia-nemo-platform--bittensor-subnet-integrations) section. It covers: the NVIDIA NeMo platform on KubeTEE, the attestation-gated TLS protocol between services, the NVIDIA NIM Operator's experimental Kata/Dynamo support and its CoCo limitations, the SOTA Bittensor subnets that could replace or augment each NeMo layer inside a TEE, the Stage 0 supply-chain security gate, and (new, 2026-11-04) model routing — NVIDIA NeMo Switchyard installed, with Fugal (SN70) as a potential replacement if it proves SOTA.
 
 ---
 
