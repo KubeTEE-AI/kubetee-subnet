@@ -233,14 +233,14 @@ dmesg | grep -i "AMD-Vi"
 
 ## Kata guest debug and CoCo Trustee
 
-Miner GPU nodes and the subnet-owner **staging cluster** run **Kata 4.2.0** with **guest debug off**. CoCo Trustee attests those guests. Every staging node is TEE CC capable; CC can be turned off on a staging node for debug.
+Miner GPU nodes and the subnet-owner **staging cluster** run **Kata 4.3.1** with **guest debug off**. CoCo Trustee attests those guests. Every staging node is TEE CC capable; CC can be turned off on a staging node for debug.
 
 | `runtimeClassName` | Workload |
 |--------------------|----------|
 | `kata-qemu-nvidia-gpu-tdx-runtime-rs` | GPU TEE (NIM / SGLang) |
 | `kata-qemu-tdx-runtime-rs` | CPU-only TDX (gateway-class) |
 
-Guest debug can be enabled **per pod** for diagnostics. Trustee attests only when debug is off. Do not use the retired Go classes (`kata-qemu-nvidia-gpu-tdx`, `kata-qemu-tdx`). See [TEE deployment](./TEE-DEPLOYMENT-AND-CICD.md#runtime-classes-kata-420).
+Guest debug can be enabled **per pod** for diagnostics. Trustee attests only when debug is off. Do not use the retired Go classes (`kata-qemu-nvidia-gpu-tdx`, `kata-qemu-tdx`). See [TEE deployment](./TEE-DEPLOYMENT-AND-CICD.md#runtime-classes-kata-431).
 
 ---
 
@@ -255,23 +255,26 @@ Nodes do **not** install or manage any NVIDIA GPU software. The **GPU Operator**
 - nvidia-container-toolkit
 - GPU device plugins and Kubernetes GPU resources
 
-Because the GPU Operator owns the GPU software stack, the node must start from a **clean Ubuntu 26.04 installation** with no pre-existing NVIDIA stack, to avoid version conflicts with what the GPU Operator deploys.
+Because KubeTEE owns host preparation and the GPU Operator owns the GPU software stack, the node must start from a **clean Ubuntu 26.04 installation** with no pre-existing NVIDIA stack.
 
-**OS Requirement**:
-- ✅ Ubuntu 26.04 (clean installation, no pre-existing NVIDIA software)
-- ✅ Kernel **7.0.0-38-generic** (Ubuntu 26.04 pin; `-31` or newer — `-31` is in updates/security, `-38` via `resolute-proposed` + apt pin. The pin is what matters: do not drift onto unpinned proposed kernels)
-- ✅ etcd user/group created
+**OS requirements at handoff**:
+- ✅ Ubuntu 26.04 LTS with no pre-existing NVIDIA software
+- ✅ Stock Ubuntu kernel — KubeTEE selects and pins the supported kernel
+- ✅ No custom kernel parameters, host OS hardening, or NVIDIA configuration
+
+See [MINER-ONBOARDING.md](MINER-ONBOARDING.md) for the complete handoff requirements.
 
 ---
 
 ## Storage Requirements
 
-| Disk | Minimum Size | Purpose |
-|------|--------------|---------|
-| **OS Disk** | **1 TB** | System + `/var/lib/longhorn/` |
-| **Data Disk** | **14 TB** | Raw block device with no filesystem |
+| Disk | Required size at handoff | Required state |
+|------|--------------------------|----------------|
+| **OS Disk** | **>784 GB usable capacity** | Plain Ubuntu 26.04 LTS with no NVIDIA software |
+| **Each data drive** | **>3.84 TB** | Unformatted, unpartitioned, and unmounted |
+| **Combined data drives** | **>7 TB raw capacity** | KubeTEE creates and validates the storage layout |
 
-**Both disks are REQUIRED for GPU nodes** due to:
+**Both the OS disk and data drives are REQUIRED for GPU nodes** due to:
 - Large AI/ML models
 - Training datasets
 - Checkpoints and artifacts
@@ -282,7 +285,7 @@ Because the GPU Operator owns the GPU software stack, the node must start from a
 
 ## Complete Verification Checklist
 
-### Before Registration (On Node)
+### Before SSH Handoff (On Node)
 
 ```bash
 # 1. Verify CPU generation
@@ -310,12 +313,12 @@ dmesg | grep -i iommu
 
 # 7. Verify storage
 df -h /
-df -h /data
-# OS: 800GB+, Data: 3TB+
+lsblk -o NAME,SIZE,TYPE,FSTYPE,MOUNTPOINTS,MODEL
+# OS disk: >784 GB usable
+# Each data drive: >3.84 TB and blank; combined raw capacity: >7 TB
 
-# 8. Verify OS and kernel
+# 8. Verify plain Ubuntu (KubeTEE selects the kernel during preparation)
 lsb_release -ds  # Should show: Ubuntu 26.04 LTS
-uname -r         # Should show: 7.0.0-38-generic (pin) or 7.0.0-31-generic+ (updates)
 
 # 9. Verify a clean baseline (no pre-existing NVIDIA stack)
 which nvidia-smi  # Should return: not found (GPU Operator installs it later)
@@ -327,37 +330,28 @@ which nvcc        # Should return: not found
 ## Quick Decision Tree
 
 ```
-Is your node a GPU node?
-├─ NO → Skip GPU requirements, proceed with standard registration
-└─ YES → Check all requirements:
-    ├─ CPU: Intel 6th Gen (Granite Rapids) OR AMD 6th Gen EPYC 9006 (Venice/Verano)? 
+Are you onboarding a new GPU node?
+├─ NO → Refer to KubeTEE before modifying an existing cluster
+└─ YES → Check miner-side handoff requirements:
+    ├─ CPU: Intel 6th Gen (Granite Rapids) OR AMD 6th Gen EPYC 9006?
     │   ├─ NO → Node NOT supported ❌
     │   └─ YES → Continue
-    ├─ TDX or SEV-SNP enabled?
-    │   ├─ NO → Enable in BIOS, then continue
+    ├─ TDX or SEV-SNP enabled in BIOS? SGX auto-registration disabled?
+    │   ├─ NO → Correct the BIOS configuration
     │   └─ YES → Continue
-    ├─ Exactly 8 GPUs?
+    ├─ Exactly 8 GPUs of the same supported model?
     │   ├─ NO → Node NOT supported ❌
     │   └─ YES → Continue
-    ├─ All GPUs are B200, B300, RTX PRO 6000 Blackwell, or Vera Rubin?
-    │   ├─ NO → Node NOT supported ❌
+    ├─ GPU firmware and VBIOS validated against the supported versions?
+    │   ├─ NO → Update and validate firmware first
     │   └─ YES → Continue
-    ├─ All GPUs same model?
-    │   ├─ NO → Node NOT supported ❌
+    ├─ Plain Ubuntu 26.04 with the stock kernel and no NVIDIA software?
+    │   ├─ NO → Reinstall Ubuntu 26.04 clean
     │   └─ YES → Continue
-    ├─ Latest firmware installed?
-    │   ├─ NO → Update firmware first
+    ├─ OS disk >784 GB; each data drive >3.84 TB, total >7 TB raw?
+    │   ├─ NO → Adjust storage before handoff
     │   └─ YES → Continue
-    ├─ PPCIe mode enabled? (H100/H200 nodes — deprecated hardware)
-    │   ├─ NO → Enable in BIOS/firmware
-    │   └─ YES → Continue
-    ├─ VFIO/IOMMU enabled?
-    │   ├─ NO → Enable in BIOS, update kernel params
-    │   └─ YES → Continue
-    ├─ Clean Ubuntu 26.04, kernel 7.0.0-3x pin (no pre-existing NVIDIA stack)?
-    │   ├─ NO → Reinstall Ubuntu 26.04
-    │   └─ YES → Continue
-    └─ ✅ Node meets ALL requirements → Proceed with registration
+    └─ ✅ Miner preparation complete → Grant KubeTEE SSH access
 ```
 
 ---
@@ -419,11 +413,11 @@ nvfwupd --query
 | **GPU Count** | Exactly 8 | 1-7, 9+ |
 | **GPU Uniformity** | All same model | Mixed models |
 | **Firmware** | Latest (25.10.1+) | Outdated versions |
-| **GPU Mode** | PPCIe enabled (Hopper) / CC mode per NVIDIA matrix (Blackwell, Vera Rubin) | Standard PCIe |
-| **IOMMU** | Enabled | Disabled |
-| **OS** | Ubuntu 26.04 (clean, kernel 7.0.0-38-generic pin; `-31`+ acceptable) | Pre-existing NVIDIA software |
-| **OS Disk** | 800 GB+ | <800 GB |
-| **Data Disk** | 3 TB+ | <3 TB |
+| **GPU Mode** | KubeTEE sets CC mode; miner validates firmware compatibility using the NVIDIA matrix | Miner adjusts CC mode during handoff |
+| **IOMMU** | KubeTEE configures host VFIO/IOMMU settings | Manual host modification during handoff |
+| **OS** | Plain Ubuntu 26.04 LTS, stock kernel at handoff | Pre-existing NVIDIA software or custom hardening |
+| **OS Disk** | >784 GB usable capacity | Insufficient capacity |
+| **Each data drive** | >3.84 TB; >7 TB total raw data capacity | Formatted or insufficient capacity |
 
 ---
 
@@ -461,7 +455,7 @@ nvfwupd --query
 
 > **One cluster per hotkey.** A miner may operate multiple clusters, but each cluster must have its own Bittensor hotkey (one cluster per hotkey, enforced by the validator's `kubetee.ai/hotkey` label binding). Multiple clusters = multiple hotkeys = multiple DCs. As the fleet moves to **Blackwell-only nodes and multi-cluster operation**, new clusters are Blackwell (B200/B300/RTX PRO 6000/Vera Rubin) at the **3-node same-type** minimum above; existing Hopper clusters are windowed out as Blackwell clusters come online (target November 2026).
 
-See [Node Registration](NODE-REGISTRATION.md) for the RKE2 node registration command and the full enrolled-cluster binding contract, and the README [For Miners (Infrastructure)](../README.md#for-miners-infrastructure) section for the onboarding flow.
+See [Miner Onboarding](MINER-ONBOARDING.md) for BIOS and OS preparation, SSH handoff, and KubeTEE-managed registration. See the README [For Miners (Infrastructure)](../README.md#for-miners-infrastructure) section for platform requirements.
 
 ---
 
@@ -471,12 +465,12 @@ See [Node Registration](NODE-REGISTRATION.md) for the RKE2 node registration com
 
 - **[NVIDIA DGX H100/H200 Firmware Update Guide](https://docs.nvidia.com/dgx/dgxh100-fw-update-guide/)** - firmware updates (Hopper; for Blackwell/Vera Rubin use your OEM/HGX procedure)
 - **[NVIDIA Trusted Computing Solutions — Guides](https://docs.nvidia.com/nvtrust/index.html#guides)** — Secure AI Compatibility Matrix and related CC guides (GPU + VBIOS + CUDA driver + Confidential Computing mode; source of truth for CC firmware compatibility)
-- **[NODE-REGISTRATION.md](NODE-REGISTRATION.md)** - Complete registration guide
+- **[MINER-ONBOARDING.md](MINER-ONBOARDING.md)** — complete node preparation and registration guide
 
 ### KubeTEE Documentation
 
-- **Node Registration**: [NODE-REGISTRATION.md](NODE-REGISTRATION.md)
-- **Cluster Creation**: see the Rancher documentation for cluster provisioning; KubeTEE miners register existing RKE2 clusters via the node registration command. Miners are **not** given Rancher access at cluster creation — a read-only `miner-readonly` account is created manually as an exception only.
+- **Miner Onboarding**: [MINER-ONBOARDING.md](MINER-ONBOARDING.md)
+- **Cluster Creation**: KubeTEE provisions clusters in Rancher and performs host preparation and RKE2 registration. Miners are **not** given Rancher access at cluster creation — a read-only `miner-readonly` account is created only as an exception.
 
 ---
 
@@ -486,12 +480,11 @@ See [Node Registration](NODE-REGISTRATION.md) for the RKE2 node registration com
 
 1. ✅ **Hardware**: 8x B200, B300, RTX PRO 6000 Blackwell, or Vera Rubin GPUs on Intel 6th Gen Xeon (Granite Rapids) OR AMD 6th Gen EPYC 9006 ("Venice" / "Verano") — Hopper H100/H200 GPUs and Intel 5th Gen, AMD 5th Gen (Turin), AMD 4th Gen (Genoa) CPUs are **deprecated** and not accepted for new nodes (existing Hopper nodes are removed as Blackwell nodes are onboarded — target November 2026). **3 nodes of the same GPU type per cluster** (see [Cluster Architecture & High Availability](#cluster-architecture--high-availability))
 2. ✅ **Firmware**: Latest version from [NVIDIA DGX Firmware Guide](https://docs.nvidia.com/dgx/dgxh100-fw-update-guide/) (Hopper) or your OEM/HGX procedure
-3. ✅ **BIOS**: TDX/SEV-SNP, CC mode per GPU generation (PPCIe on Hopper; see NVIDIA matrix for Blackwell/Vera Rubin), VFIO/IOMMU enabled
-4. ✅ **OS**: Ubuntu 26.04 clean, kernel 7.0.0-3x pin (GPU Operator manages all GPU software)
-5. ✅ **Storage**: 800GB OS + 3TB data disks
-6. ✅ **Register**: Run registration command with network addresses
-7. ✅ **Label**: `kubectl label node <name> nvidia.com/gpu.workload.config=vm-passthrough`
-8. ✅ **Wait**: GPU Operator installs drivers automatically (5-15 minutes)
+3. ✅ **BIOS**: TDX/SGX (or SEV-SNP where supported), compatible firmware, SGX auto-registration disabled; follow [MINER-ONBOARDING.md](MINER-ONBOARDING.md)
+4. ✅ **OS**: Plain Ubuntu 26.04 LTS with the stock kernel and no NVIDIA software or custom host hardening
+5. ✅ **Storage**: OS disk >784 GB; each data drive >3.84 TB, totaling >7 TB raw and left unformatted
+6. ✅ **Handoff**: Grant KubeTEE `ubuntu` SSH access with passwordless `sudo` and provide remote power-management access
+7. ✅ **KubeTEE automation**: Applies OS updates, kernel and storage configuration, CC mode, GPU drivers, RKE2 registration, and node labels
 
 **If ANY requirement is not met, the node will NOT be supported for KubeTEE GPU workloads.**
 

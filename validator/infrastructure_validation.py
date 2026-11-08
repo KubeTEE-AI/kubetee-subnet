@@ -1,7 +1,7 @@
 """Pure, fail-closed infrastructure-readiness policy (no I/O).
 
 A miner's verdict is binary: every required signal must pass, else score 0.
-The doc contract (docs/NODE-REGISTRATION.md): eligible cluster carries a
+The documented eligibility contract is: eligible cluster carries a
 `kubetee.ai/hotkey` label matching the miner's registered hotkey (one cluster
 per hotkey), is not banned (`kubetee.ai/ban != "true"`), and has Ready active
 nodes with etcd + control-plane + worker roles, >=72 CPU + >=1024 GiB per

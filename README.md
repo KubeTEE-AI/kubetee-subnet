@@ -632,7 +632,7 @@ What **KubeTEE** applies (platform enrollment — not a miner task): the `kubete
 
 **For Production Participation**: must pass minimum requirements (hardware, HA topology, 8-GPU workers, passthrough wiring), TEE attestation, and infrastructure-readiness validation.
 
-Full hardware/firmware requirements, the registration command, and the label contract: [Node Registration](./docs/NODE-REGISTRATION.md), [GPU Node Requirements](./docs/GPU-NODE-REQUIREMENTS.md), [Cluster Naming Convention](./docs/CLUSTER_NAMING_CONVENTION.md).
+Full node preparation and handoff requirements, plus the GPU and cluster-label requirements: [Miner Onboarding](./docs/MINER-ONBOARDING.md), [GPU Node Requirements](./docs/GPU-NODE-REQUIREMENTS.md), [Cluster Naming Convention](./docs/CLUSTER_NAMING_CONVENTION.md).
 
 ### Miner deposit (registration collateral)
 
@@ -640,7 +640,7 @@ Every miner posts a **10 TAO deposit per node** it contributes to its cluster (e
 
 > **Status:** **not collected during Early Access** — the deposit is implemented in [Phase 1](#phase-1--expansion), where the validator gate starts measuring coverage and then enforces it ([What Ships Today](#what-ships-today)). Bonding a share of the registration price on chain is a separate [Phase 1](#phase-1--expansion) change this deposit does not depend on.
 
-Full detail — the chain primitive, Alpha conversion, grace/recovery, `btcli` commands, owner/miner/validator runbooks: [Miner Deposit (Registration Collateral)](./docs/MINER-DEPOSIT.md). Hardware and label requirements: [GPU Node Requirements](./docs/GPU-NODE-REQUIREMENTS.md), [Node Registration](./docs/NODE-REGISTRATION.md), [Cluster Naming Convention](./docs/CLUSTER_NAMING_CONVENTION.md).
+Full detail — the chain primitive, Alpha conversion, grace/recovery, `btcli` commands, owner/miner/validator runbooks: [Miner Deposit (Registration Collateral)](./docs/MINER-DEPOSIT.md). Hardware and label requirements: [GPU Node Requirements](./docs/GPU-NODE-REQUIREMENTS.md), [Miner Onboarding](./docs/MINER-ONBOARDING.md), [Cluster Naming Convention](./docs/CLUSTER_NAMING_CONVENTION.md).
 
 ---
 
@@ -733,8 +733,7 @@ Full detail — the chain primitive, Alpha conversion, grace/recovery, `btcli` c
 
 ### Documentation
 - [Miner Deposit — registration collateral](./docs/MINER-DEPOSIT.md) — the **10 TAO per node** on-chain registration deposit (Phase 1), chain primitive, and runbooks
-- [Node BIOS & OS Preparation](./docs/NODE-BIOS-OS-PREPARATION.md) — pre-registration BIOS/TDX/SGX, OS, PCCS/QGS, and storage setup up to node registration (validated on the first miner onboarding)
-- [Node Registration](./docs/NODE-REGISTRATION.md) — Miner RKE2 node registration and `kubetee.ai/*` labels
+- [Miner Node Onboarding](./docs/MINER-ONBOARDING.md) — hardware, BIOS, GPU firmware, clean OS, storage, remote power, SSH handoff, and KubeTEE-managed registration
 - [GPU Node Requirements](./docs/GPU-NODE-REQUIREMENTS.md) — GPU/TEE hardware requirements
 - [Cluster Naming Convention](./docs/CLUSTER_NAMING_CONVENTION.md) — `kubetee.ai/*` labels and Fleet GitOps targeting
 - [FIPS-140-3 Target](./docs/FIPS-140-3.md) — RKE2 + Kata + CoCo FIPS stack research
