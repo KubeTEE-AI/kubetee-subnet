@@ -1,14 +1,15 @@
-# NeMo Microservices, Bittensor Subnet Integrations & the Stage 0 Security Gate
+# NVIDIA NeMo Platform, Bittensor Subnet Integrations & the Stage 0 Security Gate
 
-This document is the detailed reference behind the README [NVIDIA NeMo Microservices](../README.md#nvidia-nemo-microservices--bittensor-subnet-integrations) and [Bittensor Subnet Integrations](../README.md#nvidia-nemo-microservices--bittensor-subnet-integrations) sections. It covers: the NeMo stack on KubeTEE, the attestation-gated TLS protocol between services, the NVIDIA NIM Operator's experimental Kata/Dynamo support and its CoCo limitations, the SOTA Bittensor subnets that could replace or augment each NeMo layer inside a TEE, the Stage 0 supply-chain security gate, and (new, 2026-11-04) model routing — NVIDIA NeMo Switchyard installed, with Fugal (SN70) as a potential replacement if it proves SOTA.
+This document is the detailed reference behind the README [NVIDIA NeMo & Bittensor Subnet Integrations](../README.md#nvidia-nemo-microservices--bittensor-subnet-integrations) section. It covers: the NVIDIA NeMo platform on KubeTEE, the attestation-gated TLS protocol between services, the NVIDIA NIM Operator's experimental Kata/Dynamo support and its CoCo limitations, the SOTA Bittensor subnets that could replace or augment each NeMo layer inside a TEE, the Stage 0 supply-chain security gate, and (new, 2026-11-04) model routing — NVIDIA NeMo Switchyard installed, with Fugal (SN70) as a potential replacement if it proves SOTA.
 
 ---
 
-## 1. NVIDIA NeMo Microservices on KubeTEE
+## 1. NVIDIA NeMo Platform on KubeTEE
 
-[NVIDIA NeMo Microservices](https://docs.nvidia.com/nemo/microservices/latest/about/index.html) are API-first, modular tools for customizing, evaluating, and securing LLMs and embedding models on Kubernetes. A goal of the KubeTEE AI Factory is to run the full NVIDIA AI stack — NeMo Microservices, NIM models, and AI Blueprints — as **SOTA AI services** for enterprises inside Kata + CoCo TEE. Batch jobs are a secondary service: Armada schedules the jobs and pipelines that call those services when an enterprise needs that path.
+[NVIDIA NeMo Platform](https://docs.nvidia.com/nemo-platform/documentation/kubernetes-deployment/setup) is NVIDIA's self-managed Kubernetes platform for customizing, evaluating, and securing LLM and agent applications. It carries forward the former standalone NeMo Microservices suite; the component names — Customizer, Evaluator, Guardrails, and Retriever — remain. The broader [NVIDIA NeMo](https://docs.nvidia.com/) suite spans the AI agent lifecycle; **NIM microservices remain the model-inference layer**, not a replacement name for NeMo Platform. A goal of the KubeTEE AI Factory is to run the full NVIDIA AI stack — NVIDIA NeMo, NIM models, and AI Blueprints — as **SOTA AI services** for enterprises inside Kata + CoCo TEE. Batch jobs are a secondary service: Armada schedules the jobs and pipelines that call those services when an enterprise needs that path.
 
-Each cluster therefore exposes a shared, high-availability NeMo Microservices deployment as **cluster-resident services that scheduled AI jobs call**. This is the distinction between a service and a job: Customizer, Evaluator, Guardrails, Retriever, and the model endpoints are long-lived and shared, while a job is a transient Armada workload that consumes them. A fine-tuning job dispatched to a miner cluster calls the local Customizer, an evaluation job calls the local Evaluator, and a RAG job calls the local Retriever — inside the cluster, without leaving the confidential boundary or crossing the public internet. Sharing one HA deployment per cluster also means the cost of standing up the stack is amortized across every job that lands there, rather than paid again per job.
+Each cluster therefore exposes shared, high-availability NeMo services as **cluster-resident services that scheduled AI jobs call**. This is the distinction between a service and a job: Customizer, Evaluator, Guardrails, Retriever, and the model endpoints are long-lived and shared, while a job is a transient Armada workload that consumes them. A fine-tuning job dispatched to a miner cluster calls the local Customizer, an evaluation job calls the local Evaluator, and a RAG job calls the local Retriever — inside the cluster, without leaving the confidential boundary or crossing the public internet. Sharing one HA deployment per cluster also means the cost of standing up the stack is amortized across every job that lands there, rather than paid again per job.
+
 
 ---
 
@@ -36,18 +37,18 @@ SGLang (and most LLM NIMs) cannot require a client certificate, so the terminato
 
 ## 3. NIM Operator — Experimental Kata & Dynamo Support
 
-The [NVIDIA NIM Operator](https://docs.nvidia.com/nim-operator/latest/) now ships **experimental** support for running NIM/NeMo workloads inside Kata sandboxes and for Dynamo-orchestrated inference graphs:
+The [NVIDIA NIM Operator](https://docs.nvidia.com/nim-operator/latest/) ships **experimental** support for running **NIM inference** workloads inside Kata sandboxes and for Dynamo-orchestrated inference graphs:
 
 - **[Kata Sandbox Workloads (Experimental)](https://docs.nvidia.com/nim-operator/latest/kata-sandbox.html)** — deploys a `NIMService` with `runtimeClassName: kata-qemu-nvidia-gpu` so the NIM runs inside a Kata VM sandbox with hardware-isolated kernel and OS. NVIDIA notes this is a preview for testing only (not production), and that **Confidential Containers** support is planned for a future release.
 - **[Dynamo (Experimental)](https://docs.nvidia.com/nim-operator/latest/dynamo.html)** — deploys Dynamo `DynamoGraphDeployment` CRDs (OpenAI-compatible frontend, multi-backend LLM serving, disaggregated prefill/decode) via the NIM Operator with `dynamo.enabled=true`.
 
-> ⚠️ **KubeTEE does not use either path yet.** NeMo Microservices on KubeTEE run on the **stable** TEE runtime classes instead. **KubeTEE is working directly with the NVIDIA NIM Operator and Kata Containers teams** to harden Kata sandbox + CoCo integration and Dynamo's disaggregated serving graphs for production; graduating them is a Phase 3 item.
+> ⚠️ **KubeTEE does not use either path yet.** The NIM Operator is no longer the deployment path for NeMo Platform services (see [§1](#1-nvidia-nemo-platform-on-kubetee)). KubeTEE's planned confidential workloads use the **stable** TEE runtime classes instead. **KubeTEE is working directly with the NVIDIA NIM Operator and Kata Containers teams** to harden Kata sandbox + CoCo integration and Dynamo's disaggregated serving graphs for production; graduating them is a Phase 3 item.
 
 ---
 
 ## 4. Kata / CoCo Limitations (NVIDIA)
 
-The NeMo Microservices docs index does not itself list Kata/CoCo limits — the constraints come from the **NIM Operator** (which deploys NeMo Microservices as CRDs) and the **NVIDIA CoCo Reference Architecture**. They are the reason KubeTEE's current confidential path is the stable CoCo runtime classes rather than the NIM Operator's experimental Kata sandbox:
+The NeMo Platform documentation does not itself list these Kata/CoCo limits — the constraints come from the **NIM Operator** (for NIM inference workloads, not the deprecated NeMo-service CRD path) and the **NVIDIA CoCo Reference Architecture**. KubeTEE has not documented or validated NeMo Platform Helm compatibility with the confidential runtime classes below. The constraints explain why KubeTEE's confidential NIM path uses the stable CoCo runtime classes rather than the NIM Operator's experimental Kata sandbox:
 
 **NIM Operator Kata Sandbox (experimental)** — [Kata Sandbox docs](https://docs.nvidia.com/nim-operator/latest/kata-sandbox.html)
 - **Not confidential computing.** The Kata sandbox runtime class is `kata-qemu-nvidia-gpu` and *"does not enable encryption"* — VM isolation only, no TEE encryption/attestation. The GPU Operator must run in **non-CC mode** (`nvidia.com/cc.mode=off`).
@@ -62,7 +63,7 @@ The NeMo Microservices docs index does not itself list Kata/CoCo limits — the 
 - **No host-side NVIDIA driver** — CoCo uses VFIO passthrough; host drivers interfere with VFIO binding (the GPU Operator manages the in-guest driver instead).
 
 **NIM Operator (general)** — [Release Notes](https://docs.nvidia.com/nim-operator/latest/release-notes.html)
-- **No multi-node NIM microservice config** — *"The Operator does not support configuring NIM microservices in a multi-node deployment"* (multi-node NIM v2.0 via Ray is a separate, newer path).
+- **NeMo CRD deprecation is not a NIM limitation** — NIM Operator v3.1.3+ supports multi-node **NIM** through `spec.multiNode.ray` (Ray for cluster formation, vLLM for distributed execution). The deprecated legacy NeMo-service CRDs must not be conflated with this continuing NIM deployment support.
 - **CC added incrementally** — Kata sandbox is the *"first foundational step"*; full CoCo encryption/attestation through the Operator is future work.
 
 ---
@@ -120,7 +121,9 @@ flowchart LR
 
 ## References
 
-- [NVIDIA NeMo Microservices](https://docs.nvidia.com/nemo/microservices/latest/about/index.html)
+- [NVIDIA Documentation Hub](https://docs.nvidia.com/)
+- [NVIDIA NeMo Platform — Kubernetes setup](https://docs.nvidia.com/nemo-platform/documentation/kubernetes-deployment/setup)
+- [Former NeMo Microservices suite — sunset notice](https://catalog.ngc.nvidia.com/orgs/nvidia/nemo-microservices/collections/nemo-microservices/-)
 - [NVIDIA NeMo Switchyard](https://github.com/NVIDIA-NeMo/Switchyard) — [routing algorithms](https://github.com/NVIDIA-NeMo/Switchyard/blob/main/docs/routing_algorithms/overview.md) · [TOML schema](https://github.com/NVIDIA-NeMo/Switchyard/blob/main/docs/reference/toml_schema.md) · [LiteLLM plugin example](https://github.com/NVIDIA-NeMo/Switchyard/blob/main/examples/litellm/README.md)
 - [NVIDIA NIM Operator](https://docs.nvidia.com/nim-operator/latest/) — [Kata Sandbox (Experimental)](https://docs.nvidia.com/nim-operator/latest/kata-sandbox.html) | [Dynamo (Experimental)](https://docs.nvidia.com/nim-operator/latest/dynamo.html) | [Release Notes](https://docs.nvidia.com/nim-operator/latest/release-notes.html)
 - [NVIDIA Confidential Containers Reference Architecture](https://docs.nvidia.com/datacenter/cloud-native/confidential-containers/latest/overview.html)
