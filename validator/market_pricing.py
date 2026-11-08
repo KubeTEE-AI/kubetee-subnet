@@ -215,14 +215,19 @@ def load_lium_cache_epoch() -> int:
     return epoch if type(epoch) is int and epoch > 0 else -1
 
 
-def save_lium_cache(per_card: dict[str, float], epoch: int | None = None) -> None:
+def save_lium_cache(
+    per_card: dict[str, float], epoch: int | None = None
+) -> None:
     """Best-effort cache write; ``source_epoch`` preserves legacy calls."""
     try:
         os.makedirs(os.path.dirname(_cache_path()), exist_ok=True)
         with open(_cache_path(), "w", encoding="utf-8") as handle:
             json.dump(
-                {"metric": CACHE_METRIC, "source_epoch": epoch,
-                 "per_card_usd": per_card},
+                {
+                    "metric": CACHE_METRIC,
+                    "source_epoch": epoch,
+                    "per_card_usd": per_card,
+                },
                 handle,
             )
     except OSError:

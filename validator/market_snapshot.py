@@ -6,6 +6,7 @@ memorialize an older last-good provider observation. The two are never
 confused. Readers NEVER call provider APIs. targetPrice is NEVER read.
 $0 is a valid scalar observation, not an instruction to substitute a price.
 """
+
 from datetime import datetime, timezone
 import math
 
@@ -16,8 +17,12 @@ MARKET_VERSION = 3
 
 
 def _number(value):
-    if (isinstance(value, bool) or not isinstance(value, (int, float))
-            or not math.isfinite(value) or value < 0):
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not math.isfinite(value)
+        or value < 0
+    ):
         return None
     return float(value)
 
@@ -59,7 +64,9 @@ def targon_rate(row):
     maximum = _number(row.get("maxPrice"))
     if maximum is not None:
         return maximum
-    raise ValueError("Targon has neither PAYOUT/h nor Maximum; never targetPrice")
+    raise ValueError(
+        "Targon has neither PAYOUT/h nor Maximum; never targetPrice"
+    )
 
 
 def targon_fields(raw):
@@ -69,10 +76,14 @@ def targon_fields(raw):
     result = {}
     for key in GPU_TYPES:
         candidates = raw.get(key)
-        for row in candidates if isinstance(candidates, list) else [candidates]:
+        for row in (
+            candidates if isinstance(candidates, list) else [candidates]
+        ):
             if not isinstance(row, dict):
                 continue
-            hourly, maximum = _number(row.get("unitRate")), _number(row.get("maxPrice"))
+            hourly, maximum = _number(row.get("unitRate")), _number(
+                row.get("maxPrice")
+            )
             selected = {"unitRate": hourly}
             if maximum is not None:
                 # Optional for v1.4.0 hourly; independently used for legacy.
@@ -81,7 +92,9 @@ def targon_fields(raw):
                 targon_rate(selected)
             except ValueError:
                 continue
-            if key not in result or targon_rate(selected) > targon_rate(result[key]):
+            if key not in result or targon_rate(selected) > targon_rate(
+                result[key]
+            ):
                 result[key] = selected
     return result
 
@@ -89,6 +102,7 @@ def targon_fields(raw):
 def targon_by_gpu(compute):
     """Preserve raw source observations grouped by SKU GPU type."""
     from targon_payout_feed import _gpu_class_of
+
     grouped = {}
     for row in compute if isinstance(compute, list) else []:
         if not isinstance(row, dict) or row.get("kind", "gpu") != "gpu":
@@ -107,11 +121,15 @@ def chutes_for_epoch(raw, epoch):
     imported as current input. The containing market's chain epoch is checked
     independently by `parse_market_snapshot`.
     """
-    if (type(epoch) is not int or epoch <= 0
-            or not isinstance(raw, dict)
-            or not isinstance(raw.get("per_class_usd"), dict)
-            or type(raw.get("bucket")) is not int
-            or raw["bucket"] > epoch or raw["bucket"] <= 0):
+    if (
+        type(epoch) is not int
+        or epoch <= 0
+        or not isinstance(raw, dict)
+        or not isinstance(raw.get("per_class_usd"), dict)
+        or type(raw.get("bucket")) is not int
+        or raw["bucket"] > epoch
+        or raw["bucket"] <= 0
+    ):
         return None
     if raw["bucket"] != epoch and raw.get("stale") is not True:
         return None
@@ -124,11 +142,16 @@ def _volatile_provider_rates(raw, providers, gpu_type=None):
     if providers not in PROVIDERS:
         raise ValueError("unknown market provider")
     rows = raw.get("providers", {}).get(providers, {})
-    result = ({key: targon_rate(value) for key, value in rows.items()}
-              if providers == "targon"
-              else {key: value["maxPrice"] for key, value in rows.items()})
-    return ({gpu_type: result[gpu_type]} if gpu_type in result else {}
-            if gpu_type is not None else result)
+    result = (
+        {key: targon_rate(value) for key, value in rows.items()}
+        if providers == "targon"
+        else {key: value["maxPrice"] for key, value in rows.items()}
+    )
+    return (
+        {gpu_type: result[gpu_type]}
+        if gpu_type in result
+        else {} if gpu_type is not None else result
+    )
 
 
 def provider_rates(snapshot, provider):
@@ -136,7 +159,9 @@ def provider_rates(snapshot, provider):
     return _volatile_provider_rates(snapshot, provider)
 
 
-def build_market_snapshot(epoch, floors, targon, lium, chutes, source_epochs=None, raw_targon=None):
+def build_market_snapshot(
+    epoch, floors, targon, lium, chutes, source_epochs=None, raw_targon=None
+):
     """Normalize raw markets with optional exact Targon recovery provenance."""
     frozen = chutes_for_epoch(chutes, epoch)
     if frozen is None:
@@ -152,16 +177,27 @@ def build_market_snapshot(epoch, floors, targon, lium, chutes, source_epochs=Non
     if not any(data.values()):
         raise ValueError("no usable raw market fields")
     if not isinstance(floors, dict):
-        raise ValueError("manual floors map required; static card is not input")
+        raise ValueError(
+            "manual floors map required; static card is not input"
+        )
     old_floors = _positive(floors)
     inputs = source_epochs or {provider: epoch for provider in PROVIDERS}
     if not isinstance(inputs, dict):
         raise ValueError("missing input epochs")
     for provider in PROVIDERS:
-        if type(inputs.get(provider)) is not int or inputs[provider] > epoch or inputs[provider] <= 0:
+        if (
+            type(inputs.get(provider)) is not int
+            or inputs[provider] > epoch
+            or inputs[provider] <= 0
+        ):
             raise ValueError(f"invalid {provider} source epoch")
     for provider, raw in data.items():
-        if raw and not source_epochs and provider == "chutes" and frozen["bucket"] != epoch:
+        if (
+            raw
+            and not source_epochs
+            and provider == "chutes"
+            and frozen["bucket"] != epoch
+        ):
             inputs["chutes"] = frozen["bucket"]
     observed_epochs = dict(inputs)
     if not source_epochs and frozen["bucket"] != epoch:
@@ -186,13 +222,17 @@ def build_market_snapshot(epoch, floors, targon, lium, chutes, source_epochs=Non
 
 def parse_market_snapshot(raw, epoch):
     """Strict v3 current-chain-epoch read; never legacy card interpretation."""
-    if (not isinstance(raw, dict)
-            or raw.get("version") != MARKET_VERSION
-            or type(epoch) is not int or epoch <= 0
-            or type(raw.get("epoch")) is not int or raw["epoch"] != epoch
-            or not isinstance(raw.get("floors"), dict)
-            or not isinstance(raw.get("providers"), dict)
-            or not isinstance(raw.get("source_epochs"), dict)):
+    if (
+        not isinstance(raw, dict)
+        or raw.get("version") != MARKET_VERSION
+        or type(epoch) is not int
+        or epoch <= 0
+        or type(raw.get("epoch")) is not int
+        or raw["epoch"] != epoch
+        or not isinstance(raw.get("floors"), dict)
+        or not isinstance(raw.get("providers"), dict)
+        or not isinstance(raw.get("source_epochs"), dict)
+    ):
         return None
     try:
         chutes = chutes_for_epoch(raw.get("chutes_snapshot"), epoch)
@@ -202,9 +242,12 @@ def parse_market_snapshot(raw, epoch):
         for provider in ("lium", "chutes"):
             for klass, row in data[provider].items():
                 if row != market_rows({klass: row}).get(klass) or not (
-                        provider == "chutes" or _positive({klass: row["maxPrice"]})):
+                    provider == "chutes" or _positive({klass: row["maxPrice"]})
+                ):
                     return None
-        if market_rows(chutes["per_class_usd"]) != market_rows(data.get("chutes")):
+        if market_rows(chutes["per_class_usd"]) != market_rows(
+            data.get("chutes")
+        ):
             return None
         provider_data = {
             "targon": targon_fields(data.get("targon")),
@@ -215,7 +258,11 @@ def parse_market_snapshot(raw, epoch):
             return None
         for provider in PROVIDERS:
             source_epoch = raw["source_epochs"].get(provider)
-            if type(source_epoch) is not int or source_epoch <= 0 or source_epoch > epoch:
+            if (
+                type(source_epoch) is not int
+                or source_epoch <= 0
+                or source_epoch > epoch
+            ):
                 return None
         for provider, values in data.items():
             if not isinstance(values, dict) or set(values) - set(GPU_TYPES):
@@ -230,12 +277,17 @@ def parse_market_snapshot(raw, epoch):
         raw_targon = raw.get("targon_raw")
         if raw_targon is not None:
             from targon_payout_feed import _legacy_maximum_rows
+
             if not _legacy_maximum_rows(raw_targon):
                 return None
     except (TypeError, ValueError, KeyError, AttributeError):
         return None
-    return {**raw, "floors": _positive(raw["floors"]),
-            "providers": provider_data, "chutes_snapshot": chutes}
+    return {
+        **raw,
+        "floors": _positive(raw["floors"]),
+        "providers": provider_data,
+        "chutes_snapshot": chutes,
+    }
 
 
 def fetch_market_snapshot(epoch):
@@ -244,6 +296,7 @@ def fetch_market_snapshot(epoch):
         return None
     try:
         from hippius_store import _get_public
+
         return parse_market_snapshot(_get_public(MARKET_KEY), epoch)
     except Exception:
         return None
@@ -259,8 +312,9 @@ def market_price(klass, market):
     if not rates:
         raise ValueError("no shared scalar observation for " + klass)
     # A class with no configured manual floor has NO retired 0.75*card floor.
-    return max(float(market.get("floors", {}).get(klass, 0.0)),
-               1.10 * max(rates))
+    return max(
+        float(market.get("floors", {}).get(klass, 0.0)), 1.10 * max(rates)
+    )
 
 
 def fetch_market_snapshot(epoch):
@@ -269,6 +323,7 @@ def fetch_market_snapshot(epoch):
         return None
     try:
         from hippius_store import _get_public
+
         return parse_market_snapshot(_get_public(MARKET_KEY), epoch)
     except Exception:
         return None

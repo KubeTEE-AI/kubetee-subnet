@@ -44,13 +44,20 @@ from targon_payout_feed import (
     _legacy_maximum_rows,
 )
 from market_pricing import (
-    fetch_lium_per_card_usd, load_lium_cache, load_lium_cache_epoch,
+    fetch_lium_per_card_usd,
+    load_lium_cache,
+    load_lium_cache_epoch,
     save_lium_cache,
 )
 from chutes_earnings_feed import ChutesEarningsFeed
 from market_snapshot import (
-    MARKET_KEY, build_market_snapshot, chutes_for_epoch,
-    fetch_market_snapshot, market_price, provider_rates, targon_fields,
+    MARKET_KEY,
+    build_market_snapshot,
+    chutes_for_epoch,
+    fetch_market_snapshot,
+    market_price,
+    provider_rates,
+    targon_fields,
 )
 
 logging.basicConfig(
@@ -151,11 +158,17 @@ class Validator:
             raise RuntimeError("chain epoch moved backwards")
         previous = self._last_market or {}
         shared = self.shared_reader(epoch)
-        if shared is None and self.hippius is not None and self.config.is_publisher:
+        if (
+            shared is None
+            and self.hippius is not None
+            and self.config.is_publisher
+        ):
             if self._delegated:
                 # No shared v3: this epoch must skip. Never construct/write
                 # overlapping publishable inputs during the delegated rehearsal.
-                raise RuntimeError("delegated reader has no shared epoch snapshot")
+                raise RuntimeError(
+                    "delegated reader has no shared epoch snapshot"
+                )
             # The publisher freezes and publishes exactly this local object;
             # every other reader retrieves it from S3 by the same epoch key.
             shared = self._publisher_market(epoch, block, tempo, tao_usd)
@@ -163,23 +176,32 @@ class Validator:
             shared = self.shared_reader(epoch)
         if shared is None:
             raise RuntimeError("no shared v3 market for current chain epoch")
-        if (self.hippius is not None and self.config.is_publisher
-                and not self._delegated):
+        if (
+            self.hippius is not None
+            and self.config.is_publisher
+            and not self._delegated
+        ):
             self._publisher_targon_raw = shared.get("targon_raw", {})
             self._restore_publisher_lium(shared)
             # Legacy always advances its block epoch, retried independently
             # even when the v3 provider observations are all retained/stale.
-            self._publish_legacy(shared["floors"], publish_payout=(
-                shared.get("epoch") != previous.get("epoch")
-                or shared.get("source_epochs") != previous.get("source_epochs")
-                or self.price_feed.last_tao_usd == previous.get("tao_usd")
-            ))
+            self._publish_legacy(
+                shared["floors"],
+                publish_payout=(
+                    shared.get("epoch") != previous.get("epoch")
+                    or shared.get("source_epochs")
+                    != previous.get("source_epochs")
+                    or self.price_feed.last_tao_usd == previous.get("tao_usd")
+                ),
+            )
         self._market = shared
         self._market_epoch = epoch
         self._last_chutes_snapshot = dict(shared.get("chutes_snapshot") or {})
         self._last_market = dict(shared)
         self._last_market["targon_raw"] = getattr(
-            self, "_publisher_targon_raw", {},
+            self,
+            "_publisher_targon_raw",
+            {},
         )
         return shared
 
@@ -188,8 +210,10 @@ class Validator:
 
     def _restore_publisher_lium(self, shared: dict) -> None:
         """Cache only observed Lium rates for a later epoch's outage fallback."""
-        if (shared["source_epochs"].get("lium") == shared["epoch"]
-                and load_lium_cache_epoch() != shared["epoch"]):
+        if (
+            shared["source_epochs"].get("lium") == shared["epoch"]
+            and load_lium_cache_epoch() != shared["epoch"]
+        ):
             save_lium_cache(provider_rates(shared, "lium"), shared["epoch"])
 
     def _publisher_market(self, epoch, block, tempo, tao_usd) -> dict:
@@ -201,7 +225,9 @@ class Validator:
         except Exception:
             raw_targon = previous.get("targon_raw") or {}
             if not raw_targon:
-                raise RuntimeError("Targon unavailable and no retained raw snapshot")
+                raise RuntimeError(
+                    "Targon unavailable and no retained raw snapshot"
+                )
             epochs["targon"] = previous["source_epochs"]["targon"]
         self._publisher_targon_raw = raw_targon
         targon = targon_fields(raw_targon)
@@ -211,7 +237,9 @@ class Validator:
             self.chutes_feed.last = previous["chutes_snapshot"]
         chutes = self.chutes_feed.snapshot(block, tempo, tao_usd)
         if chutes_for_epoch(chutes, epoch) is None:
-            raise RuntimeError("no current or explicitly stale Chutes observation")
+            raise RuntimeError(
+                "no current or explicitly stale Chutes observation"
+            )
         epochs["chutes"] = chutes["bucket"]
         cached_lium = load_lium_cache()
         lium_epoch = load_lium_cache_epoch()
@@ -221,14 +249,21 @@ class Validator:
         except Exception:
             if cached_lium is not None:
                 if lium_epoch <= 0:
-                    raise RuntimeError("pre-v1.4.0 Lium cache has no source epoch; refresh required")
+                    raise RuntimeError(
+                        "pre-v1.4.0 Lium cache has no source epoch; refresh required"
+                    )
                 lium, epochs["lium"] = cached_lium, lium_epoch
             else:
                 lium = provider_rates(previous, "lium")
                 epochs["lium"] = previous["source_epochs"]["lium"]
         shared = build_market_snapshot(
-            epoch, self._publisher_floors(), targon, lium, chutes,
-            source_epochs=epochs, raw_targon=raw_targon,
+            epoch,
+            self._publisher_floors(),
+            targon,
+            lium,
+            chutes,
+            source_epochs=epochs,
+            raw_targon=raw_targon,
         )
         self.hippius.put_json(MARKET_KEY, shared)
         return shared
@@ -239,13 +274,18 @@ class Validator:
         raw = getattr(self, "_publisher_targon_raw", {})
         rates = _legacy_maximum_rows(raw) if raw else {}
         if not rates:
-            raise RuntimeError("no epoch-shared raw Targon Maximum for legacy feed")
+            raise RuntimeError(
+                "no epoch-shared raw Targon Maximum for legacy feed"
+            )
         return rates
 
-    def _publish_legacy(self, floors: dict, publish_payout: bool = True) -> None:
+    def _publish_legacy(
+        self, floors: dict, publish_payout: bool = True
+    ) -> None:
         """Legacy Maximum-only feed; never copy v1.4.0 pricing inputs."""
         self._publish_card(
-            self.targon.card(), self._publisher_floors(),
+            self.targon.card(),
+            self._publisher_floors(),
             self._publisher_pricing(),
         )
         per_card = self._publisher_maximums()
@@ -378,7 +418,9 @@ class Validator:
         # provider observation provenance retained within this v3 epoch.
         epoch = self._current_epoch_from_chain()
         try:
-            market = self.market_for_epoch(epoch, self._epoch(), self._tempo_from_chain(), tao_usd)
+            market = self.market_for_epoch(
+                epoch, self._epoch(), self._tempo_from_chain(), tao_usd
+            )
         except (RuntimeError, ValueError) as exc:
             metrics.record_skip("market")
             log.warning("skip cycle: pricing observation unavailable: %s", exc)
@@ -464,8 +506,12 @@ class Validator:
         self._last_card = card
         self._last_floors = floors
         self._last_pricing = pricing
-        log.info("market prices=%s floors=%s source_epochs=%s",
-                 effective_card, floors, market["source_epochs"])
+        log.info(
+            "market prices=%s floors=%s source_epochs=%s",
+            effective_card,
+            floors,
+            market["source_epochs"],
+        )
         card_source, pricing_source, targon_age = (
             "published",
             "shared-three-provider-110-floor",

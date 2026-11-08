@@ -325,7 +325,9 @@ def build_dashboard_json(snapshot: dict) -> dict:
         "lium_pricing": bool(snapshot.get("lium_pricing", False)),
         "chutes_earnings": snapshot.get("chutes_earnings"),
         "targon_raw": dict(snapshot.get("targon_raw", {}) or {}),
-        "market_source_epochs": dict(snapshot.get("market_source_epochs", {}) or {}),
+        "market_source_epochs": dict(
+            snapshot.get("market_source_epochs", {}) or {}
+        ),
         "market_chutes": dict(snapshot.get("market_chutes", {}) or {}),
         "targon_pricing": bool(snapshot.get("targon_pricing", True)),
         "miners": miners,

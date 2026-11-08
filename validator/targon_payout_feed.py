@@ -116,7 +116,9 @@ def _per_class_from_snapshot(compute: list) -> dict[str, float]:
 def _decode_targon_snapshot(payload: dict) -> dict:
     """Unwrap the same tRPC envelope used by v1.3.x."""
     result = payload.get("result") if isinstance(payload, dict) else None
-    data = (result.get("data") if isinstance(result, dict) else None) or payload
+    data = (
+        result.get("data") if isinstance(result, dict) else None
+    ) or payload
     snapshot = (data.get("json") if isinstance(data, dict) else None) or data
     if not isinstance(snapshot, dict):
         raise TargonFeedError("targon snapshot api: unexpected payload")
@@ -136,6 +138,7 @@ def fetch_targon_snapshot_rows() -> dict[str, list[dict]]:
     if not isinstance(snapshot.get("compute"), list):
         raise TargonFeedError("targon snapshot api: no compute rows")
     from market_snapshot import targon_by_gpu, targon_fields
+
     rows = targon_by_gpu(snapshot["compute"])
     if not targon_fields(rows):
         raise TargonFeedError("targon snapshot api: no usable raw fields")
@@ -146,7 +149,9 @@ def _legacy_maximum_rows(rows: dict[str, list[dict]]) -> dict[str, float]:
     """v1.3.x Maximum-only projection; hourly must never enter this feed."""
     result = {}
     for key, candidates in rows.items():
-        raw_candidates = candidates if isinstance(candidates, list) else [candidates]
+        raw_candidates = (
+            candidates if isinstance(candidates, list) else [candidates]
+        )
         values = []
         for row in raw_candidates:
             try:
