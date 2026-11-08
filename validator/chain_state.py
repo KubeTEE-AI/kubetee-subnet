@@ -36,7 +36,7 @@ def derive_hotkey_keypair(seed: str) -> Keypair:
 
 
 class ChainState:
-    """Thin wrapper over the vendored bittensor 11.1 SDK (subtensor v445)."""
+    """Thin wrapper over the official bittensor SDK (subtensor v488)."""
 
     def __init__(self, network: str, endpoint: str, hotkey_seed: str) -> None:
         network = (network or "finney").strip()

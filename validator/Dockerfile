@@ -6,7 +6,7 @@
 # and the BT-Validator-Version proxy header / User-Agent).
 FROM python:3.14-slim AS base
 
-ARG VERSION=1.1.6
+ARG VERSION=1.4.2
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -21,13 +21,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
     && rm -rf /var/lib/apt/lists/* \
     && update-ca-certificates
 
-# Official PyPI bittensor SDK. NOT the vendored subtensor/sdk/python tree:
-# that copy carries a `11.x.y.dev0` version and (from subtensor v478) a
-# `bittensor-core>=0.1.6` dep with no stable PyPI wheel, so pip cannot
-# install it. 11.3.0 is the newest official stable and pulls the prebuilt
-# `bittensor-core==0.1.5` wheel -- no Rust toolchain, no source build.
+# Official PyPI SDK matching subtensor v488. Pin the SDK and its native core
+# together: v488 requires bittensor-core>=0.1.9 for its cryptographic APIs.
+# Published wheels avoid a Rust source build from the vendored SDK.
 RUN pip install --no-cache-dir \
-    "bittensor==11.3.0" \
+    "bittensor==11.3.2" \
+    "bittensor-core==0.1.9" \
     "httpx>=0.27" \
     "prometheus-client>=0.20"
 
