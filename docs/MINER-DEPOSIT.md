@@ -246,6 +246,6 @@ everyone.
 
 ## 7. References
 
-- [`subtensor/docs/guides/mining/collateral.mdx`](../../subtensor/docs/guides/mining/collateral.mdx) — upstream guide
-- [`subtensor/pallets/subtensor/src/subnets/collateral.rs`](../../subtensor/pallets/subtensor/src/subnets/collateral.rs) — the implementation
-- The collateral policy engine — to be implemented in the validator (see [CLAUDE.md — Validator v1](../CLAUDE.md))
+- [`subtensor/docs/guides/mining/collateral.mdx`](/subtensor/docs/guides/mining/collateral.mdx) — upstream guide
+- [`subtensor/pallets/subtensor/src/subnets/collateral.rs`](/subtensor/pallets/subtensor/src/subnets/collateral.rs) — the implementation
+- `validator/infrastructure_validation.py` — deposit-validation implementation

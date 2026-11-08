@@ -79,7 +79,7 @@ KubeTEE requires the latest SEV-SNP for maximum security.
 - ✅ **NVIDIA B200** (Blackwell) - 192GB HBM3e
 - ✅ **NVIDIA B300** (Blackwell Ultra) - 288GB HBM3e
 - ✅ **NVIDIA RTX PRO 6000 Blackwell Server Edition** - 96GB GDDR7 ECC, CC mode on, PCIe Gen5, 600W configurable
-- ✅ **NVIDIA Vera Rubin** (Rubin generation) - confirm the exact GPU + VBIOS + CC-mode combination against the [NVIDIA Secure AI Compatibility Matrix](https://docs.nvidia.com/nvtrust/index.html#guides) before registering; do not assume a Hopper-era CC-mode recipe carries over
+- ✅ **NVIDIA Vera Rubin** (Rubin generation) - validate firmware and VBIOS against the [NVIDIA Secure AI Compatibility Matrix](https://docs.nvidia.com/nvtrust/index.html#guides); KubeTEE selects the supported CC-mode and driver combination
 
 **Deprecated (existing capacity only — NOT accepted for new nodes; removed as new Blackwell nodes are onboarded, target November 2026)**:
 - ⛔ **NVIDIA H100** (Hopper) - 80GB HBM3
@@ -160,10 +160,10 @@ lspci -nn | grep -i nvidia | awk -F'[][]' '{print $2}' | sort -u
 
 **Confidential Computing firmware compatibility** (authoritative source: **[NVIDIA Trusted Computing Solutions — Guides](https://docs.nvidia.com/nvtrust/index.html#guides)**, including the Secure AI Compatibility Matrix):
 
-The Compatibility Matrix is the source of truth for supported **GPU + VBIOS + CUDA driver + Confidential Computing mode** combinations (and RIM / VBIOS_RIM status). The node operator is responsible for the **GPU VBIOS** and **CC mode** (firmware/BIOS level); the **CUDA driver** is deployed by the GPU Operator after registration. Before registering a node, confirm your GPU's **VBIOS** and chosen **CC mode** (Protected PCIe / CC-Aux / APM) are listed as supported, and that the matrix's supported **CUDA driver** version matches what the GPU Operator will deploy. Key guidance from NVIDIA:
+The Compatibility Matrix is the source of truth for supported **GPU + VBIOS + CUDA driver + Confidential Computing mode** combinations (and RIM / VBIOS_RIM status). The miner is responsible for updating and validating **GPU firmware and VBIOS**. **Leave CC mode and the CUDA driver unchanged** — KubeTEE selects the supported combination and its automation configures CC mode and the GPU Operator after SSH handoff. Key guidance from NVIDIA:
 - **Protected PCIe (PPCIe) mode** — use **HGX Hopper FW 1.7.0**; avoid HGX Hopper FW 1.6.0, which has a known issue that can cause the GPU to fall off the bus during boot when PPCIe is enabled.
 - **Secure AI with HGX Hopper FW 1.8.0 or later** — rollback to FW 1.7.1 or earlier is **not supported**; plan firmware forward-only.
-- **Blackwell (B200) / Blackwell Ultra (B300) and Vera Rubin**, check the matrix for the required VBIOS + CUDA driver + CC mode combination before labeling the node.
+- **Blackwell (B200) / Blackwell Ultra (B300) and Vera Rubin**, check the matrix for the required VBIOS + CUDA driver + CC mode combination. Miners validate firmware and VBIOS only; KubeTEE selects CC mode, the driver, and node labels.
 
 **Critical firmware components**:
 - BMC (Baseboard Management Controller)
@@ -188,19 +188,16 @@ nvfwupd --query
 
 ---
 
-### ✅ 6. PPCIe Mode (MANDATORY) H100/H200 nodes (DEPRECATED hardware — kept for existing Hopper capacity)
+### ✅ 6. PPCIe mode on existing H100/H200 nodes — KubeTEE-managed
 
-**Requirement**: PPCIe (Protected PCIe) mode enabled on all GPUs on H100/H200 (Hopper) nodes — deprecated hardware, requirement kept for existing capacity. Blackwell and Vera Rubin use their own CC modes (see the NVIDIA Secure AI Compatibility Matrix).
+On existing H100/H200 nodes, KubeTEE validates PPCIe (Protected PCIe) mode as part of the supported CC configuration. Blackwell and Vera Rubin use their own CC modes (see the NVIDIA Secure AI Compatibility Matrix).
 
 **What is PPCIe?**
 - Protected PCIe mode for confidential computing
 - Enables secure GPU access in confidential VMs
 - Required for TDX/SNP GPU passthrough
 
-**Configuration**:
-- Enabled in BIOS/UEFI settings
-- Typically configured during firmware update process
-- Consult NVIDIA DGX documentation for your specific model
+**Miner responsibility**: leave CC mode unchanged. KubeTEE selects and configures the supported CC mode during automated preparation; do not configure PPCIe or another CC mode yourself.
 
 ---
 
@@ -224,10 +221,9 @@ dmesg | grep -i "Intel-IOMMU"
 dmesg | grep -i "AMD-Vi"
 ```
 
-**BIOS Configuration**:
-- Enable VT-d (Intel) or AMD-Vi (AMD)
-- Enable IOMMU
-- Enable SR-IOV (if available)
+**Responsibilities at handoff**:
+- Miners verify that virtualisation is enabled in hardware diagnostics using the commands above.
+- KubeTEE validates VT-d / AMD-Vi, IOMMU, and VFIO during automated preparation and configures the GPU passthrough drivers.
 
 ---
 
