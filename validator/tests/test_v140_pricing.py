@@ -186,43 +186,43 @@ def test_full_snapshot_uses_tdx_vm_fallback_but_legacy_uses_same_row_max():
         1, {"B300": 4}, rows, {}, chutes({"B300": 0}, 1), raw_targon=rows
     )
     assert provider_rates(market, "targon") == {"B300": 9.75}
-    assert market_price("B300", market) == pytest.approx(10.725)
+    assert market_price("B300", market) == pytest.approx(10.2375)
     from targon_payout_feed import _legacy_maximum_rows
 
     # Legacy is aggregated max across raw rows; no new hourly/markup field.
     assert _legacy_maximum_rows(rows)["B300"] == 99
 
 
-def test_three_provider_max_plus_ten_then_floor_never_card_clamp():
+def test_three_provider_max_plus_five_then_floor_never_card_clamp():
     market = snapshot()
-    assert market_price("B300", market) == pytest.approx(10.725)
-    assert market_price("H200", market) == pytest.approx(7.7)
+    assert market_price("B300", market) == pytest.approx(10.2375)
+    assert market_price("H200", market) == pytest.approx(7.35)
     market["providers"]["chutes"]["B300"]["maxPrice"] = 100
     # 12.66 or 10.00 card ceiling stays wholly out of this calculation.
-    assert market_price("B300", market) == pytest.approx(110)
+    assert market_price("B300", market) == pytest.approx(105)
     market["providers"]["chutes"]["B300"]["maxPrice"] = 1
     market["providers"]["targon"]["B300"] = {
         "unitRate": 6.01045,
         "maxPrice": 9.75,
     }
     assert market_price("B300", market) == pytest.approx(9.75)
-    assert market_price("B300", snapshot(floors={})) == pytest.approx(10.725)
+    assert market_price("B300", snapshot(floors={})) == pytest.approx(10.2375)
 
 
 def test_targon_fallback_participates_in_highest_of_three():
     assert market_price("B300", snapshot(floors={"B300": 1})) == pytest.approx(
-        10.725
+        10.2375
     )
     market = snapshot(floors={"B300": 1})
     market["providers"]["chutes"]["B300"]["maxPrice"] = 0
     market["providers"]["lium"]["B300"]["maxPrice"] = 0
     assert provider_rates(market, "lium")["B300"] == 0
-    assert market_price("B300", market) == pytest.approx(10.725)
+    assert market_price("B300", market) == pytest.approx(10.2375)
     market["providers"]["targon"]["B300"] = {
         "unitRate": 6.01045,
         "maxPrice": 9.75,
     }
-    assert market_price("B300", market) == pytest.approx(6.611495)
+    assert market_price("B300", market) == pytest.approx(6.3109725)
 
 
 def test_v3_only_and_current_chain_epoch_only_for_reader_payload():
@@ -302,7 +302,7 @@ def test_no_external_prices_on_reader_only_shared_epoch_object():
         assert shared == obj.market_for_epoch(1, 361, 360, 240.0)
         assert fetch.call_count == 1
         assert chutes_api.call_count == 0
-        assert obj.effective_market(shared)["H200"] == pytest.approx(7.7)
+        assert obj.effective_market(shared)["H200"] == pytest.approx(7.35)
         assert obj.targon_chart(shared)["B300"] == 9.75
         assert obj.lium_chart(shared)["B300"] == 5
     obj.chain.epoch_progress.return_value = (360, 360, 360)

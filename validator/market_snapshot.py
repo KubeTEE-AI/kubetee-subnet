@@ -329,7 +329,7 @@ def fetch_market_snapshot(epoch):
 
 
 def market_price(klass, market):
-    """Rule: choose HIGHEST of all three providers, +10%, then manual floor."""
+    """Rule: choose HIGHEST of all three providers, +5%, then manual floor."""
     rates = []
     for provider in PROVIDERS:
         rate = provider_rates(market, provider).get(klass)
@@ -339,7 +339,7 @@ def market_price(klass, market):
         raise ValueError("no shared scalar observation for " + klass)
     # A class with no configured manual floor has NO retired 0.75*card floor.
     return max(
-        float(market.get("floors", {}).get(klass, 0.0)), 1.10 * max(rates)
+        float(market.get("floors", {}).get(klass, 0.0)), 1.05 * max(rates)
     )
 
 
