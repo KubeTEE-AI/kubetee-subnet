@@ -153,47 +153,32 @@ class Validator:
         if epoch <= 0 or block // tempo != epoch:
             raise RuntimeError("chain epoch mismatch")
         if self._market_epoch == epoch and self._market is not None:
+            # v3 remains frozen for this epoch. The legacy feed has its own
+            # block clock and must still retry/publish on every cycle.
+            self._publish_legacy_for_market(self._market)
             return self._market
         if self._market_epoch > epoch:
             raise RuntimeError("chain epoch moved backwards")
-        previous = self._last_market or {}
         shared = self.shared_reader(epoch)
-        if (
-            shared is None
-            and self.hippius is not None
-            and self.config.is_publisher
-        ):
-            if self._delegated:
-                # No shared v3: this epoch must skip. Never construct/write
-                # overlapping publishable inputs during the delegated rehearsal.
-                raise RuntimeError(
-                    "delegated reader has no shared epoch snapshot"
-                )
-            # The publisher freezes and publishes exactly this local object;
-            # every other reader retrieves it from S3 by the same epoch key.
-            shared = self._publisher_market(epoch, block, tempo, tao_usd)
-        if shared is None and not self._delegated:
-            shared = self.shared_reader(epoch)
-        if shared is None:
-            raise RuntimeError("no shared v3 market for current chain epoch")
-        if (
+        publisher = (
             self.hippius is not None
             and self.config.is_publisher
             and not self._delegated
-        ):
+        )
+        if shared is None and self.config.is_publisher and self._delegated:
+            # A delegated rehearsal must never become a second publisher.
+            raise RuntimeError("delegated reader has no shared epoch snapshot")
+        if shared is None and publisher:
+            shared = self._publisher_market(epoch, block, tempo, tao_usd)
+        if shared is None and not self._delegated:
+            # Recover the same epoch's raw Targon provenance for v1.3.x too.
+            shared = self.shared_reader(epoch)
+        if shared is None:
+            raise RuntimeError("no shared v3 market for current chain epoch")
+        if publisher:
             self._publisher_targon_raw = shared.get("targon_raw", {})
             self._restore_publisher_lium(shared)
-            # Legacy always advances its block epoch, retried independently
-            # even when the v3 provider observations are all retained/stale.
-            self._publish_legacy(
-                shared["floors"],
-                publish_payout=(
-                    shared.get("epoch") != previous.get("epoch")
-                    or shared.get("source_epochs")
-                    != previous.get("source_epochs")
-                    or self.price_feed.last_tao_usd == previous.get("tao_usd")
-                ),
-            )
+        self._publish_legacy_for_market(shared)
         self._market = shared
         self._market_epoch = epoch
         self._last_chutes_snapshot = dict(shared.get("chutes_snapshot") or {})
@@ -269,6 +254,19 @@ class Validator:
         return shared
 
     # The publisher writes v3 in its epoch-opening read, then reads back.
+
+    def _publish_legacy_for_market(self, shared: dict) -> None:
+        """Best-effort legacy feed refresh, never a v3 pricing dependency."""
+        if (
+            self.hippius is None
+            or not self.config.is_publisher
+            or self._delegated
+        ):
+            return
+        try:
+            self._publish_legacy(shared["floors"])
+        except Exception as exc:  # match _publish_card/_publish_payout
+            log.warning("legacy maximum feed refresh failed: %s", exc)
 
     def _publisher_maximums(self) -> dict[str, float]:
         raw = getattr(self, "_publisher_targon_raw", {})

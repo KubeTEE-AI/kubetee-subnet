@@ -70,7 +70,10 @@ def test_targon_each_row_reads_hourly_else_its_own_maximum_only():
         ],
         "H200": [{"unitRate": None, "maxPrice": 3.5, "targetPrice": 999}],
     }
-    assert targon_fields(rows)["B300"] == {"unitRate": None, "maxPrice": 9.75}
+    assert targon_fields(rows)["B300"] == {
+        "unitRate": 6.01045,
+        "maxPrice": 8,
+    }
     assert targon_fields(rows)["H200"] == {"unitRate": None, "maxPrice": 3.5}
     assert targon_rate({"unitRate": 6.01045, "maxPrice": 9.75}) == 6.01045
     assert targon_rate({"unitRate": None, "maxPrice": 9.75}) == 9.75
@@ -120,8 +123,74 @@ def test_typed_raw_source_group_preserves_selected_raw_not_derived():
             "targetPrice": 999,
         },
     ]
-    assert targon_rate(targon_fields(targon_by_gpu(rows))["B300"]) == 9.75
-    assert targon_fields(targon_by_gpu(rows))["B300"]["maxPrice"] == 9.75
+    assert targon_rate(targon_fields(targon_by_gpu(rows))["B300"]) == 6.01
+    assert targon_fields(targon_by_gpu(rows))["B300"] == {
+        "unitRate": 6.01,
+        "maxPrice": 7,
+    }
+
+
+def test_live_tdx_vm_hourly_wins_over_idle_sku_and_keeps_own_maximum():
+    """API live rows: don't borrow an idle TDX-BM row's lower Maximum."""
+    fields = targon_fields(
+        {
+            "B200": [
+                {"unitRate": None, "maxPrice": 6.5},  # idle bare-metal
+                {"unitRate": 6.0089, "maxPrice": 6.5},  # active TDX VM
+            ],
+            "H200": [
+                {"unitRate": 3.291, "maxPrice": 4.5},  # active TDX VM
+                {"unitRate": None, "maxPrice": 3.5},  # idle bare-metal
+            ],
+        }
+    )
+    assert fields["B200"] == {"unitRate": 6.0089, "maxPrice": 6.5}
+    assert fields["H200"] == {"unitRate": 3.291, "maxPrice": 4.5}
+
+
+def test_positive_targon_hourly_does_not_require_a_maximum():
+    fields = targon_fields({"B300": [{"unitRate": 5, "maxPrice": None}]})
+    assert fields["B300"] == {"unitRate": 5}
+    normalized = targon_fields(fields)
+    assert provider_rates({"providers": {"targon": normalized}}, "targon") == {
+        "B300": 5
+    }
+
+
+def test_no_hourly_uses_tdx_vm_maximum_not_sev_or_bare_metal():
+    fields = targon_fields(
+        {
+            "B300": [
+                {"key": "TDX-BLACKWELL-NVIDIA-B300", "maxPrice": 99},
+                {"key": "TDX-VM-NVIDIA-B300", "maxPrice": 9.75},
+                {"key": "SEV-VM-NVIDIA-B300", "maxPrice": 55},
+            ]
+        }
+    )
+    assert fields["B300"] == {"unitRate": None, "maxPrice": 9.75}
+    multiple = targon_fields(
+        {"B300": [{"key": "TDX-VM-NVIDIA-B300", "maxPrice": 9.75}]}
+    )
+    assert multiple["B300"] == {"unitRate": None, "maxPrice": 9.75}
+
+
+def test_full_snapshot_uses_tdx_vm_fallback_but_legacy_uses_same_row_max():
+    rows = {
+        "B300": [
+            {"key": "TDX-BLACKWELL-NVIDIA-B300", "maxPrice": 99},
+            {"key": "TDX-VM-NVIDIA-B300", "maxPrice": 9.75},
+            {"key": "SEV-VM-Nvidia-B300", "maxPrice": 55},
+        ]
+    }
+    market = build_market_snapshot(
+        1, {"B300": 4}, rows, {}, chutes({"B300": 0}, 1), raw_targon=rows
+    )
+    assert provider_rates(market, "targon") == {"B300": 9.75}
+    assert market_price("B300", market) == pytest.approx(10.725)
+    from targon_payout_feed import _legacy_maximum_rows
+
+    # Legacy is aggregated max across raw rows; no new hourly/markup field.
+    assert _legacy_maximum_rows(rows)["B300"] == 99
 
 
 def test_three_provider_max_plus_ten_then_floor_never_card_clamp():
@@ -369,17 +438,32 @@ def test_publisher_makes_one_epoch_frozen_read_then_publishes_v3_and_v1():
         patch("validator.load_lium_cache_epoch", return_value=-1),
     ):
         first = obj.market_for_epoch(1, 360, 360, 240)
+        obj.chain._subtensor.block = 361
         second = obj.market_for_epoch(1, 361, 360, 240)
         assert first == second
         assert targon.call_count == lium.call_count == 1
         assert s3_read.call_count == 1  # check current epoch publication
         assert first["source_epochs"] == {"targon": 1, "lium": 1, "chutes": 1}
-        keys = [call.args[0] for call in obj.hippius.put_json.call_args_list]
-        assert sorted(keys) == [
+        # Legacy refresh is independent of the frozen v3/API observations.
+        assert [
+            call.args[0] for call in obj.hippius.put_json.call_args_list
+        ] == [
             "market.json",
+            "price-card.json",
             "payout.json",
             "price-card.json",
+            "payout.json",
         ]
+        legacy_calls = [
+            call.args[1]
+            for call in obj.hippius.put_json.call_args_list
+            if call.args[0] == "payout.json"
+        ]
+        assert [payload["epoch"] for payload in legacy_calls] == [360, 361]
+        assert all(
+            payload["per_card_usd"] == {"B300": 9.75, "H200": 10.0}
+            for payload in legacy_calls
+        )
 
 
 def test_restart_inherits_raw_maximum_and_hourly_without_provider_api():
@@ -579,6 +663,30 @@ def test_legacy_v1_card_written_unchanged_until_legacy_cutoff():
     assert payout["epoch"] == 360  # legacy v1: block, not a pricing epoch
     # v1.3.x reads Maximum only: not PAYOUT/h, and not v1.4.0's +10%.
     assert payout["per_card_usd"] == {"B300": 9.75, "H200": 10.0}
+
+
+def test_reader_and_delegate_ignore_legacy_refresh_failures_and_never_write():
+    for delegated in (False, True):
+        obj = _publisher(delegated=delegated)
+        obj.config.is_publisher = not delegated
+        with (
+            patch("validator.fetch_market_snapshot", return_value=snapshot()),
+            patch.object(
+                obj, "_publish_legacy", side_effect=OSError("S3 down")
+            ),
+        ):
+            assert obj.market_for_epoch(1, 360, 360, 240)["epoch"] == 1
+        obj.hippius.put_json.assert_not_called()
+        obj.targon.publish.assert_not_called()
+
+
+def test_cached_legacy_refresh_error_does_not_block_v3_scoring():
+    obj = _publisher()
+    frozen = snapshot()
+    obj._market = frozen
+    obj._market_epoch = 1
+    with patch.object(obj, "_publish_legacy", side_effect=OSError("S3 down")):
+        assert obj.market_for_epoch(1, 361, 360, 240) is frozen
 
 
 def test_publish_payout_retries_each_block_and_preserves_tao_fallback():

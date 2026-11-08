@@ -70,32 +70,58 @@ def targon_rate(row):
 
 
 def targon_fields(raw):
-    """Select highest attenuated PAYOUT/h-or-own-Maximum among a GPU's SKUs."""
+    """Select Targon's highest live PAYOUT/h SKU for each GPU type.
+
+    Use the highest positive PAYOUT/h across SKUs. When no SKU of this GPU
+    type has one, fall back specifically to the TDX VM row's Maximum (not
+    an SEV VM or bare-metal Maximum). Never read targetPrice, borrow a
+    different row's Maximum, or alter a selected rate on read.
+    """
     if not isinstance(raw, dict):
         raise ValueError("Targon grouped raw rows required")
     result = {}
     for key in GPU_TYPES:
         candidates = raw.get(key)
-        for row in (
-            candidates if isinstance(candidates, list) else [candidates]
-        ):
+        if not isinstance(candidates, list):
+            candidates = [candidates]
+        selected = []
+        for row in candidates:
             if not isinstance(row, dict):
                 continue
-            hourly, maximum = _number(row.get("unitRate")), _number(
-                row.get("maxPrice")
-            )
-            selected = {"unitRate": hourly}
+            hourly = _number(row.get("unitRate"))
+            maximum = _number(row.get("maxPrice"))
+            fields = {"unitRate": hourly}
             if maximum is not None:
-                # Optional for v1.4.0 hourly; independently used for legacy.
-                selected["maxPrice"] = maximum
+                fields["maxPrice"] = maximum
             try:
-                targon_rate(selected)
+                rate = targon_rate(fields)
             except ValueError:
                 continue
-            if key not in result or targon_rate(selected) > targon_rate(
-                result[key]
-            ):
-                result[key] = selected
+            selected.append((fields, rate, str(row.get("key", ""))))
+        hourly_rows = [
+            row
+            for row in selected
+            if row[0]["unitRate"] is not None and row[0]["unitRate"] > 0
+        ]
+        if hourly_rows:
+            result[key] = max(hourly_rows, key=lambda row: row[1])[0]
+            continue
+        tdx_vm = [
+            row
+            for row in selected
+            if row[2].upper().startswith("TDX-VM-")
+            and _number(row[0].get("maxPrice")) is not None
+        ]
+        if len(tdx_vm) == 1:
+            result[key] = tdx_vm[0][0]
+        elif not tdx_vm and selected and any(row[2] for row in selected):
+            # Raw SKUs with no eligible TDX VM Maximum cannot participate;
+            # never let SEV/BM become an undocumented alternate fallback.
+            continue
+        elif selected:
+            # Synthetic/already-normalized rows intentionally carry no SKU
+            # key. This keeps the v3 writer/reader codec idempotent.
+            result[key] = max(selected, key=lambda row: row[1])[0]
     return result
 
 
