@@ -89,8 +89,8 @@ def build_html(snapshot: dict) -> str:
 
     # Lium seven-day Earned p75 chips. The header shows whether the
     # market+10% rule is LIVE (card switch on) or display only — the
-    # market values never touch weights until the owner flips the
-    # published card's pricing.lium switch.
+    # In v1.4.0, pricing comes from the shared snapshot. Legacy card switches
+    # are independently published for v1.3.x and do not gate these inputs.
     lium_payout = snapshot.get("lium_payout", {}) or {}
     lium_pricing = bool(snapshot.get("lium_pricing", False))
     _lium_chips = ""
@@ -112,7 +112,7 @@ def build_html(snapshot: dict) -> str:
         else "display only — weights unaffected"
     )
 
-    # Chutes is a read-only verification display: never part of card or weights.
+    # Chutes is one of the three epoch-frozen pricing observations.
     chutes_earnings = snapshot.get("chutes_earnings")
     _chutes_chips = ""
     if isinstance(chutes_earnings, dict):
@@ -135,11 +135,8 @@ def build_html(snapshot: dict) -> str:
                 " · last successful snapshot; retry next epoch"
             )
 
-    # Targon panel header (v1.3.3): the card's pricing.targon switch.
-    targon_pricing = bool(snapshot.get("targon_pricing", True))
-    _targon_mode = (
-        "live — clamps pay toward SN4" if targon_pricing else "off — flat card"
-    )
+    # The v1.4.0 raw fields are frozen inputs, not the separate legacy card's
+    # flags. Do not show "display only" or "flat card" on these three panels.
 
     # Miner table rows — all prices normalized per hour
     hours_per_epoch = float(snapshot.get("hours_per_epoch", 1.2))
@@ -249,7 +246,8 @@ tr:hover td{{background:rgba(79,156,255,0.04)}}
 </div>
 
 <div class="panel full">
-  <h2>Targon SN4 live payout (USD per card-hour) — {pricing_source} · {_targon_mode}</h2>
+  <h2>v1.4.0 Targon input — PAYOUT/h; this SKU's Maximum only when hourly is missing or $0</h2>
+  <div style="font-size:13px;color:var(--muted);margin-bottom:10px">Target price is ignored. Legacy v1.3.x payout.json remains Maximum-only.</div>
   <div class="gpus">
 {_targon_chips}  </div>
 </div>
@@ -262,7 +260,7 @@ tr:hover td{{background:rgba(79,156,255,0.04)}}
 
 <div class="panel full">
   <h2>Chutes SN64 · median earnings — current 24h (USD per GPU-hour)</h2>
-  <div style="font-size:13px;color:var(--muted);margin-bottom:10px">Verification only · once per epoch · no effect on KubeTEE weights or pricing</div>
+  <div style="font-size:13px;color:var(--muted);margin-bottom:10px">Shared v3 market.json input · once per pricing epoch · frozen for every v1.4.0 reader</div>
   <div class="gpus">{_chutes_chips}</div>
   <div style="font-size:12px;color:var(--muted);margin-top:12px">{_chutes_observation}</div>
 </div>
@@ -326,6 +324,9 @@ def build_dashboard_json(snapshot: dict) -> dict:
         "lium_payout": dict(snapshot.get("lium_payout", {}) or {}),
         "lium_pricing": bool(snapshot.get("lium_pricing", False)),
         "chutes_earnings": snapshot.get("chutes_earnings"),
+        "targon_raw": dict(snapshot.get("targon_raw", {}) or {}),
+        "market_source_epochs": dict(snapshot.get("market_source_epochs", {}) or {}),
+        "market_chutes": dict(snapshot.get("market_chutes", {}) or {}),
         "targon_pricing": bool(snapshot.get("targon_pricing", True)),
         "miners": miners,
         "fleet_gpus": dict(snapshot.get("fleet_gpus", {})),

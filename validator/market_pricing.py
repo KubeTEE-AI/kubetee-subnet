@@ -20,9 +20,10 @@ Lium input (owner decision 2026-11-07):
 - source: Lium's public Grafana (`grafana.lium.io`), anonymous read —
   same query the dashboard runs against `executor_price_history`.
 
-The Targon half is the existing `TargonPayoutFeed` resolution (live
-/targets PAYOUT/h `unitRate`; `maxPrice` ("Maximum") and `targetPrice` are
-never read).
+The legacy `TargonPayoutFeed` uses Maximum (`maxPrice`) only. The separate
+v1.4.0 shared snapshot uses /targets PAYOUT/h (`unitRate`) and falls back
+to that SKU's Maximum only when hourly is missing or <= 0. `targetPrice`
+is never read in either path.
 
 v1.3.3 ships this DORMANT (card switch ``pricing.lium`` defaults to false):
 no Lium request is ever made, and `TargonPayoutFeed.effective_card()` stays
@@ -180,7 +181,12 @@ def _cache_path() -> str:
 
 
 def load_lium_cache() -> dict[str, float] | None:
-    """Last known Lium seven-day Earned p75s from the on-disk cache, or None."""
+    """Return last known seven-day Earned p75 rates; the epoch is separate.
+
+    v1.3.3-compatible callers receive the original {class: rate} map only.
+    The v1.4.0 publisher loads the source epoch separately, so an old cache
+    without that epoch cannot become a falsely current observation.
+    """
     try:
         with open(_cache_path(), "r", encoding="utf-8") as handle:
             payload = json.load(handle)
@@ -191,20 +197,33 @@ def load_lium_cache() -> dict[str, float] | None:
     per_card = payload.get("per_card_usd")
     if not isinstance(per_card, dict):
         return None
-    return {
+    rates = {
         str(k).upper(): float(v)
         for k, v in per_card.items()
         if isinstance(v, (int, float)) and float(v) > 0
-    } or None
+    }
+    return rates or None
 
 
-def save_lium_cache(per_card: dict[str, float]) -> None:
-    """Best-effort cache write; never blocks the cycle."""
+def load_lium_cache_epoch() -> int:
+    """Return -1 when no usable pricing epoch has been recorded."""
+    try:
+        with open(_cache_path(), "r", encoding="utf-8") as handle:
+            epoch = json.load(handle).get("source_epoch", -1)
+    except (OSError, json.JSONDecodeError, AttributeError, TypeError):
+        return -1
+    return epoch if type(epoch) is int and epoch > 0 else -1
+
+
+def save_lium_cache(per_card: dict[str, float], epoch: int | None = None) -> None:
+    """Best-effort cache write; ``source_epoch`` preserves legacy calls."""
     try:
         os.makedirs(os.path.dirname(_cache_path()), exist_ok=True)
         with open(_cache_path(), "w", encoding="utf-8") as handle:
             json.dump(
-                {"metric": CACHE_METRIC, "per_card_usd": per_card}, handle
+                {"metric": CACHE_METRIC, "source_epoch": epoch,
+                 "per_card_usd": per_card},
+                handle,
             )
     except OSError:
         pass

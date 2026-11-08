@@ -32,13 +32,26 @@ from miner_scoring import MinerInput, compute_weights
 from price_card import (
     DEFAULT_PRICING,
     build_price_card,
-    require_card,
-    resolve_card,
+    parse_price_card,
 )
 from price_feed import PriceFeed, PriceFeedError
 from rancher_client import RancherClient, RancherEvidenceError, hotkey_of
-from targon_payout_feed import DEFAULT_FLOOR_FRAC, TargonPayoutFeed
+from targon_payout_feed import (
+    DEFAULT_FLOOR_FRAC,
+    DEFAULT_USD_CARD,
+    TargonPayoutFeed,
+    fetch_targon_snapshot_rows,
+    _legacy_maximum_rows,
+)
+from market_pricing import (
+    fetch_lium_per_card_usd, load_lium_cache, load_lium_cache_epoch,
+    save_lium_cache,
+)
 from chutes_earnings_feed import ChutesEarningsFeed
+from market_snapshot import (
+    MARKET_KEY, build_market_snapshot, chutes_for_epoch,
+    fetch_market_snapshot, market_price, provider_rates, targon_fields,
+)
 
 logging.basicConfig(
     level=os.environ.get("LOG_LEVEL", "INFO").upper(),
@@ -85,7 +98,14 @@ class Validator:
         self._last_submitted_epoch = -1
         self._last_set_block: int | None = None
         self._last_targon_payout: dict[str, float] = {}
-        # Read-only dashboard reference: publisher-only, at most once per epoch.
+        # Delegated candidates only read v3, never query providers or write.
+        self._delegated = os.environ.get(
+            "KUBETEE_MARKET_PUBLISH_DELEGATED", ""
+        ).strip().lower() in ("1", "true", "yes")
+        self._market: dict | None = None
+        self._market_epoch = -1
+        self._last_market: dict | None = None
+        # Chutes is one shared pricing observation; publisher caches its value.
         self.chutes_feed: ChutesEarningsFeed | None = None
         self._last_chutes_snapshot: dict | None = None
         if self.hippius is not None:
@@ -93,6 +113,150 @@ class Validator:
             self.chutes_feed = ChutesEarningsFeed(config.taostats_api_key)
             if self._last_chutes_snapshot is not None:
                 self.chutes_feed.last = dict(self._last_chutes_snapshot)
+
+    def shared_reader(self, epoch: int) -> dict | None:
+        """Reader: current-chain-epoch shared snapshot; no independent API."""
+        return fetch_market_snapshot(epoch)
+
+    def targon_chart(self, snapshot: dict) -> dict:
+        return provider_rates(snapshot, "targon")
+
+    def lium_chart(self, snapshot: dict) -> dict:
+        return provider_rates(snapshot, "lium")
+
+    def effective_market(self, snapshot: dict) -> dict[str, float]:
+        prices = {}
+        for gpu in DEFAULT_USD_CARD:
+            try:
+                prices[gpu] = market_price(gpu, snapshot)
+            except ValueError as exc:
+                log.warning("provider missing for %s: %s", gpu, exc)
+        if not prices:
+            raise RuntimeError("shared market has no usable GPU price")
+        return prices
+
+    def market_for_epoch(
+        self, epoch: int, block: int, tempo: int, tao_usd: float
+    ) -> dict:
+        """At most one source sample/published object per pricing epoch.
+
+        Epoch guard blocks cross-epoch reader objects; source freshness is a
+        separate key so a known old provider cache is never mislabeled new.
+        """
+        if epoch <= 0 or block // tempo != epoch:
+            raise RuntimeError("chain epoch mismatch")
+        if self._market_epoch == epoch and self._market is not None:
+            return self._market
+        if self._market_epoch > epoch:
+            raise RuntimeError("chain epoch moved backwards")
+        previous = self._last_market or {}
+        shared = self.shared_reader(epoch)
+        if shared is None and self.hippius is not None and self.config.is_publisher:
+            if self._delegated:
+                # No shared v3: this epoch must skip. Never construct/write
+                # overlapping publishable inputs during the delegated rehearsal.
+                raise RuntimeError("delegated reader has no shared epoch snapshot")
+            # The publisher freezes and publishes exactly this local object;
+            # every other reader retrieves it from S3 by the same epoch key.
+            shared = self._publisher_market(epoch, block, tempo, tao_usd)
+        if shared is None and not self._delegated:
+            shared = self.shared_reader(epoch)
+        if shared is None:
+            raise RuntimeError("no shared v3 market for current chain epoch")
+        if (self.hippius is not None and self.config.is_publisher
+                and not self._delegated):
+            self._publisher_targon_raw = shared.get("targon_raw", {})
+            self._restore_publisher_lium(shared)
+            # Legacy always advances its block epoch, retried independently
+            # even when the v3 provider observations are all retained/stale.
+            self._publish_legacy(shared["floors"], publish_payout=(
+                shared.get("epoch") != previous.get("epoch")
+                or shared.get("source_epochs") != previous.get("source_epochs")
+                or self.price_feed.last_tao_usd == previous.get("tao_usd")
+            ))
+        self._market = shared
+        self._market_epoch = epoch
+        self._last_chutes_snapshot = dict(shared.get("chutes_snapshot") or {})
+        self._last_market = dict(shared)
+        self._last_market["targon_raw"] = getattr(
+            self, "_publisher_targon_raw", {},
+        )
+        return shared
+
+    # Raw Targon provenance lives in the same shared v3 object. Do not cache
+    # it on a separate dashboard key: a restart must not infer raw fields.
+
+    def _restore_publisher_lium(self, shared: dict) -> None:
+        """Cache only observed Lium rates for a later epoch's outage fallback."""
+        if (shared["source_epochs"].get("lium") == shared["epoch"]
+                and load_lium_cache_epoch() != shared["epoch"]):
+            save_lium_cache(provider_rates(shared, "lium"), shared["epoch"])
+
+    def _publisher_market(self, epoch, block, tempo, tao_usd) -> dict:
+        """Freeze source observations once and preserve each source's epoch."""
+        previous = self._last_market or self.shared_reader(epoch - 1) or {}
+        epochs = {provider: epoch for provider in ("targon", "lium", "chutes")}
+        try:
+            raw_targon = fetch_targon_snapshot_rows()
+        except Exception:
+            raw_targon = previous.get("targon_raw") or {}
+            if not raw_targon:
+                raise RuntimeError("Targon unavailable and no retained raw snapshot")
+            epochs["targon"] = previous["source_epochs"]["targon"]
+        self._publisher_targon_raw = raw_targon
+        targon = targon_fields(raw_targon)
+        if self.chutes_feed is None:
+            raise RuntimeError("publisher Chutes feed is not initialized")
+        if previous.get("chutes_snapshot") is not None:
+            self.chutes_feed.last = previous["chutes_snapshot"]
+        chutes = self.chutes_feed.snapshot(block, tempo, tao_usd)
+        if chutes_for_epoch(chutes, epoch) is None:
+            raise RuntimeError("no current or explicitly stale Chutes observation")
+        epochs["chutes"] = chutes["bucket"]
+        cached_lium = load_lium_cache()
+        lium_epoch = load_lium_cache_epoch()
+        try:
+            lium = fetch_lium_per_card_usd()
+            save_lium_cache(lium, epoch)
+        except Exception:
+            if cached_lium is not None:
+                if lium_epoch <= 0:
+                    raise RuntimeError("pre-v1.4.0 Lium cache has no source epoch; refresh required")
+                lium, epochs["lium"] = cached_lium, lium_epoch
+            else:
+                lium = provider_rates(previous, "lium")
+                epochs["lium"] = previous["source_epochs"]["lium"]
+        shared = build_market_snapshot(
+            epoch, self._publisher_floors(), targon, lium, chutes,
+            source_epochs=epochs, raw_targon=raw_targon,
+        )
+        self.hippius.put_json(MARKET_KEY, shared)
+        return shared
+
+    # The publisher writes v3 in its epoch-opening read, then reads back.
+
+    def _publisher_maximums(self) -> dict[str, float]:
+        raw = getattr(self, "_publisher_targon_raw", {})
+        rates = _legacy_maximum_rows(raw) if raw else {}
+        if not rates:
+            raise RuntimeError("no epoch-shared raw Targon Maximum for legacy feed")
+        return rates
+
+    def _publish_legacy(self, floors: dict, publish_payout: bool = True) -> None:
+        """Legacy Maximum-only feed; never copy v1.4.0 pricing inputs."""
+        self._publish_card(
+            self.targon.card(), self._publisher_floors(),
+            self._publisher_pricing(),
+        )
+        per_card = self._publisher_maximums()
+        self._last_targon_payout = per_card
+        if not publish_payout:
+            return
+        self._publish_payout(
+            per_card,
+            tao_usd=self.price_feed.last_tao_usd,
+            alpha_to_tao=self.chain.spot_price() or None,
+        )
 
     def _cache_published_chutes_snapshot(self) -> None:
         """Seed the last-good reference card across publisher restarts."""
@@ -126,9 +290,6 @@ class Validator:
             self._last_chutes_snapshot = dict(result)
         return result
 
-    def _first_cycle(self) -> bool:
-        return self._last_card is None
-
     def run_cycle(self) -> None:
         cfg = self.config
 
@@ -148,34 +309,9 @@ class Validator:
             metrics.record_skip("rancher")
             return
 
-        card, floors, pricing, card_source = self._resolve_card()
-        try:
-            require_card(card_source, self._first_cycle())
-        except Exception as exc:
-            log.error("%s", exc)
-            if self.hippius is None:
-                raise
-        self._last_card = card
-        self._last_floors = floors
-        self._last_pricing = pricing
-        # The feed must clamp against the card the subnet actually
-        # committed this epoch (manual per-class floors when the published
-        # card carries them; else the v1.2.0-equivalent 0.75 x card), and
-        # price in the MODE the card's switches select (v1.3.3: targon
-        # clamp on, lium market off — defaults).
-        self.targon.set_manual_floors(floors)
-        self.targon.set_pricing_flags(pricing)
-
-        effective_card, pricing_source, targon_age = self._targon_card()
-        log.info(
-            "card[%s/%s]=%s",
-            card_source,
-            pricing_source,
-            effective_card,
-        )
-        if floors:
-            log.info("price floors: %s", floors)
-
+        # v1.4.0 prices are resolved below from the epoch-shared raw market.
+        # The publisher additionally calls _publish_legacy(), preserving v1.3
+        # floor/card/switch semantics for validators not yet upgraded.
         # Price feed: live Taostats (cached on 429) + chain, else S3 snapshot.
         published_payout = fetch_published_payout()
         if published_payout:
@@ -237,23 +373,16 @@ class Validator:
             tao_usd,
         )
 
-        # Publish the payout snapshot (owner only) with the price fields
-        # included, so reader validators can fall back to them when Taostats
-        # is down. Deferred from _targon_card because tao_usd + alpha_to_tao
-        # are only known here.
-        if self.hippius is not None and self._last_targon_payout:
-            alpha_to_tao_now = self.chain.spot_price() or None
-            self._publish_payout(
-                self._last_targon_payout,
-                tao_usd=(
-                    tao_usd if tao_usd > 0 else self.price_feed.last_tao_usd
-                ),
-                alpha_to_tao=(
-                    alpha_to_tao_now
-                    if alpha_to_tao_now and alpha_to_tao_now > 0
-                    else None
-                ),
-            )
+        # Resolve once for the cycle: publisher reads shared inputs without
+        # duplicate store reads, and the maximum-only v1 feed uses the same
+        # provider observation provenance retained within this v3 epoch.
+        epoch = self._current_epoch_from_chain()
+        try:
+            market = self.market_for_epoch(epoch, self._epoch(), self._tempo_from_chain(), tao_usd)
+        except (RuntimeError, ValueError) as exc:
+            metrics.record_skip("market")
+            log.warning("skip cycle: pricing observation unavailable: %s", exc)
+            return
 
         registered_hotkeys = {m.hotkey for m in miners}
         metagraph_clusters = [
@@ -323,6 +452,25 @@ class Validator:
             )
 
         tempo = self._tempo_from_chain()
+        try:
+            effective_card = self.effective_market(market)
+        except (RuntimeError, ValueError) as exc:
+            metrics.record_skip("market")
+            log.warning("skip cycle: shared market unusable: %s", exc)
+            return
+        floors = dict(market["floors"])
+        pricing = {"targon": True, "lium": True, "chutes": True}
+        card = self.targon.card()
+        self._last_card = card
+        self._last_floors = floors
+        self._last_pricing = pricing
+        log.info("market prices=%s floors=%s source_epochs=%s",
+                 effective_card, floors, market["source_epochs"])
+        card_source, pricing_source, targon_age = (
+            "published",
+            "shared-three-provider-110-floor",
+            0.0,
+        )
         hours_per_epoch = (tempo * 12) / 3600.0
         try:
             scores = compute_weights(
@@ -411,14 +559,17 @@ class Validator:
                 "tempo": tempo,
                 "hours_per_epoch": hours_per_epoch,
                 "usd_per_alpha": usd_per_alpha,
+                "targon_raw": self._last_market.get("targon_raw", {}),
+                "market_source_epochs": market["source_epochs"],
+                "market_chutes": market["chutes_snapshot"],
                 "chutes_earnings": self._chutes_snapshot(
                     self._epoch(), tempo, tao_usd
                 ),
                 "card": card,
                 "floors": floors or {},
                 "effective_card": effective_card,
-                "targon_payout": self._last_targon_payout or {},
-                "lium_payout": self.targon.lium_snapshot(),
+                "targon_payout": provider_rates(market, "targon"),
+                "lium_payout": provider_rates(market, "lium"),
                 "lium_pricing": bool(pricing.get("lium", False)),
                 "targon_pricing": bool(pricing.get("targon", True)),
                 "chain_emissions": chain_emissions,
@@ -625,6 +776,8 @@ class Validator:
             log.info("dry-run: skip publish payout %s", per_card)
             return
         payload: dict = {
+            # v1 compatibility: this key has always carried the block epoch.
+            # Only new market.json uses block // tempo as its consensus epoch.
             "epoch": self._epoch(),
             "per_card_usd": {k: float(v) for k, v in per_card.items()},
             "published_at": time.time(),

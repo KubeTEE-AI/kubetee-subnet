@@ -36,8 +36,8 @@ def _feed(fetcher=None, floors=None):
 # --- snapshot parsing (tRPC compute[] rows) -------------------------------
 
 
-def test_snapshot_uses_targets_unit_rate_and_never_max_price():
-    """/targets PAYOUT/h is unitRate; null must never fall back to maxPrice."""
+def test_legacy_snapshot_uses_only_maximum_never_hourly():
+    """v1.3.x legacy reads Maximum only; v1.4.0 hourly lives elsewhere."""
     compute = [
         {
             "key": "TDX-VM-NVIDIA-H200",
@@ -51,7 +51,7 @@ def test_snapshot_uses_targets_unit_rate_and_never_max_price():
             "unitRate": 6.09,
             "maxPrice": 9.75,
         },
-        # No hourly payout: Maximum is unrelated and must not be used.
+        # Legacy still reads Maximum when no hourly payout is present.
         {
             "key": "TDX-BLACKWELL-NVIDIA-B200",
             "kind": "gpu",
@@ -63,9 +63,9 @@ def test_snapshot_uses_targets_unit_rate_and_never_max_price():
         # targetPrice must never be read: absent here on purpose
     ]
     per_class = _per_class_from_snapshot(compute)
-    assert per_class["H200"] == pytest.approx(3.0)
-    assert per_class["B300"] == pytest.approx(6.09)
-    assert "B200" not in per_class
+    assert per_class["H200"] == pytest.approx(4.5)
+    assert per_class["B300"] == pytest.approx(9.75)
+    assert per_class["B200"] == pytest.approx(6.5)
     assert "RTX6000" not in per_class or per_class["RTX6000"] > 0
     assert all(
         k in ("H100", "H200", "B200", "B300", "RTX6000") for k in per_class
@@ -73,7 +73,7 @@ def test_snapshot_uses_targets_unit_rate_and_never_max_price():
 
 
 def test_snapshot_collapses_class_variants_to_highest():
-    """Multiple compute types of one GPU class -> highest rate."""
+    """Legacy multiple compute types -> highest Maximum, not hourly."""
     compute = [
         {
             "key": "TDX-VM-NVIDIA-B300",
@@ -95,7 +95,7 @@ def test_snapshot_collapses_class_variants_to_highest():
         },
     ]
     per_class = _per_class_from_snapshot(compute)
-    assert per_class == {"B300": pytest.approx(8.23)}
+    assert per_class == {"B300": pytest.approx(9.75)}
 
 
 def test_snapshot_never_reads_target_price():
@@ -113,7 +113,7 @@ def test_snapshot_never_reads_target_price():
 
 
 def test_targets_hourly_b300_capture_and_requested_floor():
-    """Live TDX-VM PAYOUT/h wins over BLACKWELL and SEV Maximum=9.75."""
+    """Maximum=9.75 retains the v1.3.x legacy feed, not v1.4.0 hourly."""
     compute = [
         {
             "key": "TDX-VM-NVIDIA-B300",
@@ -135,7 +135,7 @@ def test_targets_hourly_b300_capture_and_requested_floor():
         },
     ]
     per_class = _per_class_from_snapshot(compute)
-    assert per_class == {"B300": pytest.approx(6.010450726667784)}
+    assert per_class == {"B300": pytest.approx(9.75)}
     effective, source = _feed(
         fetcher=lambda: per_class, floors={"B300": 9.75}
     ).effective_card()

@@ -458,7 +458,8 @@ def test_dashboard_renders_lium_panel():
     assert "median of rented nodes" not in html_out
     assert "display only" in html_out
     assert "$3.90" in html_out
-    assert "live — clamps pay toward SN4" in html_out
+    assert "PAYOUT/h" in html_out
+    assert "payout.json remains Maximum-only" in html_out
     blob = _dashboard.build_dashboard_json(snapshot)
     assert blob["lium_payout"] == {"H200": 3.9}
     assert blob["lium_pricing"] is False

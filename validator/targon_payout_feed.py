@@ -4,10 +4,10 @@ Reads live per-card USD per GPU class from Targon's snapshot API
 (`stats.targon.com/api/trpc/statistics.getSnapshot` — the same endpoint
 the stats site's /targets page consumes) and clamps the committed GPU
 price card DOWNWARD only (never above the card). Per class, the live
-value is the highest actual miner PAYOUT/h for it (`compute[].unitRate`),
-the same field rendered by Targon's /targets page. Its separately-labelled
-"Maximum" (`maxPrice`) and "Target price" (`targetPrice`) are never read.
-Unsupplied rows with a null hourly rate contribute no live observation.
+value is the highest MAXIMUM PAYOUT for it (`compute[].maxPrice`). This
+compatibility feed is used by v1.3.x validators. The separate v1.4.0 shared
+market uses PAYOUT/h (`unitRate`) or that same SKU's Maximum if hourly is
+missing/zero. "Target price" (`targetPrice`) is never read by either path.
 
 Each class is floored at its manually-committed per-GPU floor (set by
 the subnet owner on the published price card; see `set_manual_floors`),
@@ -91,39 +91,77 @@ def _gpu_class_of(compute_type: str) -> str | None:
 
 
 def _per_class_from_snapshot(compute: list) -> dict[str, float]:
-    """Per-class live $/card/hr from the snapshot's compute[] rows.
+    """Legacy v1.3.x: highest `maxPrice` (MAXIMUM PAYOUT) per GPU class.
 
-    `unitRate` is the highest actual hourly miner payout in that class,
-    rendered as PAYOUT/h on /targets. `maxPrice` (Maximum) and `targetPrice`
-    are separate columns and MUST NOT supply this value. A null rate (no
-    supplied capacity) contributes no live observation; cache resilience is
-    handled one level up. CPU rows are skipped; variants of one class
-    collapse to the highest hourly rate.
+    This compatibility feed never reads PAYOUT/h. v1.4.0's raw rows use a
+    separate market_snapshot parser for hourly-or-own-Maximum semantics.
+    `targetPrice` is never read.
     """
     per_class: dict[str, float] = {}
     for row in compute:
-        if not isinstance(row, dict):
-            continue
-        if str(row.get("kind", "gpu")) != "gpu":
+        if not isinstance(row, dict) or row.get("kind", "gpu") != "gpu":
             continue
         klass = _gpu_class_of(str(row.get("key", "")))
         if klass is None:
             continue
-        rate = row.get("unitRate")
         try:
-            rate = float(rate)
+            rate = float(row.get("maxPrice"))
         except (TypeError, ValueError):
             continue
-        if rate <= 0:
-            continue
-        prev = per_class.get(klass)
-        if prev is None or rate > prev:
+        if rate > 0 and rate > per_class.get(klass, 0.0):
             per_class[klass] = rate
     return per_class
 
 
+def _decode_targon_snapshot(payload: dict) -> dict:
+    """Unwrap the same tRPC envelope used by v1.3.x."""
+    result = payload.get("result") if isinstance(payload, dict) else None
+    data = (result.get("data") if isinstance(result, dict) else None) or payload
+    snapshot = (data.get("json") if isinstance(data, dict) else None) or data
+    if not isinstance(snapshot, dict):
+        raise TargonFeedError("targon snapshot api: unexpected payload")
+    return snapshot
+
+
+def fetch_targon_snapshot_rows() -> dict[str, list[dict]]:
+    """Raw per-SKU rows for the v1.4.0 shared market, without legacy pricing."""
+    request = urllib.request.Request(
+        _TARGON_SNAPSHOT_URL,
+        headers={"Accept": "application/json", "User-Agent": _USER_AGENT},
+        method="GET",
+    )
+    with urllib.request.urlopen(request, timeout=30) as response:
+        payload = json.loads(response.read())
+    snapshot = _decode_targon_snapshot(payload)
+    if not isinstance(snapshot.get("compute"), list):
+        raise TargonFeedError("targon snapshot api: no compute rows")
+    from market_snapshot import targon_by_gpu, targon_fields
+    rows = targon_by_gpu(snapshot["compute"])
+    if not targon_fields(rows):
+        raise TargonFeedError("targon snapshot api: no usable raw fields")
+    return rows
+
+
+def _legacy_maximum_rows(rows: dict[str, list[dict]]) -> dict[str, float]:
+    """v1.3.x Maximum-only projection; hourly must never enter this feed."""
+    result = {}
+    for key, candidates in rows.items():
+        raw_candidates = candidates if isinstance(candidates, list) else [candidates]
+        values = []
+        for row in raw_candidates:
+            try:
+                value = float(row.get("maxPrice"))
+            except (TypeError, ValueError, AttributeError):
+                continue
+            if value > 0:
+                values.append(value)
+        if values:
+            result[key] = max(values)
+    return result
+
+
 def fetch_live_per_card_usd() -> dict[str, float]:
-    """Live $/card/hour per GPU class from the Targon snapshot API."""
+    """Live v1.3.x Maximum payout from the Targon snapshot API."""
     request = urllib.request.Request(
         _TARGON_SNAPSHOT_URL,
         headers={"Accept": "application/json", "User-Agent": _USER_AGENT},
