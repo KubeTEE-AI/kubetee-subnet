@@ -258,10 +258,10 @@ class Reconciler:
                 hk
             )  # Lookup/adjudication only, never new spend.
             return
-        if self.signer is None:
-            self.follow.discard(hk)
-            return
-        if cp.get("last_spent_reference") is None:
+        if (
+            cp.get("last_spent_reference") is None
+            and cp.get("due_allowance_units", 0) == 0
+        ):
             return
         observed = await self.snapshot(hk)
         if observed is None:
@@ -273,13 +273,12 @@ class Reconciler:
         if observed.height - cp["observation_height"] > self.max_backfill:
             self.follow.add(hk)
             raise Pending("cap reminder exceeded bounded-history budget")
-        if cap_spendable(
-            observed.stored, observed.height
-        ) > 0 and observed.stored["balance"] > cp.get(
-            "due_allowance_units", 0
-        ):
-            # A refill must be proven by the existing storage escrow in the
-            # ordinary reconciler path. Never forge a zero-event delta here.
+        if cap_spendable(observed.stored, observed.height) > 0:
+            # Any live positive spending allowance is only a reason to revisit
+            # this identity. The ordinary event-and-raw-balance walk must prove
+            # a positive raw delta before spending. due_allowance_units is a
+            # chained invariant, not a credit floor; the last spend alone does
+            # not prove how much raw balance remains after further mints.
             self.follow.add(hk)
             await self.reconcile(hk)
 
@@ -292,11 +291,14 @@ class Reconciler:
             return pending(hk, "stale/nonleader worker")
         async with lock:
             try:
+                # Retain per-H fencing while reading the final native row.
+                # Releasing between checkpoint and finish created two epochs
+                # that could race a second worker's reserve/rotation read.
                 await self._reconcile_locked(hk)
+                return await self.finish(hk)
             finally:
                 if self.lease is not None:
                     await self.lease.release(hk)
-            return await self.finish(hk)
 
     async def _reconcile_locked(self, hk: str):
         row = await self._row(hk)
@@ -344,17 +346,20 @@ class Reconciler:
             raise Pending(
                 "exact-hotkey key_alias must preserve the chain-observed funding coldkey; pause"
             )
-        if cp["delta_units"] > pallet_units(now.stored, "balance"):
+        if cp["delta_units"] + cp.get("due_allowance_units", 0) > pallet_units(
+            now.stored, "balance"
+        ):
             raise Ineligible("claim exceeds finalized deposit balance")
-        if cp["delta_units"] > 0:
+        if now.height == cp["observation_height"] and cp["delta_units"] > 0:
             if self.signer is None:
                 self.follow.discard(hk)
                 raise Pending("configured signer/preflight paused", 12)
             await self.plan_spend(hk, row, cp, now)
             return
         if now.height == cp["observation_height"]:
-            self.follow.discard(hk)
-            return
+            if cp.get("due_allowance_units", 0) == 0:
+                self.follow.discard(hk)
+                return
         if now.height - cp["observation_height"] > self.max_backfill:
             self.follow.add(hk)
             raise Pending("bounded-history budget; no silent independence")
@@ -367,11 +372,11 @@ class Reconciler:
 
     async def advance(self, hk: str, row: dict, cp: dict, now: DepositState):
         added = 0
-        previous = cp["delta_units"]
+        preexisting_remainder = cp.get("due_allowance_units", 0)
+        previous = cp["delta_units"] + preexisting_remainder
         events_kind = None
         moved_in = 0
         cap_changed = False
-        preexisting_remainder = cp.get("due_allowance_units", 0)
         observed_coldkey = cp["observation_coldkey"]
         for height in range(cp["observation_height"] + 1, now.height + 1):
             block_hash, events = await self.chain.events(height)
@@ -453,12 +458,21 @@ class Reconciler:
         if previous != now.stored["balance"]:
             raise Ineligible("raw chain finality mismatch")
         cap = cap_state(now.stored)
-        if cap_changed and previous > 0 and added > 0:
-            self._check_cap_claim(cp, added, cap, now)
         next_cp = copy.deepcopy(cp)
+        delta_units = cp["delta_units"] + added
+        due_allowance_units = cp.get("due_allowance_units", 0)
+        if cap_changed and cap is None and cp.get("cap") is not None:
+            # A capped remainder cannot silently become uncapped credit after cap
+            # removal. Preserve only newly chain-proven mint. No-mint removal
+            # itself is not a credit and remains safe for later new eligible mints.
+            delta_units = added
+            due_allowance_units = 0
         next_cp.update(
             {
-                "delta_units": added,
+                # delta_units is a claim against raw storage, not only block-local events.
+                # Keep an unspent baseline across zero-delta blocks until its receipt.
+                "delta_units": delta_units,
+                "due_allowance_units": due_allowance_units,
                 "observation_height": now.height,
                 "observation_hash": now.block_hash,
                 "observation_coldkey": observed_coldkey,
@@ -519,8 +533,14 @@ class Reconciler:
         self, hk: str, row: dict, cp: dict, now: DepositState
     ):
         authorized = min(
-            cp["delta_units"], cap_spendable(now.stored, now.height)
+            cp["delta_units"] + cp.get("due_allowance_units", 0),
+            cap_spendable(now.stored, now.height),
         )
+        if 0 < authorized < 1_000_000_000:
+            self.follow.add(hk)
+            raise Pending(
+                "await sufficient cap refill for the chain's minimum spend", 12
+            )
         if authorized <= 0:
             if authorized < 0:
                 raise Pending("pending revision with no newly owned amount")
@@ -598,6 +618,30 @@ class Reconciler:
             cp["observation_coldkey"],
         )
         if found is None:
+            if await self.chain.find_skipped(
+                hk,
+                pending_ref.reference,
+                pending_ref.amount_units,
+                pending["intake_height"],
+            ):
+                next_cp = copy.deepcopy(cp)
+                next_cp["pending"] = None
+                next_cp["delta_units"] = 0
+                next_cp["due_allowance_units"] = cp["delta_units"] + cp.get(
+                    "due_allowance_units", 0
+                )
+                next_cp["due_observation_height"] = cp["observation_height"]
+                next_cp["due_cap"] = cp.get("cap")
+                rejected = await self._conditional(hk, row, cp, next_cp)
+                if rejected["metadata"]["gamma"] != next_cp:
+                    raise Pending(
+                        "skipped intent checkpoint not read back exactly"
+                    )
+                self.follow.add(hk)
+                raise Pending(
+                    "chain skipped exact spend; retained mint for gated refill planning",
+                    12,
+                )
             self.follow.add(hk)
             raise Pending(
                 "original spend uncertain; bounded chain search (never resubmit)",
@@ -641,7 +685,10 @@ class Reconciler:
             {
                 "pending": None,
                 "due_allowance_units": max(
-                    0, cp["delta_units"] - ref.amount_units
+                    0,
+                    cp["delta_units"]
+                    + cp.get("due_allowance_units", 0)
+                    - ref.amount_units,
                 ),
                 "due_observation_height": ref.block_number,
                 "due_cap": cp.get("cap"),

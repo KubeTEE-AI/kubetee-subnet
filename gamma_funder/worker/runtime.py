@@ -280,6 +280,7 @@ class Settings:
             "KUBETEE_GAMMA_KBS_CA",
             "KUBETEE_GAMMA_KBS_CERT",
             "KUBETEE_GAMMA_KBS_KEY",
+            "KUBETEE_GAMMA_KBS_GATEWAY_SERVER_CERT",
             "KUBETEE_GAMMA_KBS_PROXY_SEED",
             "KUBETEE_GAMMA_KBS_CLIENT_CERT",
             "KUBETEE_GAMMA_KBS_CLIENT_KEY",
@@ -355,33 +356,6 @@ class Settings:
 
 from cryptography import x509
 from cryptography.hazmat.primitives import serialization
-
-
-import socket
-import ssl
-
-
-def pinned_gateway_certificate(settings: Settings) -> bytes:
-    ca, cert, key = settings.certificate_files
-    context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH, cafile=ca)
-    outbound = settings.outbound_tls_files()
-    if outbound is None:
-        raise ConfigurationError(
-            "a verified outbound connection needs a dedicated clientAuth leaf"
-        )
-    context.load_cert_chain(*outbound)
-    context.minimum_version = ssl.TLSVersion.TLSv1_2
-    address = urlsplit(settings.management_url)
-    with socket.create_connection(
-        (address.hostname, address.port or 443), 10
-    ) as raw:
-        with context.wrap_socket(raw, server_hostname=address.hostname) as tls:
-            der = tls.getpeercert(True)
-    if hashlib.sha256(der).hexdigest() != settings.gateway_fingerprint:
-        raise ConfigurationError(
-            "gateway TLS certificate does not match measured leaf"
-        )
-    return der
 
 
 def verify_worker_start(
@@ -491,9 +465,7 @@ def scoped_http_client(
 
     context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH, cafile=ca)
     outbound = settings.outbound_tls_files()
-    context.load_cert_chain(
-        *(outbound if outbound is not None else (certificate, key))
-    )
+    context.load_cert_chain(*outbound)
     if gateway_der is None:
         raise ConfigurationError(
             "verified gateway TLS leaf required for worker authentication"
@@ -509,8 +481,14 @@ def scoped_http_client(
     # not by a client-side URL rewrite. SNI and mTLS retain the ClusterIP name.
     # The gateway rejects any externally supplied proof header. Only the socket's
     # peer certificate is accepted; this header is not a substitute identity.
+    from .tls import PinningAsyncTransport
+
     return httpx.AsyncClient(
-        verify=context,
+        transport=PinningAsyncTransport(
+            httpx.AsyncHTTPTransport(verify=context),
+            hostname=urlsplit(settings.management_url).hostname,
+            fingerprint=settings.gateway_fingerprint,
+        ),
         timeout=httpx.Timeout(30, connect=10),
         base_url=settings.management_url,
         headers=headers,
@@ -716,9 +694,20 @@ def create_application(
             )
             peer_der = gateway_der
             if peer_der is None:
-                from cryptography import x509
-
-                peer_der = pinned_gateway_certificate(settings)
+                # The KBS releases this gateway server leaf's public DER after
+                # measured-worker appraisal. An initial preflight socket would
+                # not prove anything about later pooled transport connections.
+                pem = await fetch(env["KUBETEE_GAMMA_KBS_GATEWAY_SERVER_CERT"])
+                peer_der = x509.load_pem_x509_certificate(pem).public_bytes(
+                    serialization.Encoding.DER
+                )
+                if (
+                    hashlib.sha256(peer_der).hexdigest()
+                    != settings.gateway_fingerprint
+                ):
+                    raise ConfigurationError(
+                        "KBS gateway server certificate fingerprint mismatch"
+                    )
             chain = (
                 create_chain(settings, client, signer)
                 if create_chain
@@ -791,6 +780,17 @@ def create_application(
             # interruptions before allocating a new zero reservation/mint spend.
             for hotkey in await native.hotkeys():
                 reconciler.follow.add(hotkey)
+                # Durable intents and unspent intake need immediate reconcile.
+                # Fully drained capped deposits only need the low-rate poll.
+                row = await native.info(hotkey)
+                cp = row.get("metadata", {}).get("gamma", {})
+                if (
+                    cp.get("pending") is None
+                    and not cp.get("delta_units")
+                    and not cp.get("due_allowance_units")
+                    and cp.get("last_spent_reference") is not None
+                ):
+                    reconciler.follow.discard(hotkey)
                 await dispatcher.observation(hotkey, "restart-native-pending")
             app.include_router(internal_router(service))
             # Startup replays all applicable eligible finalized intake before

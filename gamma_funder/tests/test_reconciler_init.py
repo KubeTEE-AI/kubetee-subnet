@@ -185,6 +185,18 @@ async def test_no_spend_recovery_still_uses_exact_receipt_and_never_submits():
 
 
 @pytest.mark.asyncio
+async def test_below_chain_minimum_never_submits_and_never_fabricates_receipt():
+    chain, store = SyntheticChain(), NativeStore()
+    chain.mint(5)
+    await intake(chain, store)
+    r = worker(chain, store)
+    with pytest.raises(Pending, match="minimum spend"):
+        await r.reconcile(HK)
+    assert len(chain.submitted) == 0 and store.credits == 0
+    assert store.row["max_budget"] == "0"
+
+
+@pytest.mark.asyncio
 async def test_crash_after_final_spend_recovery_does_not_resubmit_or_double_credit():
     chain, store = SyntheticChain(), NativeStore()
     chain.mint(1_000_000_000)
@@ -244,9 +256,9 @@ async def test_spend_skipped_means_zero_credit_and_never_same_claim_again():
     chain, store = SyntheticChain(), NativeStore()
     chain.mint(5)
     await intake(chain, store)
-    with pytest.raises(Pending, match="exact-intent lookup"):
+    with pytest.raises(Pending, match="minimum spend"):
         await worker(chain, store).reconcile(HK)
-    assert len(chain.submitted) == 1 and store.credits == 0
-    with pytest.raises(Pending, match="never resubmit"):
+    assert len(chain.submitted) == 0 and store.credits == 0
+    with pytest.raises(Pending, match="minimum spend"):
         await worker(chain, store).reconcile(HK)
-    assert len(chain.submitted) == 1 and store.credits == 0
+    assert len(chain.submitted) == 0 and store.credits == 0

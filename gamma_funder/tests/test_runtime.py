@@ -69,7 +69,8 @@ def environment(tmp_path: Path) -> dict[str, str]:
         "KUBETEE_GAMMA_MODELS": "z-ai/glm-5.3",
         "KUBETEE_GAMMA_MANAGEMENT_BASE_URL": "https://litellm-gateway-mtls.litellm.svc.cluster.local:8443",
         "KUBETEE_GAMMA_KBS_CA": "default/eastwest-ca/ca.pem",
-        "KUBETEE_GAMMA_KBS_CERT": "default/gamma-spend-proxy/tls.crt",
+        "KUBETEE_GAMMA_KBS_CERT": "default/gamma-worker-server/tls.crt",
+        "KUBETEE_GAMMA_KBS_GATEWAY_SERVER_CERT": "default/gamma-gateway-private/tls.crt",
         "KUBETEE_GAMMA_KBS_KEY": "default/gamma-spend-proxy/tls.key",
         "KUBETEE_GAMMA_KBS_PROXY_SEED": "default/gamma-spend-proxy/seed",
         "KUBETEE_GAMMA_KBS_CLIENT_CERT": "default/gamma-worker-client/tls.crt",
@@ -662,7 +663,17 @@ async def test_startup_materializes_current_kbs_paths_in_guest_scratch(
         str(tmp_path / "run" / name)
         for name in ("ca.pem", "tls.crt", "tls.key")
     )
-    assert requested == list(material)
+    # Only its CA/server leaf and outbound client leaf belong in bootstrap.
+    # The gateway server leaf is fetched in create_application; client
+    # materialization is
+    # independently pinned by materialize_kbs_identity using the fourth leaf.
+    assert requested == [
+        "default/eastwest-ca/ca.pem",
+        env["KUBETEE_GAMMA_KBS_CERT"],
+        env["KUBETEE_GAMMA_KBS_KEY"],
+        env["KUBETEE_GAMMA_KBS_CLIENT_CERT"],
+        env["KUBETEE_GAMMA_KBS_CLIENT_KEY"],
+    ]
     assert env["KUBETEE_GAMMA_KBS_PROXY_SEED"] not in requested
     assert __import__("os").environ["KUBETEE_GAMMA_WORKER_CLIENT_PEM"] == str(
         tmp_path / "run" / "client.crt"

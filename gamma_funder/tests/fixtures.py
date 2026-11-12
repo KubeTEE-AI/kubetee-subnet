@@ -8,7 +8,9 @@ from worker.chain import (
     FiscalReceipt,
     PendingReceipt,
     event_parts,
+    matching_events,
     pallet_units,
+    raw_reference,
 )
 from worker.management import ManagementError, StateConflict, exact_money
 from worker.protocol import GENESIS, SettlementRef
@@ -42,6 +44,7 @@ class SyntheticChain:
         )
         self.submitted = []
         self.disconnect: bool | None = False
+        self.reject_next_spend = False
         self.client = self
 
     async def finalized_block(self):
@@ -68,7 +71,22 @@ class SyntheticChain:
             name == "GammaSpent" and a["hotkey"] == self.HK and row is not None
         ):
             row["balance"] -= a["amount"]
-            if row["balance"] == 0:
+            cap = row.get("daily_spend_cap")
+            if cap and a["amount"] > 0:
+                fed_at = a.get("fed_at", self.current + 1)
+                bucket, anchor = cap["bucket"]
+                elapsed = max(0, fed_at - anchor)
+                allowance = min(
+                    cap["cap"], bucket + cap["cap"] * elapsed // 7200
+                )
+                assert (
+                    allowance >= a["amount"]
+                ), "chain cap rejection must be modeled, not forged"
+                cap["bucket"] = [allowance - a["amount"], fed_at]
+            if row["balance"] == 0 and (
+                not row.get("daily_spend_cap")
+                or not row["daily_spend_cap"].get("cap")
+            ):
                 row = None
         elif name == "GammaMoved":
             if a.get("origin_hotkey") == self.HK:
@@ -95,7 +113,7 @@ class SyntheticChain:
                 else {
                     "cap": a["cap"],
                     "bucket": [
-                        a.get("bucket", 0),
+                        a.get("bucket", a["cap"]),
                         a.get("fed_at", self.current + 1),
                     ],
                 }
@@ -150,7 +168,21 @@ class SyntheticChain:
 
     async def execute_spend(self, hk, amount, reference, signer):
         balance = self.blocks[self.current]["row"]["balance"]
-        success = 0 < amount <= balance and amount >= 1_000_000_000
+        stored_cap = self.blocks[self.current]["row"].get("daily_spend_cap")
+        allowance = balance
+        if stored_cap:
+            bucket, anchor = stored_cap["bucket"]
+            allowance = stored_cap["cap"]
+            allowance = min(
+                allowance,
+                bucket + allowance * max(0, self.current + 1 - anchor) // 7200,
+            )
+        success = (
+            0 < amount <= min(balance, allowance) and amount >= 1_000_000_000
+        )
+        if self.reject_next_spend:
+            success = False
+            self.reject_next_spend = False
         attrs = {
             "hotkey": hk,
             "coldkey": COLD,
@@ -217,6 +249,29 @@ class SyntheticChain:
                     )
         return None
 
+    async def find_skipped(self, hk, reference, amount, first):
+        for n in range(first, self.current + 1):
+            for _, name, a in matching_events(self.blocks[n]["events"], hk):
+                if (
+                    name == "GammaSpendSkipped"
+                    and a["hotkey"] == hk
+                    and a["spender"] == REAL
+                    and a["amount"] == amount
+                    and raw_reference(a.get("reference")) == reference.lower()
+                    and (
+                        self.blocks[n]["row"]["balance"]
+                        if self.blocks[n]["row"]
+                        else 0
+                    )
+                    == (
+                        self.blocks[n - 1]["row"]["balance"]
+                        if self.blocks[n - 1]["row"]
+                        else 0
+                    )
+                ):
+                    return True
+        return False
+
 
 class NativeStore:
     """Native exact-H fixture, compare-and-swap keyed checkpoint; no receipt DB."""
@@ -228,7 +283,8 @@ class NativeStore:
         self.interrupt = False
         self.fail_credit_once = False
 
-    async def key(self, hk, copy_ok=False):
+    async def key(self, hk):
+        # Every read is detached: a caller must never mutate native checkpoint state outside CAS.
         return copy.deepcopy(self.row) if hk == self.hk else None
 
     async def gamma_identities(self):

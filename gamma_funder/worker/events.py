@@ -13,7 +13,13 @@ from typing import Any
 from .chain import ChainError, event_parts
 
 LOG = logging.getLogger(__name__)
-TRIGGERS = {"GammaMinted", "GammaMoved", "GammaDepositSpenderSet"}
+TRIGGERS = {
+    "GammaMinted",
+    "GammaMoved",
+    "GammaDepositSpenderSet",
+    # No event-side cap guarantee: storage still fences exact allowances.
+    "GammaDepositDailySpendCapSet",
+}
 RETRYABLE_ERRORS = (ChainError, ConnectionError, TimeoutError, OSError)
 
 

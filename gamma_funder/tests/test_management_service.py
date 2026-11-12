@@ -111,7 +111,7 @@ async def test_internal_pending_reason_projects_to_public_gateway_schema():
         os.environ.get(
             "KUBETEE_GAMMA_GATEWAY_OVERLAY",
             Path.home()
-            / ".config/superpowers/worktrees/litellm/agent-gamma-guide/.git/modules/litellm/tools/kubetee-litellm-overlay/kubetee_gamma_claim.py",
+            / ".config/superpowers/worktrees/litellm/gamma-mtls-release/tools/kubetee-litellm-overlay/kubetee_gamma_claim.py",
         )
     )
     if not overlay.is_file():
@@ -140,6 +140,7 @@ async def test_internal_pending_reason_projects_to_public_gateway_schema():
     app.include_router(internal_router(service))
     # Use real worker ASGI and signature verification. Raw-key issuance must
     # use the gateway's narrow in-process client, never an external HTTP API.
+    sys.path.insert(0, str(overlay.parent))
     import kubetee_gamma_management as native_management
     from kubetee_gamma_private_mtls import InProcessIssueClient
 

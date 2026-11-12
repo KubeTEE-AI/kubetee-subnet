@@ -243,6 +243,32 @@ class GammaChain:
                     )
         return None
 
+    async def find_skipped(
+        self,
+        hotkey: str,
+        reference: str,
+        amount_units: int,
+        first: int,
+    ) -> bool:
+        """A pallet skip is definitive rejection, never a settlement receipt."""
+        final = await self.client.finalized_block()
+        if final - max(1, first) >= self.max_backfill:
+            return False
+        for height in range(max(1, first), final + 1):
+            _, events = await self.events(height)
+            for _, name, attributes in matching_events(events, hotkey):
+                if (
+                    name == "GammaSpendSkipped"
+                    and str(attributes.get("spender")) == self.real_spender
+                    and raw_reference(attributes.get("reference"))
+                    == reference.lower()
+                    and pallet_units(attributes) == amount_units
+                    and await self.raw_at(hotkey, height - 1)
+                    == await self.raw_at(hotkey, height)
+                ):
+                    return True
+        return False
+
     async def execute_spend(
         self, hotkey: str, units: int, reference: str, signer
     ):

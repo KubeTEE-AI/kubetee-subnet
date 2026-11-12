@@ -29,7 +29,7 @@ ALIEN = "5FzVQ8vH4nfFocVvpL4fVZGzSVaPMFFFGNfPCdY6P5puxy"
 
 @pytest.mark.asyncio
 async def test_real_redis_lease_fences_independent_reconciler_replicas():
-    """Disposable local Redis only; no chain requests, signatures, or gateway."""
+    """Explicit real Redis probe; no chain requests, signatures, or gateway."""
     import os
     import redis.asyncio
     from worker.lease import RedisHotkeyLease
@@ -39,32 +39,34 @@ async def test_real_redis_lease_fences_independent_reconciler_replicas():
         pytest.skip("explicit Redis integration requires GAMMA_REDIS_TEST_URL")
     redis = redis.asyncio.from_url(url)
     first = second = None
+    lease_key = "kubetee:gamma:reconciler-lease:v1:" + HK
     try:
-        await redis.flushdb()
+        # Test-owned exact hotkey only. Never flush a shared Redis database.
+        await redis.delete(lease_key, lease_key + ":stale-competitor")
         first = RedisHotkeyLease(redis, "replica-one")
         second = RedisHotkeyLease(redis, "replica-two")
+        assert first._key(HK) == second._key(HK) == lease_key
         assert await first.acquire(HK)
-        # Independent instance id bypasses this instance's self re-entrant map;
-        # the contested request must reach Redis, not a fixture-local lock.
+        # The second replica has its own random ownership token. The real,
+        # bounded ten-second contention check must reach Redis.
         assert not await second.acquire(HK)
-        # The losing replica's twelve-second retry budget consumes part of the
-        # original sixty-second lease; never assert an exact TTL after that wait.
-        assert 0 < await redis.ttl(first._key(HK)) <= 60
+        assert 0 < await redis.ttl(lease_key) <= 60
+        # Cross the first twenty-second heartbeat: TTL must be refreshed.
+        await asyncio.sleep(21)
+        assert 40 < await redis.ttl(lease_key) <= 60
         await first.release(HK)
         assert await second.acquire(HK)
         await second.release(HK)
+        assert not await redis.exists(lease_key)
     finally:
-        if first is not None:
-            for task in list(first.owned.values()):
-                task.cancel()
-            await asyncio.gather(*first.owned.values(), return_exceptions=True)
-        if second is not None:
-            for task in list(second.owned.values()):
-                task.cancel()
-            await asyncio.gather(
-                *second.owned.values(), return_exceptions=True
-            )
-        await redis.flushdb()
+        for lease in (first, second):
+            if lease is not None:
+                for task in list(lease.owned.values()):
+                    task.cancel()
+                await asyncio.gather(
+                    *lease.owned.values(), return_exceptions=True
+                )
+        await redis.delete(lease_key)
         await redis.aclose()
 
 
@@ -122,8 +124,17 @@ async def test_finalized_mint_reserves_settles_adds_exact_credit_and_dedupes():
     chain, native = SyntheticChain(), NativeStore()
     chain.mint(10_000_000_000)
     management = Management(native, "https://native.invalid", "synthetic")
+    lease = LiveLease()
+    lease.released_during_finish = False
+    original_release = lease.release
+
+    async def observe_release(hotkey):
+        lease.released_during_finish = native.row["max_budget"] != "10.0"
+        await original_release(hotkey)
+
+    lease.release = observe_release
     reconciler = Reconciler(
-        chain, management, None, signer=object(), lease=LiveLease()
+        chain, management, None, signer=object(), lease=lease
     )
     service = WorkerService(
         chain,
@@ -138,6 +149,7 @@ async def test_finalized_mint_reserves_settles_adds_exact_credit_and_dedupes():
     assert native.row["key_alias"] == COLD + "-" + HK.lower()
     assert exact_money(native.row["max_budget"]) == 10_000_000_000
     assert native.credits == 1 and len(chain.submitted) == 1
+    assert lease.released_during_finish is False
     assert await stream.dispatch_decoded(chain.current, root, rows) == 0
     assert native.credits == 1 and len(chain.submitted) == 1
     assert reconciler.follow == set() and dispatcher.tasks == {}
