@@ -98,7 +98,9 @@ async def test_separate_worker_reserves_credits_and_never_returns_raw_key():
 
 
 @pytest.mark.asyncio
-async def test_internal_pending_reason_projects_to_public_gateway_schema():
+async def test_internal_pending_reason_projects_to_public_gateway_schema(
+    monkeypatch,
+):
     import importlib.util
     from fastapi import FastAPI
     from worker.reconciler import Reconciler
@@ -118,6 +120,8 @@ async def test_internal_pending_reason_projects_to_public_gateway_schema():
         pytest.skip(
             "set KUBETEE_GAMMA_GATEWAY_OVERLAY for the cross-repository boundary test"
         )
+    # The claim handler imports sibling overlay modules by name.
+    monkeypatch.syspath_prepend(str(overlay.parent))
     spec = importlib.util.spec_from_file_location(
         "gamma_pending_boundary", overlay
     )

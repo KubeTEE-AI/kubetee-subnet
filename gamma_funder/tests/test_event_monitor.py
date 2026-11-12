@@ -226,6 +226,92 @@ async def test_move_without_spender_disputes_no_initial_event_credit():
 
 
 @pytest.mark.asyncio
+async def test_cap_change_without_spender_field_reconciles_only_a_known_row():
+    """The pallet's GammaDepositDailySpendCapSet has no spender attribute."""
+    chain, native = SyntheticChain(), NativeStore()
+    reconciler = Reconciler(
+        chain,
+        Management(native, "https://native.invalid", "synthetic"),
+        None,
+        signer=None,
+        lease=LiveLease(),
+    )
+    service = WorkerService(
+        chain,
+        chain.finalized_snapshot,
+        reconciler,
+        certificate_fingerprint="a" * 64,
+        ready=False,
+    )
+    stream = EventStream(ObservationDispatcher(service, reconciler))
+    # No mint yet: a cap event alone never creates a key identity.
+    chain.advance(
+        "GammaDepositDailySpendCapSet",
+        hotkey=HK,
+        coldkey=COLD,
+        cap=None,
+        daily_spend_cap=None,
+    )
+    root, rows = await chain.events(chain.current)
+    assert await stream.dispatch_decoded(chain.current, root, rows) == 0
+    assert native.row is None
+    chain.mint(0)
+    root, rows = await chain.events(chain.current)
+    await service.reconciler.prepare_observation(HK)
+    assert await stream.dispatch_decoded(chain.current, root, rows) == 1
+    chain.advance(
+        "GammaDepositDailySpendCapSet",
+        hotkey=HK,
+        coldkey=COLD,
+        cap=1_000_000_000,
+        daily_spend_cap=1_000_000_000,
+    )
+    root, rows = await chain.events(chain.current)
+    assert "spender" not in rows[0]["event"]["attributes"]
+    assert await stream.dispatch_decoded(chain.current, root, rows) == 1
+    assert exact_money(native.row["max_budget"]) == 0
+    assert chain.submitted == []
+
+
+@pytest.mark.asyncio
+async def test_two_events_in_one_finalized_block_are_both_seen_once():
+    from fixtures import event
+
+    chain, native = SyntheticChain(), NativeStore()
+    reconciler = Reconciler(
+        chain,
+        Management(native, "https://native.invalid", "synthetic"),
+        None,
+        signer=None,
+        lease=LiveLease(),
+    )
+    service = WorkerService(
+        chain,
+        chain.finalized_snapshot,
+        reconciler,
+        certificate_fingerprint="a" * 64,
+        ready=False,
+    )
+    stream = EventStream(ObservationDispatcher(service, reconciler))
+    chain.mint(0)
+    chain.blocks[chain.current]["events"].append(
+        event(
+            "GammaDepositDailySpendCapSet",
+            hotkey=HK,
+            coldkey=COLD,
+            daily_spend_cap=None,
+        )
+    )
+    root, rows = await chain.events(chain.current)
+    assert len(rows) == 2
+    await service.reconciler.prepare_observation(HK)
+    assert await stream.dispatch_decoded(chain.current, root, rows) == 2
+    # The same finalized block delivered again is not a second observation.
+    assert await stream.dispatch_decoded(chain.current, root, rows) == 0
+    assert exact_money(native.row["max_budget"]) == 0
+
+
+@pytest.mark.asyncio
 async def test_disabled_spend_reserves_zero_and_allows_claim_later():
     chain, native = SyntheticChain(), NativeStore()
     chain.mint(3_000_000_000)

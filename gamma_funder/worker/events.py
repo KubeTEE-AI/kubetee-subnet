@@ -20,6 +20,10 @@ TRIGGERS = {
     # No event-side cap guarantee: storage still fences exact allowances.
     "GammaDepositDailySpendCapSet",
 }
+# Only these pallet events carry a `spender` field. GammaMoved and
+# GammaDepositDailySpendCapSet do not, so they can never match a spender
+# filter; they are admitted only for a hotkey that already has a row.
+SPENDER_EVENTS = {"GammaMinted", "GammaDepositSpenderSet"}
 RETRYABLE_ERRORS = (ChainError, ConnectionError, TimeoutError, OSError)
 
 
@@ -195,16 +199,11 @@ class EventStream:
                 continue
             reconciler = getattr(self.client, "reconciler", None)
             if reconciler is not None:
-                # A move has no spender. Storage proof is authoritative;
-                # moved-to rows are established by their first mint, never
-                # created from an unauthenticated move alone.
+                # A move or cap change has no spender. Storage proof is
+                # authoritative; rows are established by their first mint,
+                # never created from a spender-less event alone.
                 if (
-                    name == "GammaMoved"
-                    and await reconciler._row(hotkey) is None
-                ):
-                    continue
-                if (
-                    name != "GammaMoved"
+                    name in SPENDER_EVENTS
                     and attrs.get("spender") != reconciler.chain.real_spender
                 ):
                     continue
