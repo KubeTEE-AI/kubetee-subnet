@@ -48,10 +48,6 @@ jobs:
     name: Build and sign immutable image
     needs: test
     runs-on: ubuntu-22.04
-    permissions:
-      contents: read
-      packages: write
-      id-token: write
     env:
       REGISTRY: ghcr.io
       IMAGE_NAME: kubetee-ai/gamma-funder
@@ -89,7 +85,10 @@ jobs:
         run: echo "${{ github.token }}" | docker login ghcr.io -u KubeTEE-AI --password-stdin
       - name: Build candidate from audited locked source
         id: build
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
         run: |
+          test -n "$TAG" || { echo 'Selected immutable release tag missing'; exit 1; }
           if [ "$PUBLISH" = "true" ]; then OUTPUT=--push; else OUTPUT=--load; fi
           docker buildx build --platform linux/amd64 \
             -f gamma_funder/Dockerfile \
@@ -99,7 +98,10 @@ jobs:
         name: Record immutable image digest
         run: echo "digest=$(jq -r '."containerimage.digest"' /tmp/gamma-image-metadata.json)" >> "$GITHUB_OUTPUT"
       - name: Test exact built image starts as unprivileged user and stays fail-closed
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
         run: |
+          test -n "$TAG" || { echo 'Selected image tag missing at test step'; exit 1; }
           docker run --rm --entrypoint python "${REGISTRY}/${IMAGE_NAME}:${TAG}" -c 'import os,worker.events,worker.runtime,worker.reconciler,worker.service; assert os.getuid() == 65532; assert os.environ["KUBETEE_GAMMA_SPEND_ENABLED"] == "0"; print("candidate image imports and defaults verified")'
       - name: Sign image and create signed provenance
         if: env.PUBLISH == 'true'
