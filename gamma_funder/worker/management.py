@@ -74,8 +74,10 @@ def validate_identity(row: dict, hotkey: str, token_id: str) -> None:
     coldkey = (md.get("gamma") or {}).get("observation_coldkey")
     if not isinstance(coldkey, str) or not coldkey:
         raise ManagementError("chain-verified Gamma funding coldkey absent")
-    if row.get("key_alias") != coldkey:
-        raise ManagementError("key_alias must match GammaDeposits.coldkey")
+    if row.get("key_alias") != coldkey + "-" + hotkey.lower():
+        raise ManagementError(
+            "key_alias must match observed GammaDeposits.coldkey and exact hotkey"
+        )
     # Never erase/access-widen these existing native grants during credit calls.
     for field in (
         "models",
@@ -216,7 +218,9 @@ class Management:
                 "hotkey_ss58": hotkey,
                 "checkpoint": checkpoint,
                 # Alias from verified GammaDeposits.coldkey, never from claimant.
-                "key_alias": checkpoint["observation_coldkey"],
+                "key_alias": checkpoint["observation_coldkey"]
+                + "-"
+                + hotkey.lower(),
                 "target_permissions": target_permissions
                 or (
                     None

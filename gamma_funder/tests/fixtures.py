@@ -272,7 +272,7 @@ class NativeStore:
             return self.row
         self.row = {
             "token_id": hashlib.sha256(b"synthetic-key").hexdigest(),
-            "key_alias": state.stored["coldkey"],
+            "key_alias": state.stored["coldkey"] + "-" + hk.lower(),
             "max_budget": "0",
             "spend": "0",
             "models": ["selected-model"],
@@ -281,7 +281,7 @@ class NativeStore:
             "metadata": {
                 "gamma_network": "finney",
                 "gamma_netuid": 90,
-                "gamma_hotkey": hk,
+                "gamma_hotkey": self.hk,
                 "gamma": base_checkpoint(state, quality=quality),
             },
             "version": 1,
@@ -292,7 +292,7 @@ class NativeStore:
         assert self.row is None
         self.row = {
             "token_id": hashlib.sha256(b"synthetic-key").hexdigest(),
-            "key_alias": cp["observation_coldkey"],
+            "key_alias": cp["observation_coldkey"] + "-" + hk.lower(),
             "max_budget": "0",
             "spend": "0",
             "models": ["selected-model"],

@@ -91,6 +91,8 @@ async def test_separate_worker_reserves_credits_and_never_returns_raw_key():
     assert (
         store.row["key_alias"]
         == store.row["metadata"]["gamma"]["observation_coldkey"]
+        + "-"
+        + store.row["metadata"]["gamma_hotkey"].lower()
     )
     assert "api_key" not in json.dumps(payload)
 
@@ -113,8 +115,6 @@ async def test_internal_pending_reason_projects_to_public_gateway_schema():
         )
     )
     if not overlay.is_file():
-        import pytest
-
         pytest.skip(
             "set KUBETEE_GAMMA_GATEWAY_OVERLAY for the cross-repository boundary test"
         )
@@ -138,17 +138,43 @@ async def test_internal_pending_reason_projects_to_public_gateway_schema():
     )
     app = FastAPI()
     app.include_router(internal_router(service))
-    # Use real worker ASGI and signature verification; no private-route shortcut.
+    # Use real worker ASGI and signature verification. Raw-key issuance must
+    # use the gateway's narrow in-process client, never an external HTTP API.
+    import kubetee_gamma_management as native_management
+    from kubetee_gamma_private_mtls import InProcessIssueClient
+
+    fixture_path = str(
+        Path(overlay).parent.parent.parent
+        / "tests/test_litellm/tools/kubetee-litellm-overlay/test_kubetee_gamma_management.py"
+    )
+    fixture_spec = importlib.util.spec_from_file_location(
+        "gamma_native_fixture", fixture_path
+    )
+    if fixture_spec is None or fixture_spec.loader is None:
+        raise ImportError("matching gateway fixture loader unavailable")
+    native_fixture = importlib.util.module_from_spec(fixture_spec)
+    fixture_spec.loader.exec_module(native_fixture)
+    management = native_management.GammaManagement(
+        proxy=native_fixture.SyntheticStore(),
+        certificate_fingerprint="ab" * 32,
+        proxy_ip="127.0.0.1",
+        models=["selected-model"],
+    )
+    native_issue = InProcessIssueClient(management)
+
+    async def authentic_worker(*args, **kwargs):
+        return "native-grant:0000000000000000"
+
+    native_issue.issue = authentic_worker
+    with pytest.raises(TypeError):
+        InProcessIssueClient(object())
     worker = claim.KubeTEEGammaClaimHandler(
         claim.PrivateWorkerResponse(
             AsyncClient(
                 transport=ASGITransport(app=app),
                 base_url="https://worker.invalid",
             ),
-            AsyncClient(
-                transport=ASGITransport(app=FastAPI()),
-                base_url="https://native.invalid",
-            ),
+            native_issue,
             {"x-kubetee-worker-proof": proof},
         ),
         authority=claim.MemoryAuthority(),
@@ -162,6 +188,7 @@ async def test_internal_pending_reason_projects_to_public_gateway_schema():
     real_signer = SigningKeypair.create_from_mnemonic(
         SigningKeypair.generate_mnemonic()
     )
+    chain.HK = real_signer.ss58_address
 
     def verify_signer(message, signature, hotkey):
         assert hotkey == real_signer.ss58_address

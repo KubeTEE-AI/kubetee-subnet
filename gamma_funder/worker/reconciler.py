@@ -317,9 +317,10 @@ class Reconciler:
             raise Pending(
                 "first live observed event must establish pending identity"
             )
-        if cp["pending"] and row["key_alias"] != cp["observation_coldkey"]:
+        expected_alias = cp["observation_coldkey"] + "-" + hk.lower()
+        if cp["pending"] and row["key_alias"] != expected_alias:
             raise Ineligible(
-                "immutable pending alias differs from observed funding coldkey"
+                "immutable pending alias differs from observed funding coldkey and exact hotkey"
             )
         if cp["pending"]:
             await self.recover(hk, row)
@@ -339,9 +340,9 @@ class Reconciler:
             return
         if str(now.stored["spender"]) != self.chain.real_spender:
             raise Ineligible("wrong service spender")
-        if row["key_alias"] != cp["observation_coldkey"]:
+        if row["key_alias"] != expected_alias:
             raise Pending(
-                "key_alias migrates at claim from chain-observed source ownership; pause"
+                "exact-hotkey key_alias must preserve the chain-observed funding coldkey; pause"
             )
         if cp["delta_units"] > pallet_units(now.stored, "balance"):
             raise Ineligible("claim exceeds finalized deposit balance")
@@ -678,9 +679,10 @@ class Reconciler:
     async def finish(self, hk: str) -> PublicResult:
         row = await self._row(hk)
         cp = row.get("metadata", {}).get("gamma") or {}
-        if row["key_alias"] != cp["observation_coldkey"]:
+        if row["key_alias"] != cp["observation_coldkey"] + "-" + hk.lower():
             raise Pending(
-                "key_alias migrates at claim; identity remains exact-H", 12
+                "exact-hotkey key_alias must preserve the chain-observed funding coldkey; pause",
+                12,
             )
         validate_identity(row, hk, row["token_id"])
         if cp.get("pending"):

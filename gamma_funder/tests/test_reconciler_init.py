@@ -16,7 +16,7 @@ from worker.chain import ChainError
 
 async def intake(chain, store, quality="minted_pending"):
     return await store.observe_fresh_event(
-        HK, chain.finalized(), quality=quality
+        getattr(chain, "HK", store.hk), chain.finalized(), quality=quality
     )
 
 
@@ -36,12 +36,13 @@ async def test_paused_observation_never_credits_or_spends():
     assert (
         store.row["key_alias"]
         == store.row["metadata"]["gamma"]["observation_coldkey"]
+        + "-"
+        + store.row["metadata"]["gamma_hotkey"].lower()
     )
     cp = store.row["metadata"]["gamma"]
     assert cp["delta_units"] == 2_000_000_000
 
 
-@pytest.mark.asyncio
 @pytest.mark.asyncio
 async def test_cross_coldkey_settlement_receipt_never_grants_credit():
     chain, store = SyntheticChain(), NativeStore()
@@ -90,11 +91,56 @@ async def test_coldkey_is_fast_alias_but_hotkey_is_identity():
     assert (
         store.row["key_alias"]
         == store.row["metadata"]["gamma"]["observation_coldkey"]
+        + "-"
+        + store.row["metadata"]["gamma_hotkey"].lower()
     )
     assert store.row["metadata"]["gamma_hotkey"] == HK
-    with pytest.raises(Pending, match="migrates"):
+    with pytest.raises(Pending, match="pause"):
         store.row["key_alias"] = ALIEN
         await Reconciler(chain, None, store, signer=None).reconcile(HK)
+
+
+@pytest.mark.asyncio
+async def test_one_coldkey_funds_two_real_same_length_hotkeys_independently():
+    second_hotkey = "5E7G3rNBsLkneUmrDAhYUo1KRu2MrTMXivYX5vbWLcMUn3de"
+    assert len(second_hotkey) == len(HK) == 48
+
+    async def funded_identity(hotkey, units):
+        chain = SyntheticChain()
+        chain.HK = hotkey
+        chain.mint(units, hk=hotkey)
+        store = NativeStore(hotkey)
+        await intake(chain, store)
+        await worker(chain, store).reconcile(hotkey)
+        return chain, store
+
+    first_chain, first_store = await funded_identity(HK, 1_000_000_000)
+    second_chain, second_store = await funded_identity(
+        second_hotkey, 2_000_000_000
+    )
+    for hotkey, units, chain, store in (
+        (HK, 1_000_000_000, first_chain, first_store),
+        (second_hotkey, 2_000_000_000, second_chain, second_store),
+    ):
+        expected_alias = (
+            store.row["metadata"]["gamma"]["observation_coldkey"]
+            + "-"
+            + hotkey.lower()
+        )
+        assert store.row["metadata"]["gamma_hotkey"] == hotkey
+        assert store.row["key_alias"] == expected_alias
+        assert store.row["max_budget"] == str(units / 1_000_000_000)
+        assert len(chain.submitted) == 1
+        assert store.credits == 1
+        result = await worker(chain, store).reconcile(hotkey)
+        assert (
+            result.reconciliation_reference
+            == store.row["metadata"]["gamma"]["last_spent_reference"]
+        )
+
+    # The two synthetic identities share a coldkey but not credentials or credit.
+    assert first_store.row["key_alias"] != second_store.row["key_alias"]
+    assert second_hotkey not in first_store.row["key_alias"]
 
 
 @pytest.mark.asyncio

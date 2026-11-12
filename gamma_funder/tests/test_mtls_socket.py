@@ -107,6 +107,8 @@ async def test_mtls_reconcile_accepts_and_authenticates_transport(tmp_path):
         assert (
             store.row["key_alias"]
             == store.row["metadata"]["gamma"]["observation_coldkey"]
+            + "-"
+            + store.row["metadata"]["gamma_hotkey"].lower()
         )
         # Even with a forged proof header, both previously untrusted force-deny
         # identities remain impossible when the server DER is different.

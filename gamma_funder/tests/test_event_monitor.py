@@ -135,7 +135,7 @@ async def test_finalized_mint_reserves_settles_adds_exact_credit_and_dedupes():
     stream = EventStream(dispatcher)
     root, rows = await chain.events(chain.current)
     assert await stream.dispatch_decoded(chain.current, root, rows) == 1
-    assert native.row["key_alias"] == COLD
+    assert native.row["key_alias"] == COLD + "-" + HK.lower()
     assert exact_money(native.row["max_budget"]) == 10_000_000_000
     assert native.credits == 1 and len(chain.submitted) == 1
     assert await stream.dispatch_decoded(chain.current, root, rows) == 0
