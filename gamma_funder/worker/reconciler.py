@@ -16,10 +16,12 @@ from typing import Any, Optional
 
 from .chain import matching_events, pallet_units, raw_reference
 from .management import (
+    ManagementError,
     StateConflict,
     amount,
     exact_money,
-    remaining_units,
+    remaining,
+    usage,
     validate_identity,
 )
 from .protocol import (
@@ -77,6 +79,17 @@ def cap_spendable(row: dict, now: int) -> int:
     )
 
 
+MAX_RECEIPTS = 100
+
+
+def native_representable(units: int) -> bool:
+    """LiteLLM stores max_budget as a float; totals must survive it exactly."""
+    try:
+        return exact_money(float(Decimal(units) / 10**9)) == units
+    except ManagementError:
+        return False
+
+
 def base_checkpoint(deposit: DepositState, *, quality: str) -> dict:
     row = deposit.stored
     if quality not in {"minted_pending", "donor", "delegated"}:
@@ -132,7 +145,7 @@ def hydrate(row: dict, cp: dict, *, hk: str) -> dict:
             raise ValueError()
         if (
             not isinstance(cp["receipt_ids"], list)
-            or len(cp["receipt_ids"]) > 100
+            or len(cp["receipt_ids"]) > MAX_RECEIPTS
         ):
             raise ValueError()
         for marker in cp["receipt_ids"]:
@@ -565,6 +578,20 @@ class Reconciler:
             r["reference"].lower() for r in cp["receipt_ids"]
         }:
             raise Pending("reference reused")
+        # Never burn Gamma on chain for a credit the gateway would refuse.
+        settled = int(cp.get("total_settled_units", 0))
+        if exact_money(row["max_budget"]) != settled:
+            raise Pending(
+                "native max_budget is not the settled Gamma total; "
+                "operator repair required before any spend",
+                12,
+            )
+        if not native_representable(settled + authorized):
+            raise Pending(
+                "settled total exceeds exact native max_budget precision", 12
+            )
+        if len(cp["receipt_ids"]) >= MAX_RECEIPTS:
+            raise Pending("receipt history full; no further spend", 12)
         expected = copy.deepcopy(cp)
         next_cp = copy.deepcopy(cp)
         next_cp["pending"] = {
@@ -677,7 +704,16 @@ class Reconciler:
             r["reference"].lower() for r in cp["receipt_ids"]
         }:
             raise Pending("duplicate receipt marker; fail closed")
-        target = exact_money(row["max_budget"]) + ref.amount_units
+        # max_budget is the only money Gamma changes and it is exactly the
+        # settled total. Native spend is LiteLLM's own meter and is ignored.
+        settled = int(cp.get("total_settled_units", 0))
+        if exact_money(row["max_budget"]) != settled:
+            raise Pending(
+                "native max_budget is not the settled Gamma total; "
+                "credit withheld for operator repair",
+                12,
+            )
+        target = settled + ref.amount_units
         next_cp = {
             k: copy.deepcopy(v) for k, v in cp.items() if k != "pending"
         }
@@ -719,8 +755,6 @@ class Reconciler:
         validate_identity(readback, hk, row["token_id"])
         if readback["metadata"]["gamma"] != next_cp:
             raise Pending("chain proof not atomically checkpointed")
-        if remaining_units(readback) < 0:
-            raise Pending("remaining native credit negative")
         self.follow.discard(hk)
 
     async def finish(self, hk: str) -> PublicResult:
@@ -734,7 +768,7 @@ class Reconciler:
         validate_identity(row, hk, row["token_id"])
         if cp.get("pending"):
             return pending(hk, "spend_final_credit_pending", 12)
-        available = remaining_units(row)
+        available = remaining(row)
         return PublicResult(
             status="funded" if available > 0 else "pending",
             reason=(
@@ -744,8 +778,8 @@ class Reconciler:
             ),
             token_id=row["token_id"],
             max_budget=str(amount(row)),
-            spend=str(row.get("spend", 0)),
-            remaining_credit=str(Decimal(available) / 10**9),
+            spend=format(usage(row), "f"),
+            remaining_credit=format(available, "f"),
             reconciliation_reference=cp.get("last_spent_reference"),
         )
 

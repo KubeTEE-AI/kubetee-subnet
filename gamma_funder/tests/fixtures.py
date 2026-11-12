@@ -375,10 +375,9 @@ class NativeStore:
             != next_cp["pending"]["expected_checkpoint"]
         ):
             raise StateConflict("pending checkpoint unfenced")
-        if self.row.get("spend") != row.get("spend") or self.row.get(
-            "max_budget"
-        ) != row.get("max_budget"):
-            raise StateConflict("native usage changed; retry at actual spend")
+        # Native spend moves while a key is in service; it never gates Gamma.
+        if self.row.get("max_budget") != row.get("max_budget"):
+            raise StateConflict("native max_budget changed")
         if self.interrupt:
             self.interrupt = False
             raise ManagementError("transport interrupted before CAS")
@@ -395,8 +394,6 @@ class NativeStore:
         assert hk == self.hk and ref.hotkey_ss58 == self.hk
         if self.row["metadata"]["gamma"] != expected_checkpoint:
             raise StateConflict("receipt without exact protected intent")
-        if self.row.get("spend", "0") != self.row.get("spend", "0"):
-            pass
         if self.row["metadata"]["gamma"] == cp:
             return copy.deepcopy(self.row)
         if self.fail_credit_once:

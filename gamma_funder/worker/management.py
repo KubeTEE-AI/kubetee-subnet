@@ -39,23 +39,32 @@ def exact_money(value: Any) -> int:
         ) from exc
 
 
+def usage(row: dict) -> Decimal:
+    """Native spend: LiteLLM's float usage meter, never Gamma base units.
+
+    It moves while a key is in service and carries float noise such as
+    0.30000000000000004, so it is reported but never compared, never a
+    precondition and never an input to max_budget.
+    """
+    try:
+        spend = Decimal(str(row.get("spend", "0")))
+    except (InvalidOperation, ValueError, TypeError) as exc:
+        raise ManagementError("native spend is not a number") from exc
+    if not spend.is_finite() or spend < 0:
+        raise ManagementError("native spend is not finite and nonnegative")
+    return spend
+
+
 def amount(row: dict, field: str = "max_budget") -> Decimal:
     """Decimal string for display only; internal amounts remain integers."""
     if field == "max_budget":
         return Decimal(exact_money(row.get("max_budget", "0"))) / 10**9
-    return Decimal(str(row.get("spend", "0")))
+    return usage(row)
 
 
 def remaining(row) -> Decimal:
-    return max(Decimal(0), remaining_units(row) / Decimal(10**9))
-
-
-def remaining_units(row) -> int:
-    return max(
-        0,
-        exact_money(row.get("max_budget", "0"))
-        - exact_money(row.get("spend", "0")),
-    )
+    """Display only: what LiteLLM will still let this key spend."""
+    return max(Decimal(0), amount(row) - usage(row))
 
 
 def validate_identity(row: dict, hotkey: str, token_id: str) -> None:
@@ -88,8 +97,8 @@ def validate_identity(row: dict, hotkey: str, token_id: str) -> None:
     ):
         if field in row:
             copy.deepcopy(row[field])
-    for field in ("max_budget", "spend"):
-        exact_money(row.get(field, "0"))
+    exact_money(row.get("max_budget", "0"))
+    usage(row)
 
 
 class Management:
@@ -269,7 +278,6 @@ class Management:
                 ),
                 "checkpoint": checkpoint,
                 "previous_max_budget": row.get("max_budget"),
-                "previous_spend": row.get("spend"),
             },
         )
         if data.get("conflict"):
@@ -316,9 +324,10 @@ class Management:
         current = await self.info(hotkey)
         if current is None:
             raise ManagementError("native identity absent after key issuance")
-        for field in ("max_budget", "spend"):
-            if exact_money(data.get(field)) != exact_money(current.get(field)):
-                raise ManagementError("native issuance money readback failed")
+        if exact_money(data.get("max_budget")) != exact_money(
+            current.get("max_budget")
+        ):
+            raise ManagementError("native issuance money readback failed")
         checkpoint = current["metadata"].get("gamma") or {}
         if data.get("reconciliation_reference") != checkpoint.get(
             "last_spent_reference"
@@ -361,7 +370,6 @@ class Management:
                     "gamma"
                 ),
                 "previous_max_budget": row.get("max_budget"),
-                "previous_spend": row.get("spend"),
                 "settlement": {
                     **settlement.model_dump(),
                     "observation_hash": observation_hash,

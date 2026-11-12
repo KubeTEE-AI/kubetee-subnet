@@ -167,6 +167,58 @@ async def test_exact_burn_added_once_and_readback_keeps_grants():
 
 
 @pytest.mark.asyncio
+async def test_top_up_adds_to_max_budget_and_ignores_native_spend():
+    """max_budget is the only money Gamma changes; usage never gates it."""
+    chain, store = SyntheticChain(), NativeStore()
+    chain.mint(1_000_000_000)
+    await intake(chain, store)
+    assert (await worker(chain, store).reconcile(HK)).status == "funded"
+    # The key is in service: LiteLLM accrues float usage beyond 1e-9 exactness
+    # and it keeps moving between the worker's reads.
+    store.row["spend"] = "0.30000000000000004"
+    chain.mint(2_000_000_000)
+    result = await worker(chain, store).reconcile(HK)
+    assert result.status == "funded"
+    cp = store.row["metadata"]["gamma"]
+    assert exact_money(store.row["max_budget"]) == 3_000_000_000
+    assert cp["total_settled_units"] == 3_000_000_000
+    assert len(cp["receipt_ids"]) == 2 and store.credits == 2
+    assert [call["amount"] for call in chain.submitted] == [
+        1_000_000_000,
+        2_000_000_000,
+    ]
+    assert result.max_budget == "3" and result.spend == "0.30000000000000004"
+    assert Decimal(result.remaining_credit) == Decimal("2.69999999999999996")
+    # Usage past the budget is still not a floor for the next credit.
+    store.row["spend"] = "7.25"
+    chain.mint(1_000_000_000)
+    result = await worker(chain, store).reconcile(HK)
+    assert exact_money(store.row["max_budget"]) == 4_000_000_000
+    assert result.status == "pending" and result.remaining_credit == "0"
+    settled = store.row["metadata"]["gamma"]
+    assert (
+        sum(r["amount_units"] for r in settled["receipt_ids"])
+        == settled["total_settled_units"]
+        == exact_money(store.row["max_budget"])
+    )
+
+
+@pytest.mark.asyncio
+async def test_budget_edited_outside_gamma_stops_before_any_chain_spend():
+    chain, store = SyntheticChain(), NativeStore()
+    chain.mint(1_000_000_000)
+    await intake(chain, store)
+    await worker(chain, store).reconcile(HK)
+    store.row["max_budget"] = "5"  # operator edit: no longer the settled total
+    chain.mint(1_000_000_000)
+    with pytest.raises(Pending, match="not the settled Gamma total"):
+        await worker(chain, store).reconcile(HK)
+    assert len(chain.submitted) == 1 and store.credits == 1
+    assert store.row["metadata"]["gamma"]["pending"] is None
+    assert store.row["metadata"]["gamma"]["total_settled_units"] == 10**9
+
+
+@pytest.mark.asyncio
 async def test_no_spend_recovery_still_uses_exact_receipt_and_never_submits():
     chain, store = SyntheticChain(), NativeStore()
     chain.mint(1_000_000_000)

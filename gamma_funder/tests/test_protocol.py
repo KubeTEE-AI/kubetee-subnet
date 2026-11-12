@@ -12,7 +12,9 @@ from worker.protocol import (
     gamma_to_units,
     CreditRequest,
 )
-from worker.management import amount, remaining
+from decimal import Decimal
+
+from worker.management import ManagementError, amount, remaining
 
 HK = "5C62Ck4UrFPiBtoCmeSrgF7x9yv9mn38446dhCpsi2mLHiFT"
 H = "0x" + "22" * 32
@@ -61,6 +63,15 @@ def test_key_credit_is_never_spend_floored():
     assert remaining(row).as_tuple().exponent == -2
     row = {"max_budget": "11.50", "spend": "12.75"}
     assert remaining(row) == 0
+    # Real LiteLLM usage is a float meter, not 1e-9 Gamma units.
+    row = {"max_budget": 1.5, "spend": 0.30000000000000004}
+    assert amount(row) == Decimal("1.5")
+    assert remaining(row) == Decimal("1.19999999999999996")
+    for spend in ("nan", "-1", "inf", None):
+        with pytest.raises(ManagementError):
+            remaining({"max_budget": "1", "spend": spend})
+    with pytest.raises(ManagementError):
+        amount({"max_budget": "0.0000000001", "spend": "0"})
 
 
 def test_challenge_version_only_required_for_update():
