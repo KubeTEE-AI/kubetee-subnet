@@ -4,7 +4,7 @@
 # source reference; the Python SDK comes from the official PyPI release.
 # Optional: --build-arg VERSION=1.1.6  (propagates to KUBETEE_VALIDATOR_VERSION
 # and the BT-Validator-Version proxy header / User-Agent).
-FROM python:3.14-slim AS base
+FROM python:3.15-slim AS base
 
 ARG VERSION=1.4.2
 
