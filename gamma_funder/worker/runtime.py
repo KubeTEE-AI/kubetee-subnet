@@ -89,6 +89,33 @@ class Settings:
     signer: Any
     test: bool
     spend_enabled: bool
+    outbound_certificate_files: tuple[str, str]
+
+    def outbound_tls_files(self) -> tuple[str, str]:
+        """Validated at construction; per-request environment cannot change roles."""
+        return self.outbound_certificate_files
+
+    @staticmethod
+    def validate_outbound_certificate(env, *, gateway_fingerprint, worker_fingerprint, gateway_client_fingerprint):
+        """Return an immutable outbound client bucket; never reuse serverAuth."""
+        cert = env.get("KUBETEE_GAMMA_WORKER_CLIENT_PEM", "")
+        key = env.get("KUBETEE_GAMMA_WORKER_CLIENT_KEY", "")
+        if not cert or not key or not os.path.isfile(cert) or not os.path.isfile(key):
+            raise ConfigurationError("dedicated KBS worker client certificate/key required")
+        fingerprint = env.get("KUBETEE_GAMMA_WORKER_CLIENT_CERT_SHA256", "")
+        if len(fingerprint) != 64 or any(c not in "0123456789abcdef" for c in fingerprint):
+            raise ConfigurationError("dedicated KBS worker client fingerprint required")
+        with open(cert, "rb") as stream:
+            leaf = x509.load_pem_x509_certificate(stream.read())
+        if hashlib.sha256(leaf.public_bytes(serialization.Encoding.DER)).hexdigest() != fingerprint:
+            raise ConfigurationError("KBS worker outbound client certificate fingerprint mismatch")
+        extension = next((entry for entry in leaf.extensions
+                         if entry.oid == x509.oid.ExtensionOID.EXTENDED_KEY_USAGE), None)
+        if extension is None or x509.oid.ExtendedKeyUsageOID.CLIENT_AUTH not in extension.value:
+            raise ConfigurationError("KBS worker outbound client certificate lacks clientAuth")
+        if fingerprint in {gateway_fingerprint, worker_fingerprint, gateway_client_fingerprint}:
+            raise ConfigurationError("all four directional mTLS identities must be distinct")
+        return cert, key
 
     @classmethod
     def from_environment(cls, env) -> "Settings":
@@ -142,7 +169,7 @@ class Settings:
             ss58_address(delegate)
         else:
             delegate = ""
-        for name in ("KUBETEE_GAMMA_KBS_CA", "KUBETEE_GAMMA_KBS_CERT", "KUBETEE_GAMMA_KBS_KEY", "KUBETEE_GAMMA_KBS_PROXY_SEED"):
+        for name in ("KUBETEE_GAMMA_KBS_CA", "KUBETEE_GAMMA_KBS_CERT", "KUBETEE_GAMMA_KBS_KEY", "KUBETEE_GAMMA_KBS_PROXY_SEED", "KUBETEE_GAMMA_KBS_CLIENT_CERT", "KUBETEE_GAMMA_KBS_CLIENT_KEY"):
             if not env.get(name) or not env[name].startswith("default/"):
                 raise ConfigurationError("in-guest KBS resource paths must be inside default/")
             if not env.get(name):
@@ -153,9 +180,13 @@ class Settings:
         if any(not os.path.isfile(env[name]) for name in ("KUBETEE_GAMMA_PROJECTOR_PEM", "KUBETEE_GAMMA_CLIENT_PEM", "KUBETEE_GAMMA_CLIENT_KEY")):
             raise ConfigurationError("KUBETEE_GAMMA_PROJECTOR_PEM and worker KBS certificate resources missing: attested startup required")
         material = (env["KUBETEE_GAMMA_PROJECTOR_PEM"], env["KUBETEE_GAMMA_CLIENT_PEM"], env["KUBETEE_GAMMA_CLIENT_KEY"])
+        if "KUBETEE_GAMMA_GATEWAY_CLIENT_PEM" in env or "KUBETEE_GAMMA_GATEWAY_CLIENT_KEY" in env:
+            raise ConfigurationError("gateway clientAuth key is never present in the worker TEE")
+        outbound = cls.validate_outbound_certificate(env, gateway_fingerprint=fingerprint,
+            worker_fingerprint=worker_fingerprint, gateway_client_fingerprint=client_fingerprint)
         return cls(real, fingerprint, url, material, env["KUBETEE_GAMMA_NETWORK"],
                    fee, models, mcp, worker_fingerprint, client_fingerprint,
-                   delegate, None, test, spend)
+                   delegate, None, test, spend, outbound)
 
 
 from cryptography import x509
@@ -169,7 +200,10 @@ import ssl
 def pinned_gateway_certificate(settings: Settings) -> bytes:
     ca, cert, key = settings.certificate_files
     context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH, cafile=ca)
-    context.load_cert_chain(cert, key)
+    outbound = settings.outbound_tls_files()
+    if outbound is None:
+        raise ConfigurationError("a verified outbound connection needs a dedicated clientAuth leaf")
+    context.load_cert_chain(*outbound)
     context.minimum_version = ssl.TLSVersion.TLSv1_2
     address = urlsplit(settings.management_url)
     with socket.create_connection((address.hostname, address.port or 443), 10) as raw:
@@ -189,6 +223,19 @@ def verify_worker_start(settings: Settings, ca_chain: bytes, certificate: bytes)
     leaf_der = leaf.public_bytes(serialization.Encoding.DER)
     if hashlib.sha256(leaf_der).hexdigest() != settings.worker_fingerprint:
         raise ConfigurationError("KBS worker certificate fingerprint mismatch")
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc)
+    if not (leaf.not_valid_before_utc <= now <= leaf.not_valid_after_utc):
+        raise ConfigurationError("KBS worker TLS certificate is outside its validity interval")
+    extension = next((entry for entry in leaf.extensions
+                     if entry.oid == x509.oid.ExtensionOID.EXTENDED_KEY_USAGE), None)
+    if extension is None or x509.oid.ExtendedKeyUsageOID.SERVER_AUTH not in extension.value:
+        raise ConfigurationError("KBS worker TLS certificate lacks serverAuth")
+    names = leaf.extensions.get_extension_for_class(x509.SubjectAlternativeName).value
+    if names.get_values_for_type(x509.DNSName) != ["gamma-funder.kubetee-ops.svc.cluster.local"]:
+        raise ConfigurationError("KBS worker TLS DNS SAN mismatch")
+    if leaf.extensions.get_extension_for_class(x509.BasicConstraints).value.ca:
+        raise ConfigurationError("KBS worker certificate must be a non-CA leaf")
     return leaf_der
 
 
@@ -207,22 +254,37 @@ async def materialize_kbs_identity(env=os.environ, fetch=certificate_material):
         with open(target / name, "wb") as material:
             material.write(data)
         os.chmod(target / name, mode)
-    ca_data = (target / "ca.pem").read_bytes()
+    # Match the exact materialized KBS worker identity, not a caller-supplied alternative.
     cert_data = (target / "tls.crt").read_bytes()
-    # Match the exact KBS client identity, not a caller/env-supplied alternative.
     leaf = x509.load_pem_x509_certificate(cert_data)
     if hashlib.sha256(leaf.public_bytes(serialization.Encoding.DER)).hexdigest() != env["KUBETEE_GAMMA_WORKER_CERT_SHA256"]:
         raise ConfigurationError("KBS worker certificate fingerprint mismatch")
-    env["KUBETEE_GAMMA_PROJECTOR_PEM"] = str(target / "ca.pem")
+    ca_path = target / "ca.pem"
+    env["KUBETEE_GAMMA_PROJECTOR_PEM"] = str(ca_path)
     env["KUBETEE_GAMMA_CLIENT_PEM"] = str(target / "tls.crt")
     env["KUBETEE_GAMMA_CLIENT_KEY"] = str(target / "tls.key")
+    cert_resource = env["KUBETEE_GAMMA_KBS_CLIENT_CERT"]
+    key_resource = env["KUBETEE_GAMMA_KBS_CLIENT_KEY"]
+    cert, key = await fetch(cert_resource), await fetch(key_resource)
+    cert_path, key_path = target / "client.crt", target / "client.key"
+    cert_path.write_bytes(cert)
+    key_path.write_bytes(key)
+    os.chmod(cert_path, 0o600)
+    os.chmod(key_path, 0o600)
+    env["KUBETEE_GAMMA_WORKER_CLIENT_PEM"] = str(cert_path)
+    env["KUBETEE_GAMMA_WORKER_CLIENT_KEY"] = str(key_path)
+    Settings.validate_outbound_certificate(env,
+        gateway_fingerprint=env["KUBETEE_GAMMA_GATEWAY_CERT_SHA256"],
+        worker_fingerprint=env["KUBETEE_GAMMA_WORKER_CERT_SHA256"],
+        gateway_client_fingerprint=env["KUBETEE_GAMMA_GATEWAY_CLIENT_CERT_SHA256"])
 
 
 def scoped_http_client(settings: Settings, gateway_der: bytes | None = None) -> httpx.AsyncClient:
     ca, certificate, key = settings.certificate_files
     import ssl
     context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH, cafile=ca)
-    context.load_cert_chain(certificate, key)
+    outbound = settings.outbound_tls_files()
+    context.load_cert_chain(*(outbound if outbound is not None else (certificate, key)))
     if gateway_der is None:
         raise ConfigurationError("verified gateway TLS leaf required for worker authentication")
     if hashlib.sha256(gateway_der).hexdigest() != settings.gateway_fingerprint:
@@ -284,20 +346,35 @@ from uvicorn.protocols.http import h11_impl
 class MTLSProofCycle(h11_impl.RequestResponseCycle):
     """Expose only the server's socket to ASGI, never a caller-provided proof."""
     async def run_asgi(self, app):
-        self.scope.setdefault("extensions", {})["transport"] = self.transport
+        extensions = dict(self.scope.get("extensions", {}))
+        extensions["transport"] = self.transport
+        self.scope["extensions"] = extensions
         return await super().run_asgi(app)
 
 
 class MTLSProofProtocol(h11_impl.H11Protocol):
-    def __init__(self, *args, **kwargs):
-        # Uvicorn 1.x resolves its request cycle through this module global
-        # rather than a protocol attribute. Worker has one dedicated server.
-        h11_impl.RequestResponseCycle = MTLSProofCycle
-        super().__init__(*args, **kwargs)
+    def handle_events(self):
+        # Uvicorn resolves through the module global. Selection is synchronous
+        # per this instance and immediately restored; never changes app startup
+        # or another Uvicorn process' class registration.
+        with self._cycle_selection():
+            return super().handle_events()
+
+    def _cycle_selection(self):
+        import contextlib
+        @contextlib.contextmanager
+        def selected():
+            standard = h11_impl.RequestResponseCycle
+            h11_impl.RequestResponseCycle = MTLSProofCycle
+            try:
+                yield
+            finally:
+                h11_impl.RequestResponseCycle = standard
+        return selected()
 
 
 
-def create_application(env=os.environ, *, connect=None, create_store=None, create_chain=None, fetch=certificate_material, gateway_der=None, management_transport=None):
+def create_application(env=os.environ, *, connect=None, create_store=None, create_chain=None, fetch=certificate_material, gateway_der=None, management_transport=None, create_monitor=None):
     """No host database, raw API-key trust, or master-token transport exists."""
     settings = Settings.from_environment(env)
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
@@ -310,7 +387,7 @@ def create_application(env=os.environ, *, connect=None, create_store=None, creat
         try:
             if connect is None:
                 import bittensor as bt
-                client = await bt.Subtensor(settings.network)
+                client = await bt.Client(settings.network).connect()
             else:
                 client = await connect(settings)
             store = await create_store(settings) if create_store is not None else None
@@ -339,7 +416,9 @@ def create_application(env=os.environ, *, connect=None, create_store=None, creat
                 store = RedisHotkeyLease(store, f"pod:{os.environ.get('HOSTNAME', 'worker')}")
             if not settings.spend_enabled and settings.spender:
                 raise ConfigurationError("proxy delegate set while spend is disabled")
-            signer = load_proxy_keypair(await fetch(env["KUBETEE_GAMMA_KBS_PROXY_SEED"]), settings.spender) if settings.spender else None
+            # Spending disabled never grants execute_spend authority. Exact
+            # on-chain receipt lookup and native credit recovery do not require it.
+            signer = load_proxy_keypair(await fetch(env["KUBETEE_GAMMA_KBS_PROXY_SEED"]), settings.spender) if settings.spend_enabled and settings.spender else None
             peer_der = gateway_der
             if peer_der is None:
                 from cryptography import x509
@@ -348,6 +427,10 @@ def create_application(env=os.environ, *, connect=None, create_store=None, creat
                 client, real_spender=settings.real_spender, delegate=settings.spender or settings.real_spender,
                 max_fee=settings.fee_cap, genesis_hash=GENESIS,
             ))
+            if not settings.spend_enabled:
+                chain.spend_enabled = False
+            # Finalized heads subscribe through the same chain client as all
+            # exact-height storage reads; no separate public RPC connection.
             await chain.preflight()
             management = scoped_http_client(settings, peer_der)
             if management_transport is not None:
@@ -360,40 +443,36 @@ def create_application(env=os.environ, *, connect=None, create_store=None, creat
                 raise ConfigurationError("only the narrow mTLS Gamma worker identity is accepted")
             native = Management(management, settings.management_url, credential or "mTLS:gamma-reconciler-type22",
                                 models=list(settings.models), mcp_servers=list(settings.mcp_servers) if settings.mcp_servers else None)
-            reconciler = Reconciler(chain, native, store, signer=signer)
-            if not settings.test and management_transport is None:
-                if not await native.ready():
-                    raise ConfigurationError("private gateway readiness failed over pinned mTLS")
+            reconciler = Reconciler(chain, native, store=None, lease=store, signer=signer)
+            if not await native.ready():
+                raise ConfigurationError("private gateway readiness failed over pinned mTLS")
             service = WorkerService(chain, chain.finalized_snapshot, reconciler,
                                     certificate_fingerprint=settings.gateway_client_fingerprint, ready=True)
+            from .events import EventStream, ObservationDispatcher, run_monitor, replay_history
+            dispatcher = ObservationDispatcher(service, reconciler)
+            service.reconciler.event_dispatcher = dispatcher
+            # One bounded per-hotkey read, never a global wallet/key map.
+            # This resolves durable pending intents after restart and off-mode
+            # interruptions before allocating a new zero reservation/mint spend.
+            for hotkey in await native.hotkeys():
+                reconciler.follow.add(hotkey)
+                await dispatcher.observation(hotkey, "restart-native-pending")
             app.include_router(internal_router(service))
-            if signer is None:
-                # No GammaSpend signature is submitted. Capped reminders remain
-                # blocked, not falsely converted into successful credit.
-                async def observation_only():
-                    while True:
-                        await asyncio.sleep(6)
-                task = asyncio.create_task(observation_only())
-            else:
-                async def reminder_loop():
-                    while True:
-                        try:
-                            height = await client.finalized_block()
-                            for hotkey in list(reconciler.follow):
-                                if height % 12 == 0:
-                                    await reconciler.reconcile(hotkey)
-                                await asyncio.sleep(6)
-                        except Exception:
-                            await asyncio.sleep(12)
-                task = asyncio.create_task(reminder_loop())
+            # Startup replays all applicable eligible finalized intake before
+            # subscription block-read latency; bounded to receipt search window.
+            stream = EventStream(dispatcher)
+            await replay_history(chain, stream)
+            monitor = run_monitor(chain, stream)
+            task = asyncio.create_task(monitor)
+            reminder = asyncio.create_task(dispatcher.run_reminders())
+            service.reconciler.event_dispatcher = dispatcher
             try:
                 yield
             finally:
+                await dispatcher.close()
                 task.cancel()
-                try:
-                    await task
-                except asyncio.CancelledError:
-                    pass
+                reminder.cancel()
+                await asyncio.gather(task, reminder, return_exceptions=True)
         finally:
             if store is not None:
                 for hotkey in list(store.tokens):

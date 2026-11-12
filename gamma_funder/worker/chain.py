@@ -71,6 +71,7 @@ class GammaChain:
         self.delegate = delegate if delegate is not None else real_spender
         self.service_url, self.max_backfill, self.max_fee = service_url, max_backfill, max_fee
         self.genesis_hash = genesis_hash.lower()
+        self.spend_enabled = True
         self.follow: set[str] = set()
 
     async def _hash_for_height(self, h: int) -> str:
@@ -122,6 +123,10 @@ class GammaChain:
         if height > await self.client.finalized_block(): raise PendingReceipt("snapshot no longer finalized")
         return height, block_hash, row
 
+    async def deposit(self, hotkey: str) -> Optional[dict]:
+        """Current finalized storage row, with no client-side event decoding."""
+        return (await self.finalized_snapshot(hotkey))[2]
+
     async def deposit_at(self, hotkey: str, height: int) -> Optional[dict]:
         snap, _ = await self._snapshot(height)
         return await snap.query(bt.storage.SubtensorModule.GammaDeposits, [90, hotkey])
@@ -151,6 +156,8 @@ class GammaChain:
         return None
 
     async def execute_spend(self, hotkey: str, units: int, reference: str, signer):
+        if not getattr(self, "spend_enabled", True):
+            raise ChainError("new GammaSpend disabled; receipt-only recovery")
         if not raw_reference(reference) == reference or type(signer) is type(None): raise ChainError("incomplete exact spend intent")
         policy = bt.intents.plan.Policy(allowed_netuids=[90], max_fee_tao="0" if self.max_fee is None else str(self.max_fee), max_spend_tao="0", allow_raw_calls=False)
         if Decimal(policy.max_fee_tao.tao) <= 0: raise ChainError("explicit positive service fee cap required")

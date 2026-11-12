@@ -10,6 +10,7 @@ import uvicorn
 
 from worker.runtime import MTLSProofProtocol, internal_router
 from fixtures import HK, NativeStore, SyntheticChain
+from certificates import issue_certificates
 from test_runtime import provider
 from worker.reconciler import Reconciler
 from worker.service import WorkerService, ss58_address
@@ -17,7 +18,7 @@ from worker.service import WorkerService, ss58_address
 
 @pytest.mark.asyncio
 async def test_mtls_reconcile_accepts_and_authenticates_transport(tmp_path):
-    fingerprint, _ = provider(tmp_path)
+    fingerprint = issue_certificates(tmp_path)["gateway-client"][0]
     chain, store = SyntheticChain(), NativeStore()
     chain.mint(1_000_000_000)
     reconciler = Reconciler(chain, store, store, signer=object())
@@ -40,12 +41,12 @@ async def test_mtls_reconcile_accepts_and_authenticates_transport(tmp_path):
     task = asyncio.create_task(server.serve(sockets=[listener]))
     await asyncio.sleep(.1)
     context = ssl.create_default_context(cafile=str(tmp_path / "projector.pem"))
-    context.load_cert_chain(str(tmp_path / "worker.pem"), str(tmp_path / "worker.key"))
+    context.load_cert_chain(str(tmp_path / "gateway-client.crt"), str(tmp_path / "gateway-client.key"))
     try:
         # No wallet is committed on this side; the socket proves both strict
         # mTLS identity and eventual successful chain-driven budget allocation.
         async def request(injected=False):
-            reader, writer = await asyncio.wait_for(asyncio.open_connection("127.0.0.1", listener.getsockname()[1], ssl=context, server_hostname="litellm-gateway-mtls.litellm.svc.cluster.local"), 5)
+            reader, writer = await asyncio.wait_for(asyncio.open_connection("127.0.0.1", listener.getsockname()[1], ssl=context, server_hostname="gamma-funder.kubetee-ops.svc.cluster.local"), 5)
             body = json.dumps({"action": "claim", "hotkey_ss58": HK, "verified_challenge_digest": "0"*64}).encode()
             forged = b"X-Kubetee-Worker-Proof: YmFk\r\n" if injected else b""
             writer.write(b"POST /internal/v1/reconcile HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\nContent-Length: " + str(len(body)).encode()+b"\r\nConnection:close\r\n" + forged + b"\r\n"+body)

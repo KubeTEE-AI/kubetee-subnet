@@ -100,6 +100,40 @@ class Reconciler:
         self._locks: dict[str, asyncio.Lock] = {}
         self._lock_guard = asyncio.Lock()
 
+    async def prepare_observation(self, hk: str) -> None:
+        """Validate live final storage and establish only blocked zero credit.
+
+        A native reservation never contains a raw customer API key. This is
+        intentionally the same per-H preparation used by authenticated claims.
+        """
+        if await self._row(hk) is not None:
+            return
+        if self.lease is not None and not await self.lease.acquire(hk):
+            raise Pending("stale/nonleader worker")
+        try:
+            if await self._row(hk) is not None:
+                return
+            observed = await self.snapshot(hk)
+            if observed is None or str(observed.stored["spender"]) != self.chain.real_spender:
+                raise Pending("no finalized eligible service deposit")
+            checkpoint = base_checkpoint(observed, quality="minted_pending")
+            if self.store is None:
+                await self.gateway.reserve(hk, checkpoint)
+            else:
+                row = await self.store.reserve(hk, checkpoint)
+                validate_identity(row, hk, row["token_id"])
+        finally:
+            if self.lease is not None:
+                await self.lease.release(hk)
+
+    async def current_cap(self, hk: str):
+        """One traceable finalized height/root, not a second unanchored RPC."""
+        _, _, row = await self.finalized_snapshot(hk)
+        return cap_state(row) if row else None
+
+    async def finalized_snapshot(self, hk: str):
+        return await self.chain.finalized_snapshot(hk)
+
     async def _row(self, hk: str) -> dict:
         return await self.gateway.info(hk) if self.store is None else await self.store.key(hk)
 
@@ -113,6 +147,38 @@ class Reconciler:
             raise Pending("unstable finalized read")
         if height > await self.chain.client.finalized_block(): raise Pending("snapshot no longer finalized")
         return DepositState(height, block_hash, row)
+
+    async def remind(self, hk: str) -> None:
+        """Re-evaluate only a known exact-H against the live capped allowance.
+
+        The reminder never discovers identities, replaces receipt evidence, or
+        fabricates a delta. Reconcile still must atomically settle a receipt.
+        """
+        row = await self._row(hk)
+        if row is None: self.follow.discard(hk); return
+        cp = row.get("metadata", {}).get("gamma") or {}
+        if cp.get("pending") is not None:
+            await self.reconcile(hk)  # Lookup/adjudication only, never new spend.
+            return
+        if self.signer is None:
+            self.follow.discard(hk)
+            return
+        if cp.get("last_spent_reference") is None: return
+        observed = await self.snapshot(hk)
+        if observed is None:
+            self.follow.discard(hk)
+            return
+        if str(observed.stored["spender"]) != self.chain.real_spender:
+            self.follow.discard(hk)
+            raise Ineligible("reminder lost exact finalized service spender")
+        if observed.height - cp["observation_height"] > self.max_backfill:
+            self.follow.add(hk)
+            raise Pending("cap reminder exceeded bounded-history budget")
+        if cap_spendable(observed.stored, observed.height) > 0 and observed.stored["balance"] > cp.get("due_allowance_units", 0):
+            # A refill must be proven by the existing storage escrow in the
+            # ordinary reconciler path. Never forge a zero-event delta here.
+            self.follow.add(hk)
+            await self.reconcile(hk)
 
     async def reconcile(self, hk: str) -> PublicResult:
         async with self._lock_guard:
@@ -222,7 +288,8 @@ class Reconciler:
             added += positive
         if previous != now.stored["balance"]: raise Ineligible("raw chain finality mismatch")
         cap = cap_state(now.stored)
-        if cap_changed and previous > 0: self._check_cap_claim(cp, added, cap, now)
+        if cap_changed and previous > 0 and added > 0:
+            self._check_cap_claim(cp, added, cap, now)
         next_cp = copy.deepcopy(cp)
         next_cp.update({"delta_units": added, "observation_height": now.height,
                         "observation_hash": now.block_hash, "observation_coldkey": observed_coldkey, "observation_spender": str(now.stored["spender"]),
@@ -320,7 +387,7 @@ class Reconciler:
                         "observation_height": ref.block_number, "observation_hash": ref.block_hash,
                         "last_spent_height": ref.block_number, "last_spent_amount": ref.amount_units,
                         "last_spent_reference": ref.reference, "accepted_kind": "settled",
-                        "cap": cap_state(await self.chain.deposit(hk)) if await self.chain.deposit(hk) else None})
+                        "cap": await self.current_cap(hk)})
         if self.store is None:
             credited = await self.gateway.credit_and_checkpoint(hk, row, ref, target, next_cp)
         else:

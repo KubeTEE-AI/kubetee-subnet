@@ -10,6 +10,7 @@ import pytest
 from worker.reconciler import Ineligible, Pending, Reconciler
 from worker.management import exact_money
 from fixtures import ALIEN, HK, NativeStore, SyntheticChain
+from worker.chain import ChainError
 
 
 async def intake(chain, store, quality="minted_pending"):
@@ -97,6 +98,24 @@ async def test_exact_burn_added_once_and_readback_keeps_grants():
     assert store.row["metadata"]["gamma"]["pending"] is None
     assert store.row["metadata"]["gamma"]["total_settled_units"] == 1_000_000_000
     assert store.row["metadata"]["gamma"]["delta_units"] == 0
+
+
+@pytest.mark.asyncio
+async def test_no_spend_recovery_still_uses_exact_receipt_and_never_submits():
+    chain, store = SyntheticChain(), NativeStore()
+    chain.mint(1_000_000_000)
+    await intake(chain, store)
+    chain.disconnect = True
+    with pytest.raises(Pending, match="exact-intent lookup"):
+        await worker(chain, store).reconcile(HK)
+    chain.spend_enabled = False  # Production chained transport enforces this.
+    recovered = Reconciler(chain, None, store, signer=None)
+    result = await recovered.reconcile(HK)
+    assert result.status == "funded"
+    assert len(chain.submitted) == 1 and store.credits == 1
+    # Transport-gate is exercised separately; this fixture models receipt lookups only.
+    assert recovered.signer is None and chain.spend_enabled is False
+    assert len(chain.submitted) == 1
 
 
 @pytest.mark.asyncio

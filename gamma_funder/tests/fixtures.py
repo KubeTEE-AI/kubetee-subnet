@@ -113,6 +113,11 @@ class NativeStore:
     async def key(self, hk, copy_ok=False):
         return copy.deepcopy(self.row) if hk == self.hk else None
 
+    async def gamma_identities(self):
+        if self.row is None:
+            return []
+        return [{"metadata": {"gamma": copy.deepcopy(self.row["metadata"]["gamma"])}}]
+
     def serialize_row(self):
         import json
         from datetime import datetime, timezone

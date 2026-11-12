@@ -17,6 +17,7 @@ from fastapi import HTTPException
 from pydantic import ValidationError
 
 from .management import ManagementError, StateConflict, remaining
+from .chain import ChainError, PendingReceipt
 from .protocol import PublicResult, ProveReconcile
 from .reconciler import DepositState, Ineligible, Pending, Reconciler, base_checkpoint
 
@@ -52,21 +53,7 @@ class WorkerService:
         if not self.is_ready:
             return PublicResult(status="retryable_error", reason="worker_unavailable", retry_after_seconds=6)
         try:
-            if await self.reconciler._row(hotkey) is None:
-                observed = await self.fresh_checkpoint(hotkey)
-                if observed is None:
-                    return pending_public("no finalized eligible service deposit")
-                if not hasattr(observed, "stored"):
-                    if not isinstance(observed, tuple) or len(observed) != 3:
-                        raise ValueError("unvalidated finalized observation")
-                    height, block_hash, stored = observed
-                    observed = DepositState(height, block_hash, stored)
-                if observed.stored is None:
-                    return pending_public("no finalized eligible service deposit")
-                if str(observed.stored["spender"]) != self.chain.real_spender:
-                    return PublicResult(status="ineligible", reason="wrong service spender")
-                checkpoint = base_checkpoint(observed, quality="minted_pending")
-                await self.reconciler.gateway.reserve(hotkey, checkpoint)
+            await self.reconciler.prepare_observation(hotkey)
             result = await self.reconciler.reconcile(hotkey)
             return public_result(result, hotkey)
         except StateConflict:
@@ -83,7 +70,8 @@ class WorkerService:
             return pending_public(str(error))
         except Ineligible as error:
             return PublicResult(status="ineligible", reason="ineligible finalized service deposit")
-        except (ManagementError, InvalidOperation, KeyError, TypeError, ValidationError, ValueError):
+        except (ManagementError, ChainError, ConnectionError, TimeoutError, OSError,
+                InvalidOperation, KeyError, TypeError, ValidationError, ValueError):
             LOG.exception("Finalized chain reconciliation or native management rejected request")
             raise HTTPException(503, {"status": "retryable_error"})
 

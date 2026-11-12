@@ -97,6 +97,28 @@ class Management:
             raise ManagementError(f"management HTTP {response.status_code}: {response.text[:1000]}")
         return response.json()
 
+    async def hotkeys(self) -> list[str]:
+        """Existing native Gamma rows only; never infer money or wallet ownership."""
+        data = await self.call("GET", "/internal/v1/gamma/keys")
+        keys = data.get("keys")
+        if not isinstance(keys, list):
+            raise ManagementError("native aggregate key-info missing keys list")
+        hotkeys = []
+        for row in keys:
+            if not isinstance(row, dict) or not isinstance(row.get("metadata"), dict):
+                continue
+            cp = row["metadata"].get("gamma")
+            if isinstance(cp, dict) and cp.get("schema") == 1:
+                hotkey = cp.get("hotkey_ss58")
+                if isinstance(hotkey, str) and hotkey:
+                    from .protocol import ss58_address
+                    ss58_address(hotkey)
+                    hotkeys.append(hotkey)
+        if len(set(hotkeys)) != len(hotkeys):
+            raise ManagementError("duplicate native Gamma identity in aggregate listing")
+        return hotkeys
+
+
     def response_row(self, data: dict, hotkey: str, previous: Optional[dict] = None,
                      checkpoint: Optional[dict] = None) -> dict:
         if not isinstance(data.get("row"), dict):
