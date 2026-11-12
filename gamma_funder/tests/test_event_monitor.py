@@ -61,7 +61,9 @@ async def test_real_redis_lease_fences_independent_reconciler_replicas():
         if second is not None:
             for task in list(second.owned.values()):
                 task.cancel()
-            await asyncio.gather(*second.owned.values(), return_exceptions=True)
+            await asyncio.gather(
+                *second.owned.values(), return_exceptions=True
+            )
         await redis.flushdb()
         await redis.aclose()
 
@@ -71,11 +73,20 @@ async def test_lease_release_suppresses_only_deliberate_renewal_cancellation():
     from unittest.mock import AsyncMock
     from worker.lease import RedisHotkeyLease
 
-    redis = type("Redis", (), {
-        "register_script": lambda self, script: AsyncMock(return_value=1),
-    })()
+    redis = type(
+        "Redis",
+        (),
+        {
+            "register_script": lambda self, script: AsyncMock(return_value=1),
+        },
+    )()
     for cancelled in (True, False):
-        failure = asyncio.CancelledError() if cancelled else RuntimeError("renewal failed")
+        failure = (
+            asyncio.CancelledError()
+            if cancelled
+            else RuntimeError("renewal failed")
+        )
+
         class Renewal:
             def cancel(self):
                 pass
@@ -83,6 +94,7 @@ async def test_lease_release_suppresses_only_deliberate_renewal_cancellation():
             def __await__(self):
                 async def operation():
                     raise failure
+
                 return operation().__await__()
 
         lease = RedisHotkeyLease(redis, "replica-one")
@@ -93,10 +105,14 @@ async def test_lease_release_suppresses_only_deliberate_renewal_cancellation():
         except RuntimeError as error:
             assert not cancelled
             assert str(error) == "renewal failed"
-            assert HK in lease.tokens, "failed release must retain unconfirmed ownership"
+            assert (
+                HK in lease.tokens
+            ), "failed release must retain unconfirmed ownership"
         else:
             assert cancelled
-            assert HK not in lease.tokens, "clean release must remove Redis ownership"
+            assert (
+                HK not in lease.tokens
+            ), "clean release must remove Redis ownership"
         if cancelled:
             assert HK not in lease.owned
 
