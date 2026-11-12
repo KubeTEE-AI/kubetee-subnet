@@ -1,0 +1,192 @@
+name: Build and Publish Gamma Funder
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "New immutable image tag (e.g. 0.1.0-rc1); existing tags are rejected"
+        required: true
+        type: string
+  push:
+    branches:
+      - feat/gamma-funder-release
+    paths:
+      - "gamma_funder/**"
+      - ".github/workflows/build-gamma-funder.yaml"
+  pull_request:
+    paths:
+      - "gamma_funder/**"
+      - ".github/workflows/build-gamma-funder.yaml"
+
+concurrency:
+  group: gamma-funder-image-release
+  cancel-in-progress: false
+
+jobs:
+  test:
+    name: Test worker source
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@61cb8a9741eeb8a550a1b8544337180c0fc8476b # v7.2.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: gamma_funder/uv.lock
+      - name: Install locked final wheel and run acceptance suite
+        run: |
+          # The package is deliberately sourced from gamma_funder/worker.
+          # Sync the locked final wheel instead of accidentally testing an
+          # earlier local editable install or relying on a cwd import.
+          UV_PROJECT_ENVIRONMENT=/tmp/gamma-test-venv uv sync \
+            --directory gamma_funder --locked --no-editable
+          /tmp/gamma-test-venv/bin/python -I -c \
+            'import worker.events,worker.reconciler,worker.runtime; print(worker.__file__); assert "/gamma_funder/worker" not in worker.__file__'
+          /tmp/gamma-test-venv/bin/python -m pytest -q gamma_funder/tests
+
+  build:
+    name: Build and sign immutable image
+    needs: test
+    runs-on: ubuntu-22.04
+    # Job tokens that omit this allow id-token:none even when contents is
+    # write. GitHub then supplies neither ACTIONS_ID_TOKEN_REQUEST_URL nor
+    # its request token; browser authentication MUST NOT be substituted for
+    # this explicitly granted, auditable keyless job identity.
+    permissions:
+      id-token: write
+      contents: read
+      packages: write
+    env:
+      REGISTRY: ghcr.io
+      IMAGE_NAME: kubetee-ai/gamma-funder
+      PUBLISH: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/feat/gamma-funder-release' }}
+    outputs:
+      digest: ${{ steps.metadata.outputs.digest }}
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
+      - name: Install cosign
+        uses: sigstore/cosign-installer@faadad0cce49287aee09b3a48701e75088a2c6ad # v4.0.0
+      - name: Select non-recycled release tag
+        id: tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUEST_TAG: ${{ inputs.tag }}
+        run: |
+          if [ -n "$REQUEST_TAG" ]; then
+            TAG="$REQUEST_TAG"
+          elif [ "$PUBLISH" = "true" ]; then
+            TAG="0.1.0-dev.$(date -u +%Y%m%d%H%M%S)"
+          else
+            TAG="0.1.0-pr${GITHUB_EVENT_NUMBER}-candidate"
+          fi
+          [[ "$TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+[-.][A-Za-z0-9.-]+$ ]] || { echo "Explicit semantic image tag required"; exit 1; }
+          AUTH=(-H "Accept: application/vnd.github+json" -H "Authorization: Bearer $GH_TOKEN")
+          EXISTING=$(curl -fsSL "${AUTH[@]}" "https://api.github.com/orgs/KubeTEE-AI/packages/container/gamma-funder/versions?per_page=100" || true)
+          if printf '%s' "$EXISTING" | grep -E '"name"[[:space:]]*:[[:space:]]*"'"$TAG"'"'; then
+            echo "Tag $TAG already exists; never recycle it"; exit 1
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+      - name: Login to GHCR for publication
+        if: env.PUBLISH == 'true'
+        run: echo "${{ github.token }}" | docker login ghcr.io -u KubeTEE-AI --password-stdin
+      - name: Build candidate from audited locked source
+        id: build
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          test -n "$TAG" || { echo 'Selected immutable release tag missing'; exit 1; }
+          if [ "$PUBLISH" = "true" ]; then OUTPUT=--push; else OUTPUT=--load; fi
+          docker buildx build --platform linux/amd64 \
+            -f gamma_funder/Dockerfile \
+            --metadata-file /tmp/gamma-image-metadata.json \
+            -t "${REGISTRY}/${IMAGE_NAME}:${TAG}" ${OUTPUT} gamma_funder
+      - id: metadata
+        name: Record immutable image digest
+        run: echo "digest=$(jq -r '."containerimage.digest"' /tmp/gamma-image-metadata.json)" >> "$GITHUB_OUTPUT"
+      - name: Export chosen immutable release identity
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+          DIGEST: ${{ steps.metadata.outputs.digest }}
+        run: |
+          test -n "$TAG"
+          test -n "$DIGEST"
+          printf '{"image":"%s/%s:%s@%s"}\n' "$REGISTRY" "$IMAGE_NAME" "$TAG" "$DIGEST" > /tmp/gamma-release-identity.json
+      - name: Test exact built image starts as unprivileged user and stays fail-closed
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          test -n "$TAG" || { echo 'Selected image tag missing at test step'; exit 1; }
+          docker run --rm --entrypoint python "${REGISTRY}/${IMAGE_NAME}:${TAG}" -c 'import os,worker.events,worker.runtime,worker.reconciler,worker.service; assert os.getuid() == 65532; assert os.environ["KUBETEE_GAMMA_SPEND_ENABLED"] == "0"; print("candidate image imports and defaults verified")'
+      - name: Sign image and create signed provenance
+        if: env.PUBLISH == 'true'
+        env:
+          DIGEST: ${{ steps.metadata.outputs.digest }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          # GitHub supplies a short-lived Sigstore OIDC token via its job
+          # identity request, never a static signing secret. `envvar` is
+          # NOT a Cosign provider; selecting it silently leads to the device
+          # flow. Supply the token to the supported Fulcio token flow and
+          # disable ambient providers to forbid any interactive fallback.
+          umask 077
+          OIDC_TOKEN_FILE=$(mktemp /tmp/gamma-funder-oidc.XXXXXX)
+          trap 'rm -f "$OIDC_TOKEN_FILE" /tmp/gamma-provenance.json' EXIT
+          curl --proto '=https' -fsSL --retry 3 --max-time 30 \
+            -H "Authorization: Bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sigstore" \
+            | jq -j .value > "$OIDC_TOKEN_FILE"
+          # jq -r contributes a newline; that is not legal in Fulcio's
+          # Authorization header. -j emits the JWT exactly, without it.
+          test "$(wc -c < "$OIDC_TOKEN_FILE")" -gt 100
+          test "$(jq -Rr 'split(".")[1]' "$OIDC_TOKEN_FILE" \
+            | tr '_-' '/+' | base64 -d 2>/dev/null | jq -r .aud)" = sigstore
+          timeout 120 cosign sign --yes --fulcio-auth-flow=token \
+            --identity-token="$OIDC_TOKEN_FILE" --oidc-disable-ambient-providers \
+            --timeout=90s "$REGISTRY/$IMAGE_NAME@$DIGEST"
+          jq -n --arg builder "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            --arg source "git+$GITHUB_SERVER_URL/$GITHUB_REPOSITORY@$GITHUB_SHA" \
+            --arg tag "$TAG" \
+            '{buildType:"kubetee-gamma-funder/v1",builder:{id:$builder},invocation:{configSource:{uri:$source,entryPoint:".github/workflows/build-gamma-funder.yaml"},parameters:{tag:$tag}}}' \
+            > /tmp/gamma-provenance.json
+          timeout 120 cosign attest --yes --fulcio-auth-flow=token \
+            --identity-token="$OIDC_TOKEN_FILE" --oidc-disable-ambient-providers \
+            --timeout=90s --type slsaprovenance --predicate=/tmp/gamma-provenance.json "$REGISTRY/$IMAGE_NAME@$DIGEST"
+          cosign verify --certificate-identity-regexp 'https://github.com/KubeTEE-AI/kubetee-subnet/.github/workflows/build-gamma-funder.yaml.*' \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com "$REGISTRY/$IMAGE_NAME@$DIGEST"
+      - name: Install Trivy
+        uses: aquasecurity/setup-trivy@3fb12ec12f41e471780db15c232d5dd185dcb514 # v0.2.6
+        with:
+          version: v0.76.2
+          cache: false
+      - name: Scan candidate for actionable high and critical vulnerabilities
+        env:
+          TARGET: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.tag }}
+        run: trivy image --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --format json --output /tmp/gamma-trivy.json --exit-code 1 "$TARGET"
+      - name: Show actionable security findings
+        if: ${{ always() && hashFiles('/tmp/gamma-trivy.json') != '' }}
+        run: |
+          jq -r '.Results[]? as $r | $r.Vulnerabilities[]? |
+            [$r.Target, .PkgName, .InstalledVersion, .FixedVersion,
+             .VulnerabilityID, .Severity] | @tsv' /tmp/gamma-trivy.json
+      - name: Record immutable release result
+        if: ${{ always() }}
+        run: |
+          test -s /tmp/gamma-image-metadata.json
+          test -s /tmp/gamma-release-identity.json
+          test -s /tmp/gamma-trivy.json
+          printf '## Immutable Gamma worker evidence\n\n' >> "$GITHUB_STEP_SUMMARY"
+          jq -r .image /tmp/gamma-release-identity.json >> "$GITHUB_STEP_SUMMARY"
+      - name: Record supply chain evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: ${{ always() }}
+        with:
+          name: gamma-funder-release-${{ steps.tag.outputs.tag }}
+          path: |
+            /tmp/gamma-image-metadata.json
+            /tmp/gamma-release-identity.json
+            /tmp/gamma-provenance.json
+            /tmp/gamma-trivy.json
+          if-no-files-found: ignore
+          retention-days: 90
