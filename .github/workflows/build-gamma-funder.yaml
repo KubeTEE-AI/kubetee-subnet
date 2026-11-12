@@ -128,7 +128,9 @@ jobs:
           curl --proto '=https' -fsSL --retry 3 --max-time 30 \
             -H "Authorization: Bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
             "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sigstore" \
-            | jq -r .value > "$OIDC_TOKEN_FILE"
+            | jq -j .value > "$OIDC_TOKEN_FILE"
+          # jq -r contributes a newline; that is not legal in Fulcio's
+          # Authorization header. -j emits the JWT exactly, without it.
           test "$(wc -c < "$OIDC_TOKEN_FILE")" -gt 100
           test "$(jq -Rr 'split(".")[1]' "$OIDC_TOKEN_FILE" \
             | tr '_-' '/+' | base64 -d 2>/dev/null | jq -r .aud)" = sigstore
