@@ -59,7 +59,7 @@ jobs:
     env:
       REGISTRY: ghcr.io
       IMAGE_NAME: kubetee-ai/gamma-funder
-      PUBLISH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/feat/gamma-funder-release' }}
+      PUBLISH: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/feat/gamma-funder-release' }}
     outputs:
       digest: ${{ steps.metadata.outputs.digest }}
       tag: ${{ steps.tag.outputs.tag }}
