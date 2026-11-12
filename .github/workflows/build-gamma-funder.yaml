@@ -71,7 +71,7 @@ jobs:
           elif [ "$PUBLISH" = "true" ]; then
             TAG="0.1.0-dev.$(date -u +%Y%m%d%H%M%S)"
           else
-            TAG="pr-${GITHUB_EVENT_NUMBER}-candidate"
+            TAG="0.1.0-pr${GITHUB_EVENT_NUMBER}-candidate"
           fi
           [[ "$TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+[-.][A-Za-z0-9.-]+$ ]] || { echo "Explicit semantic image tag required"; exit 1; }
           AUTH=(-H "Accept: application/vnd.github+json" -H "Authorization: Bearer $GH_TOKEN")
@@ -109,13 +109,16 @@ jobs:
           DIGEST: ${{ steps.metadata.outputs.digest }}
           TAG: ${{ steps.tag.outputs.tag }}
         run: |
-          cosign sign --yes "$REGISTRY/$IMAGE_NAME@$DIGEST"
+          # --yes MUST NOT fall into Sigstore's interactive browser/device
+          # flow. Bind the keyless identity to this job's GitHub OIDC token;
+          # a device code expires and leaves no signature or attestation.
+          timeout 120 cosign --oidc-provider=github-actions --timeout=90s sign --yes "$REGISTRY/$IMAGE_NAME@$DIGEST"
           jq -n --arg builder "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
             --arg source "git+$GITHUB_SERVER_URL/$GITHUB_REPOSITORY@$GITHUB_SHA" \
             --arg tag "$TAG" \
             '{buildType:"kubetee-gamma-funder/v1",builder:{id:$builder},invocation:{configSource:{uri:$source,entryPoint:".github/workflows/build-gamma-funder.yaml"},parameters:{tag:$tag}}}' \
             > /tmp/gamma-provenance.json
-          cosign attest --yes --type slsaprovenance --predicate /tmp/gamma-provenance.json "$REGISTRY/$IMAGE_NAME@$DIGEST"
+          timeout 120 cosign --oidc-provider=github-actions --timeout=90s attest --yes --type slsaprovenance --predicate /tmp/gamma-provenance.json "$REGISTRY/$IMAGE_NAME@$DIGEST"
           cosign verify --certificate-identity-regexp 'https://github.com/KubeTEE-AI/kubetee-subnet/.github/workflows/build-gamma-funder.yaml.*' \
             --certificate-oidc-issuer https://token.actions.githubusercontent.com "$REGISTRY/$IMAGE_NAME@$DIGEST"
       - name: Install Trivy
