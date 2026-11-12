@@ -157,14 +157,14 @@ jobs:
           TARGET: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.tag }}
         run: trivy image --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --format json --output /tmp/gamma-trivy.json --exit-code 1 "$TARGET"
       - name: Show actionable security findings
-        if: always() && hashFiles('/tmp/gamma-trivy.json') != ''
+        if: ${{ always() && hashFiles('/tmp/gamma-trivy.json') != '' }}
         run: |
           jq -r '.Results[]? as $r | $r.Vulnerabilities[]? |
             [$r.Target, .PkgName, .InstalledVersion, .FixedVersion,
              .VulnerabilityID, .Severity] | @tsv' /tmp/gamma-trivy.json
       - name: Record supply chain evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        if: always() && hashFiles('/tmp/gamma-image-metadata.json') != ''
+        if: ${{ always() && hashFiles('/tmp/gamma-image-metadata.json') != '' }}
         with:
           name: gamma-funder-release-${{ steps.tag.outputs.tag }}
           path: |

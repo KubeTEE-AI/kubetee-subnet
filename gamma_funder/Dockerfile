@@ -11,6 +11,12 @@ RUN --mount=type=cache,target=/root/.cache/uv uv sync --locked --no-dev --python
 
 # linux/amd64 release bases are verified with registry source manifest pins.
 FROM python:3.14.3-slim-trixie@sha256:69f1ba39d930d9510073db2edf85af17f1552a5591b0d56c9e44524532271cae
+# The pinned upstream snapshot predates its Debian security package updates.
+# Refresh only Debian packages; the Python and locked application dependencies
+# remain from the verified immutable source layers.
+RUN apt-get update \
+    && apt-get -y --no-install-recommends full-upgrade \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 PATH="/app/.venv/bin:$PATH" \
     KUBETEE_GAMMA_WORKER=0 KUBETEE_GAMMA_SPEND_ENABLED=0 \
     KUBETEE_GAMMA_FINNEY_SPEND_APPROVED=0 KUBETEE_GAMMA_TEST=0
