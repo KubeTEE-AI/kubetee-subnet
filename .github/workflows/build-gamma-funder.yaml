@@ -117,26 +117,32 @@ jobs:
           DIGEST: ${{ steps.metadata.outputs.digest }}
           TAG: ${{ steps.tag.outputs.tag }}
         run: |
-          # Select only the v3 envvar provider: GitHub's ambient request
-          # variables can be excluded in this job, but its OIDC identity is
-          # still available by requesting a short-lived Sigstore token.
-          # Keep the token in an unprintable variable and forbid all fallback
-          # providers so a configuration error can never open a browser flow.
-          OIDC_TOKEN=$(curl --proto '=https' -fsSL --retry 3 --max-time 30 \
+          # GitHub supplies a short-lived Sigstore OIDC token via its job
+          # identity request, never a static signing secret. `envvar` is
+          # NOT a Cosign provider; selecting it silently leads to the device
+          # flow. Supply the token to the supported Fulcio token flow and
+          # disable ambient providers to forbid any interactive fallback.
+          umask 077
+          OIDC_TOKEN_FILE=$(mktemp /tmp/gamma-funder-oidc.XXXXXX)
+          trap 'rm -f "$OIDC_TOKEN_FILE" /tmp/gamma-provenance.json' EXIT
+          curl --proto '=https' -fsSL --retry 3 --max-time 30 \
             -H "Authorization: Bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
-            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sigstore")
-          export SIGSTORE_ID_TOKEN=$(printf '%s' "$OIDC_TOKEN" | jq -r .value)
-          unset OIDC_TOKEN
-          test "${#SIGSTORE_ID_TOKEN}" -gt 100
-          test "$(printf '%s' "$SIGSTORE_ID_TOKEN" | awk -F. '{print $2}' \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sigstore" \
+            | jq -r .value > "$OIDC_TOKEN_FILE"
+          test "$(wc -c < "$OIDC_TOKEN_FILE")" -gt 100
+          test "$(jq -Rr 'split(".")[1]' "$OIDC_TOKEN_FILE" \
             | tr '_-' '/+' | base64 -d 2>/dev/null | jq -r .aud)" = sigstore
-          timeout 120 cosign --oidc-provider=envvar --oidc-disable-ambient-providers --timeout=90s sign --yes "$REGISTRY/$IMAGE_NAME@$DIGEST"
+          timeout 120 cosign sign --yes --fulcio-auth-flow=token \
+            --identity-token="$OIDC_TOKEN_FILE" --oidc-disable-ambient-providers \
+            --timeout=90s "$REGISTRY/$IMAGE_NAME@$DIGEST"
           jq -n --arg builder "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
             --arg source "git+$GITHUB_SERVER_URL/$GITHUB_REPOSITORY@$GITHUB_SHA" \
             --arg tag "$TAG" \
             '{buildType:"kubetee-gamma-funder/v1",builder:{id:$builder},invocation:{configSource:{uri:$source,entryPoint:".github/workflows/build-gamma-funder.yaml"},parameters:{tag:$tag}}}' \
             > /tmp/gamma-provenance.json
-          timeout 120 cosign --oidc-provider=envvar --oidc-disable-ambient-providers --timeout=90s attest --yes --type slsaprovenance --predicate /tmp/gamma-provenance.json "$REGISTRY/$IMAGE_NAME@$DIGEST"
+          timeout 120 cosign attest --yes --fulcio-auth-flow=token \
+            --identity-token="$OIDC_TOKEN_FILE" --oidc-disable-ambient-providers \
+            --timeout=90s --type slsaprovenance --predicate=/tmp/gamma-provenance.json "$REGISTRY/$IMAGE_NAME@$DIGEST"
           cosign verify --certificate-identity-regexp 'https://github.com/KubeTEE-AI/kubetee-subnet/.github/workflows/build-gamma-funder.yaml.*' \
             --certificate-oidc-issuer https://token.actions.githubusercontent.com "$REGISTRY/$IMAGE_NAME@$DIGEST"
       - name: Install Trivy
