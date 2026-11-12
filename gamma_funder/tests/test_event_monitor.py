@@ -28,6 +28,80 @@ ALIEN = "5FzVQ8vH4nfFocVvpL4fVZGzSVaPMFFFGNfPCdY6P5puxy"
 
 
 @pytest.mark.asyncio
+async def test_real_redis_lease_fences_independent_reconciler_replicas():
+    """Disposable local Redis only; no chain requests, signatures, or gateway."""
+    import os
+    import redis.asyncio
+    from worker.lease import RedisHotkeyLease
+
+    url = os.environ.get("GAMMA_REDIS_TEST_URL")
+    if not url:
+        pytest.skip("explicit Redis integration requires GAMMA_REDIS_TEST_URL")
+    redis = redis.asyncio.from_url(url)
+    first = second = None
+    try:
+        await redis.flushdb()
+        first = RedisHotkeyLease(redis, "replica-one")
+        second = RedisHotkeyLease(redis, "replica-two")
+        assert await first.acquire(HK)
+        # Independent instance id bypasses this instance's self re-entrant map;
+        # the contested request must reach Redis, not a fixture-local lock.
+        assert not await second.acquire(HK)
+        # The losing replica's twelve-second retry budget consumes part of the
+        # original sixty-second lease; never assert an exact TTL after that wait.
+        assert 0 < await redis.ttl(first._key(HK)) <= 60
+        await first.release(HK)
+        assert await second.acquire(HK)
+        await second.release(HK)
+    finally:
+        if first is not None:
+            for task in list(first.owned.values()):
+                task.cancel()
+            await asyncio.gather(*first.owned.values(), return_exceptions=True)
+        if second is not None:
+            for task in list(second.owned.values()):
+                task.cancel()
+            await asyncio.gather(*second.owned.values(), return_exceptions=True)
+        await redis.flushdb()
+        await redis.aclose()
+
+
+@pytest.mark.asyncio
+async def test_lease_release_suppresses_only_deliberate_renewal_cancellation():
+    from unittest.mock import AsyncMock
+    from worker.lease import RedisHotkeyLease
+
+    redis = type("Redis", (), {
+        "register_script": lambda self, script: AsyncMock(return_value=1),
+    })()
+    for cancelled in (True, False):
+        failure = asyncio.CancelledError() if cancelled else RuntimeError("renewal failed")
+        class Renewal:
+            def cancel(self):
+                pass
+
+            def __await__(self):
+                async def operation():
+                    raise failure
+                return operation().__await__()
+
+        lease = RedisHotkeyLease(redis, "replica-one")
+        lease.owned[HK] = Renewal()
+        lease.tokens[HK] = "owned-token"
+        try:
+            await lease.release(HK)
+        except RuntimeError as error:
+            assert not cancelled
+            assert str(error) == "renewal failed"
+            assert HK in lease.tokens, "failed release must retain unconfirmed ownership"
+        else:
+            assert cancelled
+            assert HK not in lease.tokens, "clean release must remove Redis ownership"
+        if cancelled:
+            assert HK not in lease.owned
+
+
+@pytest.mark.asyncio
 async def test_finalized_mint_reserves_settles_adds_exact_credit_and_dedupes():
     chain, native = SyntheticChain(), NativeStore()
     chain.mint(10_000_000_000)
@@ -211,6 +285,19 @@ async def test_real_subscription_shape_retries_lost_connection_and_gaps():
     with pytest.raises(RuntimeError, match="retries"):
         await run_monitor(chain, stream, retries=2)
     assert calls == [8, 9, 10, 11, 12]
+
+
+@pytest.mark.asyncio
+async def test_actual_bittensor_client_finalized_head_uses_async_substrate():
+    """No synchronous Subtensor compatibility shim or guessed method name."""
+    from bittensor import Client
+
+    class Substrate:
+        async def finalized_block_number(self):
+            return 90
+
+    client = Client("finney", substrate=Substrate())
+    assert await client.finalized_block() == 90
 
 
 @pytest.mark.asyncio

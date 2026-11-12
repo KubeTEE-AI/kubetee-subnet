@@ -7,6 +7,7 @@ are validated SS58 identities separate from this lock's random ownership token.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import secrets
 import time
 
@@ -60,7 +61,10 @@ class RedisHotkeyLease:
         task = self.owned.pop(hotkey, None)
         if task is not None:
             task.cancel()
-            await task
+            # Expected cancellation belongs to this release, not its caller.
+            # Any other renewal failure still interrupts the accounting cycle.
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
         token = self.tokens.pop(hotkey, None)
         if token:
             await self._release(keys=[self._key(hotkey)], args=[token])
