@@ -1,4 +1,5 @@
 """Remote-attested startup: KBS resources before every network authorization."""
+
 import os
 import ssl
 
@@ -20,11 +21,14 @@ async def bootstrap(fetch=certificate_material, *, scratch_directory=None):
     await materialize_kbs_identity(os.environ, fetch)
     # materialize_kbs_identity already fetched and pinned the fourth
     # clientAuth leaf; no second secret-resource name or duplicate fetch.
-    ca, cert, key = (os.environ[name] for name in (
-        "KUBETEE_GAMMA_PROJECTOR_PEM",
-        "KUBETEE_GAMMA_CLIENT_PEM",
-        "KUBETEE_GAMMA_CLIENT_KEY",
-    ))
+    ca, cert, key = (
+        os.environ[name]
+        for name in (
+            "KUBETEE_GAMMA_PROJECTOR_PEM",
+            "KUBETEE_GAMMA_CLIENT_PEM",
+            "KUBETEE_GAMMA_CLIENT_KEY",
+        )
+    )
     settings = Settings.from_environment(os.environ)
     # Inbound serving and outbound clientAuth are distinct certificate roles.
     settings.outbound_tls_files()
@@ -37,14 +41,22 @@ async def bootstrap(fetch=certificate_material, *, scratch_directory=None):
 
 def main(fetch=certificate_material):
     import asyncio
+
     ca, cert, key = asyncio.run(bootstrap(fetch))
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     context.load_cert_chain(cert, key)
     context.load_verify_locations(cafile=ca)
     context.verify_mode = ssl.CERT_REQUIRED
-    uvicorn.run(create_application(), host="0.0.0.0", port=8443,
-        http="worker.runtime:MTLSProofProtocol", ssl_certfile=cert,
-        ssl_keyfile=key, ssl_cert_reqs=ssl.CERT_REQUIRED, ssl_ca_certs=ca)
+    uvicorn.run(
+        create_application(),
+        host="0.0.0.0",
+        port=8443,
+        http="worker.runtime:MTLSProofProtocol",
+        ssl_certfile=cert,
+        ssl_keyfile=key,
+        ssl_cert_reqs=ssl.CERT_REQUIRED,
+        ssl_ca_certs=ca,
+    )
 
 
 if __name__ == "__main__":

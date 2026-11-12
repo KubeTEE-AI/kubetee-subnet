@@ -24,12 +24,20 @@ from worker.service import WorkerService
 
 def certificate():
     key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "synthetic measured caller")])
+    name = x509.Name(
+        [x509.NameAttribute(NameOID.COMMON_NAME, "synthetic measured caller")]
+    )
     now = datetime.now(timezone.utc)
-    cert = (x509.CertificateBuilder().subject_name(name).issuer_name(name)
-            .public_key(key.public_key()).serial_number(x509.random_serial_number())
-            .not_valid_before(now).not_valid_after(now + timedelta(minutes=1))
-            .sign(key, hashes.SHA256()))
+    cert = (
+        x509.CertificateBuilder()
+        .subject_name(name)
+        .issuer_name(name)
+        .public_key(key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(now)
+        .not_valid_after(now + timedelta(minutes=1))
+        .sign(key, hashes.SHA256())
+    )
     der = cert.public_bytes(serialization.Encoding.DER)
     return base64.b64encode(der).decode(), hashlib.sha256(der).hexdigest()
 
@@ -38,11 +46,17 @@ def certificate():
 async def test_separate_worker_reserves_credits_and_never_returns_raw_key():
     chain, store = SyntheticChain(), NativeStore()
     chain.mint(1_000_000_000)
-    native = Management(store, "https://native.invalid", "synthetic scoped credential")
+    native = Management(
+        store, "https://native.invalid", "synthetic scoped credential"
+    )
     reconciler = Reconciler(chain, native, None, signer=object())
     proof, fingerprint = certificate()
-    service = WorkerService(chain, lambda hk: chain.finalized_snapshot(hk), reconciler,
-                            certificate_fingerprint=fingerprint)
+    service = WorkerService(
+        chain,
+        lambda hk: chain.finalized_snapshot(hk),
+        reconciler,
+        certificate_fingerprint=fingerprint,
+    )
     with pytest.raises(HTTPException):
         await service.authenticate("invalid")
     with pytest.raises(HTTPException):
@@ -51,19 +65,33 @@ async def test_separate_worker_reserves_credits_and_never_returns_raw_key():
     application = FastAPI()
     application.include_router(internal_router(service))
     transport = ASGITransport(app=application)
-    body = {"network": "finney", "genesis_hash": GENESIS, "netuid": 90,
-            "hotkey_ss58": HK, "action": "claim", "verified_challenge_digest": "a" * 64}
-    async with AsyncClient(transport=transport, base_url="http://worker.invalid") as http:
+    body = {
+        "network": "finney",
+        "genesis_hash": GENESIS,
+        "netuid": 90,
+        "hotkey_ss58": HK,
+        "action": "claim",
+        "verified_challenge_digest": "a" * 64,
+    }
+    async with AsyncClient(
+        transport=transport, base_url="http://worker.invalid"
+    ) as http:
         root = await http.get("/internal/v1/ready")
         assert root.status_code == 403
-        result = await http.post("/internal/v1/reconcile", json=body,
-                                 headers={"x-kubetee-worker-proof": proof})
+        result = await http.post(
+            "/internal/v1/reconcile",
+            json=body,
+            headers={"x-kubetee-worker-proof": proof},
+        )
     assert result.status_code == 200, result.text
     payload = result.json()
     assert payload["status"] == "funded"
     assert exact_money(payload["max_budget"]) == 1_000_000_000
     assert store.credits == 1 and len(chain.submitted) == 1
-    assert store.row["key_alias"] == store.row["metadata"]["gamma"]["observation_coldkey"]
+    assert (
+        store.row["key_alias"]
+        == store.row["metadata"]["gamma"]["observation_coldkey"]
+    )
     assert "api_key" not in json.dumps(payload)
 
 
@@ -76,30 +104,51 @@ async def test_internal_pending_reason_projects_to_public_gateway_schema():
     from fixtures import NativeStore, SyntheticChain
 
     import os
-    overlay = Path(os.environ.get(
-        "KUBETEE_GAMMA_GATEWAY_OVERLAY",
-        Path.home() / ".config/superpowers/worktrees/litellm/agent-gamma-guide/.git/modules/litellm/tools/kubetee-litellm-overlay/kubetee_gamma_claim.py",
-    ))
+
+    overlay = Path(
+        os.environ.get(
+            "KUBETEE_GAMMA_GATEWAY_OVERLAY",
+            Path.home()
+            / ".config/superpowers/worktrees/litellm/agent-gamma-guide/.git/modules/litellm/tools/kubetee-litellm-overlay/kubetee_gamma_claim.py",
+        )
+    )
     if not overlay.is_file():
         import pytest
-        pytest.skip("set KUBETEE_GAMMA_GATEWAY_OVERLAY for the cross-repository boundary test")
-    spec = importlib.util.spec_from_file_location("gamma_pending_boundary", overlay)
+
+        pytest.skip(
+            "set KUBETEE_GAMMA_GATEWAY_OVERLAY for the cross-repository boundary test"
+        )
+    spec = importlib.util.spec_from_file_location(
+        "gamma_pending_boundary", overlay
+    )
     claim = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = claim
     spec.loader.exec_module(claim)
     chain, store = SyntheticChain(), NativeStore()
-    native = Management(store, "https://native.invalid", "synthetic credential")
+    native = Management(
+        store, "https://native.invalid", "synthetic credential"
+    )
     reconciler = Reconciler(chain, native, None, signer=object())
     proof, fingerprint = certificate()
-    service = WorkerService(chain, chain.finalized_snapshot, reconciler,
-                            certificate_fingerprint=fingerprint)
+    service = WorkerService(
+        chain,
+        chain.finalized_snapshot,
+        reconciler,
+        certificate_fingerprint=fingerprint,
+    )
     app = FastAPI()
     app.include_router(internal_router(service))
     # Use real worker ASGI and signature verification; no private-route shortcut.
     worker = claim.KubeTEEGammaClaimHandler(
         claim.PrivateWorkerResponse(
-            AsyncClient(transport=ASGITransport(app=app), base_url="https://worker.invalid"),
-            AsyncClient(transport=ASGITransport(app=FastAPI()), base_url="https://native.invalid"),
+            AsyncClient(
+                transport=ASGITransport(app=app),
+                base_url="https://worker.invalid",
+            ),
+            AsyncClient(
+                transport=ASGITransport(app=FastAPI()),
+                base_url="https://native.invalid",
+            ),
             {"x-kubetee-worker-proof": proof},
         ),
         authority=claim.MemoryAuthority(),
@@ -109,25 +158,55 @@ async def test_internal_pending_reason_projects_to_public_gateway_schema():
     chain.signer = object()
     from bittensor_wallet import Keypair as SigningKeypair
     from bittensor_core import Keypair
-    real_signer = SigningKeypair.create_from_mnemonic(SigningKeypair.generate_mnemonic())
+
+    real_signer = SigningKeypair.create_from_mnemonic(
+        SigningKeypair.generate_mnemonic()
+    )
+
     def verify_signer(message, signature, hotkey):
         assert hotkey == real_signer.ss58_address
-        return bool(Keypair(ss58_address=hotkey).verify(message.encode(), bytes.fromhex(signature)))
+        return bool(
+            Keypair(ss58_address=hotkey).verify(
+                message.encode(), bytes.fromhex(signature)
+            )
+        )
+
     claim._verify = verify_signer
-    async with AsyncClient(transport=ASGITransport(app=public), base_url="https://public.invalid") as http:
-        result = await http.post("/v1/gamma/challenge", json={"hotkey_ss58": real_signer.ss58_address, "action": "claim", "netuid": 90})
+    async with AsyncClient(
+        transport=ASGITransport(app=public), base_url="https://public.invalid"
+    ) as http:
+        result = await http.post(
+            "/v1/gamma/challenge",
+            json={
+                "hotkey_ss58": real_signer.ss58_address,
+                "action": "claim",
+                "netuid": 90,
+            },
+        )
         assert result.status_code == 200
         challenge = result.json()
-        signed = await http.post("/v1/gamma/key/claim", json={
-            "challenge_id": challenge["challenge_id"],
-            "signature": real_signer.sign(challenge["message"].encode()).hex(),
-        })
+        signed = await http.post(
+            "/v1/gamma/key/claim",
+            json={
+                "challenge_id": challenge["challenge_id"],
+                "signature": real_signer.sign(
+                    challenge["message"].encode()
+                ).hex(),
+            },
+        )
         assert signed.status_code == 202, signed.text
         assert signed.json()["reason"] == "spend_final_credit_pending"
 
-    request = {"hotkey_ss58": HK, "action": "claim", "verified_challenge_digest": "0" * 64}
+    request = {
+        "hotkey_ss58": HK,
+        "action": "claim",
+        "verified_challenge_digest": "0" * 64,
+    }
     result = await worker.worker.claim(request)
-    assert result[0] == 202 and result[1]["reason"] == "spend_final_credit_pending"
+    assert (
+        result[0] == 202
+        and result[1]["reason"] == "spend_final_credit_pending"
+    )
     projected = claim._typed_response(*result)
     assert projected.status_code == 202
     assert json.loads(projected.body)["status"] == "pending"

@@ -4,6 +4,7 @@ Spend is off by default. Finney requires BOTH KUBETEE_GAMMA_SPEND_ENABLED=1
 and KUBETEE_GAMMA_FINNEY_SPEND_APPROVED=1; test-only settings never enable
 production funding. Tests inject transports, never these approval switches.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -61,15 +62,25 @@ def load_proxy_keypair(raw: bytes, expected: str):
     text = raw.decode().strip()
     try:
         if text.startswith("0x"):
-            signer = Keypair.create_from_seed(bytes.fromhex(text[2:]), crypto_type=bt.CRYPTO_SR25519)
+            signer = Keypair.create_from_seed(
+                bytes.fromhex(text[2:]), crypto_type=bt.CRYPTO_SR25519
+            )
         elif len(text) == 64:
-            signer = Keypair.create_from_seed(bytes.fromhex(text), crypto_type=bt.CRYPTO_SR25519)
+            signer = Keypair.create_from_seed(
+                bytes.fromhex(text), crypto_type=bt.CRYPTO_SR25519
+            )
         else:
-            signer = Keypair.create_from_mnemonic(text, crypto_type=bt.CRYPTO_SR25519)
+            signer = Keypair.create_from_mnemonic(
+                text, crypto_type=bt.CRYPTO_SR25519
+            )
     except (ValueError, TypeError) as exc:
-        raise ConfigurationError("GammaSpend delegate material rejected") from exc
+        raise ConfigurationError(
+            "GammaSpend delegate material rejected"
+        ) from exc
     if signer.ss58_address != expected:
-        raise ConfigurationError("GammaSpend delegate is not the configured proxy address")
+        raise ConfigurationError(
+            "GammaSpend delegate is not the configured proxy address"
+        )
     return signer
 
 
@@ -96,72 +107,168 @@ class Settings:
         return self.outbound_certificate_files
 
     @staticmethod
-    def validate_outbound_certificate(env, *, gateway_fingerprint, worker_fingerprint, gateway_client_fingerprint):
+    def validate_outbound_certificate(
+        env,
+        *,
+        gateway_fingerprint,
+        worker_fingerprint,
+        gateway_client_fingerprint,
+    ):
         """Return an immutable outbound client bucket; never reuse serverAuth."""
         cert = env.get("KUBETEE_GAMMA_WORKER_CLIENT_PEM", "")
         key = env.get("KUBETEE_GAMMA_WORKER_CLIENT_KEY", "")
-        if not cert or not key or not os.path.isfile(cert) or not os.path.isfile(key):
-            raise ConfigurationError("dedicated KBS worker client certificate/key required")
+        if (
+            not cert
+            or not key
+            or not os.path.isfile(cert)
+            or not os.path.isfile(key)
+        ):
+            raise ConfigurationError(
+                "dedicated KBS worker client certificate/key required"
+            )
         fingerprint = env.get("KUBETEE_GAMMA_WORKER_CLIENT_CERT_SHA256", "")
-        if len(fingerprint) != 64 or any(c not in "0123456789abcdef" for c in fingerprint):
-            raise ConfigurationError("dedicated KBS worker client fingerprint required")
+        if len(fingerprint) != 64 or any(
+            c not in "0123456789abcdef" for c in fingerprint
+        ):
+            raise ConfigurationError(
+                "dedicated KBS worker client fingerprint required"
+            )
         with open(cert, "rb") as stream:
             leaf = x509.load_pem_x509_certificate(stream.read())
-        if hashlib.sha256(leaf.public_bytes(serialization.Encoding.DER)).hexdigest() != fingerprint:
-            raise ConfigurationError("KBS worker outbound client certificate fingerprint mismatch")
-        extension = next((entry for entry in leaf.extensions
-                         if entry.oid == x509.oid.ExtensionOID.EXTENDED_KEY_USAGE), None)
-        if extension is None or x509.oid.ExtendedKeyUsageOID.CLIENT_AUTH not in extension.value:
-            raise ConfigurationError("KBS worker outbound client certificate lacks clientAuth")
-        if fingerprint in {gateway_fingerprint, worker_fingerprint, gateway_client_fingerprint}:
-            raise ConfigurationError("all four directional mTLS identities must be distinct")
+        if (
+            hashlib.sha256(
+                leaf.public_bytes(serialization.Encoding.DER)
+            ).hexdigest()
+            != fingerprint
+        ):
+            raise ConfigurationError(
+                "KBS worker outbound client certificate fingerprint mismatch"
+            )
+        extension = next(
+            (
+                entry
+                for entry in leaf.extensions
+                if entry.oid == x509.oid.ExtensionOID.EXTENDED_KEY_USAGE
+            ),
+            None,
+        )
+        if (
+            extension is None
+            or x509.oid.ExtendedKeyUsageOID.CLIENT_AUTH not in extension.value
+        ):
+            raise ConfigurationError(
+                "KBS worker outbound client certificate lacks clientAuth"
+            )
+        if fingerprint in {
+            gateway_fingerprint,
+            worker_fingerprint,
+            gateway_client_fingerprint,
+        }:
+            raise ConfigurationError(
+                "all four directional mTLS identities must be distinct"
+            )
         return cert, key
 
     @classmethod
     def from_environment(cls, env) -> "Settings":
         if not flag(env, "KUBETEE_GAMMA_WORKER"):
-            raise ConfigurationError("KUBETEE_GAMMA_WORKER=1 is required; no enabled-by-default worker")
+            raise ConfigurationError(
+                "KUBETEE_GAMMA_WORKER=1 is required; no enabled-by-default worker"
+            )
         if env.get("KUBETEE_GAMMA_NETWORK", "finney") != "finney":
             raise ConfigurationError("only exact Finney network is accepted")
         real = env.get("KUBETEE_GAMMA_REAL_SPENDER_SS58", "")
         ss58_address(real)
         fingerprint = env.get("KUBETEE_GAMMA_GATEWAY_CERT_SHA256", "")
-        if len(fingerprint) != 64 or not all(c in "0123456789abcdef" for c in fingerprint):
-            raise ConfigurationError("exact gateway TLS leaf certificate SHA256 is required")
+        if len(fingerprint) != 64 or not all(
+            c in "0123456789abcdef" for c in fingerprint
+        ):
+            raise ConfigurationError(
+                "exact gateway TLS leaf certificate SHA256 is required"
+            )
         worker_fingerprint = env.get("KUBETEE_GAMMA_WORKER_CERT_SHA256", "")
-        if len(worker_fingerprint) != 64 or not all(c in "0123456789abcdef" for c in worker_fingerprint):
-            raise ConfigurationError("exact worker TLS leaf certificate SHA256 is required")
-        client_fingerprint = env.get("KUBETEE_GAMMA_GATEWAY_CLIENT_CERT_SHA256", "")
-        if len(client_fingerprint) != 64 or not all(c in "0123456789abcdef" for c in client_fingerprint):
-            raise ConfigurationError("exact gateway client TLS leaf fingerprint required")
+        if len(worker_fingerprint) != 64 or not all(
+            c in "0123456789abcdef" for c in worker_fingerprint
+        ):
+            raise ConfigurationError(
+                "exact worker TLS leaf certificate SHA256 is required"
+            )
+        client_fingerprint = env.get(
+            "KUBETEE_GAMMA_GATEWAY_CLIENT_CERT_SHA256", ""
+        )
+        if len(client_fingerprint) != 64 or not all(
+            c in "0123456789abcdef" for c in client_fingerprint
+        ):
+            raise ConfigurationError(
+                "exact gateway client TLS leaf fingerprint required"
+            )
         if client_fingerprint in {fingerprint, worker_fingerprint}:
-            raise ConfigurationError("gateway client, server and worker must be separate TLS identities")
-        models = tuple(filter(None, env.get("KUBETEE_GAMMA_MODELS", "").split(",")))
+            raise ConfigurationError(
+                "gateway client, server and worker must be separate TLS identities"
+            )
+        models = tuple(
+            filter(None, env.get("KUBETEE_GAMMA_MODELS", "").split(","))
+        )
         if not models or len(set(models)) != len(models):
-            raise ConfigurationError("one or more explicit restricted Gamma models required")
-        mcp = tuple(filter(None, env.get("KUBETEE_GAMMA_MCP_SERVERS", "").split(","))) or None
+            raise ConfigurationError(
+                "one or more explicit restricted Gamma models required"
+            )
+        mcp = (
+            tuple(
+                filter(
+                    None, env.get("KUBETEE_GAMMA_MCP_SERVERS", "").split(",")
+                )
+            )
+            or None
+        )
         url = env.get("KUBETEE_GAMMA_MANAGEMENT_BASE_URL", "")
         parsed_url = urlsplit(url)
         try:
             port = parsed_url.port or 443
         except ValueError as exc:
-            raise ConfigurationError("invalid cluster-internal gateway HTTPS port") from exc
-        if (url != "https://litellm-gateway-mtls.litellm.svc.cluster.local:8443"
-                or parsed_url.scheme != "https"
-                or parsed_url.hostname != "litellm-gateway-mtls.litellm.svc.cluster.local"
-                or parsed_url.username or parsed_url.password or parsed_url.query
-                or parsed_url.fragment or parsed_url.path.rstrip("/") or port != 8443):
-            raise ConfigurationError("exact private Gamma gateway mTLS HTTPS ClusterIP origin required")
+            raise ConfigurationError(
+                "invalid cluster-internal gateway HTTPS port"
+            ) from exc
+        if (
+            url
+            != "https://litellm-gateway-mtls.litellm.svc.cluster.local:8443"
+            or parsed_url.scheme != "https"
+            or parsed_url.hostname
+            != "litellm-gateway-mtls.litellm.svc.cluster.local"
+            or parsed_url.username
+            or parsed_url.password
+            or parsed_url.query
+            or parsed_url.fragment
+            or parsed_url.path.rstrip("/")
+            or port != 8443
+        ):
+            raise ConfigurationError(
+                "exact private Gamma gateway mTLS HTTPS ClusterIP origin required"
+            )
         test = flag(env, "KUBETEE_GAMMA_TEST")
         spend = flag(env, "KUBETEE_GAMMA_SPEND_ENABLED")
-        if spend and not test and env.get("KUBETEE_GAMMA_FINNEY_SPEND_APPROVED", "") != "yes, approved by operator":
-            raise MainnetSpendNotApproved("Finney spend requires separate explicit operator approval")
-        if not test and any(flag(env, name) for name in ("KUBETEE_GAMMA_INJECT", "KUBETEE_GAMMA_MOCK")):
-            raise ConfigurationError("mock capabilities forbidden outside synthetic tests")
+        if (
+            spend
+            and not test
+            and env.get("KUBETEE_GAMMA_FINNEY_SPEND_APPROVED", "")
+            != "yes, approved by operator"
+        ):
+            raise MainnetSpendNotApproved(
+                "Finney spend requires separate explicit operator approval"
+            )
+        if not test and any(
+            flag(env, name)
+            for name in ("KUBETEE_GAMMA_INJECT", "KUBETEE_GAMMA_MOCK")
+        ):
+            raise ConfigurationError(
+                "mock capabilities forbidden outside synthetic tests"
+            )
         fee = env.get("KUBETEE_GAMMA_MAX_FEE_TAO", "")
         try:
             if not fee or Decimal(fee) <= 0:
-                raise ConfigurationError("positive bounded GammaSpend fee cap required")
+                raise ConfigurationError(
+                    "positive bounded GammaSpend fee cap required"
+                )
         except InvalidOperation as exc:
             raise ConfigurationError("invalid bounded fee cap") from exc
         delegate = env.get("KUBETEE_GAMMA_PROXY_DELEGATE_SS58", "")
@@ -169,24 +276,81 @@ class Settings:
             ss58_address(delegate)
         else:
             delegate = ""
-        for name in ("KUBETEE_GAMMA_KBS_CA", "KUBETEE_GAMMA_KBS_CERT", "KUBETEE_GAMMA_KBS_KEY", "KUBETEE_GAMMA_KBS_PROXY_SEED", "KUBETEE_GAMMA_KBS_CLIENT_CERT", "KUBETEE_GAMMA_KBS_CLIENT_KEY"):
+        for name in (
+            "KUBETEE_GAMMA_KBS_CA",
+            "KUBETEE_GAMMA_KBS_CERT",
+            "KUBETEE_GAMMA_KBS_KEY",
+            "KUBETEE_GAMMA_KBS_PROXY_SEED",
+            "KUBETEE_GAMMA_KBS_CLIENT_CERT",
+            "KUBETEE_GAMMA_KBS_CLIENT_KEY",
+        ):
             if not env.get(name) or not env[name].startswith("default/"):
-                raise ConfigurationError("in-guest KBS resource paths must be inside default/")
+                raise ConfigurationError(
+                    "in-guest KBS resource paths must be inside default/"
+                )
             if not env.get(name):
-                raise ConfigurationError("in-guest KBS CA/certificate/key resource paths required")
-        if any(variable not in env for variable in ("KUBETEE_GAMMA_PROJECTOR_PEM", "KUBETEE_GAMMA_CLIENT_PEM", "KUBETEE_GAMMA_CLIENT_KEY")):
-            raise ConfigurationError("KUBETEE_GAMMA_PROJECTOR_PEM and worker KBS certificate resources missing: attested startup required")
+                raise ConfigurationError(
+                    "in-guest KBS CA/certificate/key resource paths required"
+                )
+        if any(
+            variable not in env
+            for variable in (
+                "KUBETEE_GAMMA_PROJECTOR_PEM",
+                "KUBETEE_GAMMA_CLIENT_PEM",
+                "KUBETEE_GAMMA_CLIENT_KEY",
+            )
+        ):
+            raise ConfigurationError(
+                "KUBETEE_GAMMA_PROJECTOR_PEM and worker KBS certificate resources missing: attested startup required"
+            )
         import os.path
-        if any(not os.path.isfile(env[name]) for name in ("KUBETEE_GAMMA_PROJECTOR_PEM", "KUBETEE_GAMMA_CLIENT_PEM", "KUBETEE_GAMMA_CLIENT_KEY")):
-            raise ConfigurationError("KUBETEE_GAMMA_PROJECTOR_PEM and worker KBS certificate resources missing: attested startup required")
-        material = (env["KUBETEE_GAMMA_PROJECTOR_PEM"], env["KUBETEE_GAMMA_CLIENT_PEM"], env["KUBETEE_GAMMA_CLIENT_KEY"])
-        if "KUBETEE_GAMMA_GATEWAY_CLIENT_PEM" in env or "KUBETEE_GAMMA_GATEWAY_CLIENT_KEY" in env:
-            raise ConfigurationError("gateway clientAuth key is never present in the worker TEE")
-        outbound = cls.validate_outbound_certificate(env, gateway_fingerprint=fingerprint,
-            worker_fingerprint=worker_fingerprint, gateway_client_fingerprint=client_fingerprint)
-        return cls(real, fingerprint, url, material, env["KUBETEE_GAMMA_NETWORK"],
-                   fee, models, mcp, worker_fingerprint, client_fingerprint,
-                   delegate, None, test, spend, outbound)
+
+        if any(
+            not os.path.isfile(env[name])
+            for name in (
+                "KUBETEE_GAMMA_PROJECTOR_PEM",
+                "KUBETEE_GAMMA_CLIENT_PEM",
+                "KUBETEE_GAMMA_CLIENT_KEY",
+            )
+        ):
+            raise ConfigurationError(
+                "KUBETEE_GAMMA_PROJECTOR_PEM and worker KBS certificate resources missing: attested startup required"
+            )
+        material = (
+            env["KUBETEE_GAMMA_PROJECTOR_PEM"],
+            env["KUBETEE_GAMMA_CLIENT_PEM"],
+            env["KUBETEE_GAMMA_CLIENT_KEY"],
+        )
+        if (
+            "KUBETEE_GAMMA_GATEWAY_CLIENT_PEM" in env
+            or "KUBETEE_GAMMA_GATEWAY_CLIENT_KEY" in env
+        ):
+            raise ConfigurationError(
+                "gateway clientAuth key is never present in the worker TEE"
+            )
+        outbound = cls.validate_outbound_certificate(
+            env,
+            gateway_fingerprint=fingerprint,
+            worker_fingerprint=worker_fingerprint,
+            gateway_client_fingerprint=client_fingerprint,
+        )
+        return cls(
+            real,
+            fingerprint,
+            url,
+            material,
+            env["KUBETEE_GAMMA_NETWORK"],
+            fee,
+            models,
+            mcp,
+            worker_fingerprint,
+            client_fingerprint,
+            delegate,
+            None,
+            test,
+            spend,
+            outbound,
+        )
 
 
 from cryptography import x509
@@ -202,19 +366,27 @@ def pinned_gateway_certificate(settings: Settings) -> bytes:
     context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH, cafile=ca)
     outbound = settings.outbound_tls_files()
     if outbound is None:
-        raise ConfigurationError("a verified outbound connection needs a dedicated clientAuth leaf")
+        raise ConfigurationError(
+            "a verified outbound connection needs a dedicated clientAuth leaf"
+        )
     context.load_cert_chain(*outbound)
     context.minimum_version = ssl.TLSVersion.TLSv1_2
     address = urlsplit(settings.management_url)
-    with socket.create_connection((address.hostname, address.port or 443), 10) as raw:
+    with socket.create_connection(
+        (address.hostname, address.port or 443), 10
+    ) as raw:
         with context.wrap_socket(raw, server_hostname=address.hostname) as tls:
             der = tls.getpeercert(True)
     if hashlib.sha256(der).hexdigest() != settings.gateway_fingerprint:
-        raise ConfigurationError("gateway TLS certificate does not match measured leaf")
+        raise ConfigurationError(
+            "gateway TLS certificate does not match measured leaf"
+        )
     return der
 
 
-def verify_worker_start(settings: Settings, ca_chain: bytes, certificate: bytes) -> bytes:
+def verify_worker_start(
+    settings: Settings, ca_chain: bytes, certificate: bytes
+) -> bytes:
     """No unverified filesystem secret can select an alternate identity."""
     ca = x509.load_pem_x509_certificate(ca_chain)
     leaf = x509.load_pem_x509_certificate(certificate)
@@ -224,28 +396,51 @@ def verify_worker_start(settings: Settings, ca_chain: bytes, certificate: bytes)
     if hashlib.sha256(leaf_der).hexdigest() != settings.worker_fingerprint:
         raise ConfigurationError("KBS worker certificate fingerprint mismatch")
     from datetime import datetime, timezone
+
     now = datetime.now(timezone.utc)
     if not (leaf.not_valid_before_utc <= now <= leaf.not_valid_after_utc):
-        raise ConfigurationError("KBS worker TLS certificate is outside its validity interval")
-    extension = next((entry for entry in leaf.extensions
-                     if entry.oid == x509.oid.ExtensionOID.EXTENDED_KEY_USAGE), None)
-    if extension is None or x509.oid.ExtendedKeyUsageOID.SERVER_AUTH not in extension.value:
+        raise ConfigurationError(
+            "KBS worker TLS certificate is outside its validity interval"
+        )
+    extension = next(
+        (
+            entry
+            for entry in leaf.extensions
+            if entry.oid == x509.oid.ExtensionOID.EXTENDED_KEY_USAGE
+        ),
+        None,
+    )
+    if (
+        extension is None
+        or x509.oid.ExtendedKeyUsageOID.SERVER_AUTH not in extension.value
+    ):
         raise ConfigurationError("KBS worker TLS certificate lacks serverAuth")
-    names = leaf.extensions.get_extension_for_class(x509.SubjectAlternativeName).value
-    if names.get_values_for_type(x509.DNSName) != ["gamma-funder.kubetee-ops.svc.cluster.local"]:
+    names = leaf.extensions.get_extension_for_class(
+        x509.SubjectAlternativeName
+    ).value
+    if names.get_values_for_type(x509.DNSName) != [
+        "gamma-funder.kubetee-ops.svc.cluster.local"
+    ]:
         raise ConfigurationError("KBS worker TLS DNS SAN mismatch")
     if leaf.extensions.get_extension_for_class(x509.BasicConstraints).value.ca:
-        raise ConfigurationError("KBS worker certificate must be a non-CA leaf")
+        raise ConfigurationError(
+            "KBS worker certificate must be a non-CA leaf"
+        )
     return leaf_der
 
 
 async def materialize_kbs_identity(env=os.environ, fetch=certificate_material):
     """CDH/Guest scratch only; filesystem mounts cannot inject an identity."""
     from pathlib import Path
-    resources = ((env["KUBETEE_GAMMA_KBS_CA"], "ca.pem", 0o644),
-                 (env["KUBETEE_GAMMA_KBS_CERT"], "tls.crt", 0o600),
-                 (env["KUBETEE_GAMMA_KBS_KEY"], "tls.key", 0o600))
-    target = Path(env.get("KUBETEE_GAMMA_PROJECTOR_PEM", "/run/gamma-kbs/ca.pem")).parent
+
+    resources = (
+        (env["KUBETEE_GAMMA_KBS_CA"], "ca.pem", 0o644),
+        (env["KUBETEE_GAMMA_KBS_CERT"], "tls.crt", 0o600),
+        (env["KUBETEE_GAMMA_KBS_KEY"], "tls.key", 0o600),
+    )
+    target = Path(
+        env.get("KUBETEE_GAMMA_PROJECTOR_PEM", "/run/gamma-kbs/ca.pem")
+    ).parent
     target.mkdir(mode=0o700, parents=True, exist_ok=True)
     for resource, name, mode in resources:
         data = await fetch(resource)
@@ -257,7 +452,12 @@ async def materialize_kbs_identity(env=os.environ, fetch=certificate_material):
     # Match the exact materialized KBS worker identity, not a caller-supplied alternative.
     cert_data = (target / "tls.crt").read_bytes()
     leaf = x509.load_pem_x509_certificate(cert_data)
-    if hashlib.sha256(leaf.public_bytes(serialization.Encoding.DER)).hexdigest() != env["KUBETEE_GAMMA_WORKER_CERT_SHA256"]:
+    if (
+        hashlib.sha256(
+            leaf.public_bytes(serialization.Encoding.DER)
+        ).hexdigest()
+        != env["KUBETEE_GAMMA_WORKER_CERT_SHA256"]
+    ):
         raise ConfigurationError("KBS worker certificate fingerprint mismatch")
     ca_path = target / "ca.pem"
     env["KUBETEE_GAMMA_PROJECTOR_PEM"] = str(ca_path)
@@ -273,22 +473,35 @@ async def materialize_kbs_identity(env=os.environ, fetch=certificate_material):
     os.chmod(key_path, 0o600)
     env["KUBETEE_GAMMA_WORKER_CLIENT_PEM"] = str(cert_path)
     env["KUBETEE_GAMMA_WORKER_CLIENT_KEY"] = str(key_path)
-    Settings.validate_outbound_certificate(env,
+    Settings.validate_outbound_certificate(
+        env,
         gateway_fingerprint=env["KUBETEE_GAMMA_GATEWAY_CERT_SHA256"],
         worker_fingerprint=env["KUBETEE_GAMMA_WORKER_CERT_SHA256"],
-        gateway_client_fingerprint=env["KUBETEE_GAMMA_GATEWAY_CLIENT_CERT_SHA256"])
+        gateway_client_fingerprint=env[
+            "KUBETEE_GAMMA_GATEWAY_CLIENT_CERT_SHA256"
+        ],
+    )
 
 
-def scoped_http_client(settings: Settings, gateway_der: bytes | None = None) -> httpx.AsyncClient:
+def scoped_http_client(
+    settings: Settings, gateway_der: bytes | None = None
+) -> httpx.AsyncClient:
     ca, certificate, key = settings.certificate_files
     import ssl
+
     context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH, cafile=ca)
     outbound = settings.outbound_tls_files()
-    context.load_cert_chain(*(outbound if outbound is not None else (certificate, key)))
+    context.load_cert_chain(
+        *(outbound if outbound is not None else (certificate, key))
+    )
     if gateway_der is None:
-        raise ConfigurationError("verified gateway TLS leaf required for worker authentication")
+        raise ConfigurationError(
+            "verified gateway TLS leaf required for worker authentication"
+        )
     if hashlib.sha256(gateway_der).hexdigest() != settings.gateway_fingerprint:
-        raise ConfigurationError("mTLS gateway certificate is not the operator-approved leaf")
+        raise ConfigurationError(
+            "mTLS gateway certificate is not the operator-approved leaf"
+        )
     # No caller-provided peer-DER header is needed. The socket carries identity;
     # the gateway protocol inserts it after verifying its allowed client leaf.
     headers = {"user-agent": "gamma-reconciler-type22"}
@@ -296,39 +509,71 @@ def scoped_http_client(settings: Settings, gateway_der: bytes | None = None) -> 
     # not by a client-side URL rewrite. SNI and mTLS retain the ClusterIP name.
     # The gateway rejects any externally supplied proof header. Only the socket's
     # peer certificate is accepted; this header is not a substitute identity.
-    return httpx.AsyncClient(verify=context, timeout=httpx.Timeout(30, connect=10),
-                             base_url=settings.management_url, headers=headers)
+    return httpx.AsyncClient(
+        verify=context,
+        timeout=httpx.Timeout(30, connect=10),
+        base_url=settings.management_url,
+        headers=headers,
+    )
 
 
 class DelegateProofMiddleware:
     """Loopback proof only after the gateway's TLS leaf matched its fingerprint."""
+
     async def __call__(self, scope, receive, send):
         if scope["type"] not in {"http", "websocket"}:
             await self.app(scope, receive, send)
             return
         # Direct headers remain untrusted. Derive proof ONLY from TLS client
         # certificate validated by uvicorn's required mTLS SSLContext.
-        scope["headers"] = [(name, value) for name, value in scope["headers"]
-                            if name not in {b"x-kubetee-worker-proof", b"x-kubetee-worker-cert-der"}]
+        scope["headers"] = [
+            (name, value)
+            for name, value in scope["headers"]
+            if name
+            not in {b"x-kubetee-worker-proof", b"x-kubetee-worker-cert-der"}
+        ]
         transport = scope.get("extensions", {}).get("transport")
         if transport is None:
-            raise TypeError("mTLSProofProtocol required: no trusted TLS transport")
+            raise TypeError(
+                "mTLSProofProtocol required: no trusted TLS transport"
+            )
         tls = transport.get_extra_info("ssl_object")
         if tls is None:
             raise RuntimeError("verified transport has no mTLS TLS object")
         peer_certificate = tls.getpeercert(True)
         if peer_certificate is None:
             from fastapi.responses import JSONResponse
-            response = JSONResponse({"detail": {"status": "ineligible", "reason": "worker TLS required"}}, status_code=403)
+
+            response = JSONResponse(
+                {
+                    "detail": {
+                        "status": "ineligible",
+                        "reason": "worker TLS required",
+                    }
+                },
+                status_code=403,
+            )
             await response(scope, receive, send)
             return
         import base64
+
         der = peer_certificate
         if not isinstance(der, bytes) or not der:
-            raise RuntimeError("mTLS peer certificate required from verified transport")
+            raise RuntimeError(
+                "mTLS peer certificate required from verified transport"
+            )
         if hashlib.sha256(der).hexdigest() != self.fingerprint:
             from fastapi.responses import JSONResponse
-            response = JSONResponse({"detail": {"status": "ineligible", "reason": "wrong worker certificate"}}, status_code=403)
+
+            response = JSONResponse(
+                {
+                    "detail": {
+                        "status": "ineligible",
+                        "reason": "wrong worker certificate",
+                    }
+                },
+                status_code=403,
+            )
             await response(scope, receive, send)
             return
         headers = list(scope["headers"])
@@ -345,6 +590,7 @@ from uvicorn.protocols.http import h11_impl
 
 class MTLSProofCycle(h11_impl.RequestResponseCycle):
     """Expose only the server's socket to ASGI, never a caller-provided proof."""
+
     async def run_asgi(self, app):
         extensions = dict(self.scope.get("extensions", {}))
         extensions["transport"] = self.transport
@@ -362,6 +608,7 @@ class MTLSProofProtocol(h11_impl.H11Protocol):
 
     def _cycle_selection(self):
         import contextlib
+
         @contextlib.contextmanager
         def selected():
             standard = h11_impl.RequestResponseCycle
@@ -370,15 +617,28 @@ class MTLSProofProtocol(h11_impl.H11Protocol):
                 yield
             finally:
                 h11_impl.RequestResponseCycle = standard
+
         return selected()
 
 
-
-def create_application(env=os.environ, *, connect=None, create_store=None, create_chain=None, fetch=certificate_material, gateway_der=None, management_transport=None, create_monitor=None):
+def create_application(
+    env=os.environ,
+    *,
+    connect=None,
+    create_store=None,
+    create_chain=None,
+    fetch=certificate_material,
+    gateway_der=None,
+    management_transport=None,
+    create_monitor=None,
+):
     """No host database, raw API-key trust, or master-token transport exists."""
     settings = Settings.from_environment(env)
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
-    app.add_middleware(DelegateProofMiddleware, fingerprint=settings.gateway_client_fingerprint)
+    app.add_middleware(
+        DelegateProofMiddleware,
+        fingerprint=settings.gateway_client_fingerprint,
+    )
     from contextlib import asynccontextmanager
 
     @asynccontextmanager
@@ -387,16 +647,33 @@ def create_application(env=os.environ, *, connect=None, create_store=None, creat
         try:
             if connect is None:
                 import bittensor as bt
+
                 client = await bt.Client(settings.network).connect()
             else:
                 client = await connect(settings)
-            store = await create_store(settings) if create_store is not None else None
+            store = (
+                await create_store(settings)
+                if create_store is not None
+                else None
+            )
             if not settings.test and store is None:
                 url = env.get("KUBETEE_GAMMA_REDIS_URL", "")
-                if urlsplit(url).scheme not in {"redis", "rediss", "redis+sentinel", "rediss+sentinel"} or not urlsplit(url).hostname:
-                    raise ConfigurationError("production Redis fencing client required")
+                if (
+                    urlsplit(url).scheme
+                    not in {
+                        "redis",
+                        "rediss",
+                        "redis+sentinel",
+                        "rediss+sentinel",
+                    }
+                    or not urlsplit(url).hostname
+                ):
+                    raise ConfigurationError(
+                        "production Redis fencing client required"
+                    )
                 from .config import redis_production_settings
                 from redis.asyncio import Redis, Sentinel
+
                 try:
                     parsed = redis_production_settings(url)
                     if "url" in parsed:
@@ -405,28 +682,54 @@ def create_application(env=os.environ, *, connect=None, create_store=None, creat
                         nodes = parsed.pop("sentinel_nodes")
                         service_name = parsed.pop("service_name")
                         sentinel_kwargs = parsed.pop("sentinel_kwargs")
-                        discovery = Sentinel(nodes, sentinel_kwargs=sentinel_kwargs,
-                                             socket_connect_timeout=5.0, socket_timeout=5.0)
+                        discovery = Sentinel(
+                            nodes,
+                            sentinel_kwargs=sentinel_kwargs,
+                            socket_connect_timeout=5.0,
+                            socket_timeout=5.0,
+                        )
                         store = discovery.master_for(service_name, **parsed)
                 except ValueError as error:
-                    raise ConfigurationError("invalid production Redis URI configuration") from error
+                    raise ConfigurationError(
+                        "invalid production Redis URI configuration"
+                    ) from error
             if store is not None and not hasattr(store, "acquire"):
                 from .lease import RedisHotkeyLease
+
                 redis_connection = store
-                store = RedisHotkeyLease(store, f"pod:{os.environ.get('HOSTNAME', 'worker')}")
+                store = RedisHotkeyLease(
+                    store, f"pod:{os.environ.get('HOSTNAME', 'worker')}"
+                )
             if not settings.spend_enabled and settings.spender:
-                raise ConfigurationError("proxy delegate set while spend is disabled")
+                raise ConfigurationError(
+                    "proxy delegate set while spend is disabled"
+                )
             # Spending disabled never grants execute_spend authority. Exact
             # on-chain receipt lookup and native credit recovery do not require it.
-            signer = load_proxy_keypair(await fetch(env["KUBETEE_GAMMA_KBS_PROXY_SEED"]), settings.spender) if settings.spend_enabled and settings.spender else None
+            signer = (
+                load_proxy_keypair(
+                    await fetch(env["KUBETEE_GAMMA_KBS_PROXY_SEED"]),
+                    settings.spender,
+                )
+                if settings.spend_enabled and settings.spender
+                else None
+            )
             peer_der = gateway_der
             if peer_der is None:
                 from cryptography import x509
+
                 peer_der = pinned_gateway_certificate(settings)
-            chain = (create_chain(settings, client, signer) if create_chain else GammaChain(
-                client, real_spender=settings.real_spender, delegate=settings.spender or settings.real_spender,
-                max_fee=settings.fee_cap, genesis_hash=GENESIS,
-            ))
+            chain = (
+                create_chain(settings, client, signer)
+                if create_chain
+                else GammaChain(
+                    client,
+                    real_spender=settings.real_spender,
+                    delegate=settings.spender or settings.real_spender,
+                    max_fee=settings.fee_cap,
+                    genesis_hash=GENESIS,
+                )
+            )
             if not settings.spend_enabled:
                 chain.spend_enabled = False
             # Finalized heads subscribe through the same chain client as all
@@ -437,18 +740,50 @@ def create_application(env=os.environ, *, connect=None, create_store=None, creat
                 # Synthetic channel mirrors the measured mTLS contract; master
                 # credentials cannot enter either transport in production.
                 await management.aclose()
-                management = httpx.AsyncClient(transport=management_transport, base_url=settings.management_url)
+                management = httpx.AsyncClient(
+                    transport=management_transport,
+                    base_url=settings.management_url,
+                )
             credential = env.get("KUBETEE_GAMMA_MANAGEMENT_CREDENTIAL", "")
-            if not settings.test and credential != "mTLS:gamma-reconciler-type22":
-                raise ConfigurationError("only the narrow mTLS Gamma worker identity is accepted")
-            native = Management(management, settings.management_url, credential or "mTLS:gamma-reconciler-type22",
-                                models=list(settings.models), mcp_servers=list(settings.mcp_servers) if settings.mcp_servers else None)
-            reconciler = Reconciler(chain, native, store=None, lease=store, signer=signer)
+            if (
+                not settings.test
+                and credential != "mTLS:gamma-reconciler-type22"
+            ):
+                raise ConfigurationError(
+                    "only the narrow mTLS Gamma worker identity is accepted"
+                )
+            native = Management(
+                management,
+                settings.management_url,
+                credential or "mTLS:gamma-reconciler-type22",
+                models=list(settings.models),
+                mcp_servers=(
+                    list(settings.mcp_servers)
+                    if settings.mcp_servers
+                    else None
+                ),
+            )
+            reconciler = Reconciler(
+                chain, native, store=None, lease=store, signer=signer
+            )
             if not await native.ready():
-                raise ConfigurationError("private gateway readiness failed over pinned mTLS")
-            service = WorkerService(chain, chain.finalized_snapshot, reconciler,
-                                    certificate_fingerprint=settings.gateway_client_fingerprint, ready=True)
-            from .events import EventStream, ObservationDispatcher, run_monitor, replay_history
+                raise ConfigurationError(
+                    "private gateway readiness failed over pinned mTLS"
+                )
+            service = WorkerService(
+                chain,
+                chain.finalized_snapshot,
+                reconciler,
+                certificate_fingerprint=settings.gateway_client_fingerprint,
+                ready=True,
+            )
+            from .events import (
+                EventStream,
+                ObservationDispatcher,
+                run_monitor,
+                replay_history,
+            )
+
             dispatcher = ObservationDispatcher(service, reconciler)
             service.reconciler.event_dispatcher = dispatcher
             # One bounded per-hotkey read, never a global wallet/key map.
@@ -489,5 +824,6 @@ def create_application(env=os.environ, *, connect=None, create_store=None, creat
                     result = close()
                     if asyncio.iscoroutine(result):
                         await result
+
     app.router.lifespan_context = lifespan
     return app

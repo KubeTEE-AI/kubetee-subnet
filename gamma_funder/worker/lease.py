@@ -3,12 +3,12 @@
 Registered fixed Lua scripts never accept caller-provided Lua source. Hotkeys
 are validated SS58 identities separate from this lock's random ownership token.
 """
+
 from __future__ import annotations
 
 import asyncio
 import secrets
 import time
-
 
 RENEW_SCRIPT = "if redis.call('GET',KEYS[1])==ARGV[1] then return redis.call('EXPIRE',KEYS[1],60) else return 0 end"
 RELEASE_SCRIPT = "if redis.call('GET',KEYS[1])==ARGV[1] then return redis.call('DEL',KEYS[1]) else return 0 end"
@@ -17,7 +17,9 @@ RELEASE_SCRIPT = "if redis.call('GET',KEYS[1])==ARGV[1] then return redis.call('
 class RedisHotkeyLease:
     def __init__(self, redis, worker_id: str):
         if redis is None or not worker_id:
-            raise ValueError("explicit Redis transport and stable worker instance id required")
+            raise ValueError(
+                "explicit Redis transport and stable worker instance id required"
+            )
         self.redis, self.worker_id = redis, worker_id
         self.tokens, self.owned = {}, {}
         self._renew = self.redis.register_script(RENEW_SCRIPT)
@@ -27,10 +29,14 @@ class RedisHotkeyLease:
         token = secrets.token_urlsafe(32)
         deadline = time.monotonic() + 10
         while time.monotonic() < deadline:
-            acquired = await self.redis.set(self._key(hotkey), token, nx=True, ex=60)
+            acquired = await self.redis.set(
+                self._key(hotkey), token, nx=True, ex=60
+            )
             if acquired is True:
                 self.tokens[hotkey] = token
-                self.owned[hotkey] = asyncio.create_task(self.keep_lease(hotkey, token))
+                self.owned[hotkey] = asyncio.create_task(
+                    self.keep_lease(hotkey, token)
+                )
                 return True
             await asyncio.sleep(0.2)
         return False
@@ -39,7 +45,10 @@ class RedisHotkeyLease:
         try:
             while True:
                 await asyncio.sleep(20)
-                if await self._renew(keys=[self._key(hotkey)], args=[token]) != 1:
+                if (
+                    await self._renew(keys=[self._key(hotkey)], args=[token])
+                    != 1
+                ):
                     raise RuntimeError("worker lost reconciliation fencing")
         except asyncio.CancelledError:
             return

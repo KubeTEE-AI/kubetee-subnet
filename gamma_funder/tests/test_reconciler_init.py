@@ -1,5 +1,6 @@
 from pathlib import Path
 import sys
+
 sys.path.insert(0, str(Path(__file__).parents[1]))
 
 import copy
@@ -14,7 +15,9 @@ from worker.chain import ChainError
 
 
 async def intake(chain, store, quality="minted_pending"):
-    return await store.observe_fresh_event(HK, chain.finalized(), quality=quality)
+    return await store.observe_fresh_event(
+        HK, chain.finalized(), quality=quality
+    )
 
 
 def worker(chain, store, **kw):
@@ -30,7 +33,10 @@ async def test_paused_observation_never_credits_or_spends():
     with pytest.raises(Pending, match="paused"):
         await r.reconcile(HK)
     assert chain.submitted == [] and store.row["max_budget"] == "0"
-    assert store.row["key_alias"] == store.row["metadata"]["gamma"]["observation_coldkey"]
+    assert (
+        store.row["key_alias"]
+        == store.row["metadata"]["gamma"]["observation_coldkey"]
+    )
     cp = store.row["metadata"]["gamma"]
     assert cp["delta_units"] == 2_000_000_000
 
@@ -45,7 +51,9 @@ async def test_cross_coldkey_settlement_receipt_never_grants_credit():
 
     async def foreign_coldkey(hk, amount, reference, signer):
         await original(hk, amount, reference, signer)
-        chain.blocks[chain.current]["events"][0]["event"]["attributes"]["coldkey"] = ALIEN
+        chain.blocks[chain.current]["events"][0]["event"]["attributes"][
+            "coldkey"
+        ] = ALIEN
 
     chain.execute_spend = foreign_coldkey
     with pytest.raises(Pending, match="lookup|never resubmit"):
@@ -58,9 +66,13 @@ async def test_cross_coldkey_settlement_receipt_never_grants_credit():
 @pytest.mark.asyncio
 async def test_moved_event_is_matched_at_destination_hotkey():
     chain, store = SyntheticChain(), NativeStore()
-    chain.advance("GammaMoved", coldkey="5C8etthaGJi5SkQeEDSaK32ABBjkhwDeK9ksQCTLEGM3EH14",
-                  origin_hotkey="5FzVQ8vH4nfFocVvpL4fVZGzSVaPMFFFGNfPCdY6P5puxy",
-                  destination_hotkey=HK, amount=1_000_000_000)
+    chain.advance(
+        "GammaMoved",
+        coldkey="5C8etthaGJi5SkQeEDSaK32ABBjkhwDeK9ksQCTLEGM3EH14",
+        origin_hotkey="5FzVQ8vH4nfFocVvpL4fVZGzSVaPMFFFGNfPCdY6P5puxy",
+        destination_hotkey=HK,
+        amount=1_000_000_000,
+    )
     await intake(chain, store, quality="donor")
     chain.advance()
     await worker(chain, store).reconcile(HK)
@@ -75,7 +87,10 @@ async def test_coldkey_is_fast_alias_but_hotkey_is_identity():
     await intake(chain, store)
     result = await worker(chain, store).reconcile(HK)
     assert result.status == "funded"
-    assert store.row["key_alias"] == store.row["metadata"]["gamma"]["observation_coldkey"]
+    assert (
+        store.row["key_alias"]
+        == store.row["metadata"]["gamma"]["observation_coldkey"]
+    )
     assert store.row["metadata"]["gamma_hotkey"] == HK
     with pytest.raises(Pending, match="migrates"):
         store.row["key_alias"] = ALIEN
@@ -89,14 +104,19 @@ async def test_exact_burn_added_once_and_readback_keeps_grants():
     await intake(chain, store)
     result = await worker(chain, store).reconcile(HK)
     assert result.status == "funded"
-    assert len(chain.submitted) == 1 and chain.submitted[0]["amount"] == 1_000_000_000
+    assert (
+        len(chain.submitted) == 1
+        and chain.submitted[0]["amount"] == 1_000_000_000
+    )
     assert store.credits == 1
     assert exact_money(store.row["max_budget"]) == 1_000_000_000
     assert store.row["models"] == ["selected-model"]
     assert store.row["team_id"] == "native-grant"
     assert store.row["object_permission"]["mcp_servers"] == ["firecrawl"]
     assert store.row["metadata"]["gamma"]["pending"] is None
-    assert store.row["metadata"]["gamma"]["total_settled_units"] == 1_000_000_000
+    assert (
+        store.row["metadata"]["gamma"]["total_settled_units"] == 1_000_000_000
+    )
     assert store.row["metadata"]["gamma"]["delta_units"] == 0
 
 

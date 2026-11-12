@@ -3,6 +3,7 @@
 Nothing here mints keys, supplies amounts, or records an alternative ledger.
 An event is an observation; live storage and exact receipts remain authoritative.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -19,7 +20,9 @@ RETRYABLE_ERRORS = (ChainError, ConnectionError, TimeoutError, OSError)
 def decoded_records(rows: Any):
     if rows is None:
         return []
-    if isinstance(rows, dict) and any(name in rows for name in ("records", "events")):
+    if isinstance(rows, dict) and any(
+        name in rows for name in ("records", "events")
+    ):
         rows = rows.get("records", rows.get("events", []))
     return [row.to_dict() if hasattr(row, "to_dict") else row for row in rows]
 
@@ -41,6 +44,7 @@ class ObservationDispatcher:
     Pending results are explicitly left to the next event/restart/recovery
     reminder and are never acknowledged as settled credit by this dispatcher.
     """
+
     def __init__(self, service, reconciler):
         self.service = service
         self.reconciler = reconciler
@@ -50,7 +54,9 @@ class ObservationDispatcher:
 
     async def observation(self, hotkey: str, identifier: str):
         if len(self.tasks) >= self.max_queue:
-            LOG.warning("Gamma observation queue saturated; exact-H retry remains pending")
+            LOG.warning(
+                "Gamma observation queue saturated; exact-H retry remains pending"
+            )
             return False
         previous = self.tasks.get(hotkey)
         if previous is not None:
@@ -59,14 +65,19 @@ class ObservationDispatcher:
 
     async def _run(self, hotkey: str):
         from .protocol import ProveReconcile
+
         task = asyncio.current_task()
         if task is None:
             raise RuntimeError("Gamma observation requires an event loop")
         self.tasks[hotkey] = task
         try:
-            result = await self.service.request(ProveReconcile(
-                hotkey_ss58=hotkey, action="status", verified_challenge_digest="0" * 64,
-            ))
+            result = await self.service.request(
+                ProveReconcile(
+                    hotkey_ss58=hotkey,
+                    action="status",
+                    verified_challenge_digest="0" * 64,
+                )
+            )
             if result.status in {"funded", "ineligible"}:
                 return True
             # Native pending intent, live zero-budget reservation, and chain
@@ -74,7 +85,10 @@ class ObservationDispatcher:
             self.reconciler.follow.add(hotkey)
             return True
         except Exception:
-            LOG.warning("Finalized Gamma observation failed; retry remains due", exc_info=True)
+            LOG.warning(
+                "Finalized Gamma observation failed; retry remains due",
+                exc_info=True,
+            )
             self.reconciler.follow.add(hotkey)
             return False
         finally:
@@ -99,14 +113,20 @@ class ObservationDispatcher:
                     if result.status in {"funded", "ineligible"}:
                         self.reconciler.follow.discard(hotkey)
                 except Exception:
-                    LOG.warning("Exact-H pending receipt reminder deferred", exc_info=True)
+                    LOG.warning(
+                        "Exact-H pending receipt reminder deferred",
+                        exc_info=True,
+                    )
             # No general account-map walk. Exact follow entries can reflect a
             # native pending spend or a previously checkpointed capped balance.
             for hotkey in tuple(self.reconciler.follow):
                 try:
                     await self.reconciler.remind(hotkey)
                 except Exception:
-                    LOG.warning("Exact-H capped allowance reminder deferred", exc_info=True)
+                    LOG.warning(
+                        "Exact-H capped allowance reminder deferred",
+                        exc_info=True,
+                    )
             await asyncio.sleep(interval)
 
     async def close(self):
@@ -129,6 +149,7 @@ async def automatic_status(awaitable):
 
 class EventStream:
     """Bounded block-hash/event-position deduplication, not a receipt store."""
+
     def __init__(self, client, *, retain: int = 8192):
         self.client = client
         self.next_head: int | None = None
@@ -138,17 +159,29 @@ class EventStream:
         self._keys: set[str] = set()
         self._order: list[str] = []
 
-    async def dispatch_decoded(self, height: int, block_hash: str, rows: Any, *, startup: bool = False) -> int:
+    async def dispatch_decoded(
+        self, height: int, block_hash: str, rows: Any, *, startup: bool = False
+    ) -> int:
         root = "0x" + block_hash.removeprefix("0x").lower()
-        if len(root) != 66 or any(c not in "0123456789abcdef" for c in root[2:]):
+        if len(root) != 66 or any(
+            c not in "0123456789abcdef" for c in root[2:]
+        ):
             raise ChainError("invalid finalized Gamma block hash")
         count = 0
         for position, entry in enumerate(decoded_records(rows)):
             pallet, name, attrs, _ = event_parts(entry)
-            if (name not in TRIGGERS or pallet not in ("SubtensorModule", "Subtensor")
-                    or not isinstance(attrs, dict) or str(attrs.get("netuid")) != "90"):
+            if (
+                name not in TRIGGERS
+                or pallet not in ("SubtensorModule", "Subtensor")
+                or not isinstance(attrs, dict)
+                or str(attrs.get("netuid")) != "90"
+            ):
                 continue
-            hotkey = attrs.get("destination_hotkey") if name == "GammaMoved" else attrs.get("hotkey")
+            hotkey = (
+                attrs.get("destination_hotkey")
+                if name == "GammaMoved"
+                else attrs.get("hotkey")
+            )
             if not isinstance(hotkey, str) or not hotkey:
                 continue
             key = root + "-" + str(position)
@@ -159,14 +192,25 @@ class EventStream:
                 # A move has no spender. Storage proof is authoritative;
                 # moved-to rows are established by their first mint, never
                 # created from an unauthenticated move alone.
-                if name == "GammaMoved" and await reconciler._row(hotkey) is None:
+                if (
+                    name == "GammaMoved"
+                    and await reconciler._row(hotkey) is None
+                ):
                     continue
-                if name != "GammaMoved" and attrs.get("spender") != reconciler.chain.real_spender:
+                if (
+                    name != "GammaMoved"
+                    and attrs.get("spender") != reconciler.chain.real_spender
+                ):
                     continue
-                if name != "GammaMinted" and await reconciler._row(hotkey) is None:
+                if (
+                    name != "GammaMinted"
+                    and await reconciler._row(hotkey) is None
+                ):
                     continue
             if not await self.dispatch(hotkey, key):
-                raise ChainError("finalized Gamma observation not acknowledged")
+                raise ChainError(
+                    "finalized Gamma observation not acknowledged"
+                )
             # Atomically commit dedup only after the authoritative outcome.
             self._keys.add(key)
             self._order.append(key)
@@ -191,7 +235,9 @@ async def replay_history(chain: Any, events: EventStream):
     await events.replay(chain, events.next_head, head)
 
 
-async def run_monitor(chain: Any, events: EventStream, *, retries: int | None = None):
+async def run_monitor(
+    chain: Any, events: EventStream, *, retries: int | None = None
+):
     """Recover transport gaps without silently skipping finalized heights."""
     failures = 0
     while retries is None or failures < retries:
@@ -200,12 +246,19 @@ async def run_monitor(chain: Any, events: EventStream, *, retries: int | None = 
             async for header in chain.client.blocks(finalized=True):
                 height = event_header(header)
                 if events.next_head is None:
-                    raise ChainError("startup replay must complete before subscription")
+                    raise ChainError(
+                        "startup replay must complete before subscription"
+                    )
                 if height < events.next_head:
                     continue
                 await events.replay(chain, events.next_head, height)
                 failures = 0
         except RETRYABLE_ERRORS:
-            LOG.warning("Finalized Gamma subscription interrupted; resuming", exc_info=True)
+            LOG.warning(
+                "Finalized Gamma subscription interrupted; resuming",
+                exc_info=True,
+            )
             await asyncio.sleep(1)
-    raise RuntimeError("finalized head subscription exceeded configured retries")
+    raise RuntimeError(
+        "finalized head subscription exceeded configured retries"
+    )

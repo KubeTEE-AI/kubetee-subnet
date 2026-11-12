@@ -1,4 +1,5 @@
 """SN90 Gamma protocol: canonical integers, references, signed claim wire types."""
+
 from __future__ import annotations
 
 import hashlib
@@ -23,15 +24,24 @@ def units_to_gamma(value: int) -> str:
 
 def gamma_to_units(value) -> int:
     """Current SDK amount_tao_to_u64 convention for user Gamma amounts."""
-    if isinstance(value, bool): raise ValueError("invalid Gamma amount")
+    if isinstance(value, bool):
+        raise ValueError("invalid Gamma amount")
     try:
         if isinstance(value, (int, str, Decimal)):
-            if isinstance(value, int) and 0 <= value <= 2**64 - 1 and not isinstance(value, str):
+            if (
+                isinstance(value, int)
+                and 0 <= value <= 2**64 - 1
+                and not isinstance(value, str)
+            ):
                 return value
             result = Decimal(str(value).removesuffix(" gamma")) * GAMMA_UNITS
         else:
-            result = Decimal(str(bt.intents._money.gamma_amount(value))) * GAMMA_UNITS
-        if result != int(result) or not 0 <= int(result) <= 2**64 - 1: raise ValueError()
+            result = (
+                Decimal(str(bt.intents._money.gamma_amount(value)))
+                * GAMMA_UNITS
+            )
+        if result != int(result) or not 0 <= int(result) <= 2**64 - 1:
+            raise ValueError()
         return int(result)
     except (bt.BittensorError, InvalidOperation, ValueError, TypeError) as exc:
         raise ValueError("invalid exact Gamma amount") from exc
@@ -51,19 +61,28 @@ def ss58_address(value: str) -> str:
     return value
 
 
-def settlement_reference(netuid: int, hotkey_ss58: str, block_hash: str, amount_units: int) -> str:
-    if netuid != 90: raise ValueError("only SN90")
+def settlement_reference(
+    netuid: int, hotkey_ss58: str, block_hash: str, amount_units: int
+) -> str:
+    if netuid != 90:
+        raise ValueError("only SN90")
     ss58_address(hotkey_ss58)
     units_to_gamma(amount_units)
     try:
-        if len(bytes.fromhex(block_hash.removeprefix("0x"))) != 32 or block_hash != block_hash.lower():
+        if (
+            len(bytes.fromhex(block_hash.removeprefix("0x"))) != 32
+            or block_hash != block_hash.lower()
+        ):
             raise ValueError()
     except ValueError as exc:
         raise ValueError("canonical lowercase block hash required") from exc
-    return "0x" + hashlib.sha256(
-        f"kubetee-sn90-settlement-v1\0{GENESIS}\0{netuid}\0{hotkey_ss58}\0"
-        f"{block_hash}\0{amount_units}".encode()
-    ).hexdigest()
+    return (
+        "0x"
+        + hashlib.sha256(
+            f"kubetee-sn90-settlement-v1\0{GENESIS}\0{netuid}\0{hotkey_ss58}\0"
+            f"{block_hash}\0{amount_units}".encode()
+        ).hexdigest()
+    )
 
 
 class SettlementRef(BaseModel):
@@ -77,10 +96,15 @@ class SettlementRef(BaseModel):
     amount_units: int = Field(gt=0)
 
     @property
-    def event_id(self): return f"{self.block_hash}:{self.event_index}"
+    def event_id(self):
+        return f"{self.block_hash}:{self.event_index}"
 
     def validate_identity(self, hotkey: str) -> None:
-        if self.hotkey_ss58 != hotkey or self.netuid != 90 or self.amount_units <= 0:
+        if (
+            self.hotkey_ss58 != hotkey
+            or self.netuid != 90
+            or self.amount_units <= 0
+        ):
             raise ValueError("wrong settlement hotkey")
         # Emitted at the settlement height; it cannot equal the planning hash.
 
@@ -110,6 +134,7 @@ class PublicResult(BaseModel):
 
 class ReservationRequest(BaseModel):
     """Private worker request: alias is always chain-observed, not signed text."""
+
     model_config = ConfigDict(extra="forbid")
     network: Literal["finney"] = "finney"
     genesis_hash: Literal[GENESIS] = GENESIS
@@ -134,12 +159,17 @@ class CreditRequest(BaseModel):
 
 def internal_router(processor) -> APIRouter:
     router = APIRouter()
+
     @router.post("/internal/v1/reconcile", response_model=PublicResult)
-    async def reconcile(body: ProveReconcile, x_kubetee_worker_proof: str = Header("")):
+    async def reconcile(
+        body: ProveReconcile, x_kubetee_worker_proof: str = Header("")
+    ):
         await processor.authenticate(x_kubetee_worker_proof)
         return await processor.request(body)
+
     @router.get("/internal/v1/ready")
     async def ready(x_kubetee_worker_proof: str = Header("")):
         await processor.authenticate(x_kubetee_worker_proof)
         return await processor.ready()
+
     return router
