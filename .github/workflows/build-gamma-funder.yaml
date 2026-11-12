@@ -48,6 +48,14 @@ jobs:
     name: Build and sign immutable image
     needs: test
     runs-on: ubuntu-22.04
+    # Job tokens that omit this allow id-token:none even when contents is
+    # write. GitHub then supplies neither ACTIONS_ID_TOKEN_REQUEST_URL nor
+    # its request token; browser authentication MUST NOT be substituted for
+    # this explicitly granted, auditable keyless job identity.
+    permissions:
+      id-token: write
+      contents: read
+      packages: write
     env:
       REGISTRY: ghcr.io
       IMAGE_NAME: kubetee-ai/gamma-funder
