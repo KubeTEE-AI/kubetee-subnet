@@ -105,6 +105,14 @@ jobs:
       - id: metadata
         name: Record immutable image digest
         run: echo "digest=$(jq -r '."containerimage.digest"' /tmp/gamma-image-metadata.json)" >> "$GITHUB_OUTPUT"
+      - name: Export chosen immutable release identity
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+          DIGEST: ${{ steps.metadata.outputs.digest }}
+        run: |
+          test -n "$TAG"
+          test -n "$DIGEST"
+          printf '{"image":"%s/%s:%s@%s"}\n' "$REGISTRY" "$IMAGE_NAME" "$TAG" "$DIGEST" > /tmp/gamma-release-identity.json
       - name: Test exact built image starts as unprivileged user and stays fail-closed
         env:
           TAG: ${{ steps.tag.outputs.tag }}
@@ -162,13 +170,22 @@ jobs:
           jq -r '.Results[]? as $r | $r.Vulnerabilities[]? |
             [$r.Target, .PkgName, .InstalledVersion, .FixedVersion,
              .VulnerabilityID, .Severity] | @tsv' /tmp/gamma-trivy.json
+      - name: Record immutable release result
+        if: ${{ always() }}
+        run: |
+          test -s /tmp/gamma-image-metadata.json
+          test -s /tmp/gamma-release-identity.json
+          test -s /tmp/gamma-trivy.json
+          printf '## Immutable Gamma worker evidence\n\n' >> "$GITHUB_STEP_SUMMARY"
+          jq -r .image /tmp/gamma-release-identity.json >> "$GITHUB_STEP_SUMMARY"
       - name: Record supply chain evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        if: ${{ always() && hashFiles('/tmp/gamma-image-metadata.json') != '' }}
+        if: ${{ always() }}
         with:
           name: gamma-funder-release-${{ steps.tag.outputs.tag }}
           path: |
             /tmp/gamma-image-metadata.json
+            /tmp/gamma-release-identity.json
             /tmp/gamma-provenance.json
             /tmp/gamma-trivy.json
           if-no-files-found: ignore
