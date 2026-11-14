@@ -1,5 +1,7 @@
 """No-spend observation boundary: synthetic local identity/chain only."""
 
+from types import SimpleNamespace
+
 import httpx
 import pytest
 from asgi_lifespan import LifespanManager
@@ -194,6 +196,105 @@ async def test_preview_unavailable_is_retryable_not_internal_error(tmp_path):
             "/preview/v1/status", headers={"x-kubetee-worker-proof": proof}
         )
     assert response.status_code == 503
+
+
+class AdvancingClient(DisabledClient):
+    def __init__(self):
+        super().__init__()
+        self.storage_heights = []
+
+    async def finalized_block(self):
+        self.calls += 1
+        return 1000 + (self.calls > 1)
+
+    async def at(self, height):
+        self.storage_heights.append(height)
+        if len(self.storage_heights) > 1:
+            assert height == 1000, "latest head displaced the request snapshot"
+        return DisabledSnapshot()
+
+
+def preview_environment(tmp_path):
+    values = environment(tmp_path)
+    values.update(
+        {
+            "KUBETEE_GAMMA_OBSERVE_ONLY": "true",
+            "KUBETEE_GAMMA_PREVIEW_OBSERVATION_ONLY": "true",
+            "KUBETEE_GAMMA_SPEND_ENABLED": "false",
+            "KUBETEE_GAMMA_FINNEY_SPEND_APPROVED": "NOT_APPROVED",
+            "KUBETEE_GAMMA_SUBTENSOR_ENDPOINT": "wss://entrypoint-finney.opentensor.ai:443",
+            "KUBETEE_GAMMA_REAL_SPENDER_SS58": "5C7LYpP2ZH3tpKbvVvwiVe54AapxErdPBbvkYhe6y9ZBkqWt",
+        }
+    )
+    return values
+
+
+@pytest.mark.asyncio
+async def test_preview_all_finalized_reads_use_one_height(tmp_path):
+    values = preview_environment(tmp_path)
+    client = AdvancingClient()
+
+    async def connect():
+        return client
+
+    from worker.runtime import Settings
+
+    app = create_observation_application(
+        Settings.from_environment(values), values, connect=connect
+    )
+    async with LifespanManager(app):
+        # Start this request with a fresh client call. A later height must not
+        # silently replace the height used by the deposit read.
+        client.calls = 0
+        response = await app.state.preview_service.preview_observation()
+    assert response["finalized_height"] == 1000
+    assert client.storage_heights == [1000, 1000, 1000]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("error", [ConnectionError("rpc closed"), TimeoutError()])
+async def test_preview_rpc_failure_is_retryable_503(tmp_path, error):
+    values = preview_environment(tmp_path)
+    client = DisabledClient()
+
+    async def connect():
+        return client
+
+    from worker.runtime import Settings
+
+    app = create_observation_application(
+        Settings.from_environment(values), values, connect=connect
+    )
+    proof, fingerprint = certificate()
+    service = app.state.preview_service
+    service.certificate_fingerprint = fingerprint
+    route_app = FastAPI()
+    route_app.include_router(preview_router(service))
+    async with LifespanManager(app):
+
+        async def unavailable(_hotkey):
+            raise error
+
+        service.chain.finalized_snapshot = unavailable
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=route_app),
+            base_url="https://worker",
+        ) as transport:
+            response = await transport.get(
+                "/preview/v1/status", headers={"x-kubetee-worker-proof": proof}
+            )
+    assert response.status_code == 503
+
+
+def test_observer_rejects_false_observe_only_gate(tmp_path):
+    from worker.runtime import ConfigurationError, Settings
+
+    values = preview_environment(tmp_path)
+    values["KUBETEE_GAMMA_OBSERVE_ONLY"] = "false"
+    with pytest.raises(ConfigurationError, match="no-spend gates"):
+        create_observation_application(
+            Settings.from_environment(values), values
+        )
 
 
 def chain_not_spending(chain):

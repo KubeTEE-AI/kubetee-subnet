@@ -87,7 +87,6 @@ class WorkerService:
         hotkey = "5C62Ck4UrFPiBtoCmeSrgF7x9yv9mn38446dhCpsi2mLHiFT"
         ss58_address(hotkey)
         height, block_hash, row = await self.chain.finalized_snapshot(hotkey)
-        await self.chain.preflight()
         return {
             "network": "finney",
             "genesis_hash": GENESIS,
@@ -195,7 +194,15 @@ def preview_router(service):
         await service.authenticate(x_kubetee_worker_proof)
         try:
             return await service.preview_observation()
-        except (ChainError, KeyError, TypeError, ValueError) as error:
+        except (
+            ChainError,
+            ConnectionError,
+            TimeoutError,
+            OSError,
+            KeyError,
+            TypeError,
+            ValueError,
+        ) as error:
             LOG.warning("Finalized observation failed", exc_info=True)
             raise HTTPException(
                 503, "Finney finalized observation unavailable"

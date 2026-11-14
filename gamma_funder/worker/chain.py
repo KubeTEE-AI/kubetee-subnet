@@ -128,10 +128,12 @@ class GammaChain:
     async def genesis(self):
         return str(await self.client._substrate.block_hash(0)).lower()
 
-    async def preflight(self):
+    async def preflight(self, height=None):
         if await self.genesis() != self.genesis_hash:
             raise ChainError("non-Finney chain")
-        snap, _ = await self._snapshot()
+        # A preview request can bind service state to the same finalized block
+        # as its deposit. Default behavior remains the latest finalized head.
+        snap, _ = await self._snapshot(height)
         enabled, enabled90, services, oracle = await asyncio.gather(
             snap.query(bt.storage.SubtensorModule.GammaEnabled),
             snap.query(bt.storage.SubtensorModule.SubnetGammaEnabled, [90]),

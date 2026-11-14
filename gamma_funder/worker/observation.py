@@ -44,7 +44,12 @@ class ObservationChain:
         self.service_observation = self.reader.service_observation
 
     async def finalized_snapshot(self, hotkey):
-        return await self.reader.finalized_snapshot(hotkey)
+        height, block_hash, row = await self.reader.finalized_snapshot(hotkey)
+        # Bind SN90 flags/services and the public deposit row to this exact
+        # finalized snapshot. Preflight still requires the explicit Finney
+        # genesis and the fresh independent oracle read.
+        await self.reader.preflight(height)
+        return height, block_hash, row
 
 
 class ObservationUnavailable:
