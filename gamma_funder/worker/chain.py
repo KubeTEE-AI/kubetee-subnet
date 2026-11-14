@@ -93,6 +93,7 @@ class GammaChain:
         max_backfill=7200,
         max_fee=None,
         genesis_hash=GENESIS,
+        spend_enabled=True,
     ):
         if not real_spender:
             raise ValueError("real spender required")
@@ -104,7 +105,9 @@ class GammaChain:
             max_fee,
         )
         self.genesis_hash = genesis_hash.lower()
-        self.spend_enabled = True
+        self.spend_enabled = spend_enabled
+        self.service_observation: dict[str, Any] = {}
+        self.bound_observations: dict[int, Any] = {}
         self.follow: set[str] = set()
 
     async def _hash_for_height(self, h: int) -> str:
@@ -137,19 +140,23 @@ class GammaChain:
         )
         project = None
         proxies = []
-        if self.delegate != self.real_spender:
+        if self.spend_enabled and self.delegate != self.real_spender:
             project, proxies = await asyncio.gather(
                 snap.query(bt.storage.System.Account, [self.delegate]),
                 snap.query(bt.storage.Proxy.Proxies, [self.real_spender]),
             )
-        if not enabled or not enabled90:
-            raise ChainError("Gamma/SN90 not enabled")
-        if not any(
+        enabled90 = bool(enabled90)
+        registered = any(
             svc.get("url") == self.service_url
             and str(svc.get("spender")) == self.real_spender
             for _hk, svc in services
-        ):
-            raise ChainError("service registration spender mismatch")
+        )
+        if self.spend_enabled:
+            if not enabled or not enabled90:
+                raise ChainError("Gamma/SN90 not enabled")
+            if not registered:
+                raise ChainError("service registration spender mismatch")
+            return None
         if (
             not isinstance(oracle, dict)
             or not oracle.get("oracle")
@@ -157,7 +164,21 @@ class GammaChain:
             or oracle["blocks_since_last_feed"] > 300
         ):
             raise ChainError("absent/stale Finney oracle")
-        if self.delegate != self.real_spender:
+        self.service_observation = {
+            "gamma_enabled": bool(enabled),
+            "sn90_enabled": enabled90,
+            "services": services,
+            "service_registered": registered,
+            "status": "eligible_observation_only" if enabled and enabled90 and registered else "ineligible",
+            "reason": "none" if enabled and enabled90 and registered else "brand_not_configured",
+            "observation_only": True,
+            "spend_submitted": False,
+            "gate": {"observe_only": True, "spend_enabled": False,
+                     "finney_spend_approved": False},
+            "rpc_provenance": "public OpenTensor Finney RPC; not attested",
+        }
+        return True
+        if self.spend_enabled and self.delegate != self.real_spender:
             if int((project or {}).get("data", {}).get("free", 0)) <= 0:
                 raise ChainError("proxy delegate fee balance is zero")
             rows = (

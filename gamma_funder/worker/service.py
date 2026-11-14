@@ -14,7 +14,7 @@ from typing import Any
 
 from cryptography import x509
 
-from fastapi import HTTPException
+from fastapi import HTTPException, APIRouter, Header
 from pydantic import ValidationError
 
 from .management import ManagementError, StateConflict, remaining
@@ -75,6 +75,22 @@ class WorkerService:
 
     async def ready(self) -> dict[str, bool]:
         return {"ready": self.is_ready}
+
+    async def preview_observation(self):
+        from .protocol import GENESIS, ss58_address
+        if self.chain.spend_enabled or getattr(self.chain, "preview_pending", False):
+            raise ChainError("preview has no spend authority or is not ready")
+        # Fixed public synthetic hotkey; never enumerate or fetch a wallet.
+        hotkey = "5C62Ck4UrFPiBtoCmeSrgF7x9yv9mn38446dhCpsi2mLHiFT"
+        ss58_address(hotkey)
+        height, block_hash, row = await self.chain.finalized_snapshot(hotkey)
+        await self.chain.preflight()
+        return {
+            "network": "finney", "genesis_hash": GENESIS,
+            "finalized_height": height, "finalized_block_hash": block_hash,
+            "deposit_row": row, **self.chain.service_observation,
+        }
+
 
     async def request(self, body: ProveReconcile) -> PublicResult:
         hotkey = body.hotkey_ss58
@@ -163,6 +179,22 @@ def public_result(result: Any, hotkey: str) -> PublicResult:
     if isinstance(result, dict):
         return PublicResult.model_validate(result)
     raise TypeError("native worker result is not public")
+
+
+def preview_router(service):
+    """Same TLS/proof gate as reconciliation, without a funding path."""
+    router = APIRouter()
+
+    @router.get("/preview/v1/status")
+    async def status(x_kubetee_worker_proof: str = Header("")):
+        await service.authenticate(x_kubetee_worker_proof)
+        try:
+            return await service.preview_observation()
+        except (ChainError, KeyError, TypeError, ValueError) as error:
+            LOG.warning("Finalized observation failed", exc_info=True)
+            raise HTTPException(503, "Finney finalized observation unavailable") from error
+
+    return router
 
 
 def ss58_address(hotkey: str) -> None:

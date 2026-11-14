@@ -101,6 +101,7 @@ class Settings:
     test: bool
     spend_enabled: bool
     outbound_certificate_files: tuple[str, str]
+    preview_observation: bool = False
 
     def outbound_tls_files(self) -> tuple[str, str]:
         """Validated at construction; per-request environment cannot change roles."""
@@ -246,6 +247,7 @@ class Settings:
                 "exact private Gamma gateway mTLS HTTPS ClusterIP origin required"
             )
         test = flag(env, "KUBETEE_GAMMA_TEST")
+        preview = flag(env, "KUBETEE_GAMMA_PREVIEW_OBSERVATION_ONLY")
         spend = flag(env, "KUBETEE_GAMMA_SPEND_ENABLED")
         if (
             spend
@@ -335,6 +337,7 @@ class Settings:
             worker_fingerprint=worker_fingerprint,
             gateway_client_fingerprint=client_fingerprint,
         )
+        preview_observation = preview
         return cls(
             real,
             fingerprint,
@@ -351,6 +354,7 @@ class Settings:
             test,
             spend,
             outbound,
+            preview,
         )
 
 
@@ -717,6 +721,7 @@ def create_application(
                     delegate=settings.spender or settings.real_spender,
                     max_fee=settings.fee_cap,
                     genesis_hash=GENESIS,
+                    spend_enabled=settings.spend_enabled,
                 )
             )
             if not settings.spend_enabled:
