@@ -78,7 +78,10 @@ class WorkerService:
 
     async def preview_observation(self):
         from .protocol import GENESIS, ss58_address
-        if self.chain.spend_enabled or getattr(self.chain, "preview_pending", False):
+
+        if self.chain.spend_enabled or getattr(
+            self.chain, "preview_pending", False
+        ):
             raise ChainError("preview has no spend authority or is not ready")
         # Fixed public synthetic hotkey; never enumerate or fetch a wallet.
         hotkey = "5C62Ck4UrFPiBtoCmeSrgF7x9yv9mn38446dhCpsi2mLHiFT"
@@ -86,11 +89,13 @@ class WorkerService:
         height, block_hash, row = await self.chain.finalized_snapshot(hotkey)
         await self.chain.preflight()
         return {
-            "network": "finney", "genesis_hash": GENESIS,
-            "finalized_height": height, "finalized_block_hash": block_hash,
-            "deposit_row": row, **self.chain.service_observation,
+            "network": "finney",
+            "genesis_hash": GENESIS,
+            "finalized_height": height,
+            "finalized_block_hash": block_hash,
+            "deposit_row": row,
+            **self.chain.service_observation,
         }
-
 
     async def request(self, body: ProveReconcile) -> PublicResult:
         hotkey = body.hotkey_ss58
@@ -192,7 +197,9 @@ def preview_router(service):
             return await service.preview_observation()
         except (ChainError, KeyError, TypeError, ValueError) as error:
             LOG.warning("Finalized observation failed", exc_info=True)
-            raise HTTPException(503, "Finney finalized observation unavailable") from error
+            raise HTTPException(
+                503, "Finney finalized observation unavailable"
+            ) from error
 
     return router
 

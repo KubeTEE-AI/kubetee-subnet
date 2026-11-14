@@ -1,4 +1,5 @@
 """Attested worker TLS bootstrap; selected only by a dedicated preview command."""
+
 import asyncio
 import ssl
 
@@ -20,10 +21,13 @@ def main():
     context.verify_mode = ssl.CERT_REQUIRED
     uvicorn.run(
         create_observation_application(settings, os.environ),
-        host="0.0.0.0", port=8443,
+        host="0.0.0.0",
+        port=8443,
         http="worker.runtime:MTLSProofProtocol",
-        ssl_certfile=certificate, ssl_keyfile=key,
-        ssl_cert_reqs=ssl.CERT_REQUIRED, ssl_ca_certs=ca,
+        ssl_certfile=certificate,
+        ssl_keyfile=key,
+        ssl_cert_reqs=ssl.CERT_REQUIRED,
+        ssl_ca_certs=ca,
     )
 
 

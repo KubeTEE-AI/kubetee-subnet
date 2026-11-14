@@ -4,6 +4,7 @@ There is no Redis client, native gateway client, delegate signer, spending,
 reconciliation listener or key-discovery path. Public Finney RPC is an
 unattested read transport. It never receives a wallet or an extrinsic.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -31,8 +32,11 @@ class ObservationChain:
         self.service_observation = {}
         self.spend_enabled = False
         self.reader = GammaChain(
-            client, real_spender=OBSERVATION_SPENDER, delegate=None,
-            genesis_hash=genesis, spend_enabled=False,
+            client,
+            real_spender=OBSERVATION_SPENDER,
+            delegate=None,
+            genesis_hash=genesis,
+            spend_enabled=False,
         )
 
     async def preflight(self):
@@ -46,6 +50,7 @@ class ObservationChain:
 class ObservationUnavailable:
     spend_enabled = False
     preview_pending = True
+
     async def preflight(self):
         raise PendingReceipt("attested observation is not ready")
 
@@ -66,21 +71,32 @@ def create_observation_application(settings, env, *, connect=None):
     if env.get("KUBETEE_GAMMA_SUBTENSOR_ENDPOINT") != RPC_ENDPOINT:
         raise ConfigurationError("reviewed official Finney read RPC required")
     if settings.real_spender != OBSERVATION_SPENDER:
-        raise ConfigurationError("synthetic non-wallet observer identity required")
-    if env.get("KUBETEE_GAMMA_KBS_PROXY_SEED") != "default/gamma-spend-proxy/seed":
+        raise ConfigurationError(
+            "synthetic non-wallet observer identity required"
+        )
+    if (
+        env.get("KUBETEE_GAMMA_KBS_PROXY_SEED")
+        != "default/gamma-spend-proxy/seed"
+    ):
         raise ConfigurationError("fixed unused signer resource path required")
     if settings.test and connect is None:
-        raise ConfigurationError("synthetic mode is forbidden in the real preview")
+        raise ConfigurationError(
+            "synthetic mode is forbidden in the real preview"
+        )
     for name in (
-        "KUBETEE_GAMMA_REDIS_URL", "KUBETEE_GAMMA_MANAGEMENT_CREDENTIAL",
-        "KUBETEE_GAMMA_INJECT", "KUBETEE_GAMMA_MOCK",
-        "KUBETEE_GAMMA_GATEWAY_CLIENT_PEM", "KUBETEE_GAMMA_GATEWAY_CLIENT_KEY",
+        "KUBETEE_GAMMA_REDIS_URL",
+        "KUBETEE_GAMMA_MANAGEMENT_CREDENTIAL",
+        "KUBETEE_GAMMA_INJECT",
+        "KUBETEE_GAMMA_MOCK",
+        "KUBETEE_GAMMA_GATEWAY_CLIENT_PEM",
+        "KUBETEE_GAMMA_GATEWAY_CLIENT_KEY",
     ):
         if env.get(name):
             raise ConfigurationError(f"observer excludes {name}")
 
     service = WorkerService(
-        chain=ObservationUnavailable(), fresh_checkpoint=object(),
+        chain=ObservationUnavailable(),
+        fresh_checkpoint=object(),
         reconciler=object(),
         certificate_fingerprint=settings.gateway_client_fingerprint,
     )
@@ -96,11 +112,13 @@ def create_observation_application(settings, env, *, connect=None):
         client = None
         try:
             client = await (
-                connect() if connect is not None
+                connect()
+                if connect is not None
                 else bt.Client(RPC_ENDPOINT).connect()
             )
             chain = ObservationChain(
-                client, genesis=GENESIS,
+                client,
+                genesis=GENESIS,
             )
             await asyncio.wait_for(chain.preflight(), timeout=20)
             service.chain = chain

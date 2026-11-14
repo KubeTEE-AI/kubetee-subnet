@@ -59,7 +59,9 @@ class DisabledClient:
 
 async def chain_no_spend():
     chain = GammaChain(
-        DisabledClient(), real_spender=REAL, delegate=None,
+        DisabledClient(),
+        real_spender=REAL,
+        delegate=None,
         service_url="https://llm.kubetee.ai/kubetee-service.json",
         spend_enabled=True,
     )
@@ -76,25 +78,33 @@ async def chain_no_spend():
 
 
 @pytest.mark.asyncio
-async def test_observation_app_has_only_authenticated_finalized_status(tmp_path):
+async def test_observation_app_has_only_authenticated_finalized_status(
+    tmp_path,
+):
     values = environment(tmp_path)
-    values.update({
-        "KUBETEE_GAMMA_OBSERVE_ONLY": "true",
-        "KUBETEE_GAMMA_PREVIEW_OBSERVATION_ONLY": "true",
-        "KUBETEE_GAMMA_SPEND_ENABLED": "false",
-        "KUBETEE_GAMMA_FINNEY_SPEND_APPROVED": "NOT_APPROVED",
-        "KUBETEE_GAMMA_SUBTENSOR_ENDPOINT": "wss://entrypoint-finney.opentensor.ai:443",
-        "KUBETEE_GAMMA_REAL_SPENDER_SS58": "5C7LYpP2ZH3tpKbvVvwiVe54AapxErdPBbvkYhe6y9ZBkqWt",
-    })
+    values.update(
+        {
+            "KUBETEE_GAMMA_OBSERVE_ONLY": "true",
+            "KUBETEE_GAMMA_PREVIEW_OBSERVATION_ONLY": "true",
+            "KUBETEE_GAMMA_SPEND_ENABLED": "false",
+            "KUBETEE_GAMMA_FINNEY_SPEND_APPROVED": "NOT_APPROVED",
+            "KUBETEE_GAMMA_SUBTENSOR_ENDPOINT": "wss://entrypoint-finney.opentensor.ai:443",
+            "KUBETEE_GAMMA_REAL_SPENDER_SS58": "5C7LYpP2ZH3tpKbvVvwiVe54AapxErdPBbvkYhe6y9ZBkqWt",
+        }
+    )
     from worker.runtime import Settings
 
     settings = Settings.from_environment(values)
     client = DisabledClient()
+
     async def connect():
         return client
 
     app = create_observation_application(settings, values, connect=connect)
-    assert any(m.cls.__name__ == "DelegateProofMiddleware" for m in app.user_middleware)
+    assert any(
+        m.cls.__name__ == "DelegateProofMiddleware"
+        for m in app.user_middleware
+    )
     paths = {getattr(route, "path", None) for route in app.routes}
     assert "/internal/v1/reconcile" not in paths
     assert "/healthz" not in paths
@@ -135,22 +145,28 @@ async def test_observation_app_has_only_authenticated_finalized_status(tmp_path)
 
 
 @pytest.mark.asyncio
-async def test_observer_cannot_start_without_excluded_external_settings(tmp_path):
+async def test_observer_cannot_start_without_excluded_external_settings(
+    tmp_path,
+):
     from worker.runtime import ConfigurationError, Settings
 
     values = environment(tmp_path)
-    values.update({
-        "KUBETEE_GAMMA_OBSERVE_ONLY": "true",
-        "KUBETEE_GAMMA_PREVIEW_OBSERVATION_ONLY": "true",
-        "KUBETEE_GAMMA_SPEND_ENABLED": "false",
-        "KUBETEE_GAMMA_FINNEY_SPEND_APPROVED": "NOT_APPROVED",
-        "KUBETEE_GAMMA_SUBTENSOR_ENDPOINT": "wss://entrypoint-finney.opentensor.ai:443",
-        "KUBETEE_GAMMA_REAL_SPENDER_SS58": "5C7LYpP2ZH3tpKbvVvwiVe54AapxErdPBbvkYhe6y9ZBkqWt",
-    })
+    values.update(
+        {
+            "KUBETEE_GAMMA_OBSERVE_ONLY": "true",
+            "KUBETEE_GAMMA_PREVIEW_OBSERVATION_ONLY": "true",
+            "KUBETEE_GAMMA_SPEND_ENABLED": "false",
+            "KUBETEE_GAMMA_FINNEY_SPEND_APPROVED": "NOT_APPROVED",
+            "KUBETEE_GAMMA_SUBTENSOR_ENDPOINT": "wss://entrypoint-finney.opentensor.ai:443",
+            "KUBETEE_GAMMA_REAL_SPENDER_SS58": "5C7LYpP2ZH3tpKbvVvwiVe54AapxErdPBbvkYhe6y9ZBkqWt",
+        }
+    )
     values["KUBETEE_GAMMA_REDIS_URL"] = "rediss+sentinel://real-cluster"
     values["KUBETEE_GAMMA_TEST"] = "0"
     with pytest.raises(ConfigurationError, match="REDIS_URL"):
-        create_observation_application(Settings.from_environment(values), values)
+        create_observation_application(
+            Settings.from_environment(values), values
+        )
 
 
 @pytest.mark.asyncio
@@ -159,9 +175,12 @@ async def test_preview_unavailable_is_retryable_not_internal_error(tmp_path):
     from fastapi import FastAPI
     from worker.observation import ObservationUnavailable
     from worker.service import WorkerService, preview_router
+
     proof, fingerprint = certificate()
     service = WorkerService(
-        ObservationUnavailable(), object(), object(),
+        ObservationUnavailable(),
+        object(),
+        object(),
         certificate_fingerprint=fingerprint,
     )
     route_app = FastAPI()

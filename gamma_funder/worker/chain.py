@@ -169,12 +169,23 @@ class GammaChain:
             "sn90_enabled": enabled90,
             "services": services,
             "service_registered": registered,
-            "status": "eligible_observation_only" if enabled and enabled90 and registered else "ineligible",
-            "reason": "none" if enabled and enabled90 and registered else "brand_not_configured",
+            "status": (
+                "eligible_observation_only"
+                if enabled and enabled90 and registered
+                else "ineligible"
+            ),
+            "reason": (
+                "none"
+                if enabled and enabled90 and registered
+                else "brand_not_configured"
+            ),
             "observation_only": True,
             "spend_submitted": False,
-            "gate": {"observe_only": True, "spend_enabled": False,
-                     "finney_spend_approved": False},
+            "gate": {
+                "observe_only": True,
+                "spend_enabled": False,
+                "finney_spend_approved": False,
+            },
             "rpc_provenance": "public OpenTensor Finney RPC; not attested",
         }
         return True
