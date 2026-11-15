@@ -4,7 +4,7 @@ Endpoint reference for **Nemotron-3-Nano-Omni**
 (`nvidia/nemotron-3-nano-omni-30b-a3b-reasoning`) — the any-to-any model:
 text, image, video, and audio **in**, text **out**, with reasoning traces and
 tool calling. One StatefulSet (1 replica) on a single H100 SXM5 80GB under Kata
-TDX CC (Intel TDX + NVIDIA CC) on the `na-us-michigan-97` production cluster,
+TDX CC (Intel TDX + NVIDIA CC) on a Phase 0 external production miner cluster,
 behind a per-model in-guest HAProxy that terminates mTLS on `:8443`; the
 east-west Gateway does L4/SNI TLS Passthrough
 ([East-West Attested mTLS](./EAST-WEST-ATTESTED-MTLS.md)).
@@ -23,8 +23,8 @@ surfaces table in the [README](../README.md#litellm-gateway--the-multi-service-f
 | Serving container | NVIDIA NIM `nvcr.io/nim/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:2.0.13`, digest-pinned (GA line, vLLM 0.27.1 backend, FP8 profile auto-selected) |
 | Hardware | **1× H100 80GB** — the point of the 3B-active design: a multimodal understanding-and-reasoning serve on one card |
 | LiteLLM route | `model: nvidia/nemotron-3-nano-omni-30b-a3b-reasoning` → `POST https://llm.kubetee.ai/v1/chat/completions` |
-| SNI base URL | `https://nemotron-omni.na-us-michigan-97.inference.kubetee.ai` (house mTLS client pair required) |
-| Live since | 2026-10-08 (deployment, contract smoke, and load battery same day) |
+| Integration path | LiteLLM gateway; the Phase 0 direct SNI endpoint is retired and not a current integration path |
+| Live since | 2026-10-08 (Phase 0 deployment, contract smoke, and load battery); **evaluation only pending commercial licensing** |
 
 ## Access paths
 
@@ -35,12 +35,10 @@ tracking are enforced on this route as on every gateway route. The gateway's
 `hosted_vllm` provider normalizes one field on the way out — see
 [Reasoning field](#reasoning-field-name-is-non-standard).
 
-**2. East-west SNI —
-`https://nemotron-omni.na-us-michigan-97.inference.kubetee.ai`** — for
-authorized integrators holding the house mTLS client pair. Same API directly
-against the NIM (no gateway normalization — use the raw contract below).
-Probe-exempt (no client cert): `GET /v1/health/ready` and `/health/live`;
-everything else requires the client certificate.
+**2. East-west SNI — future external backend integration.** A confidential
+model backend may expose an attested mTLS SNI endpoint on its miner cluster;
+the gateway remains the supported integration path for this evaluation-only
+model. No Phase 0 direct endpoint should be inferred to remain available.
 
 ---
 

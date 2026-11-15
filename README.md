@@ -69,22 +69,22 @@ As a member of the [Confidential Computing Consortium (CCC)](https://confidentia
   - [Confidential Computing Consortium Resources](#confidential-computing-consortium-resources)
   - [Mission & Vision](#mission--vision)
 - [Overview](#overview)
-  - [Early Access](#early-access)
+  - [Phase 1: Expansion and external miners](#phase-1-expansion-and-external-miners)
   - [What Ships Today](#what-ships-today)
 - [The Confidential Compute Challenge: Problems We Solve](#the-confidential-compute-challenge-problems-we-solve)
 - [Deploying in a TEE: The Engineering Challenge](#deploying-in-a-tee-the-engineering-challenge)
-- [Debugging on the staging cluster](#debugging-on-the-staging-cluster)
+- [Phase 0 staging & Phase 1 transition](#phase-1-transition)
 - [Architecture](#architecture)
   - [Confidential Computing (Kata + CoCo)](#confidential-computing-kata--coco)
   - [Infrastructure](#infrastructure) — RKE2 HA; Armada for the batch-job service
   - [Security & Compliance](#security--compliance)
   - [Multi-Cluster Topology](#multi-cluster-topology)
-  - [Early Access Topology](#early-access-topology)
+  - Phase 0 topology history is recorded inline with the multi-cluster diagram
 - [Supported SOTA AI Services](#supported-sota-ai-services)
   - [Serving Configurations](#serving-configurations--every-service-requires-fast-inference)
   - [NVIDIA NeMo Platform & Bittensor Subnet Integrations](#nvidia-nemo-platform--bittensor-subnet-integrations) — attestation-gated TLS, NIM Operator Kata/CoCo limits, SOTA Bittensor subnet substitutes, Stage 0 supply-chain CI
 - [Subnet Economics](#subnet-economics)
-  - [Incentive Mechanism: Infrastructure](#incentive-mechanism-infrastructure-early-access)
+  - [Incentive Mechanism: Infrastructure](#incentive-mechanism-infrastructure)
   - [Payment methods](#payment-methods)
   - [Staging vs Production](#staging-vs-production)
 - [Tokenomics — Utility Token & DePIN Model](#tokenomics--utility-token--depin-model)
@@ -102,7 +102,7 @@ As a member of the [Confidential Computing Consortium (CCC)](https://confidentia
 - [For Miners (Infrastructure)](#for-miners-infrastructure)
   - [Miner onboarding](#miner-onboarding)
   - [Miner deposit (registration collateral)](#miner-deposit-registration-collateral)
-- [Roadmap](#roadmap) — [Phase 0](#phase-0--early-access-current) · [Phase 1](#phase-1--expansion) · [Phase 2](#phase-2--paid-jobsservicesinference) · [Phase 3](#phase-3--job-typeservices-growth)
+- [Roadmap](#roadmap) — [Phase 0](#phase-0--early-access-completed) · [Phase 1](#phase-1--expansion) · [Phase 2](#phase-2--paid-jobsservicesinference) · [Phase 3](#phase-3--job-typeservices-growth)
 - [Research & Documentation](#research--documentation)
 - [Community & Support](#community--support)
 
@@ -112,22 +112,19 @@ As a member of the [Confidential Computing Consortium (CCC)](https://confidentia
 
 KubeTEE AI Factory provides enterprise-grade confidential computing for **SOTA AI services** on a decentralized multi-cluster Kubernetes RKE2 infrastructure. Services run inside Trusted Execution Environments (TEE) so that data and models are protected **at rest, in transit, and in use** — and never leave the confidential computing boundary. **Batch jobs** (fine-tune, eval, pipelines) are a secondary service on the same clusters, submitted to Armada queues when needed.
 
-Each miner cluster is identified by a permanent Bittensor **hotkey/coldkey** pair. **SOTA AI services** run as Kubernetes pods under a confidential `runtimeClassName` so they are hardware-isolated and attested. When that service is a batch job, Armada dispatches it. TEE classes are **`kata-qemu-nvidia-gpu-tdx-runtime-rs`** (GPU) and **`kata-qemu-tdx-runtime-rs`** (CPU-only). Every node on the **staging cluster** is TEE CC capable. Kata guest debug is **off**; CoCo Trustee attests those guests. For diagnostics, CC can be turned **off** on a staging node, and guest debug can be enabled **per pod**; Trustee attests only when debug is off.
+Each miner cluster is identified by a permanent Bittensor **hotkey/coldkey** pair. **SOTA AI services** run as Kubernetes pods under a confidential `runtimeClassName` so they are hardware-isolated and attested. When that service is a batch job, Armada dispatches it. TEE classes are **`kata-qemu-nvidia-gpu-tdx-runtime-rs`** (GPU) and **`kata-qemu-tdx-runtime-rs`** (CPU-only). Miner clusters keep CC on and guest debug **off**; CoCo Trustee attests those guests. **From Phase 1, only external miners are onboarded and scored:** the subnet-owner staging miner **UID 56** (`na-us-oakland-56`) was decommissioned as a miner at that transition and is not a capacity or emissions source. Subnet-owner infrastructure runs the control plane, not a scored miner.
 
 The RKE2 baseline is **[FIPS-140-2 validated](https://docs.rke2.io/security/fips_support)** today; FIPS-140-3 is a [Phase 3](#phase-3--job-typeservices-growth) target. Both are referred to below simply as the FIPS-validated baseline.
 
 > **Open-source by default.** Every technology in the KubeTEE stack is open source — RKE2, Rancher, Kata Containers, Confidential Containers, Armada, LiteLLM, Longhorn, cert-manager, NVIDIA GPU Operator, and the Bittensor subtensor SDK. KubeTEE does not vendor-lock or proprietary-fork any of them. Where KubeTEE adds patches, fixes, or features (e.g. the Kata runtime-rs NVSwitch passthrough fix, the CSI direct-volume data-loss fix, the LiteLLM provider integration), the modifications live in **forks under the [KubeTEE-AI](https://github.com/KubeTEE-AI) GitHub organization** and are contributed upstream wherever the upstream project accepts them. The forks are public so anyone can audit what changed, and the contribution path back to upstream is the long-term goal for every patch.
 
-### Early Access
+### Phase 1: Expansion and external miners
 
-KubeTEE is in **Early Access**. Miner registration is hand-reviewed and onboarded directly with KubeTEE; permissionless self-service onboarding ships in [Phase 1](#phase-1--expansion) (see [Miner onboarding](#miner-onboarding)). **The fleet is moving from Hopper to Blackwell-only nodes and multi-cluster operation** — existing Hopper (H100/H200) clusters are windowed out as new Blackwell clusters (3+ nodes of the same GPU type per cluster) are onboarded (target November 2026). Early Access focuses on:
+**Early Access (Phase 0) is complete. KubeTEE is now in Phase 1.** The subnet is expanding as a multi-cluster network of **external miners**: each participant operates its own RKE2 cluster, with CC on and Kata guest debug off, and is evaluated by the validator. The subnet owner operates the control plane, validator, and platform services—not a scored miner. **UID 56 (`na-us-oakland-56`), the former owner-operated staging miner, is decommissioned** and receives no miner capacity score or emissions. See [Phase 0 staging and the Phase 1 transition](#phase-1-transition).
 
-- **First external miner live**: **BTLABS (UID 97)** operates the first production miner cluster (`na-us-michigan-97`, 7 nodes, 56 GPUs — H100 + H200) — real hardware, TDX attestation, and live emissions. The subnet-owner staging cluster remains the debug target, not a miner template
-- Standing up the Armada multi-cluster batch scheduler across miner clusters
-- Running confidential AI jobs in Kata + CoCo TEE pods
-- A **staging cluster** operated by Pierre as the subnet-owner staging miner — all nodes are TEE CC capable. Workloads run on miner clusters; if a workload fails, it can be targeted at staging for debug. Kata guest debug is **off**; CoCo Trustee attests those guests. CC can be turned off on a staging node for debug; guest debug can be enabled per pod. See [Debugging on the staging cluster](#debugging-on-the-staging-cluster)
-- The **validator incentive mechanism**: scoring miners on TEE attestation, Armada job success, uptime, and **competitive pricing** against the other compute subnets (Targon, Lium, Chutes)
-- **Emissions + Alpha/TAO paid jobs** — the supply and demand sides of a single mechanism (see [Subnet Economics](#subnet-economics)); demand-side paid jobs land in [Phase 1](#phase-1--expansion)
+Phase 0 established the confidential Kata + CoCo runtime, the initial validator incentive mechanism, the Armada multi-cluster scheduling design, and the external-miner onboarding path. Phase 1 uses that foundation without naming individual miners or specific miner clusters in this public overview.
+
+Phase 1 adds demand-driven **Blackwell-only** expansion (3+ nodes of the same GPU type per cluster), transitioning away from Hopper (H100/H200). **Permissionless self-service registration, paid Alpha/TAO services, and deposit enforcement remain Phase 1 work in progress** (see [Roadmap](#phase-1--expansion)); they are not implied to be live by entering the phase. See [Miner onboarding](#miner-onboarding) and [Subnet Economics](#subnet-economics).
 
 ### What Ships Today
 
@@ -135,20 +132,20 @@ This README documents both what runs in the KubeTEE infrastructure and what is d
 
 | Area | Exists today (infrastructure / design) | Designed / to be built |
 |------|--------------------|--------------------|
-| **Miner&nbsp;fleet** | **BTLABS (UID 97)** — first production miner cluster (`na-us-michigan-97`): 7 nodes, 56 GPUs (32× H100 + 24× H200), Intel TDX + NVIDIA CC, running production workloads and earning emissions, scored and paid every epoch. Plus the subnet-owner staging cluster (UID 56) and the European Luxembourg cluster (`eu-lu-luxembourg-133`, B300). See [Miner onboarding](#miner-onboarding) | More miner clusters — Early Access onboarding is open and hand-reviewed; permissionless registration in [Phase 1](#phase-1--expansion) |
-| **Confidential&nbsp;runtime** | Kata **4.2.0** + CoCo TEE runtime-rs classes on TDX H200/B200 nodes (`kata-qemu-nvidia-gpu-tdx-runtime-rs` / `kata-qemu-tdx-runtime-rs`) | AMD SEV-SNP multi-arch + NVIDIA RTX PRO 6000 Blackwell Server Edition testing ([Phase 1](#phase-1--expansion)) |
-| **Service&nbsp;transport** | Grey-cloud DNS + Traefik TLS passthrough into the LiteLLM TDX guest. [Attestation-gated TLS](./docs/NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md#2-attestation-gated-tls-between-services) (RA-TLS: TLS public key in TDX `report_data`, Trustee + Intel Trust Authority) is the client-attested hop on top of that path | Native TLS from the LiteLLM guest to NIM guests on miner clusters |
-| **Staging&nbsp;cluster** | Subnet-owner staging cluster — every node is TEE CC capable. Debug target if a workload fails. Kata **guest debug off**; CoCo Trustee attests those guests. CC can be turned off on a node for debug; guest debug can be enabled per pod. | — |
+| **Miner&nbsp;fleet** | **Phase 1:** only external miners are eligible for onboarding and scoring. Each qualifying miner operates its own RKE2 cluster with CC on and guest debug off. Owner staging UID 56 is decommissioned and receives no miner capacity score or emissions | Demand-driven Blackwell expansion. Permissionless external registration remains Phase 1 work, not a deployed feature ([Roadmap](#phase-1--expansion)) |
+| **Confidential&nbsp;runtime** | Kata **4.3.1** + CoCo TEE runtime-rs classes (`kata-qemu-nvidia-gpu-tdx-runtime-rs` / `kata-qemu-tdx-runtime-rs`), with CC on and guest debug off. Phase 0 also validated these classes on Kata 4.2.0 | AMD SEV-SNP multi-arch + NVIDIA RTX PRO 6000 Blackwell Server Edition testing ([Phase 1](#phase-1--expansion)) |
+| **Service&nbsp;transport** | The validated Phase 0 pattern: grey-cloud DNS + Traefik TLS passthrough into the LiteLLM TDX guest, with attestation-gated TLS to model backends. The former Oakland gateway is not the Phase 1 control-plane deployment | Migrate this gateway pattern off Oakland; validate the new endpoint and backend chain before claiming client-facing service. Native TLS from the LiteLLM guest to external-miner NIM guests |
+| **Owner&nbsp;staging&nbsp;miner** | **Decommissioned as Phase 1 begins** — UID 56 (`na-us-oakland-56`) is not a scored miner or source of miner emissions. Owner control-plane infrastructure is separate from miner eligibility | — |
 | **Security&nbsp;gate** | Supply-chain CI is a **design reference** (manual/advisory practice) — automation removed from the roadmap (2026-10-19) | — |
 | **Validator&nbsp;scoring** | **v1 live on Finney:** binary infrastructure-readiness gate (hotkey binding, Rancher readiness, HA topology, capacity, 8-GPU passthrough, confidential runtime handler) + USD-denominated compensation pricing via Taostats + Targon SN4 supply-side clamp + [KubeTEE Validator/Miners Dashboard](https://s3.hippius.com/kubetee-validator/index.html) (hosted on Hippius) | `PROBATION`→`EARNING` state machine; fresh TEE attestation, Armada job metrics, serving probes, workload identity |
 | **Validator&nbsp;pricing** | **v1.3 live:** Taostats compensation feed (`api/dtao/pool/latest/v1`) + Targon SN4 payout feed (snapshot API `statistics.getSnapshot` — highest live $/card per class, MAX-payout fallback for classes with no supply) + per-GPU price card (H100 $4 / H200 $5.50 / B200 $8 / B300 $10 / RTX6000 $2.50 /GPU/hr) with manual per-class floors on the published card; one `set_weights` per epoch with rate-limit cooldown | Lium / Chutes demand-side scrape, per-job-class target price, price-competitiveness weighting |
 | **Validator&nbsp;runtime** | **v1 live:** flat self-contained Python unit (14 modules, 96 tests) running as a container on the operator's machine; sets weights once per epoch | Run inside a Kata + CoCo TEE pod on the control plane with CoCo remote attestation (the referee itself attested) ([Phase 2](#phase-2--paid-jobsservicesinference)) |
-| **Armada** | — | **In development** — Server on the control plane, Executor on each miner cluster ([Phase 0](#phase-0--early-access-current)); move into Kata + CoCo TEE pods with attestation-gated TLS ([Phase 1](#phase-1--expansion)) |
-| **Miner&nbsp;onboarding** | KubeTEE applies the hotkey binding | Permissionless self-service ([Phase 1](#phase-1--expansion)) |
-| **Miner&nbsp;deposit** | **Not applied in Early Access** — 10 TAO per node, implemented in Phase 1 | 10 TAO/node deposit (measure → enforce) + on-chain collateral bonding ([Phase 1](#phase-1--expansion)) |
+| **Armada** | **Not deployed** — Phase 0 scoped the Server on the owner control plane and the Executor on each miner cluster | Finish the Phase 1 carry-over deployment; move into Kata + CoCo TEE pods with attestation-gated TLS in [Phase 2](#phase-2--paid-jobsservicesinference) |
+| **Miner&nbsp;onboarding** | KubeTEE onboards **external miners** and applies the hotkey binding; no owner-operated miner is eligible | Permissionless self-service external-miner registration is Phase 1 work in progress ([Roadmap](#phase-1--expansion)) |
+| **Miner&nbsp;deposit** | **Not collected during Phase 0 Early Access** | 10 TAO/node deposit measurement → enforcement, plus on-chain collateral bonding: Phase 1 work in progress ([Roadmap](#phase-1--expansion)) |
 | **Payments** | **TAO is live on Base** (Chainlink CCIP-bridged ERC-20, Aerodrome TAO/USDC — [ForeverMoney](https://x.com/forevermoney_ai/status/2090469070248235027), 2026-08-21) — the payment rail exists | Alpha / TAO paid jobs (demand-side) at the resources price per hour; USDC-on-BASE and TAO-on-BASE job billing + automated recycle ([Phase 1](#phase-1--expansion)) |
-| **LiteLLM&nbsp;gateway** | `llm.kubetee.ai` — OpenAI-compatible inference plus virtual keys, budgets, rate limits, and spend tracking. Cloudflare DNS-only (grey cloud) to oakland node IPs. LiteLLM runs in `kata-qemu-tdx-runtime-rs` with guest debug off; Traefik TLS passthrough terminates in the guest. CoCo Trustee attests the guest. Inference backends are in-cluster NIM on the staging cluster; miner clusters are extra `api_base` rows under the same `model_name`. **sayGM (SN28)** is a connected inference provider (same `model` names). | Wire `/mcp` and `/a2a` and fine-tuning / batch through to Armada; KubeTEE as an upstream LiteLLM **provider**; RA-TLS; **TEE fallbacks** to Chutes / Phala / Near AI ([Inference providers](#inference-providers-and-tee-fallbacks)) |
-| **Inference&nbsp;models** | **Live** through `llm.kubetee.ai`: Kimi-K3.1-Pro (B300, Luxembourg), GLM-5.2 (H200 FP8), GLM-5.3, **Ornith-1.5-397B** (H200 FP8), **MiMo-V2.6-Pro** (B200 CC, 2 replicas), **DeepSeek-V4.1-Flash** (H200 CC). **Nemotron-3-Nano-Omni** — any-to-any multimodal understanding (text / image / video / audio → text, with reasoning + tool calling) on 1× H100, live 2026-10-08 from the first production miner cluster in TEE ([Nemotron-Omni Multimodal API](./docs/NEMOTRON-OMNI-MULTIMODAL-API.md)); **evaluation-only** pending the Nemotron commercial license grant — not a billed SKU. **SN28 (sayGM) live 2026-08-19** as an inference provider + idle-capacity demand channel — not SN90's product. Paid offers: `moonshot/kimi-k3.1-pro-tee`, `z-ai/glm-5.2`, `z-ai/glm-5.3`, `ornith/ornith-1.5-397b`, `xiaomi/mimo-v2.6-pro-ultraspeed` (MIT, declared 2026-09-24) — [SN28-SAYGM.md](./docs/SN28-SAYGM.md). Free window closed at **14,812,329,857** tokens. **In collaboration with SN28 sayGM, KubeTEE was the first to provide Ornith-1.5-397B worldwide** (2026-08-20). | TEE router fallbacks (Chutes / Phala / Near AI) — moved to [Phase 2](#phase-2--paid-jobsservicesinference). Expand the confidential model catalogue. Do not declare Kimi/Qwen/MiMo on SN28. |
+| **LiteLLM&nbsp;gateway** | `llm.kubetee.ai` — OpenAI-compatible inference, virtual keys, budgets, rate limits, and spend tracking. Its Oakland deployment and the sayGM-connected model routes are **Phase 0 history**; a former staging-miner address must not be carried into Phase 1. Only external-miner clusters supply confidential `api_base` backends. The owner control plane will operate the migrated gateway and is not a miner | Complete the control-plane gateway migration off Oakland and validate the retained external-miner backend. Wire `/mcp` and `/a2a` and fine-tuning / batch through to Armada; upstream LiteLLM **provider** integration; RA-TLS; [TEE fallbacks](#inference-providers-and-tee-fallbacks) |
+| **Inference&nbsp;models** | Confidential model backends run on qualifying external-miner clusters behind the migrated `llm.kubetee.ai` control plane. Historical deployments and paid offers are not the Phase 1 catalogue; availability requires a current backend and gateway validation. Nemotron-3-Nano-Omni remains **evaluation-only** subject to licensing, not a billed SKU. SN28 sayGM was connected as an inference provider and idle-capacity demand channel in Phase 0 | New external-miner backends and expanded confidential model catalogue. TEE router fallbacks (Chutes / Phala / Near AI) are [Phase 2](#phase-2--paid-jobsservicesinference) work. Past model availability must not be represented as live without a current deployment |
 | **Jobs&nbsp;MCP&nbsp;server** | — | **Not developed yet** — agent- and chat-driven job deployment at `llm.kubetee.ai/mcp` ([Phase 3](#phase-3--job-typeservices-growth)) |
 
 ---
@@ -165,39 +162,36 @@ Enterprises running sensitive SOTA AI services — inference, agents, training, 
 
 ## Deploying in a TEE: The Engineering Challenge
 
-The section above is why customers need confidential compute. This one is why it is hard to build — and why Early Access keeps a CC-capable staging cluster as a **debug target** when a workload fails, rather than a required promotion workflow.
+
 
 **A confidential pod is a virtual machine with an encrypted, attested memory boundary, not a namespaced process on the host.** Every assumption a Kubernetes workload makes about devices, storage, resources, startup time, and debuggability is renegotiated at that boundary — multi-GPU/NVSwitch passthrough, guest-vs-pod sizing, cold start, storage semantics, observability, destructive failures, and version-coupled stacks. Each has been hit bringing up this stack, and most have an upstream issue attached.
 
-Two consequences follow directly, and they shape Early Access:
 
-1. **CC can be turned off on a staging node for debug.** Every staging node is TEE CC capable. Turning CC off (or guest debug on for a pod) is a diagnostic choice so an operator can tell "the workload is broken" from "the TEE path is broken."
-2. **Guest debug is off by default so CoCo Trustee can attest the guest.** Turning debug on for a pod is a diagnostic choice: that guest is then not attested. Staging and miner TEE pods run with debug off unless an operator enables it on that pod.
 
-More on staging as a debug target: [Deploying in a TEE — Challenge and debugging](./docs/TEE-DEPLOYMENT-AND-CICD.md).
+
 
 ### Example: Upstream Participation — kata-containers #13535
 
-KubeTEE does not just consume upstream projects; it hardens them and reports what it finds. A concrete example from Early Access:
+KubeTEE does not just consume upstream projects; it hardens them and reports what it finds. A concrete example from Phase 0 Early Access:
 
 While bringing up a 2.5 TB Kimi-K3 inference pod (8× B300 GPU passthrough) under `kata-qemu-nvidia-gpu-tdx-runtime-rs`, the sandbox hung at boot and hit the 1200s `create_container` timeout before the guest kernel even started. Root cause: the `OVMF.inteltdx.fd` shipped in **kata-deploy v4.0.0** performs **eager memory acceptance** for Intel TDX guests — spending all its time in `TDCALL [TDG.MEM.PAGE.ACCEPT]` for large-memory VMs. The distro `ovmf-inteltdx` (Ubuntu, with lazy-accept enabled by `PcdLazyAcceptPartialMemorySize=512`) booted the same 512 GB TDX VM in under 15 seconds. KubeTEE filed the issue with full evidence (serial logs, kata config, kernel `CONFIG_UNACCEPTED_MEMORY=y`), root-cause analysis (Config-A vs Config-B build, PCD defaults), and three proposed solutions — [kata-containers#13535](https://github.com/kata-containers/kata-containers/issues/13535).
 
-KubeTEE's Kata base is **4.3.1** (Oakland since 2026-10-23; Luxembourg's `lu-b300-40` verified 2026-11-03). Stock 4.3.1 ships lazy-accept `edk2-stable202608` via [#13717](https://github.com/kata-containers/kata-containers/pull/13717), so the OVMF overlay is retired; [#13535](https://github.com/kata-containers/kata-containers/issues/13535) closed completed 2026-10-27. The **`v4.3.1-fix11649-t15t16`** shim overlay remains for [#11649](https://github.com/kata-containers/kata-containers/issues/11649) (deterministic duplicate block-device ID after init-container unplug) and the T15/T16 missing-task teardown path ([#13665](https://github.com/kata-containers/kata-containers/issues/13665)/[#13746](https://github.com/kata-containers/kata-containers/issues/13746)); host shim `96bcd8efa4cb…`, stock lazy-accept OVMF `2a2dc271…`. Retired Michigan and 4.2.0 overlay details are historical, not current recovery instructions. See [TEE deployment](./docs/TEE-DEPLOYMENT-AND-CICD.md#runtime-classes-kata-431).
+KubeTEE's Kata base is **4.3.1**, validated during Phase 0 and deployed on external-miner clusters. Stock 4.3.1 ships lazy-accept `edk2-stable202608` via [#13717](https://github.com/kata-containers/kata-containers/pull/13717), so the OVMF overlay is retired; [#13535](https://github.com/kata-containers/kata-containers/issues/13535) closed completed 2026-10-27. The **`v4.3.1-fix11649-t15t16`** shim overlay remains for [#11649](https://github.com/kata-containers/kata-containers/issues/11649) (deterministic duplicate block-device ID after init-container unplug) and the T15/T16 missing-task teardown path ([#13665](https://github.com/kata-containers/kata-containers/issues/13665)/[#13746](https://github.com/kata-containers/kata-containers/issues/13746)); host shim `96bcd8efa4cb…`, stock lazy-accept OVMF `2a2dc271…`. Retired 4.2.0 overlay details are historical, not current recovery instructions. See [TEE deployment](./docs/TEE-DEPLOYMENT-AND-CICD.md#runtime-classes-kata-431).
 
-This is the model: hit the failure in production, isolate it (CC off on a staging node for debug, plus the distro OVMF comparison), file it upstream with a reproducible root cause and a fix proposal, and carry a local workaround until the upstream fix lands. KubeTEE maintains a fork branch with pre-built lazy-accept OVMF from `edk2-stable202608` (202605 + the TDVF below-4G fix) and a reproducible build workflow for pipeline testing.
+This is the Phase 0 model that established KubeTEE's upstream engineering practice: isolate failures using the staging-debug environment and the distro OVMF comparison, file reproducible root causes and fix proposals, and carry a local workaround until the upstream fix lands. The owner-operated staging miner is decommissioned from Phase 1; the external-miner-only boundary does not require a replacement staging miner. KubeTEE maintains a fork branch with pre-built lazy-accept OVMF from `edk2-stable202608` (202605 + the TDVF below-4G fix) and a reproducible build workflow for pipeline testing.
 
 ---
 
-## Debugging on the staging cluster
+## Phase 1 transition
 
-Workloads run on **miner clusters** (CC on, guest debug off; CoCo Trustee attests). There is no required staging promotion workflow.
 
-If a workload fails, it can be targeted at the **staging cluster** for diagnostics. Every staging node is TEE CC capable. CC can be turned off on a node for debug, and guest debug can be enabled **per pod**. Trustee attests only when debug is off.
+**As Phase 1 begins, the subnet-owner staging miner role is decommissioned. UID 56 is withdrawn from miner capacity, scoring, and emissions. From now on, only external miners are onboarded.** The owner-operated control plane, validator, and platform services are infrastructure, funded by the owner's emission share—not miner scoring or capacity payments.
 
 ```mermaid
 flowchart LR
-    Jobs["AI service"] --> Miners["Miner clusters<br/>CC on, guest debug off<br/>CoCo Trustee attests"]
-    Jobs -.->|"on failure, debug"| Staging["Staging cluster<br/>CC-capable; CC off and<br/>per-pod guest debug available"]
+    Services["AI services and jobs"] --> Miners["External miner clusters<br/>CC on, guest debug off<br/>CoCo Trustee attests"]
+    Owner["Subnet-owner control plane<br/>no scored miner"] -.->|platform operation| Miners
+    Retired["UID 56 owner staging miner<br/>DECOMMISSIONED as Phase 1 begins"] -.->|no capacity or emissions| Miners
 ```
 
 Supply-chain CI (SAST, Trustee secrets, image CVE, IaC) is a design reference — automating it is no longer a roadmap deliverable — see [the security gate](./docs/NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md#6-stage-0--supply-chain-security-gate). Detail: [Deploying in a TEE](./docs/TEE-DEPLOYMENT-AND-CICD.md).
@@ -214,7 +208,7 @@ Supply-chain CI (SAST, Trustee secrets, image CVE, IaC) is a design reference �
 - Intel TDX (6th Gen Xeon Granite Rapids) with TDX/SGX; AMD SEV-SNP (6th Gen EPYC 9006) from [Phase 1](#phase-1--expansion)
 - NVIDIA Blackwell / Vera Rubin — Hopper (H100/H200) is deprecated (existing nodes only; removed as new Blackwell nodes are onboarded, target November 2026)
 
-Confidential services execute under the TEE runtime classes in the [Overview](#overview). On staging, every node is TEE CC capable; Kata guest debug is off and CoCo Trustee attests those guests. CC can be turned off on a staging node for debug. Batch jobs use the same runtime classes; see [Armada Multi-Cluster Batch Scheduling](#armada-multi-cluster-batch-scheduling) for that secondary path.
+Confidential services execute under the TEE runtime classes in the [Overview](#overview) on external miner clusters. Kata guest debug is off and CoCo Trustee attests those guests. Batch jobs use the same runtime classes; see [Armada Multi-Cluster Batch Scheduling](#armada-multi-cluster-batch-scheduling) for that secondary path.
 
 ### Infrastructure
 
@@ -243,15 +237,15 @@ Confidential services execute under the TEE runtime classes in the [Overview](#o
 - **Armada Executor + Installer** run on **each miner cluster**, turning the cluster into a scheduling target (pool)
 - Jobs are submitted to **Armada queues** and scheduled across miner clusters with **fair-use queuing**, **gang scheduling**, and **preemption**
 
-**Confidentiality of the scheduler itself** is a second step, not part of the initial install. Phase 0 stands Armada up; [Phase 2](#phase-2--paid-jobsservicesinference) moves the Server and Executors into Kata + CoCo TEE pods and puts [attestation-gated TLS](./docs/NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md#2-attestation-gated-tls-between-services) on the Server-to-Executor control channel, so a scheduler will not dispatch to an executor that cannot attest and an executor will not accept work from an unattested scheduler. Until then the scheduler is trusted infrastructure while the *jobs* it dispatches are already confidential.
+**Confidentiality of the scheduler itself** is a second step, not part of the initial install. Phase 0 scoped Armada, but that deployment carries into Phase 1 because it was not completed; [Phase 2](#phase-2--paid-jobsservicesinference) moves the Server and Executors into Kata + CoCo TEE pods and puts [attestation-gated TLS](./docs/NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md#2-attestation-gated-tls-between-services) on the Server-to-Executor control channel, so a scheduler will not dispatch to an executor that cannot attest and an executor will not accept work from an unattested scheduler. Until then the scheduler is trusted infrastructure while the *jobs* it dispatches are already confidential.
 
 **Confidential execution**:
-- Jobs land on nodes with a confidential `runtimeClassName` — `kata-qemu-nvidia-gpu-tdx-runtime-rs` for Intel TDX + NVIDIA GPU passthrough, `kata-qemu-tdx-runtime-rs` for CPU-only TDX. On staging, CC can be turned off on a node for debug.
-- **CoCo + Trustee/KBS** handle remote attestation when guest debug is off, so the job image needs no modification to run confidentially. Debug can be enabled per pod for diagnostics.
+- Jobs land on external miner nodes with a confidential `runtimeClassName` — `kata-qemu-nvidia-gpu-tdx-runtime-rs` for Intel TDX + NVIDIA GPU passthrough, `kata-qemu-tdx-runtime-rs` for CPU-only TDX.
+- **CoCo + Trustee/KBS** handle remote attestation when guest debug is off, so the job image needs no modification to run confidentially.
 
 Armada addresses Kubernetes batch limitations that matter for the Factory: single-cluster scaling limits, etcd throughput ceilings, and the lack of fair-use / gang scheduling in the default kube-scheduler.
 
-> **Status:** Armada is not deployed yet. Standing up the Server and Executors is a [Phase 0](#phase-0--early-access-current) item; moving them into TEE is [Phase 2](#phase-2--paid-jobsservicesinference) ([What Ships Today](#what-ships-today)).
+> **Status:** Armada is not deployed yet. Its Phase 0 scope carries into Phase 1; moving Server and Executors into TEE remains [Phase 2](#phase-2--paid-jobsservicesinference) work ([What Ships Today](#what-ships-today)).
 
 ### Security & Compliance
 
@@ -273,6 +267,8 @@ Armada addresses Kubernetes batch limitations that matter for the Factory: singl
 ### Multi-Cluster Topology
 
 #### Subnet Owner Infrastructure
+
+The owner operates the control plane, not a scored miner. From Phase 1, one external organization owns each miner cluster; no owner-operated staging miner is included in this production footprint.
 - Global Multi-Cluster Control Plane with Rancher on Confidential Computing TEE
 - Rancher Multi-Cluster Management with Fleet for GitOps
   - RKE2 Rancher Kubernetes (FIPS-validated baseline)
@@ -283,7 +279,7 @@ Armada addresses Kubernetes batch limitations that matter for the Factory: singl
 
 #### Miner Infrastructure
 - RKE2 Rancher Kubernetes
-- One Cluster per Miner (identified by hotkey, not UID)
+- One Cluster per External Miner (identified by hotkey, not UID)
   - One data center per cluster — all nodes co-located in a single DC
   - Regional deployment (One Region/Zone Control Plane with same region workers)
   - Cluster carries the `kubetee.ai/hotkey` binding label, **applied by the
@@ -293,32 +289,10 @@ Armada addresses Kubernetes batch limitations that matter for the Factory: singl
 - Fleet Agent for automated deployments
 
 
-### Early Access Topology
 
-```mermaid
-flowchart LR
-    subgraph owner["Subnet Owner Control Plane"]
-        Validator["Validator\nweights + emissions"]
-        ArmadaServer["Armada Server\nscheduler + queues\nPulsar/Redis/Postgres"]
-    end
-    subgraph staging["KubeTEE Staging Cluster — subnet-owner"]
-        NodeTEE["CC-capable TDX GPU nodes (B200 / B300)<br/>kata-qemu-nvidia-gpu-tdx-runtime-rs<br/>guest debug off; Trustee attests<br/>CC can be turned off for debug"]
-    end
-    subgraph clusterA["Miner Cluster — BTLABS (UID 97), 1 hotkey, 1 DC (USA)"]
-        ExecA["Armada Executor"]
-        NodeA["7 nodes, 56 GPUs (H100 + H200)\nkata-qemu-nvidia-gpu-tdx-runtime-rs\nguest debug off"]
-    end
-    Client["Job Submitter\nNeMo/NIM/Blueprint job"] -->|submit| ArmadaServer
-    Client -.->|"on failure, debug"| NodeTEE
-    ArmadaServer -->|schedule| ExecA
-    ExecA --> NodeA
-    NodeA -.->|attestation + metrics| Validator
-    Validator -->|set weights| Chain["Bittensor\nemissions"]
-```
-
-> The **Validator** runs on the subnet-owner control plane; moving it into a confidential Kata + CoCo TEE pod is a [Phase 2](#phase-2--paid-jobsservicesinference) item (see [Validator Runtime (TEE)](#validator-runtime-tee)). The **Armada Server** and **Executors** are drawn here as designed: they are stood up in [Phase 0](#phase-0--early-access-current) and move into TEE pods in [Phase 2](#phase-2--paid-jobsservicesinference) ([What Ships Today](#what-ships-today)).
+> The **Validator** runs on the subnet-owner control plane; moving it into a confidential Kata + CoCo TEE pod is a [Phase 2](#phase-2--paid-jobsservicesinference) item (see [Validator Runtime (TEE)](#validator-runtime-tee)). The **Armada Server** and **Executors** are drawn here as designed. Their Phase 0 deployment milestone was not completed; they remain carry-over work before moving into TEE pods in [Phase 2](#phase-2--paid-jobsservicesinference) ([What Ships Today](#what-ships-today)).
 >
-> The **first miner cluster** is live in production: BTLABS (UID 97), `na-us-michigan-97` — 7 nodes (4× 8-GPU H100 + 3× 8-GPU H200), Intel TDX, NVIDIA CC. Subsequent miner clusters join the same shape. The **staging cluster** is KubeTEE's own. Every node is TEE CC capable. It is a **debug target** if a workload fails — not a required promotion step. Kata guest debug is **off**; CoCo Trustee attests those guests. CC can be turned off on a staging node for debug; guest debug can be enabled per pod. Miner clusters keep CC on with guest debug off. See [For Miners (Infrastructure)](#for-miners-infrastructure) and [Debugging on the staging cluster](#debugging-on-the-staging-cluster).
+> **Phase 1 topology.** Every qualifying miner cluster belongs to an external miner, keeps CC on with guest debug off, and is identified by its registered hotkey. The owner staging miner UID 56 (`na-us-oakland-56`) is **decommissioned as Phase 1 begins** and is not carried forward as a miner or emissions recipient; owner infrastructure operates the control plane only. This public overview does not enumerate participants or miner locations. See [For Miners (Infrastructure)](#for-miners-infrastructure) and [Phase 1 transition](#phase-1-transition).
 
 ---
 
@@ -371,15 +345,15 @@ Full detail — the attestation-gated TLS protocol, the NIM Operator experimenta
 
 ## Subnet Economics
 
-### Incentive Mechanism: Infrastructure (Early Access)
+### Incentive Mechanism: Infrastructure
 
-KubeTEE Early Access uses a **single Infrastructure incentive mechanism** with two sides. On the **supply side**, miners earn Bittensor emissions for providing confidential compute capacity and reliably executing Armada-scheduled jobs; emissions are distributed per resources provided (GPU nodes), weighted by attested TEE health, job-execution quality, and uptime. On the **demand side**, consumers pay Alpha or TAO at a published **resources price per hour** for the compute they consume (demand-side paid jobs land in [Phase 1](#phase-1--expansion)).
+KubeTEE uses a **single Infrastructure incentive mechanism** with two sides. In Phase 1, only **external miners** participate on the **supply side**, earning Bittensor emissions for providing confidential compute capacity and reliably executing Armada-scheduled jobs; emissions are distributed per resources provided (GPU nodes), weighted by attested TEE health, job-execution quality, and uptime. On the **demand side**, consumers pay Alpha or TAO at a published **resources price per hour** for the compute they consume (demand-side paid jobs are Phase 1 work in progress, not a deployed billing flow—[Roadmap](#phase-1--expansion)).
 
 **TEE attestation is mandatory** — Intel TDX/SGX and NVIDIA CC must be proven, and **no attestation means no emissions**. Compliance is enforced rather than requested, higher-tier GPU nodes earn more, and a miner is paid on capacity it makes available *and can prove*.
 
 #### Payment methods
 
-**Subnet 90 Alpha, other subnets' Alpha, and TAO** are all accepted at the published resources-per-hour price (demand-side paid jobs land in [Phase 1](#phase-1--expansion)). There are **no discounts and no referrer or reseller program**: SN90 compute is already priced competitively because it is subsidized by subnet emissions, so a discount layer would simply be gamed (see the [Tokenomics](#tokenomics--utility-token--depin-model) boundary conditions).
+**Subnet 90 Alpha, other subnets' Alpha, and TAO** are all accepted at the published resources-per-hour price (demand-side paid jobs are Phase 1 work in progress, not a deployed billing flow—[Roadmap](#phase-1--expansion)). There are **no discounts and no referrer or reseller program**: SN90 compute is already priced competitively because it is subsidized by subnet emissions, so a discount layer would simply be gamed (see the [Tokenomics](#tokenomics--utility-token--depin-model) boundary conditions).
 
 **TAO is live on Base** (2026-08-21) as a Chainlink CCIP-bridged ERC-20 — announced by [ForeverMoney](https://x.com/forevermoney_ai/status/2090469070248235027), tradeable against USDC on Aerodrome (`0xf3081494b87e8d5fb7960f066e931d1d0e6e3d67`). A consumer can buy TAO from USDC or ETH in a Base wallet, without a Bittensor-native wallet, then spend it for SN90 compute. Finney TAO and TAO-on-BASE are the same asset on two rails; CCIP is the canonical bridge ([forevermoney.ai](https://forevermoney.ai/)). This is the on-chain acquisition path — settlement of a job still recycles Alpha on Finney (see [Tokenomics](./docs/TOKENOMICS.md#tao-on-base)).
 
@@ -391,13 +365,14 @@ The price itself is **competitive** (benchmarked against Targon/Lium/Chutes) and
 
 #### Staging vs Production
 
-**Staging Environment** (Subnet Owner):
-- Operated by the subnet-owner. Every node is TEE CC capable. Debug target if a workload fails — not a required promotion step. Kata guest debug is **off**; CoCo Trustee attests those guests. CC can be turned off on a node for debug; guest debug can be enabled per pod ([Deploying in a TEE](./docs/TEE-DEPLOYMENT-AND-CICD.md))
-- Test applications, infrastructure, upgrades; community Staging jobs
+**Owner staging miner** (Phase 0, retired):
+- UID 56 (`na-us-oakland-56`) was the CC-capable owner staging miner. Its CC-off and per-pod guest-debug diagnostics are **retired from Phase 1**, alongside its mining and emissions role
+- Subnet-owner control-plane services are platform infrastructure, not a replacement for the retired staging miner
 
-**Production Environment** (Permissionless with minimum qualification and collaterals):
-- **Live**: BTLABS (UID 97) operates the first production miner cluster (`na-us-michigan-97`) — real hardware, TDX attestation, live emissions
-- Multi-cluster — one per data center per miner hotkey
+**External miner production** (Phase 1 onward — minimum qualification and collateral):
+- **Only external miners are onboarded.** No new owner-operated staging or production miner is eligible
+- Each participating cluster is owned and operated by an independent external miner; individual participants and locations are not enumerated here
+- Multi-cluster — one per data center per external miner hotkey
 - Must pass minimum requirements (hardware, HA topology, 8-GPU workers, passthrough wiring), TEE attestation, and infrastructure-readiness validation
 - **TEE-only, Kata guest debug off**, CoCo Trustee attests
 - Verified accreditation — IP addresses and data center certifications/accreditations for regulated workloads
@@ -410,7 +385,7 @@ SN90 (KubeTEE) Alpha is a **utility token consumed to access confidential comput
 
 - **Owner conviction auto-locked to perpetuity** — KubeTEE AI LTD owns the 18% owner emission stream and the $198k (≈1,003 TAO) subnet registration; 100% of its dTAO conviction is programmatically re-locked on-chain so it never decays and is never withdrawn. The owner holds no discretionary liquid position to sell — removes the large-discretionary-insider-position fact pattern from the securities analysis.
 - **Recycle vs burn** — spent Alpha is **recycled** (returned to unissued supply, extends the emission runway, refills the miner budget), not burned. For a compute subnet whose product is ongoing work, recycle funds future miner emissions.
-- **Corporate structure (vertically split)** — KubeTEE AI LTD (subnet owner, mechanism + IP, 18% stream) and 1-HORIZON LTD (miner operator, competes for the 41% miner share under identical rules as every external miner). The target state is a declining related-party share — the on-chain evidence the network is real.
+- **Corporate structure (vertically split)** — KubeTEE AI LTD (subnet owner, mechanism + IP, 18% stream), 41% miner, 41% Validators/stakers
 - **Cross-subnet consumption loop** — external customers → consuming subnet swaps TAO for SN90 Alpha on the open pool (no discounts) → spends Alpha on SN90 confidential compute → spent Alpha recycled → re-emitted via 41/41/18. TAO can now be acquired on **Base** (CCIP-bridged ERC-20, Aerodrome USDC/TAO) as well as on Finney. A consumer-aligned validator on SN90 scores miner output as the protocol-native SLA. External demand one hop removed, not circular emissions-farming.
 - **DePIN subsidy trajectory** — the emission subsidy line decays as consumption revenue rises; they cross at the **crossover** (net Alpha issuance ≈ 0, consumers fund the miner budget). The subsidy ratio (emission value ÷ total miner compensation) is the single on-chain KPI, monotonically declining. Defenses: published glide path, stack-efficiency moat (bin-packing, TEE premium, utilization), and self-consumption made economically neutral to defeat wash consumption.
 
@@ -421,14 +396,17 @@ Full analysis (securities posture, recycle mechanics, flywheel, trajectory chart
 
 ## Validator Scoring & Attestation
 
-The validator is the subnet's referee. In Early Access it scores each miner (one hotkey per cluster) on a single Infrastructure mechanism and sets Bittensor weights each epoch.
+The validator is the subnet's referee. It scores each external miner (one hotkey per cluster) on a single Infrastructure mechanism and sets Bittensor weights each epoch. Owner infrastructure is outside miner eligibility.
 
 > **Status:** validator v1 is **built, tested (96 tests), and live on Finney** —
-> it scores every registered miner cluster (subnet-owner staging + production
-> miners) on a single Infrastructure mechanism and sets Bittensor
-> weights once per epoch (boundary-aligned, with `weights_rate_limit` cooldown).
-> The first production miner (BTLABS, UID 97 — `na-us-michigan-97`) is validated
-> and earning every epoch. The KubeTEE Validator/Miners Dashboard is published to Hippius S3 every cycle at
+> it scores registered miner clusters on a single Infrastructure mechanism and
+> sets weights once per epoch (boundary-aligned, with `weights_rate_limit`
+> cooldown). Phase 0 validated the external-miner registration, infrastructure,
+> scoring, and emissions path. **Phase 1 policy:** owner
+> staging UID 56 is decommissioned and receives no CC-off scoring exception,
+> miner capacity score, or miner emissions; only external miners are onboarded.
+> The legacy code exception is retired separately; its live removal is not
+> implied by these documentation changes. The KubeTEE Validator/Miners Dashboard is published to Hippius S3 every cycle at
 > [https://s3.hippius.com/kubetee-validator/index.html](https://s3.hippius.com/kubetee-validator/index.html).
 > The sections below
 > describe both the running v1 and the future-scoring dimensions on top of it.
@@ -485,7 +463,7 @@ These are the validator behaviors:
 
 ## Submitting a Confidential Job
 
-The primary door is the **[LiteLLM gateway](#litellm-gateway--the-multi-service-front-door)** at `llm.kubetee.ai` (ships today) — SOTA inference, tools, and agents. **Batch jobs** are a secondary service: **[Airflow and Metaflow connectors](#workflow-orchestration-airflow--metaflow)** for multi-step pipelines (designed, not built) and the **[Jobs MCP server](#jobs-mcp-server)** for conversational submit (not developed yet). Those land on Armada queues (Armada is in development) with a confidential `runtimeClassName`. In Early Access, direct Armada submission will be open to the subnet owner and authorized integrators.
+The primary door is the **[LiteLLM gateway](#litellm-gateway--the-multi-service-front-door)** at `llm.kubetee.ai` (ships today) — SOTA inference, tools, and agents. **Batch jobs** are a secondary service: **[Airflow and Metaflow connectors](#workflow-orchestration-airflow--metaflow)** for multi-step pipelines (designed, not built) and the **[Jobs MCP server](#jobs-mcp-server)** for conversational submit (not developed yet). Those land on Armada queues (Armada is in development) with a confidential `runtimeClassName`. During Phase 1 rollout, direct Armada submission is available only to the subnet owner and authorized integrators until the public job interfaces ship.
 
 (Miners join the other side of this: they register one cluster per hotkey with the subnet owner for Rancher Fleet and Armada enrollment — see [For Miners (Infrastructure)](#for-miners-infrastructure).)
 
@@ -506,7 +484,7 @@ The primary door is the **[LiteLLM gateway](#litellm-gateway--the-multi-service-
 | [Guardrails](https://docs.litellm.ai/docs/adding_provider/generic_guardrail_api) | Policy enforcement across every endpoint above | Pre- and post-call policy on confidential traffic |
 | [Virtual keys, teams, orgs](https://docs.litellm.ai/docs/proxy/virtual_keys), hierarchical budgets, RPM limits, spend tracking | Multi-tenant governance — budgets inherit down the hierarchy and requests are blocked in real time when any level is exhausted | **The metering surface for Alpha/TAO billing** at the published resources price per hour (see [Subnet Economics](#subnet-economics)) |
 
-**The gateway itself runs inside a TEE.** LiteLLM runs under `kata-qemu-tdx-runtime-rs` with guest debug off. Cloudflare hosts DNS for `llm.kubetee.ai` as **grey cloud** (DNS-only) to the oakland node ExternalIPs. Cluster ingress is **TLS passthrough**: Traefik holds no private key and forwards TLS records into the guest, where an in-sandbox terminator decrypts onto LiteLLM loopback. From there the gateway speaks [attestation-gated TLS](./docs/NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md#2-attestation-gated-tls-between-services) to model services. CoCo Trustee attests the guest. A caller can get cryptographic proof per request — the [nonce-bound TDX quote endpoint](./docs/CLIENT-FACING-ATTESTATION.md) (live since 2026-09-18) — where a fresh quote with `SHA512(nonce)` in `REPORTDATA` rides the response headers; quote-in-handshake RA-TLS remains a later hardening on top.
+**The gateway architecture runs inside a TEE.** LiteLLM uses `kata-qemu-tdx-runtime-rs` with guest debug off. Cloudflare hosts DNS for `llm.kubetee.ai` as **grey cloud** (DNS-only). The historical Oakland ExternalIPs are not the Phase 1 destination; DNS and ingress follow the migrated control-plane gateway, not the decommissioned staging miner. Cluster ingress is **TLS passthrough**: Traefik holds no private key and forwards TLS records into the guest, where an in-sandbox terminator decrypts onto LiteLLM loopback. From there the gateway design uses [attestation-gated TLS](./docs/NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md#2-attestation-gated-tls-between-services) to model services on external-miner clusters. The identical gateway architecture must be provisioned off the former staging cluster as part of the Phase 1 migration; a retained customer hostname does not imply the Oakland infrastructure remains deployed. CoCo Trustee attests the guest. A caller can get cryptographic proof per request — the [nonce-bound TDX quote endpoint](./docs/CLIENT-FACING-ATTESTATION.md) (live since 2026-09-18) — where a fresh quote with `SHA512(nonce)` in `REPORTDATA` rides the response headers; quote-in-handshake RA-TLS remains a later hardening on top.
 
 When a miner cluster has a model, LiteLLM gets another row with the same `model_name` and that cluster's private `api_base`. `simple-shuffle` / `least-busy` uses capacity on every healthy backend.
 
@@ -514,9 +492,9 @@ Two things follow. First, an internal AI service or pipeline deployed in the Kub
 
 #### Inference providers and TEE fallbacks
 
-[sayGM (SN28)](https://saygm.com/) is an **inference provider** connected to the KubeTEE LiteLLM gateway. The same OpenRouter-style `model` names (`z-ai/glm-5.2`, `z-ai/glm-5.3`, `ornith/ornith-1.5-397b`, `xiaomi/mimo-v2.6-pro-ultraspeed`, `deepseek/deepseek-v4.1-flash`, …) are the models on `llm.kubetee.ai`. Inbound sayGM buyers already hit those SKUs through the KubeTEE miner ([SN28-SAYGM.md](./docs/SN28-SAYGM.md)).
+[sayGM (SN28)](https://saygm.com/) was connected to the KubeTEE LiteLLM gateway as an **inference provider** during Phase 0. The dated Oakland-era-era model names and buyer routes are historical, not the Phase 1 catalogue ([SN28-SAYGM.md](./docs/SN28-SAYGM.md)). Current provider relationships follow the retained external-miner backends.
 
-**Primary:** in-cluster TEE backends (Kata + NVIDIA CC). **Fallbacks** are other networks that already serve models **in TEE** — not plaintext public cloud:
+**Primary:** external-miner-cluster TEE backends (Kata + NVIDIA CC). **Fallbacks** are other networks that already serve models **in TEE** — not plaintext public cloud:
 
 | Fallback | What it is | Why it qualifies |
 |---|---|---|
@@ -524,24 +502,19 @@ Two things follow. First, an internal AI service or pipeline deployed in the Kub
 | [Phala](https://phala.network/) | Confidential VM / TEE inference | Hardware-isolated guests (the same CC path KubeTEE helped bring up) |
 | [Near AI](https://near.ai/) | TEE-served model inference | Confidential inference fallback when in-cluster capacity is down |
 
-LiteLLM router fallbacks ([docs](https://docs.litellm.ai/docs/proxy/reliability)) send the same `model` to the next TEE backend after cooldown (`allowed_fails` / `cooldown_time`). Do **not** add sayGM as a fallback for KubeTEE-hosted SKUs — the miner already forwards sayGM → `llm.kubetee.ai`, so that hop would loop.
+LiteLLM router fallbacks ([docs](https://docs.litellm.ai/docs/proxy/reliability)) send the same `model` to the next TEE backend after cooldown (`allowed_fails` / `cooldown_time`). Do **not** add sayGM as a fallback for KubeTEE-hosted SKUs: the established inbound pattern forwards sayGM → `llm.kubetee.ai`, so that hop would loop whenever such a route is restored on an external-miner backend.
 
-> **Status:** inbound sayGM → LiteLLM → in-cluster TEE is **live**. Router fallbacks to Chutes / Phala / Near AI are the HA design — credentials stay out-of-band (Trustee / KBS), TEE-only backends only.
+> **Status:** inbound sayGM → LiteLLM → external-miner TEE was established in Phase 0; withdrawn Oakland-era-era routes are not current. New routes require a live external-miner backend. Router fallbacks to Chutes / Phala / Near AI are the HA design—credentials stay out-of-band (Trustee / KBS), TEE-only backends only.
 
-> **Status:** `llm.kubetee.ai` serves inference and multi-tenant governance (virtual keys, budgets, rate limits, spend tracking). Cloudflare is DNS-only (grey cloud). LiteLLM runs in `kata-qemu-tdx-runtime-rs` with guest debug off, Traefik TLS passthrough, and in-guest termination. CoCo Trustee attests the guest. Remaining: RA-TLS so clients attest the terminator; native TLS from the LiteLLM guest to NIM guests; wiring `/mcp`, `/a2a`, and the fine-tuning and batch endpoints through to Armada; upstream provider integration; TEE fallbacks (Chutes / Phala / Near AI). See [What Ships Today](#what-ships-today).
+> **Phase 0 deployment status:** the retired Oakland `llm.kubetee.ai` deployment served inference and multi-tenant governance (virtual keys, budgets, rate limits, spend tracking). Cloudflare is DNS-only (grey cloud). LiteLLM runs in `kata-qemu-tdx-runtime-rs` with guest debug off, Traefik TLS passthrough, and in-guest termination. CoCo Trustee attests the guest. Remaining: RA-TLS so clients attest the terminator; native TLS from the LiteLLM guest to NIM guests; wiring `/mcp`, `/a2a`, and the fine-tuning and batch endpoints through to Armada; upstream provider integration; TEE fallbacks (Chutes / Phala / Near AI). See [What Ships Today](#what-ships-today).
 
 ### SN28 sayGM — idle capacity, not the product
 
-**SN90 is not an inference subnet.** It hosts **SOTA AI services** for enterprises. Serving models to the general public is not the product. Factory services on the clusters always get priority. What goes to [sayGM (SN28)](https://saygm.com/) is **idle GPU headroom** — capacity that would otherwise sit warm and unused.
+**SN90 is not an inference subnet.** It hosts **SOTA AI services** for enterprises. Serving models to the general public is not the product. Factory services on external-miner clusters always get priority. [sayGM (SN28)](https://saygm.com/) can receive **idle GPU headroom** from those clusters—capacity that would otherwise sit warm and unused. Any such integration requires a live external-miner backend.
 
-That channel is **live** (2026-08-19). Buyers use the OpenAI-compatible sayGM API; the KubeTEE miner forwards to `llm.kubetee.ai` inside Intel TDX + NVIDIA CC. Same stack as the Factory gateway. Details: [SN28-SAYGM.md](./docs/SN28-SAYGM.md).
+The channel went live in **Phase 0** on **2026-08-19**: buyers used the OpenAI-compatible sayGM API and requests were forwarded to `llm.kubetee.ai` inside Intel TDX + NVIDIA CC. Those Oakland-era deployment paths and their buyer models were withdrawn; they are not current Phase 1 backends. In collaboration with sayGM, KubeTEE was the first to serve Ornith-1.5-397B worldwide on 2026-08-20.
 
-**First worldwide — Ornith-1.5-397B.** In collaboration with [sayGM (SN28)](https://saygm.com/), KubeTEE was the first to serve [Ornith-1.5-397B](https://huggingface.co/ornith-ai/Ornith-1.5-397B-NVFP4) anywhere in the world (2026-08-20), as idle-capacity on the same SN28 channel.
-
-Current buyer models: `z-ai/glm-5.2` (`glm-5.2`), `z-ai/glm-5.3`, `ornith/ornith-1.5-397b` (first worldwide availability, 2026-08-20), and `xiaomi/mimo-v2.6-pro-ultraspeed` (MIT, sole provider, declared 2026-09-24) — [SN28-SAYGM.md](./docs/SN28-SAYGM.md).
-
-
-The free window that preceded this used **14,812,329,857** tokens.
+The historical integration and withdrawal details are in [SN28-SAYGM.md](./docs/SN28-SAYGM.md). A future channel may offer spare capacity on already-live external-miner clusters; that is utilization, not a reason to onboard capacity ahead of Factory demand.
 
 ### Workflow Orchestration (Airflow & Metaflow)
 
@@ -602,32 +575,31 @@ flowchart LR
 
 ### Miner onboarding
 
-**KubeTEE onboards each miner today.** The miner supplies the cluster and the
-hardware it runs on (requirements below); KubeTEE binds it by applying the
+**KubeTEE onboards external miners.** Each external miner supplies its own cluster and
+hardware (requirements below); KubeTEE binds it by applying the
 `kubetee.ai/hotkey` label that links the cluster to the miner's registered
 hotkey. Rancher Fleet GitOps then deploys the infrastructure onto RKE2 and
-verifies attestations and metrics. **The first miner onboarded this way is
-BTLABS (UID 97)** — its production cluster (`na-us-michigan-97`) went through
-the full path: registration, binding, infrastructure validation, scoring, and
-emissions (see [Early Access](#early-access)).
+verifies attestations and metrics. Phase 0 established the end-to-end path of
+registration, binding, infrastructure validation, scoring, and emissions. Phase 1
+uses that path exclusively for external miners; this public overview does not
+enumerate miner participants or cluster names.
 
-**Self-service permissionless onboarding ships in Phase 1** — see
+**Self-service permissionless onboarding is a Phase 1 work item, not yet shipped** — see
 [Roadmap](#phase-1--expansion). Until then the platform endpoints, credentials,
 and binding procedures behind onboarding are intentionally not published in this
 public repository.
 
 > **Onboarding rate is demand-driven.** The rate at which KubeTEE onboards new miners is governed by demand-side consumption — production deployments that have been staged, measured, and incentivized. New miner capacity is added to match proven demand, not ahead of it, so emissions are not diluted by unused clusters. Spare GPUs on **already-live** clusters can go to the [SN28 sayGM idle-capacity channel](#sn28-saygm--idle-capacity-not-the-product); that is utilisation, not a reason to onboard more miners.
 
-> **The staging cluster is not a template for miners.** KubeTEE operates one staging cluster where every node is TEE CC capable. It is a **debug target** if a workload fails — not a required promotion step. CC can be turned off on a staging node for debug; guest debug can be enabled per pod. Kata guest debug is **off** by default; CoCo Trustee attests those guests. Miners keep CC on: capacity with CC off is not confidential capacity and is not what the subnet scores. Miners provide attested confidential capacity (debug off) and execute jobs.
 
-**Minimum For Staging Participation** — what the **miner** provides:
+**Minimum for Phase 1 external-miner participation** — what each **external miner** provides:
 
 > KubeTEE is a decentralized multi-cluster architecture. Miners must provide the minimum requirements below to allow high availability, deploy the full tech stack, and have enough nodes to run SOTA AI services and enhanced services for enterprises. The minimum is **3 nodes of the same GPU type per cluster** (reduced from 7 as the fleet moves to Blackwell-only, multi-cluster operation). These requirements are written in Phase 0; the node count is **topology guidance, not a validator gate** (the validator checks node readiness, roles, per-node resources, and 8-GPU passthrough wiring — it no longer enforces a minimum node count).
 
 - **3 nodes minimum per cluster** — 3 nodes of the **same GPU type** (each an 8-GPU combined control-plane + etcd + worker), all co-located in a single data center. The 3 nodes run the tech stack (GPU Operator, Kata/CoCo, Longhorn, NeMo, Armada Executor, monitoring) and serve inference and AI jobs. A mixed-GPU cluster needs 3 nodes **per GPU type** (e.g. 3 B200 + 3 B300 = 6 nodes). Fewer nodes cannot hold etcd quorum or survive a node loss. Full topology + scaling table: [GPU Node Requirements — Cluster Architecture & HA](./docs/GPU-NODE-REQUIREMENTS.md#cluster-architecture--high-availability)
 - Intel TDX 6th Gen Xeon (Granite Rapids) or AMD SEV-SNP 6th Gen EPYC 9006 Series ("Venice" / "Verano") nodes — Intel 5th Gen (Emerald Rapids), AMD 5th Gen (Turin) and AMD 4th Gen (Genoa) are deprecated (existing capacity only) — with 8x NVIDIA B200/B300/RTX PRO 6000 Blackwell or Vera Rubin GPUs (Hopper H100/H200 deprecated; existing Hopper nodes are removed as new Blackwell nodes are onboarded — target November 2026); BIOS + kernel TDX/SEV-SNP enabled; one cluster per miner; cluster registered with Rancher for Fleet management
 - Production Rancher inventory passes the infrastructure-readiness policy (readiness, HA topology, CPU/memory, eight-GPU workers, passthrough wiring, confidential runtime handler)
-- A **10 TAO deposit per node** as on-chain registration collateral on the mining hotkey — see [Miner deposit (registration collateral)](#miner-deposit-registration-collateral). **Not collected during Early Access**; it takes effect in [Phase 1](#phase-1--expansion).
+- A **10 TAO deposit per node** as on-chain registration collateral on the mining hotkey — see [Miner deposit (registration collateral)](#miner-deposit-registration-collateral). It was not collected during Phase 0; Phase 1 measurement and enforcement are work in progress.
 
 What **KubeTEE** applies (platform enrollment — not a miner task): the `kubetee.ai/hotkey` binding label (one cluster per hotkey) and any further `kubetee.ai/*` platform labels; the validator reads only the hotkey label and the `kubetee.ai/ban` safety switch.
 
@@ -639,7 +611,7 @@ Full node preparation and handoff requirements, plus the GPU and cluster-label r
 
 Every miner posts a **10 TAO deposit per node** it contributes to its cluster (e.g. 30 TAO on a 3-node cluster) as on-chain **registration collateral** on its own mining hotkey — the same rate for every miner. It is **not a fee, not custodial, and not slashable**: it stays on the miner's hotkey (KubeTEE never holds it), and a miner that breaches its SLA stops being scored → emission stops → deposit draining stops → the capital **freezes on the miner's own hotkey** rather than being taken. That freeze reverses as soon as the miner is back in compliance.
 
-> **Status:** **not collected during Early Access** — the deposit is implemented in [Phase 1](#phase-1--expansion), where the validator gate starts measuring coverage and then enforces it ([What Ships Today](#what-ships-today)). Bonding a share of the registration price on chain is a separate [Phase 1](#phase-1--expansion) change this deposit does not depend on.
+> **Status:** the deposit was not collected during Phase 0 Early Access. In Phase 1, the validator gate starts measuring coverage and then enforces it; both remain roadmap work, not a completed rollout ([Roadmap](#phase-1--expansion)). Bonding a share of the registration price on chain is a separate Phase 1 change this deposit does not depend on.
 
 Full detail — the chain primitive, Alpha conversion, grace/recovery, `btcli` commands, owner/miner/validator runbooks: [Miner Deposit (Registration Collateral)](./docs/MINER-DEPOSIT.md). Hardware and label requirements: [GPU Node Requirements](./docs/GPU-NODE-REQUIREMENTS.md), [Miner Onboarding](./docs/MINER-ONBOARDING.md), [Cluster Naming Convention](./docs/CLUSTER_NAMING_CONVENTION.md).
 
@@ -647,51 +619,55 @@ Full detail — the chain primitive, Alpha conversion, grace/recovery, `btcli` c
 
 ## Roadmap
 
-### Phase 0 — Early Access (Current)
+**Phase 1 is the current phase.** Phase 0 is the historical foundation; unfinished items in its record explicitly carry into Phase 1 rather than implying they were completed.
+
+### Phase 0 — Early Access (Completed)
 
 - [x] Kata **4.2.0** + CoCo TEE runtime-rs classes (`kata-qemu-nvidia-gpu-tdx-runtime-rs`, `kata-qemu-tdx-runtime-rs`)
-- [x] Staging cluster — every node is TEE CC capable (H200/B200). Debug target if a workload fails; CC can be turned off on a node for debug (see [Debugging on the staging cluster](#debugging-on-the-staging-cluster))
-- [x] Kata guest debug **off** on the staging cluster — CoCo Trustee attests those guests. Debug can be enabled per pod for diagnostics.
+- [x] Owner staging cluster (Phase 0) — every node was TEE CC capable (H200/B200), with CC-off diagnostics available. Retired as a miner as Phase 1 begins (see [Phase 1 transition](#phase-1-transition))
+- [x] Kata guest debug **off** on the Phase 0 staging cluster — CoCo Trustee attests non-debug guests. This owner-specific diagnostic configuration is not carried into Phase 1 mining.
 - [x] [Attestation-gated TLS](./docs/NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md#2-attestation-gated-tls-between-services) on the served backend (Kata runtime deployed) — in-guest keypairs, certificates issued only against a valid TDX quote verified through Intel Trust Authority, ingress on TLS passthrough, termination inside the guest
-- [x] **SN28 (sayGM) idle-capacity channel + LiteLLM inference provider** — live 2026-08-19 ([SN28-SAYGM.md](./docs/SN28-SAYGM.md)). SN90 is **not** an inference subnet; Factory AI services keep priority; SN28 gets spare headroom. Same `model` names on `llm.kubetee.ai`. Buyer offers: `z-ai/glm-5.2`, `z-ai/glm-5.3`, `ornith/ornith-1.5-397b`, `xiaomi/mimo-v2.6-pro-ultraspeed` — [SN28-SAYGM.md](./docs/SN28-SAYGM.md). **Ornith-1.5-397B** — first worldwide availability, in collaboration with SN28 sayGM (2026-08-20). Free window closed at 14,812,329,857 tokens.
-- [x] **Remote miner-cluster backends on the gateway** — production miner clusters (not just the staging cluster) serve Factory SKUs in TEE behind attested mTLS: image generation (2026-09-19) and video+audio generation (2026-09-21) both live end-to-end through `llm.kubetee.ai`, weights and prompts confined to attested guests. Spec + live-verification record: [EAST-WEST-ATTESTED-MTLS.md](./docs/EAST-WEST-ATTESTED-MTLS.md).
+- [x] **SN28 (sayGM) idle-capacity channel + LiteLLM inference provider** — launched 2026-08-19 ([SN28-SAYGM.md](./docs/SN28-SAYGM.md)). Factory AI services kept priority and SN28 received spare headroom. Buyer offers included `z-ai/glm-5.2`, `z-ai/glm-5.3`, `ornith/ornith-1.5-397b`, and `xiaomi/mimo-v2.6-pro-ultraspeed`; these dated offers were withdrawn and are not the Phase 1 roster. **Ornith-1.5-397B** had first worldwide availability in collaboration with SN28 sayGM on 2026-08-20. Free window closed at 14,812,329,857 tokens.
+- [x] **Remote miner-cluster backends on the gateway** — Phase 0 expanded beyond the owner staging miner to external production miner clusters serving Factory SKUs in TEE behind attested mTLS: image generation (2026-09-19) and video+audio generation (2026-09-21) both live end-to-end through `llm.kubetee.ai`, weights and prompts confined to attested guests. Spec + live-verification record: [EAST-WEST-ATTESTED-MTLS.md](./docs/EAST-WEST-ATTESTED-MTLS.md).
 - [ ] **Confidential model catalogue** — more TEE-served models on `llm.kubetee.ai` (and optionally extra SN28 SKUs). SN28 is a demand channel, **not** the exclusive path to public inference. Every model published in all three [serving configurations](#serving-configurations--every-service-requires-fast-inference) and billed at below-OpenRouter prices per token on the gateway (a demand channel, **not** an SN90 discounted reseller tier — see [Payment methods](#payment-methods)):
-  - [x] **Kimi-K3.1-Pro** — B300 nodes in Luxembourg (`llm.kubetee.ai`)
-  - [x] **GLM-5.2** — H200 nodes (FP8, michigan-97 since 2026-10-12; was B200 NVFP4 until 2026-10-13, decommissioned) (`llm.kubetee.ai` + SN28)
-  - [x] **Ornith-1.5-397B** — H200 FP8 (`llm.kubetee.ai` + SN28; retargeted 2026-08-28). First worldwide, in collaboration with SN28 sayGM (2026-08-20).
-  - [x] **MiMo-V2.6-Pro** — B200 nodes (2 replicas), MIT-licensed, DFLASH speculative decode (`llm.kubetee.ai` + SN28 as `xiaomi/mimo-v2.6-pro-ultraspeed`, sole provider, declared 2026-09-24).
-  - [x] **DeepSeek-V4.1-Flash** — H200 nodes (`llm.kubetee.ai`), live 2026-09-21; replaced withdrawn `deepseek-v4-flash-0731`. 1 replica (scaled 2→1 2026-10-16).
-  - [x] **Mistral-Large-4** — **RETIRED 2026-11-03** (was 1× B200 NVFP4 SGLang on `na-us-dallas-132` / TEEmo `tx-b200-16`, live 2026-10-30 as the first dallas-132 model backend). Backend decommissioned with the dallas-132 teardown: sayGM offer withdrawn, LiteLLM row deleted, manifest + KBS cert pair removed. The Mistral MaaS commercial-license gate was never cleared — resolved by retirement; do not re-offer without the license.
-  - [x] **GLM-5.3** — B200 nodes (RadixArk NVFP4 production since 2026-10-13 — `glm-5-3-radixark-nvfp4-sglang-b200-cc`, 2 replicas on `am-b200-59`; NVIDIA NVFP4 + FP8 builds parked as fallback)
+  - [x] **Kimi-K3.1-Pro** — served on an external-miner B300 cluster (`llm.kubetee.ai`)
+  - [x] **GLM-5.2** — deployed in Phase 0 on H200 FP8 and evaluated on B200 NVFP4. Subsequently withdrawn; not a current Phase 1 backend or offer
+  - [x] **Ornith-1.5-397B** — deployed in Phase 0 on H200 FP8 and delivered worldwide first in collaboration with SN28 sayGM (2026-08-20). Subsequently retired and withdrawn
+  - [x] **MiMo-V2.6-Pro** — deployed in Phase 0 on B200 nodes (2 replicas), MIT-licensed, with DFLASH speculative decoding; offered on sayGM as `xiaomi/mimo-v2.6-pro-ultraspeed`. Subsequently withdrawn
+  - [x] **DeepSeek-V4.1-Flash** — deployed in Phase 0 on H200 nodes (live 2026-09-21; replaced withdrawn `deepseek-v4-flash-0731`). Subsequently withdrawn
+  - [x] **Mistral-Large-4** — **RETIRED 2026-11-03**. The backend was decommissioned, its buyer offer withdrawn, and its gateway route removed. The Mistral MaaS commercial-license gate was never cleared — resolved by retirement; do not re-offer without the license.
+  - [x] **GLM-5.3** — deployed in Phase 0 on B200 nodes (RadixArk NVFP4, 2 replicas; NVIDIA NVFP4 + FP8 builds evaluated as fallbacks). Subsequently withdrawn
   - [x] **GLM-5.3-Flash** — H200 nodes (5 replicas 2026-10-16 burst canary); **withdrawn 2026-10-26**
-  - [x] **Nemotron-3-Nano-Omni** — any-to-any multimodal **understanding** (text / image / video / audio → text, with reasoning + tool calling) on **1× H100** — the ~3B-active hybrid MoE point: a multimodal understanding-and-reasoning serve on a single card (`llm.kubetee.ai`), live 2026-10-08, smoke- and load-tested (128 concurrent mixed-modality requests, 0% errors, ~50 tok/s per stream). **Evaluation-only** until the Nemotron commercial license grant is confirmed — not billed and not on SN28. [Nemotron-3-Nano-Omni Multimodal API](./docs/NEMOTRON-OMNI-MULTIMODAL-API.md)
-  - [x] **MiniMax-H3** — H200 nodes, joint video+audio generation in TEE through the gateway's OpenAI-compatible `/v1/videos` (create → poll → content), live 2026-09-21. **Combined-mode serving since 2026-10-05**: `t2va`, `fl2va` (first/last-frame), and `ref2va` (mixed image/video/audio references) all live in one deployment. $0.08/s, 4–15 s clips (768p, native audio), artifacts in-guest memory only. API reference — serving differences vs the official MiniMax API: [H3-VIDEO-GENERATION-API.md](./docs/H3-VIDEO-GENERATION-API.md). The MiniMax H3 Community License excludes the US/EU/UK/KR; KubeTEE serves it under **written US authorization from MiniMax** (see [SN28-SAYGM.md](./docs/SN28-SAYGM.md) — models & licenses).
-  - [x] **MiniMax-Music3 + MOSS-TTS** — music and speech generation through the gateway's TTS/music pass-throughs (OPTION B, live 2026-10-08; `moss-tts-v1.5` + `minimax-music3` STS on michigan-97).
+  - [x] **Nemotron-3-Nano-Omni** — any-to-any multimodal **understanding** (text / image / video / audio → text, with reasoning + tool calling) evaluated on **1× H100** in Phase 0. Smoke- and load-tested (128 concurrent mixed-modality requests, 0% errors, ~50 tok/s per stream). **Evaluation-only** until the Nemotron commercial license grant is confirmed — not billed and not on SN28. [Nemotron-3-Nano-Omni Multimodal API](./docs/NEMOTRON-OMNI-MULTIMODAL-API.md)
+  - [x] **MiniMax-H3** — Phase 0 deployment on H200 nodes with joint video+audio generation in TEE through the gateway's OpenAI-compatible `/v1/videos` (create → poll → content), launched 2026-09-21. Combined-mode serving (`t2va`, `fl2va`, `ref2va`) added 2026-10-05. Artifacts remained in-guest memory only. API reference: [H3-VIDEO-GENERATION-API.md](./docs/H3-VIDEO-GENERATION-API.md). The MiniMax H3 Community License excludes the US/EU/UK/KR; the historical US service had **written US authorization from MiniMax** (see [SN28-SAYGM.md](./docs/SN28-SAYGM.md))
+  - [x] **MiniMax-Music3 + MOSS-TTS** — music and speech generation evaluated through the gateway's TTS/music pass-throughs in Phase 0 (2026-10-08); not a current Phase 1 deployment
   - [ ] **SOTA embedding model**
   - [ ] **Rerank** — retrieval reranking models on the gateway `/rerank` endpoint
-  - [x] **Images** — **FLUX.2-klein-4B** (Apache-2.0) on the gateway `/v1/images/generations`, live 2026-09-19 (b64_json delivery through LiteLLM). Cosmos3-Super additionally available via the `/cosmos3` native passthrough.
-  - [x] **Videos** — **MiniMax-H3** on the gateway `/v1/videos` (see the MiniMax-H3 row above), 5–15 s clips at 768p with native stereo audio, fully in-TEE. **Audio+video joint generation is the capability; the Cosmos3-Super SGLang path was evaluated and retired the same day** (no sound head, OOM on long prompts) — its NIM passthrough remains for native API consumers.
+  - [x] **Images** — **FLUX.2-klein-4B** (Apache-2.0) served on the gateway `/v1/images/generations` in Phase 0, launched 2026-09-19 (b64_json delivery through LiteLLM). Cosmos3-Super was also available via its native passthrough; these historical backends are not a current Phase 1 claim
+  - [x] **Videos** — **MiniMax-H3** served on the gateway `/v1/videos` in Phase 0, 4–15 s clips at 768p with native stereo audio, fully in-TEE. The Cosmos3-Super SGLang path was evaluated and retired the same day (no sound head, OOM on long prompts)
   - [ ] **OCR (NeMo)** — document OCR served through [NVIDIA NeMo Platform](#nvidia-nemo-platform--bittensor-subnet-integrations)
   - [ ] **Specialised models for vectorization, LLM-as-judge, and document retrieval** — served through [NVIDIA NeMo Platform](#nvidia-nemo-platform--bittensor-subnet-integrations) (NeMo Retriever + Evaluator)
-- [x] **Deploy 2 US clusters** (one hotkey each, each cluster's nodes co-located in a single DC): subnet-owner staging (`na-us-oakland-56`, West Coast) + **first production miner cluster — BTLABS UID 97** (`na-us-michigan-97`, 7 nodes, 56 GPUs, H100 + H200). Onboarding validated end to end: registration, binding, infrastructure validation, scoring, emissions. *The fleet is moving to **Blackwell-only, multi-cluster** operation — new clusters are Blackwell at the 3-node same-type minimum, and Hopper clusters are windowed out as Blackwell clusters come online (target November 2026).*
-- [x] Armada Server Multi-cluster Scheduler on the subnet-owner control plane; Armada Executor on each miner cluster
+- [x] **Phase 0: validate multi-cluster operation** — one cluster per hotkey, with each cluster's nodes co-located in a single data center. Registration, binding, infrastructure validation, scoring, and emissions were validated end to end. *The fleet is moving to **Blackwell-only, multi-cluster** operation — new clusters are Blackwell at the 3-node same-type minimum, and Hopper clusters are windowed out as Blackwell clusters come online (target November 2026).*
+- [ ] **Armada deployment — carried into Phase 1:** the Server on the subnet-owner control plane and Executors on miner clusters were scoped in Phase 0 but are not deployed. Moving Armada into confidential TEE pods remains Phase 2 work
 - [ ] Binary Infrastructure validator gate (hotkey binding identity, Rancher readiness, HA, capacity, GPU/runtime wiring, TEE attestations)
 - [x] Validator Rancher v3 API access: a validator authenticates by **signing a challenge with its Bittensor hotkey**; an auth mechanism connected to Rancher verifies the signature and issues the narrow cluster/node-read plus guarded-cluster-delete role. Split reconciliation behind an operator-owned mutation credential/controller before describing validator scoring tokens as read-only
-- [x] Emissions rewards for miners providing confidential compute capacity (supply-side) — **live**: first external miner (BTLABS UID 97) earning since its first scored epoch
+- [x] Phase 0 emissions rewards for external miners providing confidential compute capacity (supply-side) — external miners earned from scored epochs during Early Access
 - [x] Competitive pricing, supply side: implement live Targon (SN4), Lium (SN51), and Chutes (SN64) price feeds to clamp the GPU price card (one publisher, all validators read), and the per-GPU price paid to miners
 
 ### Phase 1 — Expansion
+
+- [x] **Decommission the subnet-owner staging miner for Phase 1** — retire UID 56 (`na-us-oakland-56`) from miner capacity, scoring, and emissions at the transition. Only external miners are onboarded; owner-operated platform infrastructure is not a scored miner.
 
 - [ ] Permissionless, no KYC usage of KubeTEE services with TAO/ALPHA tokens (Pre-Gamma token)
 - [ ] Alpha / TAO paid jobs/services (demand-side) — compute priced at a resources price per hour, dynamic with Armada queue depth and wait time per job class
 - [ ] **USDC-on-BASE** and **TAO-on-BASE** job/service deposits — layered on top of the Alpha / TAO resources-per-hour pricing.
 - [ ] Automated **USDC-on-BASE** (or **TAO-on-BASE**)→ Finney TAO → Alpha recycling
-- [ ] **Permissionless miner onboarding** — a self-service flow where a registered miner proves control of its own cluster and the `kubetee.ai/hotkey` binding is applied without operator involvement (today KubeTEE performs onboarding — see [Miner onboarding](#miner-onboarding)). Onboarding rate is **demand-driven**: new miner capacity is added to match proven Factory demand, not ahead of it. Spare GPUs on live clusters may go to [SN28](#sn28-saygm--idle-capacity-not-the-product); that does not justify onboarding extra miners.
+- [ ] **Permissionless external-miner onboarding** — a self-service flow where a registered **external miner** proves control of its own cluster and the `kubetee.ai/hotkey` binding is applied without operator involvement (today KubeTEE performs onboarding — see [Miner onboarding](#miner-onboarding)). Onboarding rate is **demand-driven**: new miner capacity is added to match proven Factory demand, not ahead of it. Spare GPUs on live clusters may go to [SN28](#sn28-saygm--idle-capacity-not-the-product); that does not justify onboarding extra miners.
 - [ ] **Bond the registration price on chain** — set the subnet's `collateral_lock_share` and `collateral_drain_ratio` so a share of each registration is locked as collateral rather than burned. The drain ratio governs how long a miner stays accountable and can only be sized against observed per-miner emission, so both values are set in Phase 1 once that data exists; Phase 1 runs the [10 TAO per node deposit](#miner-deposit-registration-collateral) through the validator gate alone (see [Miner Deposit](./docs/MINER-DEPOSIT.md))
 - [ ] **Enforce the miner deposit** — the **10 TAO per node** [deposit](#miner-deposit-registration-collateral) goes from specified to collected: the validator gate measures coverage first, then withholds score from delinquent miners (grace window + recovery margin — see [Miner Deposit §5–6](./docs/MINER-DEPOSIT.md#5-validator-runbook))
 - [x] More US + international clusters — Blackwell-only (B200/B300/RTX PRO 6000/Vera Rubin), **3 nodes of the same GPU type per cluster**, multi-cluster expansion; existing Hopper clusters are windowed out as Blackwell clusters come online (target November 2026)
-  - [x] **European cluster in Luxembourg** — `eu-lu-luxembourg-133`, B300; serves Kimi-K3.1-Pro through `llm.kubetee.ai`
-- [ ] Validator scoring expansion: TEE attestation + Armada job metrics + infrastructure health (replacing the Early Access liveness stand-in)
+  - [x] **International external-miner expansion** — a B300 cluster serves Kimi-K3.1-Pro through `llm.kubetee.ai`; individual miner identities and locations are not published in this overview
+- [ ] Validator scoring expansion: TEE attestation + Armada job metrics + infrastructure health (replacing the Phase 0 liveness stand-in)
 - [ ] **Agent Skills Hub** — offer a curated catalog of KubeTEE service skills and selected ecosystem skills for supported agents, beginning with competition-produced candidates from [TrajectoryRL SN11](https://trajrl.com/) and [sundae_bar SN121](https://www.sundaebar.ai/). Published capabilities will be independently reviewed for safety, attribution, and usefulness, with availability subject to compatible gateway and client support
 - [ ] **KubeTEE Added services** on `llm.kubetee.ai` 
   - [ ] **Smart model routing** — optional selection of efficient or capable models using tool-aware and decision-model approaches. Evaluate [NVIDIA Switchyard](https://github.com/NVIDIA-NeMo/Switchyard), [REAX SN92](https://reax.co/), and [Fugal SN70](https://www.fugalai.com/) on completed-task quality, latency, cost, and data protection
@@ -712,7 +688,7 @@ Full detail — the chain primitive, Alpha conversion, grace/recovery, `btcli` c
 
 ### Phase 2 — Paid Jobs/Services/Inference
 
-- [ ] **Armada in TEE** — move the Phase 0 Server and Executors onto Kata + CoCo TEE pods, with [attestation-gated TLS](./docs/NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md#2-attestation-gated-tls-between-services) on the Server-to-Executor control channel (see [Armada Multi-Cluster Batch Scheduling](#armada-multi-cluster-batch-scheduling))
+- [ ] **Armada in TEE** — after the carry-over deployment lands, move the Server and Executors onto Kata + CoCo TEE pods, with [attestation-gated TLS](./docs/NEMO-MICROSERVICES-AND-SUBNET-INTEGRATIONS.md#2-attestation-gated-tls-between-services) on the Server-to-Executor control channel (see [Armada Multi-Cluster Batch Scheduling](#armada-multi-cluster-batch-scheduling))
 - [ ] Armada fair-use + gang scheduling hardening
 - [ ] Automated TEE attestation cronjobs
 - [ ] Confidential job templates — NeMo / NIM / Blueprint, for subnet owners and approved integrators
@@ -735,13 +711,13 @@ Full detail — the chain primitive, Alpha conversion, grace/recovery, `btcli` c
 ## Research & Documentation
 
 ### Documentation
-- [Miner Deposit — registration collateral](./docs/MINER-DEPOSIT.md) — the **10 TAO per node** on-chain registration deposit (Phase 1), chain primitive, and runbooks
+- [Miner Deposit — registration collateral](./docs/MINER-DEPOSIT.md) — the **10 TAO per node** on-chain registration deposit (Phase 1), chain primitive, and runbooks.
 - [Miner Node Onboarding](./docs/MINER-ONBOARDING.md) — hardware, BIOS, GPU firmware, clean OS, storage, remote power, SSH handoff, and KubeTEE-managed registration
 - [GPU Node Requirements](./docs/GPU-NODE-REQUIREMENTS.md) — GPU/TEE hardware requirements
 - [Cluster Naming Convention](./docs/CLUSTER_NAMING_CONVENTION.md) — `kubetee.ai/*` labels and Fleet GitOps targeting
 - [FIPS-140-3 Target](./docs/FIPS-140-3.md) — RKE2 + Kata + CoCo FIPS stack research
 - [Confidential Containers Certification](./docs/certification-confidential-containers.md) — CC standards and Kata runtime mapping
-- [Deploying in a TEE — Challenge & debugging](./docs/TEE-DEPLOYMENT-AND-CICD.md) — Kata 4.2.0 runtime-rs classes, why TEE deployment is hard, staging as a debug target if a workload fails, Kata guest debug off, CoCo Trustee attestation
+- [Deploying in a TEE — Challenge & debugging](./docs/TEE-DEPLOYMENT-AND-CICD.md) — Kata 4.3.1 runtime-rs classes, why TEE deployment is hard, the Phase 0 owner-staging debug history and its Phase 1 retirement, external-miner-only capacity, guest debug off, CoCo Trustee attestation
 - [Workflow Orchestration — Airflow & Metaflow](./docs/WORKFLOW-ORCHESTRATION.md) — orchestrating multi-step confidential pipelines on Armada
 - [Tokenomics — Utility Token & DePIN Model](./docs/TOKENOMICS.md) — recycle vs burn, securities posture, TAO-on-BASE (CCIP), cross-subnet consumption loop, DePIN subsidy trajectory
 - [Competitive Pricing & Miner Scoring](./docs/COMPETITIVE-PRICING.md) — pricing SN90 against Targon/Lium/Chutes and how price becomes weights

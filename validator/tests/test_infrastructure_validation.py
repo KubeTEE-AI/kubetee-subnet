@@ -168,7 +168,7 @@ def test_unschedulable_worker_fails():
     assert not verdict.ready
 
 
-# --- freshness gates (na-us-dallas-132 incident, 2026-11-03) ----------------
+# --- freshness gates (disconnected-node incident, 2026-11-03) ---------------
 # A decommissioned node keeps its last `Ready: True` snapshot in Rancher
 # forever once the cluster agent disconnects. These pin the gates that stop
 # such a frozen snapshot from earning epoch weight.

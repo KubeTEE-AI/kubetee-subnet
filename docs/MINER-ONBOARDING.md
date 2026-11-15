@@ -1,7 +1,11 @@
 # Miner Node Onboarding
 
-> **Status:** DRAFT — pending review. Not yet merged or deployed.
-> **Applies to:** miner production clusters.
+> **Applies to:** external miner production clusters from Phase 1.
+>
+> **External-only boundary:** the subnet-owner staging miner UID 56
+> (`na-us-oakland-56`) is decommissioned as Phase 1 begins. Only
+> external miners are onboarded. There is no owner-operated staging miner to
+> onboard, and no CC-off or scoring exception applies to any miner.
 
 This guide covers the complete node-onboarding workflow: the miner prepares hardware, BIOS, a clean OS installation, storage, and access; KubeTEE performs host preparation and RKE2 registration.
 
@@ -14,6 +18,8 @@ Do not run registration commands, edit platform labels, or manually install host
 ---
 
 ## 1. Operational ownership
+
+All requirements in this guide apply uniformly to external miners. Prepare only the miner's own production cluster; do not attempt to register UID 56 or reproduce its retired Phase 0 staging configuration.
 
 The operator provides the hardware and a clean OS installation. KubeTEE automation performs the remaining host preparation.
 
@@ -235,7 +241,7 @@ Do not run registration or service commands to work around stalled onboarding. C
 - **[RKE2 Documentation](https://docs.rke2.io/)** — official RKE2 documentation
 - **[Rancher Documentation](https://rancher.com/docs/)** — official Rancher documentation
 
-**Last Updated:** 2026-11-08
+**Last Updated:** 2026-11-15
 
 **For:** KubeTEE Miners
 

@@ -12,9 +12,9 @@ topology in the docs is guidance, not a readiness gate). Any explicit
 missing/malformed/ambiguous/unhealthy evidence is a failure. (A Rancher
 outage is handled upstream as a cycle skip, not a per-miner failure.)
 
-Two freshness gates keep a dead cluster from scoring off frozen evidence
-(added 2026-11-03 after na-us-dallas-132 kept earning 13.2% of the epoch
-pool for ~40 min after its node was decommissioned):
+Two freshness gates keep a zero-capacity external cluster from scoring off
+frozen evidence (added 2026-11-03 after such a cluster kept earning 13.2% of
+the epoch pool for ~40 min after its node was decommissioned):
 
 1. A node counts as Ready only if its Ready condition is younger than
    `_READY_MAX_AGE_SECONDS` (15 min; healthy nodes heartbeat every <5 min).
@@ -42,7 +42,7 @@ _ROLE_KEYWORDS = ("etcd", "control-plane", "worker")
 # CR but leaves the last snapshot — including `Ready: True` — in place
 # forever. Healthy oakland nodes heartbeat every <5 min, so anything older
 # than this is treated as dead evidence, not as a live node. Without this
-# gate a stopped node keeps scoring: na-us-dallas-132 (tx-b200-16) was
+# gate a stopped zero-capacity node keeps scoring: one external miner node was
 # decommissioned 2026-11-03 11:10Z yet kept earning 13.2% of the epoch pool
 # off a Ready condition frozen at 10:36:55Z.
 _READY_MAX_AGE_SECONDS = 900.0  # 15 min

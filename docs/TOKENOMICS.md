@@ -207,6 +207,10 @@ Separating the subnet-owner entity from the miner entity means each receives val
 
 A related-party miner on the subnet is unremarkable — most owner teams bootstrap capacity this way. What degrades both the DePIN story and the digital-commodity posture is **1-HORIZON becoming the dominant miner**: at that point the network is not meaningfully permissionless, the compute consumers pay for is mostly produced by the owner's sister company, and token value starts depending on one director's operational decisions across both entities — the managerial-efforts prong creeping back in. This is the "own a DC, fully self-mine, limit access" anti-pattern.
 
+### Phase 1 external-miner transition (2026-11-15)
+
+The Phase 0 owner staging miner **UID 56** (`na-us-oakland-56`) is decommissioned from miner capacity, scoring, emissions, and collateral participation. From Phase 1, **only external miners are onboarded**, including related-party miners such as 1-HORIZON under identical rules. The subnet owner operates the control plane, not a replacement scored miner. The owner's protocol owner-cut recycle sink remains separate from miner participation.
+
 ### Load-bearing mitigations (in order)
 
 1. The incentive mechanism must be **objective and published**, scoring measurable compute properties so no validator judgment call can favor 1-HORIZON.

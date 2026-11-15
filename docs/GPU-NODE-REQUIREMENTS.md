@@ -8,8 +8,11 @@
 > **Phase 1 roadmap** item: the requirements and verification commands below are
 > kept for reference so miners can pre-qualify hardware, but SEV-SNP is not yet
 > supported by the KubeTEE runtime classes and the validator does not score it.
-> **Phase 1** will also introduce **NVIDIA RTX PRO 6000 Blackwell Server Edition** testing on the
-> staging cluster. See the README roadmap for the multi-arch TEE timeline.
+> **Phase 1 — external miners only:** the owner staging miner UID 56
+> (`na-us-oakland-56`) is decommissioned as Phase 1 begins. Only
+> external miners are onboarded, and this entire document applies equally to
+> every external miner. No owner-operated miner or scoring exception replaces
+> the retired staging role.
 
 ---
 
@@ -225,18 +228,6 @@ dmesg | grep -i "AMD-Vi"
 - Miners verify that virtualisation is enabled in hardware diagnostics using the commands above.
 - KubeTEE validates VT-d / AMD-Vi, IOMMU, and VFIO during automated preparation and configures the GPU passthrough drivers.
 
----
-
-## Kata guest debug and CoCo Trustee
-
-Miner GPU nodes and the subnet-owner **staging cluster** run **Kata 4.3.1** with **guest debug off**. CoCo Trustee attests those guests. Every staging node is TEE CC capable; CC can be turned off on a staging node for debug.
-
-| `runtimeClassName` | Workload |
-|--------------------|----------|
-| `kata-qemu-nvidia-gpu-tdx-runtime-rs` | GPU TEE (NIM / SGLang) |
-| `kata-qemu-tdx-runtime-rs` | CPU-only TDX (gateway-class) |
-
-Guest debug can be enabled **per pod** for diagnostics. Trustee attests only when debug is off. Do not use the retired Go classes (`kata-qemu-nvidia-gpu-tdx`, `kata-qemu-tdx`). See [TEE deployment](./TEE-DEPLOYMENT-AND-CICD.md#runtime-classes-kata-431).
 
 ---
 
@@ -486,7 +477,7 @@ See [Miner Onboarding](MINER-ONBOARDING.md) for BIOS and OS preparation, SSH han
 
 ---
 
-**Last Updated**: 2026-10-16  
+**Last Updated**: 2026-11-15
 **NVIDIA Firmware Version**: 25.10.1+  
 **Status**: ✅ Production Ready
 

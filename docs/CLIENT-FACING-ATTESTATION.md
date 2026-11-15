@@ -1,6 +1,5 @@
 # Client-facing attestation of inference on `llm.kubetee.ai`
 
-**Status:** live on staging `na-us-oakland-56` (2026-09-18) — endpoint + inline evidence shipped on the LiteLLM gateway (3 CPU-TDX replicas, `kata-qemu-tdx-runtime-rs`).
 **Audience:** miners and clients calling the KubeTEE inference API who want cryptographic proof that responses came from a TDX confidential guest.
 **Related:** [EAST-WEST-ATTESTED-MTLS.md](./EAST-WEST-ATTESTED-MTLS.md) (live east-west spec + roadmap, merged 2026-10-27).
 

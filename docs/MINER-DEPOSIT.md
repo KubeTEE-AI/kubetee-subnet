@@ -5,7 +5,14 @@ Every KubeTEE miner posts a **10 TAO per node deposit** (e.g. 30 TAO on a
 hotkey. It exists so that a miner accepting confidential workloads has capital
 committed to the SLA it agreed to, and it is the same rate for every miner.
 This document is the full reference: what the primitive is, what it can and
-cannot do, and the runbooks for the subnet owner, miners, and validators.
+cannot do, and the runbooks for the subnet owner, external miners, and validators.
+
+From Phase 1, only external miners are onboarded and scored. The former
+owner-operated staging miner UID 56 (`na-us-oakland-56`) is decommissioned, is
+not a collateral participant or emissions recipient, and receives no exception
+from this uniform external-miner requirement. The subnet owner's collateral
+configuration applies to every external miner; the owner control plane is not
+a miner that posts this deposit.
 
 Summary for the impatient: the deposit is **not** a fee, **not** custodial, and
 **not** slashable. It sits on the miner's own hotkey — KubeTEE never holds it

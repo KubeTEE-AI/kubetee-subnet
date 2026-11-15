@@ -8,7 +8,7 @@
 > document is the source of truth now. **Rule going forward:** a sentence about
 > current cluster behavior goes in Part I, unfinished work goes in Part II.
 
-**Status:** deployed on staging `na-us-oakland-56` and production `na-us-michigan-97` (first cut 2026-08-15; rows synced 2026-10-16). East-west backends — live STS counts 2026-10-16: `glm-5-2-fp8-sglang-h200-oakland` (H200 FP8, na-us-oakland-56 since 2026-10-19, 2 replicas per-pod; michigan-97's 3-replica deployment **decommissioned 2026-10-20**, `mi-h200-161/164/165` freed; earlier B200 NVFP4 `glm-5-2-nvfp4-sglang` deleted 2026-10-13), `glm-5-3-radixark-nvfp4-sglang-b200-cc` (B200 **RadixArk NVFP4**, 2 replicas — the `z-ai/glm-5.3` backend since 2026-10-13), `ornith-1-5-397b-fp8-sglang-h200` (H200 FP8, michigan-97, 1 replica), `dsv41-flash-sglang-h200` (H200, 1 replica on am-h200-27 — scaled 2→1 2026-10-16, per-pod row `68b87577` → `dsv41-flash-sglang-h200-0`; group row `0a4c740e` deleted same day), `mimo-v2-6-pro-rl-sglang-b200-cc` (B200 CC, 2 replicas). `glm-5-3-sglang-b200-cc` (FP8) and `glm-5-3-nvfp4-sglang-b200-cc` (NVIDIA ModelOpt NVFP4) sit at 0 replicas as warm fallbacks. Nemotron-Omni / MiniMax-H3 / MiniMax-Music3 on michigan-97 run the same in-guest HAProxy terminator behind the east-west Gateway's L4/SNI passthrough (`*.na-us-michigan-97.inference.kubetee.ai`). Services expose `:8443` only. SGLang binds `127.0.0.1:8000` (pod IP `:8000` connection refused). Kubelet HTTPS probes use `:8443` `/health` and `/health_generate` (HAProxy `verify optional` on those GET paths only; all other paths need a verified client cert). LiteLLM presents the Trustee client cert via `sitecustomize.py` (httpx 0.28 ignores `ssl_certificate`). Public hop is still Let’s Encrypt + Traefik. KBS resource policy is the KubeTEE `resource-policy.rego` (**LIVE** since 2026-09-18, replacing upstream `default.rego`) — path×role + cpu0-affirming 401s after attest 200.  
+**Status:** Phase 0 implementation record, first cut 2026-08-15, with backend rows synced through 2026-10-16. The design was validated on the former staging cluster `na-us-oakland-56` and an external production miner cluster, using TDX and NVIDIA CC GPUs. Historical chat backends used in-guest HAProxy to terminate mTLS on `:8443`, with SGLang bound to `127.0.0.1:8000`. Kubelet HTTPS probes used `:8443` `/health` and `/health_generate`; other paths required a verified client certificate. LiteLLM presented its Trustee client certificate via `sitecustomize.py`. These dated backend counts and routes are **history, not the Phase 1 model catalogue**. Phase 1 uses the same attested mTLS pattern with qualifying external-miner clusters; individual miner names, locations, and historical endpoints are not enumerated here. Public-hop TLS remains Let's Encrypt + Traefik. KBS resource policy is the KubeTEE `resource-policy.rego` (live since 2026-09-18), with path-and-role checks plus CPU-attestation denial coverage.
 **Date:** 2026-08-15 (rows synced 2026-10-16 — GLM-5.2 retargeted 2026-10-12/13, GLM-5.3 cut over to RadixArk NVFP4 2026-10-13)  
 **Approach:** CoCo Confidential AI — Trustee issues TLS credentials after attestation. Apps speak ordinary mTLS. No quote parsing in LiteLLM or SGLang.  
 **Roadmap:** remaining gaps (HTTPS KBS, gpu0/RVPS, sealed NGC, five-actor ops) — [Part II](#part-iistatus-table) below.
@@ -71,14 +71,14 @@ Live LiteLLM `api_base` rows (HTTPS `:8443`), synced 2026-10-16 against the `nem
 
 | LiteLLM `model_name` | Service (TLS hostname) | Manifest | Public |
 |--------------|------------------------|----------|--------|
-| `z-ai/glm-5.2` | `glm-5-2-fp8-sglang-h200-{0,1}.nemo.svc.cluster.local` (per-pod rows) | `nim/glm-5-2-fp8-sglang-h200-oakland-cc.yaml` (H200 CC FP8, na-us-oakland-56, 2 replicas; since 2026-10-19. Michigan-97 `nim/glm-5-2-fp8-sglang-h200-cc.yaml` **decommissioned 2026-10-20**; B200 NVFP4 deleted 2026-10-13) | no (in-cluster rows) |
+| `z-ai/glm-5.2` | `glm-5-2-fp8-sglang-h200-{0,1}.nemo.svc.cluster.local` (per-pod rows) | `nim/glm-5-2-fp8-sglang-h200-oakland-cc.yaml` (H200 CC FP8, na-us-oakland-56, 2 replicas; since 2026-10-19; the earlier H200 and B200 NVFP4 backends were decommissioned) | no (in-cluster rows) |
 | `z-ai/glm-5.3-flash` | `glm-5-3-flash-sglang-h200.nemo.svc.cluster.local` | `nim/glm-5-3-flash-sglang-h200-cc.yaml` (H200 CC; was 5 replicas — 4→5 burst canary 2026-10-16, 2 since 2026-08-27) — **withdrawn 2026-10-26** (removed from the catalog) | no |
 | `z-ai/glm-5.3` | `glm-5-3-radixark-nvfp4-sglang-b200-cc.nemo.svc.cluster.local` | `nim/glm-5-3-radixark-nvfp4-sglang-b200-cc.yaml` (B200 CC **RadixArk NVFP4**, 2 replicas; production since 2026-10-13. FP8 `nim/glm-5-3-sglang-b200-cc.yaml` + NVIDIA NVFP4 `nim/glm-5-3-nvfp4-sglang-b200-cc.yaml` parked at 0/1 replicas as fallback) | yes |
-| `ornith/ornith-1.5-397b` | `ornith-1-5-397b-fp8-sglang-h200.nemo.svc.cluster.local` | `nim/ornith-1.5-397b-fp8-sglang-h200-cc.yaml` (H200 CC FP8, michigan-97, 1 replica; short name retargeted 2026-08-28) | yes (SayGM) |
+| `ornith/ornith-1.5-397b` | `ornith-1-5-397b-fp8-sglang-h200.nemo.svc.cluster.local` | `nim/ornith-1.5-397b-fp8-sglang-h200-cc.yaml` (Phase 0 H200 CC FP8 external-miner backend, 1 replica; short name retargeted 2026-08-28) | yes (SayGM) |
 | `deepseek/deepseek-v4.1-flash-1017` | `dsv41-flash-sglang-h200-0.nemo.svc.cluster.local` | `nim/deepseek-v4-1-flash-sglang-h200-cc.yaml` (H200 CC, 1 replica, **DeepSeek-V4.1-Flash-1017** weights since 2026-10-17 — Service `dsv41-flash-sglang-h200-0` on `statefulset.kubernetes.io/pod-name`; row `f0c2fc02-…`) | yes |
 | `deepseek/deepseek-v4.1-flash` (ALIAS) | `dsv41-flash-sglang-h200-0.nemo.svc.cluster.local` | same backend + same pod (row `68b87577-…`, name kept for the SayGM dual-name transition, backend re-pointed to `DeepSeek-V4.1-Flash-1017` 2026-10-17) | yes |
 | `xiaomi/mimo-v2.6-pro-ultraspeed` | `mimo-v2-6-pro-rl-sglang-b200-cc.nemo.svc.cluster.local` | `nim/mimo-v2-6-pro-rl-sglang-b200-cc.yaml` (B200 CC, 2 replicas since 2026-10-13; DFLASH spec decode) | yes (SayGM) |
-| ~~`mistralai/mistral-large-4`~~ **RETIRED 2026-11-03** | ~~`mistral-large-4.na-us-dallas-132.inference.kubetee.ai`~~ | ~~`nim/mistral-large-4-nvfp4-sglang-b200-cc.yaml`~~ (B200 CC **NVFP4** SGLang on `na-us-dallas-132` / TEEmo `tx-b200-16` — **first dallas-132 miner-cluster model backend**; deployed 2026-10-30, decommissioned 2026-11-03 with the dallas-132 teardown — manifest, `nim/external-dns-dallas-tee.yaml`, the `eastwest-nim-dallas-mistral-large-4` KBS cert pair + rego rule all removed) | no (withdrawn) |
+| ~~`mistralai/mistral-large-4`~~ **RETIRED 2026-11-03** | **Direct endpoint retired** | Phase 0 B200 CC NVFP4 SGLang backend; deployed 2026-10-30 and fully decommissioned 2026-11-03, including its manifest, route, and KBS certificate pair. Do not re-offer without clearing the commercial license gate. | no (withdrawn) |
 | `moonshotai/kimi-k3` | `kimi-k3-sglang-cc.nemo.svc.cluster.local:8000` | `nim/kimi-k3-sglang-b300.yaml` (B300, non-CC) — **row is stale: model row deleted 2026-10-05, Service deleted, backend gone; do not route to it** | no |
 
 GLM HA uses the **existing Service**, not per-pod DNS. Each replica attests independently and receives the same NIM server cert (SAN = Service FQDN). ClusterIP load-balances TCP; a stream stays on one pod. Kubernetes readiness is pod-wide: a replica must not be Ready until HTTPS `:8443` `/health` succeeds (HAProxy up and SGLang healthy on loopback).
@@ -107,7 +107,7 @@ Resources (illustrative URIs; keep the `default` repository unless Trustee layou
 
 NIM server cert SANs (explicit, not a wildcard):
 
-- `glm-5-2-fp8-sglang-h200.nemo.svc.cluster.local` (STOPPED — michigan backend decommissioned 2026-10-20; SAN kept like `dsv4-0731` above; the oakland per-pod SANs `glm-5-2-fp8-sglang-h200-{0,1}.nemo.svc.cluster.local` carry serving since 2026-10-19)
+- `glm-5-2-fp8-sglang-h200.nemo.svc.cluster.local` (STOPPED — earlier external-miner backend decommissioned 2026-10-20; SAN kept like `dsv4-0731` above; the oakland per-pod SANs `glm-5-2-fp8-sglang-h200-{0,1}.nemo.svc.cluster.local` carry serving since 2026-10-19)
 - `dsv4-0731-sglang-h200.nemo.svc.cluster.local` (STOPPED — backend deleted, replaced by V4.1-Flash; SAN kept)
 - `ornith-1-5-397b-fp8-sglang-h200.nemo.svc.cluster.local`
 - `glm-5-3-sglang-b200-cc.nemo.svc.cluster.local` (added 2026-09-11)
@@ -164,7 +164,7 @@ LiteLLM `ssl_certificate` is ignored by httpx 0.28 (still true at 1.103.9). Live
 
 | Upstream Service | Live `api_base` |
 |------------------|-----------------|
-| GLM | `https://glm-5-2-fp8-sglang-h200-{0,1}.nemo.svc.cluster.local:8443/v1` (per-pod, oakland; the michigan group Service was decommissioned 2026-10-20) |
+| GLM | `https://glm-5-2-fp8-sglang-h200-{0,1}.nemo.svc.cluster.local:8443/v1` (per-pod, oakland; the earlier external-miner group Service was decommissioned 2026-10-20) |
 
 `model_list` in the ConfigMap stays `[]`. Flip `api_base` via `/model/update` and **re-include** every `litellm_params` field (known gotcha: unspecified list fields are nulled). Scripts: `nim/scripts/litellm-glm52-https-8443.py`, `nim/scripts/litellm-dsv4-https-8443.py`.
 
@@ -194,7 +194,7 @@ A leftover Terminating LiteLLM pod from an earlier sidecar experiment must be le
 
 History: live GLM-1 on `na-us-oakland-56` (2026-08-14) hit QEMU `Duplicate nodes with node-name='drive-5'` after an init/sidecar EROFS unplug — [kata-containers#11649](https://github.com/kata-containers/kata-containers/issues/11649). Root cause (not a parallel-Create race): `wait_for_device_deleted` reset QMP `SO_RCVTIMEO` to **250ms**; the next container's multi-layer EROFS `blockdev-add` then returned `WouldBlock` after QEMU had already created `drive-N`; CreateContainer retry → Duplicate. The sidecar was pulled out until the shim carried a fix.
 
-**The fix is deployed (2026-09-17):** #11649 was reproduced **deterministically on stock kata 4.2.0** (ornith-1 on `am-h200-29`, glm-5-3-flash on `am-h200-23`: `duplicate QEMU block device ID drive-5` CrashLoopBackOff after every `fetch-certs` init unplug), and the MINIMAL `v4.2.0-fix11649` overlay (idempotent `blockdev-add` — pre-check `query_named_block_nodes`, delete orphaned backend, treat duplicate/timeout as success-or-continue, keep a 60s hotplug-sized QMP read timeout) went live on **both** oakland (staging) and michigan-97 (production) on 2026-09-17. Superseded 2026-10-03/13 by `v4.2.0-fix11649-fix16-tx` (adds #13641 + T15/T16 fix classes). With it, the init + sidecar + main-container sequence boots clean; both wedged pods recovered on the fixed shim. Upstream: [#13635](https://github.com/kata-containers/kata-containers/pull/13635) was **closed unmerged** (2026-09-13, issues-only policy); the issue is OPEN with our live-repro comment (2026-09-17) — no fix in flight. Keep the overlay until an official kata-deploy tag contains the fix.
+**The fix is deployed (2026-09-17):** #11649 was reproduced **deterministically on stock kata 4.2.0** (ornith-1 on `am-h200-29`, glm-5-3-flash on `am-h200-23`: `duplicate QEMU block device ID drive-5` CrashLoopBackOff after every `fetch-certs` init unplug), and the MINIMAL `v4.2.0-fix11649` overlay (idempotent `blockdev-add` — pre-check `query_named_block_nodes`, delete orphaned backend, treat duplicate/timeout as success-or-continue, keep a 60s hotplug-sized QMP read timeout) went live on **both** oakland (staging) and the external production miner cluster on 2026-09-17. Superseded 2026-10-03/13 by `v4.2.0-fix11649-fix16-tx` (adds #13641 + T15/T16 fix classes). With it, the init + sidecar + main-container sequence boots clean; both wedged pods recovered on the fixed shim. Upstream: [#13635](https://github.com/kata-containers/kata-containers/pull/13635) was **closed unmerged** (2026-09-13, issues-only policy); the issue is OPEN with our live-repro comment (2026-09-17) — no fix in flight. Keep the overlay until an official kata-deploy tag contains the fix.
 
 Upstream fix status (as of 2026-09-17):
 
@@ -235,8 +235,8 @@ hardening option on top of this.
 
 ## Public KBS endpoint — SHIPPED (2026-09-18): `https://kbs.kubetee.ai`
 
-Production-cluster guests (michigan-97 today, miner production clusters
-later) attest against the oakland Trustee over a public endpoint instead
+Production-cluster guests on external miners attest against the oakland
+Trustee over a public endpoint instead
 of the in-cluster ClusterIP URL. Fleet bundle
 `fleet-gitops/infrastructure/kbs-gateway/` (GitRepo
 `kbs-gateway-staging`, oakland only):
@@ -262,18 +262,18 @@ of the in-cluster ClusterIP URL. Fleet bundle
   (auth → attest → resource: fetched the 1854-byte east-west CA over TLS).
   Oakland's own guests keep the in-cluster URL (no hairpin through traefik).
 - Production guests bake `https://kbs.kubetee.ai` into `cc_init_data` /
-  kernel params at their first CC rollout (done for the michigan image-gen
+  kernel params at their first CC rollout (done for the external-miner image-gen
   backends 2026-09-19: klein + cosmos3 both run the public-endpoint initdata,
   role `image-gen`). The measured agent-policy allowlist in
   `cc_init_data` is per-deployment (same encode-initdata.py flow).
 
 <a id="miner-cluster-backends"></a>
 
-## Miner-cluster backends — SHIPPED (2026-09-19): michigan-97 backends live
+## Miner-cluster backends — Phase 0 validation complete (2026-09-19)
 
 LiteLLM stays on the infra cluster (`na-us-oakland-56`). Miner clusters run models (e.g. DSV4-Flash-0731) in TEE and do **not** run LiteLLM. LiteLLM’s `api_base` points at the remote guest over the WAN. Same CoCo pattern as this cut: Trustee issues TLS after attestation; apps speak ordinary mTLS. The miner host, kubelet, and CNI stay untrusted.
 
-**This is no longer hypothetical.** Remote backends run in production on `na-us-michigan-97` (production miner cluster, 7-node RKE2, TDX + PPCIE/native-CC H100/H200, kata 4.2.0). **Ops detail (node names, LB ports, and the per-backend DNS names) is deliberately NOT recorded here** — it lives in the private runbooks (`nim/eastwest/` history + the per-model manifests in the infra repo) and in the live LiteLLM `model_list` DB. The east-west gate is mTLS against the Trustee CA regardless: the URLs are L4 LoadBalancers with per-service certs, not secret-bearing.
+**This Phase 0 record is not a current roster.** Remote backends ran in production on an external miner RKE2 cluster using TDX + CC GPUs and kata 4.2.0. The same design carries into Phase 1 on qualifying external-miner clusters. **Ops detail (node names, LB ports, miner identifiers, and per-backend DNS names) is deliberately NOT recorded here** — it lives in private runbooks and the validated gateway configuration. The east-west gate is mTLS against the Trustee CA regardless: the URLs are L4 load-balanced endpoints with per-service certificates, not secret-bearing.
 
 | Backend | Placement | Runtime | LiteLLM path |
 |---------|-----------|---------|--------------|
@@ -346,7 +346,7 @@ Quote-in-handshake RA-TLS on LiteLLM→DSV4 is a later hardening (stolen Trustee
 
 ### LiteLLM cutover (a miner backend — proven 2026-09-19)
 
-`/model/update` only — no LiteLLM deploy on the miner. Restate every `litellm_params` field. Same client cert, new server cert + passthrough. The klein and cosmos3 rows on michigan-97 are the worked examples (see the table above).
+`/model/update` only — no LiteLLM deploy on the miner. Restate every `litellm_params` field. Same client cert, new server cert + passthrough. The Phase 0 image-generation backends on an external miner are the worked examples (see the table above).
 
 ## Later (not this cut)
 
@@ -463,7 +463,7 @@ the steal items below are what we do **next**.
 | `nim/eastwest/RELEASE-RUNBOOK.md` | The gateway release runbook |
 | `kubetee-subnet/docs/CLIENT-FACING-ATTESTATION.md` | Client guide (Phase 8): API surface, nonce semantics, ITA + local DCAP verification paths. |
 | `kubetee-subnet/docs/ATTESTATION-SPEC-v1.md` | The partner contract: binding construction + reference-value publication |
-| `nim/glm-5-2-fp8-sglang-h200-cc.yaml` | GLM STS + Service `:8443` (michigan-97; replaced `nim/glm-5-2-nvfp4-sglang-cc.yaml`, deleted 2026-10-13) |
+| `nim/glm-5-2-fp8-sglang-h200-cc.yaml` | Phase 0 external-miner GLM STS + Service `:8443` (replaced `nim/glm-5-2-nvfp4-sglang-cc.yaml`, deleted 2026-10-13) |
 | `nim/deepseek-v4-1-flash-sglang-h200-cc.yaml` | DSV41 STS + Service `:8443` (replaced the withdrawn `deepseek-v4-flash-0731` manifest, deleted) |
 | `fleet-gitops/infrastructure/litellm/staging/values-litellm-na-us-oakland-56.yaml` | LiteLLM TDX overlay (LE public hop + east-west client cert) |
 | `fleet-gitops/infrastructure/trustee/` | Trustee chart v0.22.0 + volumes (Fleet). Manual `kbs-auth-public-key`. |
@@ -797,7 +797,7 @@ rejection, image + resource standards, canary record).
 Roll record:
 
 - [x] `v4.2.0-fix11649` overlay on **every CC node of both clusters** (2026-09-17;
-      oakland 10/10 + michigan 7/7) — init + sidecar rolls no longer hit
+      oakland 10/10 + external production miner 7/7) — init + sidecar rolls no longer hit
       `Duplicate nodes with node-name='drive-N'`. Superseded 2026-10-03/13 by
       `v4.2.0-fix11649-fix16-tx`.
 - [x] Sidecar + `fetch-certs` init restored; in-process fetch/HAProxy dropped
@@ -812,7 +812,7 @@ This is independent of sealed NGC. Do not block Phase 2 on it.
 
 ## Phase 7: Miner-cluster backends — SHIPPED (2026-09-19)
 
-**Status: SHIPPED** — michigan-97 backends live; see
+**Status: Phase 0 validation complete** — external-miner backends were verified; see
 [Part I → Miner-cluster backends](#miner-cluster-backends) (the worked
 example, the klipper port lesson, the image-generation two-path decision, and
 the MiniMax-H3 authorization).
@@ -879,7 +879,7 @@ Implementation notes for future phases:
 | Five-actor ops | 5 | **Not done** |
 | HAProxy sidecar restore | 6 | **COMPLETE (2026-09-17)** — all 10 CC pods |
 | Client-facing attestation | 8 | **COMPLETE (2026-09-18)** + v1 bundle/appraisal/vm_config (2026-10-27) |
-| Miner backends | 7 | **Shipped (2026-09-19)** — michigan-97 backends live |
+| Miner backends | 7 | **Phase 0 validation complete (2026-09-19)** — external-miner backends were verified end to end |
 | Reference-value publication (`/.well-known/…`) | — | **Publication in progress** (schema + contract published in `ATTESTATION-SPEC-v1.md`; endpoints not yet served) |
 | NRAS Remote | — | **Shipped** — do not revert |
 | Guest-pull as TDX default | — | **Ignored** |

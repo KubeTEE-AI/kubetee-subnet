@@ -1,10 +1,10 @@
 # Deploying in a TEE — Challenge and debugging
 
-A confidential pod is a virtual machine with an encrypted, attested memory boundary, not a namespaced process on the host. Workloads run on **miner clusters**. Every node on the subnet-owner **staging cluster** is TEE CC capable. Staging is a **debug target** when a workload fails — not a required promotion workflow.
+A confidential pod is a virtual machine with an encrypted, attested memory boundary, not a namespaced process on the host. From Phase 1, workloads run on **external miner clusters** with CC on and guest debug off. **Only external miners are onboarded.** The subnet-owner staging miner UID 56 (`na-us-oakland-56`), previously the CC-off debug target, is decommissioned as a miner as Phase 1 begins. Subnet-owner control-plane infrastructure is not a replacement miner. There is no staging promotion workflow.
 
 ## Runtime classes (Kata 4.3.1)
 
-Kata is **4.3.1** (`kata-deploy` Fleet bundle, vendored chart `4.3.1+kubetee.1`, `updateStrategy: RollingUpdate`, `maxUnavailable: 1`; Oakland since 2026-10-23, Luxembourg `lu-b300-40` verified 2026-11-03). KubeTEE uses **only** the runtime-rs classes — the Go shims (`kata-qemu-nvidia-gpu-tdx`, `kata-qemu-tdx`) are retired.
+Kata is **4.3.1** (`kata-deploy` Fleet bundle, vendored chart `4.3.1+kubetee.1`, `updateStrategy: RollingUpdate`, `maxUnavailable: 1`; validated during Phase 0 and adopted for external-miner clusters). KubeTEE uses **only** the runtime-rs classes — the Go shims (`kata-qemu-nvidia-gpu-tdx`, `kata-qemu-tdx`) are retired.
 
 | `runtimeClassName` | Workload |
 |--------------------|----------|
@@ -19,18 +19,11 @@ TDX guests use **erofs + host-pull** (`IfNotPresent`). Nydus is installed only; 
 
 Never `kubectl delete --force --grace-period=0` a Kata/CC pod. After a CC GPU node reboot, **cordon** until `kata-deploy` has finished extracting and the shim overlay hash is applied — a pod that starts on the stock shim can leave a leftover VM holding all GPUs.
 
-## Kata guest debug, CC off, and CoCo Trustee
+## Phase 0 staging history and the external-miner boundary
 
-On the **staging cluster**, Kata Containers guest debug is **off**. [CoCo Trustee](https://github.com/confidential-containers/trustee) (KBS) attests those guests.
+During Phase 0, the subnet-owner staging miner UID 56 (`na-us-oakland-56`) ran TEE-CC-capable nodes with guest debug off by default. For diagnostics, an operator could disable CC on a staging node or enable guest debug per pod. [CoCo Trustee](https://github.com/confidential-containers/trustee) (KBS) attested only the non-debug guests.
 
-If a workload fails and needs debugging, target staging. For diagnostics:
-
-- CC can be turned **off** on a staging node.
-- Guest debug can be enabled **per pod**.
-
-Trustee attests only when debug is off (CC on).
-
-Miner clusters keep CC on with guest debug off. Trustee attests those guests.
+That staging-miner role and its CC-off diagnostic exception are **decommissioned at Phase 1**. No replacement owner-operated staging miner is onboarded. External miner clusters keep CC on and guest debug off; Trustee attests those guests. External miners must not reproduce the historical staging CC-off configuration for production capacity.
 
 ## Supply-chain CI
 
@@ -40,4 +33,4 @@ Ordinary supply-chain CI (SAST, image CVE, IaC, provenance) is a **design refere
 
 Secrets live in CoCo Trustee / KBS and are released only to an attested guest (guest debug off). They are not Kubernetes Secrets and must not appear in Git, Helm, or image layers.
 
-See the [README](../README.md#debugging-on-the-staging-cluster).
+See the [README external-miner transition](../README.md#phase-1-transition) and [Miner Onboarding](./MINER-ONBOARDING.md).

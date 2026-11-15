@@ -22,15 +22,15 @@
 
 ### 1. Continent Code (2 letters)
 
-| Code | Continent |
-|------|-----------|
-| `eu` | Europe |
+| Code | Continent     |
+| ---- | ------------- |
+| `eu` | Europe        |
 | `na` | North America |
 | `sa` | South America |
-| `as` | Asia |
-| `af` | Africa |
-| `oc` | Oceania |
-| `me` | Middle East |
+| `as` | Asia          |
+| `af` | Africa        |
+| `oc` | Oceania       |
+| `me` | Middle East   |
 
 ### 2. Country Code (2 letters)
 
@@ -72,16 +72,16 @@ validator but may be present on older clusters.
 
 ## Examples
 
-| Cluster Name | Location | Description |
-|--------------|----------|-------------|
-| `eu-fr-paris-123` | Europe, France, Paris | Miner UID 123 in Paris |
-| `na-us-newyork-456` | North America, USA, New York | Miner UID 456 in New York |
-| `as-jp-tokyo-789` | Asia, Japan, Tokyo | Miner UID 789 in Tokyo |
-| `eu-de-berlin-234` | Europe, Germany, Berlin | Miner UID 234 in Berlin |
-| `na-ca-toronto-567` | North America, Canada, Toronto | Miner UID 567 in Toronto |
-| `as-sg-singapore-890` | Asia, Singapore, Singapore | Miner UID 890 in Singapore |
-| `oc-au-sydney-345` | Oceania, Australia, Sydney | Miner UID 345 in Sydney |
-| `me-ae-dubai-678` | Middle East, UAE, Dubai | Miner UID 678 in Dubai |
+| Cluster Name          | Location                       | Description                |
+| --------------------- | ------------------------------ | -------------------------- |
+| `eu-fr-paris-123`     | Europe, France, Paris          | Miner UID 123 in Paris     |
+| `na-us-newyork-456`   | North America, USA, New York   | Miner UID 456 in New York  |
+| `as-jp-tokyo-789`     | Asia, Japan, Tokyo             | Miner UID 789 in Tokyo     |
+| `eu-de-berlin-234`    | Europe, Germany, Berlin        | Miner UID 234 in Berlin    |
+| `na-ca-toronto-567`   | North America, Canada, Toronto | Miner UID 567 in Toronto   |
+| `as-sg-singapore-890` | Asia, Singapore, Singapore     | Miner UID 890 in Singapore |
+| `oc-au-sydney-345`    | Oceania, Australia, Sydney     | Miner UID 345 in Sydney    |
+| `me-ae-dubai-678`     | Middle East, UAE, Dubai        | Miner UID 678 in Dubai     |
 
 ## Legacy Enrollment Binding (optional, not read by the validator)
 
@@ -308,14 +308,14 @@ spec:
 
 ### Comparison
 
-| Method | Use Case | Example |
-|--------|----------|---------|
-| **Environment Label** | Deploy to all staging or production clusters | `environment: production` |
-| **Cluster Name** | Deploy to one specific cluster | `clusterName: eu-fr-paris-123` |
+| Method                     | Use Case                                      | Example                        |
+| -------------------------- | --------------------------------------------- | ------------------------------ |
+| **Environment Label**      | Deploy to all staging or production clusters  | `environment: production`      |
+| **Cluster Name**           | Deploy to one specific cluster                | `clusterName: eu-fr-paris-123` |
 | **Canonical Hotkey Label** | Deploy to the cluster bound to a miner hotkey | `kubetee.ai/hotkey: "5Grw..."` |
-| **Continent** | Deploy to all clusters in a continent | `kubetee.ai/continent: eu` |
-| **Country** | Deploy to all clusters in a country | `kubetee.ai/country: fr` |
-| **City** | Deploy to all clusters in a city | `kubetee.ai/city: paris` |
+| **Continent**              | Deploy to all clusters in a continent         | `kubetee.ai/continent: eu`     |
+| **Country**                | Deploy to all clusters in a country           | `kubetee.ai/country: fr`       |
+| **City**                   | Deploy to all clusters in a city              | `kubetee.ai/city: paris`       |
 
 ### Advanced: Combined Selectors
 
