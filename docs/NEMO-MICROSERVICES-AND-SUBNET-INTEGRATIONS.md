@@ -1,132 +1,137 @@
 # NVIDIA NeMo Platform, Bittensor Subnet Integrations & the Stage 0 Security Gate
 
-This document is the detailed reference behind the README [NVIDIA NeMo & Bittensor Subnet Integrations](../README.md#nvidia-nemo-platform--bittensor-subnet-integrations) section. It covers: the NVIDIA NeMo platform on KubeTEE, the attestation-gated TLS protocol between services, the NVIDIA NIM Operator's experimental Kata/Dynamo support and its CoCo limitations, the SOTA Bittensor subnets that could replace or augment each NeMo layer inside a TEE, the Stage 0 supply-chain security gate, and (new, 2026-11-04) model routing — NVIDIA NeMo Switchyard installed, with Fugal (SN70) as a potential replacement if it proves SOTA.
+This public reference complements the [NVIDIA NeMo & Bittensor Subnet Integrations](../README.md#nvidia-nemo-platform--bittensor-subnet-integrations) overview. It explains the intended architecture, trust boundaries, and partnership candidates. Deployment settings, implementation checklists, and operational procedures belong in internal engineering documentation.
 
 ---
 
 ## 1. NVIDIA NeMo Platform on KubeTEE
 
-[NVIDIA NeMo Platform](https://docs.nvidia.com/nemo-platform/documentation/kubernetes-deployment/setup) is NVIDIA's self-managed Kubernetes platform for customizing, evaluating, and securing LLM and agent applications. It carries forward the former standalone NeMo Microservices suite; the component names — Customizer, Evaluator, Guardrails, and Retriever — remain. The broader [NVIDIA NeMo](https://docs.nvidia.com/) suite spans the AI agent lifecycle; **NIM microservices remain the model-inference layer**, not a replacement name for NeMo Platform. A goal of the KubeTEE AI Factory is to run the full NVIDIA AI stack — NVIDIA NeMo, NIM models, and AI Blueprints — as **SOTA AI services** for enterprises inside Kata + CoCo TEE. Batch jobs are a secondary service: Armada schedules the jobs and pipelines that call those services when an enterprise needs that path.
+[NVIDIA NeMo Platform](https://docs.nvidia.com/nemo-platform/documentation/kubernetes-deployment/setup) provides self-managed Kubernetes capabilities for customizing, evaluating, and securing LLM and agent applications. It carries forward the former standalone NeMo Microservices suite; Customizer, Evaluator, Guardrails, and Retriever remain useful capability categories. [NVIDIA NIM](https://docs.nvidia.com/nim/) supplies model inference and is a separate serving layer.
 
-Each cluster therefore exposes shared, high-availability NeMo services as **cluster-resident services that scheduled AI jobs call**. This is the distinction between a service and a job: Customizer, Evaluator, Guardrails, Retriever, and the model endpoints are long-lived and shared, while a job is a transient Armada workload that consumes them. A fine-tuning job dispatched to a miner cluster calls the local Customizer, an evaluation job calls the local Evaluator, and a RAG job calls the local Retriever — inside the cluster, without leaving the confidential boundary or crossing the public internet. Sharing one HA deployment per cluster also means the cost of standing up the stack is amortized across every job that lands there, rather than paid again per job.
+KubeTEE's objective is to combine these capabilities with independently developed AI services inside confidential clusters. Shared services can support multiple customer workloads, while transient jobs perform specific training, evaluation, or retrieval tasks. The goal is a broader confidential AI service portfolio—not presumed compatibility with every upstream component.
 
-
----
-
-## 2. Attestation-Gated TLS Between Services
-
-Traffic between these services is secured by **attestation-gated TLS, not operator-issued mTLS** — a distinction that matters because the threat model excludes the host operator, so a certificate KubeTEE issued proves nothing about the workload holding it:
-
-- **cert-manager** mints private keys into Kubernetes Secrets, so the keys exist in etcd and on the node. KubeTEE staff could impersonate either end, or sit in the middle. The wire is encrypted and the guarantee is zero.
-- **A service mesh** (Linkerd, Istio, Calico's Istio integration) binds certificates to a pod's Kubernetes ServiceAccount, which authenticates *identity*, not *integrity*. Flip `runtimeClassName` from a confidential runtime to plain `nvidia` and the workload presents the same valid certificate over the same green mTLS — the mesh cannot tell a TEE workload from a non-TEE one. Its issuer key also lives in a Secret outside any TEE.
-- **Host-level encryption** (Calico or Cilium WireGuard/IPsec) is a host-to-host tunnel with no per-workload identity, so it cannot express "refuse a peer that cannot attest," and it leaves the host-to-pod segments in the clear.
-
-The general rule: any encryption layer whose keys are managed by the host fails here, because the host is the adversary being excluded.
-
-KubeTEE follows the CoCo Confidential AI pattern: **Trustee issues TLS credentials after attestation; apps speak ordinary mTLS.** Guests do not parse quotes. The built-in CoCo Attestation Service verifies Intel-signed TDX DCAP quotes (PCCS collateral on the cluster); KBS policy releases certs only when the EAR is affirming and guest debug is off. TLS is terminated **inside** the guest, so cleartext exists only in encrypted guest memory. Intel Trust Authority is deferred.
-
-That is not classic quote-in-handshake RA-TLS, and it is not in-guest keygen. Trustee is the relying party (trusted zone). A later profile can bind `report_data` to a guest-generated pubkey if keys must never exist in Trustee; that is not the first cut.
-
-SGLang (and most LLM NIMs) cannot require a client certificate, so the terminator is a second container in the **same** Kata sandbox (HAProxy, not Envoy/Traefik), proxying to the model server on guest loopback. LiteLLM `ssl_certificate` is ignored by httpx 0.28 (still true at 1.103.9); outbound mTLS is `sitecustomize.py` loading the Trustee client cert into the default SSL context. Kubernetes **Service** DNS is the TLS hostname: replicas share one cert SAN; they do not need per-pod endpoints.
-
-**Public hop.** Grey-cloud DNS plus Traefik TLS passthrough is ordinary Let’s Encrypt into the LiteLLM guest (`kata-qemu-tdx-runtime-rs`). Client-attested RA-TLS on `llm.kubetee.ai` is later. If an L7 relay returns to the path, OHTTP+SKR is the attested relay design.
-
-**First cut (deployed 2026-08-15 on `na-us-oakland-56`):** LiteLLM → GLM-5.2 and DeepSeek-V4-Flash-0731 over Service `:8443` mTLS. All four replicas `2/2`. SGLang binds `127.0.0.1:8000`; kubelet HTTPS probes use `:8443`. KBS still used `default.rego` (path×role + cpu0-affirming 401s). Implementation spec: [East-west attested mTLS](./EAST-WEST-ATTESTED-MTLS.md). **Current state (2026-10-16):** the mesh now spans five east-west backends across `na-us-oakland-56` + `na-us-michigan-97` (GLM-5.2, GLM-5.3 RadixArk NVFP4, Ornith-1.5-397B, MiMo-V2.6-Pro, DeepSeek-V4.1-Flash — the `deepseek-v4-flash-0731` backend was withdrawn and replaced), the KBS policy is the KubeTEE `resource-policy.rego` (live 2026-09-18), and replica counts are whatever the live `nemo` StatefulSets say — see [East-west attested mTLS](./EAST-WEST-ATTESTED-MTLS.md). Miner clusters will run TEE models without LiteLLM; the gateway stays on the infra cluster and uses the same Trustee mTLS over L4 passthrough — [Miner-cluster backends](./EAST-WEST-ATTESTED-MTLS.md#miner-cluster-backends). Do not start that until KBS resource fetch is attested or TLS-pinned.
+A key design principle is service locality: workloads should access supporting services within the same trust domain rather than crossing the public internet unnecessarily. Persistent services and short-lived jobs therefore play complementary roles.
 
 ---
 
-## 3. NIM Operator — Experimental Kata & Dynamo Support
+## 2. Attestation-Gated Confidential Communication
 
-The [NVIDIA NIM Operator](https://docs.nvidia.com/nim-operator/latest/) ships **experimental** support for running **NIM inference** workloads inside Kata sandboxes and for Dynamo-orchestrated inference graphs:
+Confidential workloads require protection against a potentially untrusted host operator, not only network interception. Standard workload certificates or host-managed tunnels alone cannot establish that the correct software is running inside genuine confidential hardware.
 
-- **[Kata Sandbox Workloads (Experimental)](https://docs.nvidia.com/nim-operator/latest/kata-sandbox.html)** — deploys a `NIMService` with `runtimeClassName: kata-qemu-nvidia-gpu` so the NIM runs inside a Kata VM sandbox with hardware-isolated kernel and OS. NVIDIA notes this is a preview for testing only (not production), and that **Confidential Containers** support is planned for a future release.
-- **[Dynamo (Experimental)](https://docs.nvidia.com/nim-operator/latest/dynamo.html)** — deploys Dynamo `DynamoGraphDeployment` CRDs (OpenAI-compatible frontend, multi-backend LLM serving, disaggregated prefill/decode) via the NIM Operator with `dynamo.enabled=true`.
+KubeTEE's trust model combines remote attestation with service credentials issued only to approved workloads. Confidential inference can then establish protected communication with its approved peers. Encrypted memory protects sensitive processing, while attestation provides evidence of the execution environment.
 
-> ⚠️ **KubeTEE does not use either path yet.** The NIM Operator is no longer the deployment path for NeMo Platform services (see [§1](#1-nvidia-nemo-platform-on-kubetee)). KubeTEE's planned confidential workloads use the **stable** TEE runtime classes instead. **KubeTEE is working directly with the NVIDIA NIM Operator and Kata Containers teams** to harden Kata sandbox + CoCo integration and Dynamo's disaggregated serving graphs for production; graduating them is a Phase 3 item.
+This distinction matters for customers:
 
----
+- **Identity alone is insufficient.** A valid service account or ordinary workload certificate does not prove execution inside the expected confidential environment.
+- **Host-managed encryption is insufficient.** An encrypted connection can still terminate in an environment controlled by the operator being excluded.
+- **Attestation supports workload integrity.** Approved measurements and policies determine whether credentials should be released.
+- **Credentials should not expose confidential processing.** Secrets and decrypted content must remain within the documented trust boundary.
 
-## 4. Kata / CoCo Limitations (NVIDIA)
-
-The NeMo Platform documentation does not itself list these Kata/CoCo limits — the constraints come from the **NIM Operator** (for NIM inference workloads, not the deprecated NeMo-service CRD path) and the **NVIDIA CoCo Reference Architecture**. KubeTEE has not documented or validated NeMo Platform Helm compatibility with the confidential runtime classes below. The constraints explain why KubeTEE's confidential NIM path uses the stable CoCo runtime classes rather than the NIM Operator's experimental Kata sandbox:
-
-**NIM Operator Kata Sandbox (experimental)** — [Kata Sandbox docs](https://docs.nvidia.com/nim-operator/latest/kata-sandbox.html)
-- **Not confidential computing.** The Kata sandbox runtime class is `kata-qemu-nvidia-gpu` and *"does not enable encryption"* — VM isolation only, no TEE encryption/attestation. The GPU Operator must run in **non-CC mode** (`nvidia.com/cc.mode=off`).
-- **CoCo + NIMCache unsupported.** *"Confidential Containers and NIM Cache deployments have not been tested and are not supported in this release."* Only `NIMService` with the Kata sandbox has been tested; CoCo support is planned for a future NIM Operator release.
-- **Preview only** — NVIDIA marks it *"experimental, not fully supported, not recommended for production."*
-
-**NVIDIA CoCo Reference Architecture** (the stable `kata-qemu-nvidia-gpu-tdx-runtime-rs` path KubeTEE uses) — [Limitations & Restrictions](https://docs.nvidia.com/datacenter/cloud-native/confidential-containers/latest/overview.html)
-- **containerd only** — no CRI-O / dockerd for confidential workloads.
-- **All GPUs on a host must be in CC mode** — configuring a subset is unsupported; for multi-GPU passthrough, all GPUs must be assigned to a single confidential VM.
-- **No nested virtualization** — CoCo must be installed directly on the host, not inside a guest VM.
-- **No PCI peer-to-peer (P2P) DMA** — IOMMUFD cannot map PCI BAR regions (QEMU logs warnings; GPU function is unaffected).
-- **No host-side NVIDIA driver** — CoCo uses VFIO passthrough; host drivers interfere with VFIO binding (the GPU Operator manages the in-guest driver instead).
-
-**NIM Operator (general)** — [Release Notes](https://docs.nvidia.com/nim-operator/latest/release-notes.html)
-- **NeMo CRD deprecation is not a NIM limitation** — NIM Operator v3.1.3+ supports multi-node **NIM** through `spec.multiNode.ray` (Ray for cluster formation, vLLM for distributed execution). The deprecated legacy NeMo-service CRDs must not be conflated with this continuing NIM deployment support.
-- **CC added incrementally** — Kata sandbox is the *"first foundational step"*; full CoCo encryption/attestation through the Operator is future work.
+The architectural pattern is service-to-service protection based on attested workload identity. See [East-west attested mTLS](./EAST-WEST-ATTESTED-MTLS.md) for the implementation design.
 
 ---
 
-## 5. Bittensor Subnet Integrations (SOTA, Confidential-Ready)
+## 3. NVIDIA Kata and Confidential-Computing Compatibility
 
-Given the limitations above, KubeTEE's thesis is that **the Bittensor ecosystem already contains SOTA, verifiable substitutes** for several NeMo stack layers, and that running them inside Kata + CoCo TEE pods — instead of, or alongside, the NVIDIA stack — could sidestep those limitations while keeping workloads confidential. Each subnet below exposes a **verifiable feed** (public API + on-chain metagraph) and is a **potential partnership** that could replace or augment the corresponding NeMo component. These are candidate integrations and proposals, not shipping integrations:
+NVIDIA and Kata Containers provide multiple sandboxing technologies, but a VM sandbox is not automatically a confidential virtual machine. Deployment suitability depends on hardware-backed memory protection, attestation, GPU support, and the maturity of the specific integration path.
 
-| Subnet | Name | SOTA role | Could replace / augment (NeMo stack) | Confidential-computing fit |
-|--------|------|-----------|--------------------------------------|----------------------------|
-| SN56 | [Gradients](https://www.gradients.io/) (G.O.D) | AutoML tournaments — miners submit open-source SFT / DPO / GRPO training scripts; validators execute on standardized GPU infra and open-source the winners | NeMo Customizer (fine-tuning) | Training scripts execute inside KubeTEE TEE pods → confidential fine-tuning tournaments with open-source winning methods |
-| SN120 | [Affine](https://www.affine.io/) | Incentivized RL ("reason mining") — miners submit on-chain model revisions; validators host inference and run challenger-vs-champion duels; winner-takes-all; sybil/decoy/copy/overfitting-proof | NeMo Customizer (RL / reasoning) | Validator inference + duels run in TEE; winning models bridge to Chutes (SN64) for confidential serving |
-| SN22 | [Desearch](https://desearch.ai/) | Decentralized real-time web + X/Twitter search for AI agents; cited, context-rich results via API | Live search / grounding (not RAG) | Search runs as a confidential web/X lookup inside the TEE before generation |
+KubeTEE evaluates each NVIDIA component independently. Support for a particular runtime or NIM deployment method must not be generalized into support for all NeMo services.
+
+The public compatibility principles are:
+
+- Preserve hardware-backed confidentiality rather than accepting VM isolation alone.
+- Verify GPU and storage behavior under the intended confidential runtime.
+- Treat preview integration paths as evaluation work, not production guarantees.
+- Deploy only after the particular service, runtime, and attestation policy pass acceptance testing.
+
+The relevant upstream references are the [NIM Operator](https://docs.nvidia.com/nim-operator/latest/), its [Kata Sandbox documentation](https://docs.nvidia.com/nim-operator/latest/kata-sandbox.html), and the [NVIDIA Confidential Containers reference architecture](https://docs.nvidia.com/datacenter/cloud-native/confidential-containers/latest/overview.html).
+
+---
+
+## 4. Ecosystem Capabilities
+
+The Bittensor ecosystem offers competing implementations of capabilities that can complement the AI stack. KubeTEE evaluates them as potential partners or technology sources—not as drop-in NeMo replacements by virtue of their category.
+
+Candidate areas include:
+
+| Capability | Example subnet | Proposed contribution |
+|---|---|---|
+| Fine-tuning | [Gradients SN56](https://www.gradients.io/) | Open, competitive model-customization methods |
+| Reinforcement learning and reasoning | [Affine SN120](https://www.affine.io/) | Competitive production and evaluation of reasoning models |
+| Search and grounding | [Desearch SN22](https://desearch.ai/) | Real-time web and social-information discovery for agents |
+| Knowledge-enhanced retrieval | *Candidate to be determined* | Graph-supported retrieval for cross-document reasoning |
+| Video understanding | [Score SN44](https://github.com/score-technologies/turbovision) | Structured visual analysis suitable for searchable video workflows |
+| Inference and training | [Chutes SN64](https://chutes.ai/) | Decentralized inference and training capacity, including confidential workloads |
+| Confidential storage | [Hippius SN75](https://hippius.com/) | Durable storage for approved confidential workloads |
+| Safety and alignment detection | [Trishool SN23](https://github.com/TrishoolAI/trishool-phase2) | Detection capabilities for policy, safety, and alignment evaluation |
+| Security hardening | [RedTeam SN61](https://github.com/RedTeamSubnet/RedTeam) | Challenge-derived methods and evaluation material for security defenses |
+
+These are partnership proposals rather than shipping integrations. Compatibility with confidential execution must be evaluated for each specific service. An attested evaluation process does not itself attest an external production service, and an external API must not silently enlarge the trust boundary of a confidential workload.
+
+---
+
+## 5. The Bittensor Subnet-NeMo Mapping
+
+Given the capabilities above, each NeMo service and supporting AI capability has one or more Bittensor subnet candidates whose work could complement it inside a TEE. These are partnership and integration proposals—not drop-in replacements or shipping integrations. Compatibility, confidential execution, and current service availability must be assessed individually for every candidate.
+
+| Subnet | Project & what it produces | SOTA value | Replaces / augments | Integration fit (inside KubeTEE TEE) |
+|---|---|---|---|---|
+| — | [NVIDIA NeMo Switchyard](https://github.com/NVIDIA-NeMo/Switchyard) | Routing algorithms that select efficient or capable models using request and tool-execution context | Model-selection strategy for the LiteLLM gateway | Evaluate the tool-aware strategy against fixed efficient/capable models, prompt-complexity routing, and Fugal |
+| SN92 | [REAX](https://reax.co/) — Decision Models | Independently verified decision models for prompt-complexity and task-type classification | Prompt-oriented model routing across configurable task tiers | Evaluate a JEV-compatible classifier as an explicit routing option; its decision output selects a KubeTEE model for confidential inference |
+| SN11 | [TrajectoryRL](https://trajrl.com/) | Competition-produced agent skills alongside programs that combine models into fusion policies | Agent skills for the planned Hub; candidate model-selection methods | Select individual skills after artifact, license, security, and compatibility review; executable miner policies remain separate from ordinary Hub skill packages |
+| SN121 | [sundae_bar](https://www.sundaebar.ai/) | Business-workflow skill bundles evaluated on fixed-base agents across multiple scenarios | Agent skills for the planned Hub | Review selected enterprise skills and their evaluation results against KubeTEE models and agents before publication through the planned Hub |
+| SN56 | [Gradients](https://www.gradients.io/) | AutoML tournaments for LLM fine-tuning (open-source SFT/DPO/GRPO scripts, decentralized judge network, held-out eval) | NeMo Customizer (fine-tuning service) | Fine-tune jobs run inside the TEE; the winning checkpoint's weights + eval scores are attested artifacts — "models trained by the network, on confidential data" |
+| SN120 | [Affine](https://www.affine.io/) | Incentivized RL / verifiable post-training — "reason mining": challenger-vs-champion model duels, pruning challenger scores with environmental verification | NeMo Customizer (RL/DPO path) + NeMo Evaluator (model-vs-model evaluation) | RL training runs in TEE; duels produce verifiable quality deltas rather than reputation — an always-current SOTA reasoning-model lane |
+| SN22 | [Desearch](https://desearch.ai/) | Decentralized web + X/Twitter search for AI agents (bitAgent web-search subnet: indexed live web + Twitter firehose, structured search API) | NeMo Retriever (information retrieval) + AI-Q Research Agent (online lookups) | Retrieval-augmented pre-pass: Desearch API calls run as a confidential web/X lookup inside the TEE before generation |
 | — | *Candidate TBD* | **GraphRAG** — knowledge-graph-enhanced retrieval: entities/relations are extracted into a graph over ingested corpora, queries traverse multi-hop reasoning paths (not just vector similarity), and answers are synthesized with citations; validators score retrieval accuracy and answer quality | NeMo Retriever / RAG | Graph build + multi-hop retrieval + generation run inside the TEE; the knowledge graph, retrieved paths, and citations stay in the enclave |
-| SN44 | [Score](https://github.com/score-technologies/turbovision) (TurboVision) | Decentralized computer vision — miners run CV models (object detection, keypoint detection, tracking) on live video/imagery and return structured, decision-ready annotations; validators benchmark on live data via lightweight hybrid validation (frame filtering, keypoint + homography checks, CLIP-based semantic verification). First deployment: Game State Recognition for football at 10–100× lower cost than manual annotation; generalizes to any camera feed | NVIDIA Video Search and Summarization blueprint (video analytics / structured video understanding) | CV inference + validation run inside KubeTEE TEE pods → confidential video analytics with attested structured outputs; sensitive footage stays in the enclave |
+| SN44 | [Score](https://github.com/score-technologies/turbovision) (TurboVision) | Decentralized computer vision — miners run CV models (object detection, keypoint detection, tracking) on live video/imagery and return structured, decision-ready annotations; validators benchmark on live data via lightweight hybrid validation (frame filtering, keypoint + homography checks, CLIP-based semantic verification). First deployment: Game State Recognition for football; generalizes to other camera feeds | NVIDIA Video Search and Summarization blueprint (video analytics / structured video understanding) | CV inference + validation run inside KubeTEE TEE pods → confidential video analytics with attested structured outputs; sensitive footage stays in the enclave |
 | SN28 | [sayGM](https://saygm.com/) | Idle-capacity inference marketplace; KubeTEE miner SKUs forward to `llm.kubetee.ai`. Connected as a LiteLLM **inference provider** (same `model` names on the gateway) | Inference (provider + demand channel) | Inbound path is live (TDX + NVIDIA CC). LiteLLM HA fallbacks go to other TEE networks (Chutes, Phala, Near AI) — not back through sayGM |
-| SN64 | [Chutes](https://chutes.ai/) — Parallax (Jon Durbin) | Decentralized serverless inference + **Parallax** decentralized MoE training (surrogate experts, no all-to-all; ternary weights; Gated DeltaNet) across heterogeneous, non-colocated GPUs — within 0.6% of centralized baseline | Inference + distributed training; **LiteLLM TEE fallback** | Chutes already runs a **fully TEE-only infrastructure stack**; Parallax trains frontier models on distributed confidential compute — a native fit for KubeTEE's decentralized TEE clusters and a fallback when in-cluster TEE is down |
-| SN75 | [Hippius](https://hippius.com/) | Decentralized cloud storage — S3-compatible + IPFS pinning; Arion engine (Reed-Solomon k=10/m=20, CRUSH placement, self-healing) | Persistent storage (solves CoCo's **ephemeral-data-only** limitation) | **Already ships Confidential Compute** (AMD SEV-SNP encrypted VMs); drop-in S3 endpoint replacing/augmenting encrypted Longhorn + object store |
-| SN23 | [Trishool](https://github.com/TrishoolAI/trishool-phase2) | AI guardrail models & alignment audits — Input Guard / Output Guard for LLM endpoints, the Halo classifier (87% F1), HaloGuard EU (EU AI Act output screening, via the Astroware commercial spinoff), and the Petri alignment-auditing agent | NeMo Guardrails (input/output rails, jailbreak + injection detection, content moderation) | The detector stack replaces NeMo's LLM-as-judge `self_check` rails with independent trained classifiers running as TEE rail services; every verdict carries the attested detector identity (model/policy measurement) |
-| SN70 | [Fugal](https://www.fugalai.com/) | **Candidate (2026-11-04).** Trained, hardware-attested LLM router heads (benchmarked by miners inside Intel TDX VMs) | **Potential replacement for NeMo Switchyard** — see the [README model-routing integration](../README.md#nvidia-nemo-platform--bittensor-subnet-integrations) | Fugal earns a swap only by beating Switchyard head-to-head as SOTA. |
-| SN61 | [RedTeam](https://github.com/RedTeamSubnet/RedTeam) | Subnet-owner product distilled from the CTF challenges (detection, exploitation, mitigation) — the protection/detection software the team derives from what the competitions surface, plus the challenge-derived exploit/jailbreak corpus | NeMo Guardrails (custom rails) + `nemoguardrails evaluate` (adversarial testing) | The owner product runs in TEE as versioned rail releases, each pinned to a quote; the challenge corpus gates every release through the evaluation harness. KubeTEE integrates the owner product — it does not evaluate individual miners or their submissions |
+| SN64 | [Chutes](https://chutes.ai/) — Parallax (Jon Durbin) | Decentralized serverless inference + **Parallax** decentralized MoE training (surrogate experts, ternary weights, Gated DeltaNet) across heterogeneous, non-colocated GPUs | Inference + distributed training; **LiteLLM TEE fallback** | Chutes already runs a **fully TEE-only infrastructure stack**; Parallax trains frontier models on distributed confidential compute — a native fit for KubeTEE's decentralized TEE clusters and a fallback when in-cluster TEE is down |
+| SN75 | [Hippius](https://hippius.com/) | Decentralized cloud storage — S3-compatible + IPFS pinning; Arion engine (Reed-Solomon, CRUSH placement, self-healing) | Persistent storage (solves CoCo's **ephemeral-data-only** limitation) | **Already ships Confidential Compute** (AMD SEV-SNP encrypted VMs); drop-in S3 endpoint for approved confidential workloads |
+| SN23 | [Trishool](https://github.com/TrishoolAI/trishool-phase2) | AI guardrail models & alignment audits — Input Guard / Output Guard for LLM endpoints, the Halo classifier, HaloGuard EU, and the Petri alignment-auditing agent | NeMo Guardrails (input/output rails, jailbreak + injection detection, content moderation) | Evaluate the detector stack as independent trained classifiers running as TEE rail services; every verdict carries the attested detector identity (model/policy measurement) |
+| SN70 | [Fugal](https://www.fugalai.com/) | Trained, hardware-attested LLM router heads (benchmarked by miners inside Intel TDX VMs) | Model-routing methods; potential confidential-evaluation partner | Compare against Switchyard, REAX, and fixed-model baselines on quality, latency, successful-task cost, and data protection. TDX proofs cover benchmark execution, not automatic confidentiality of production requests |
+| SN61 | [RedTeam](https://github.com/RedTeamSubnet/RedTeam) | Subnet-owner product distilled from the CTF challenges (detection, exploitation, mitigation) — the protection/detection software the team derives from what the competitions surface, plus the challenge-derived exploit/jailbreak corpus | NeMo Guardrails (custom rails) + evaluation (adversarial testing) | Evaluate the owner product as versioned rail releases in TEE and use suitable challenge material for adversarial testing; no need to evaluate individual miners or submissions |
 
-**Guardrails track (active proposal, 2026-10-27):** the SN23 and SN61 rows above are more than candidates — a joint proposal to run both detector stacks inside KubeTEE TEEs as the **NeMo Guardrails detector layer** in front of LiteLLM is drafted at `docs/attested-guardrails-sn23-sn61-proposal-2026-10-27.md` (workspace-local proposal; not published in this repository). Placement decision (user, 2026-10-27): the full pipeline runs in TEE — NeMo `IORails` orchestration plus the detector services live in one confidential pod, and LiteLLM's hook calls the in-TEE rail server over attestation-gated TLS (the section 2 pattern). The integration surface is a `CustomGuardrail` adapter around `IORails` in the `litellm` fork (`kubetee-overlay` branch); no NeMo hook exists in upstream LiteLLM today.
+The routing and Agent Skills Hub capabilities above are **planned**, not customer-facing availability announcements. KubeTEE will announce availability once gateway compatibility, client integration, confidential-service acceptance testing, and supply review are complete.
 
-KubeTEE treats this as an **open set**: any Bittensor subnet with a SOTA, verifiable solution for a NeMo stack layer — data, training, retrieval, inference, storage, guardrails, or evaluation — is a potential partnership and candidate integration, with the workload adapted to run inside `kata-qemu-nvidia-gpu-tdx-runtime-rs` / `kata-qemu-tdx-runtime-rs` and its outputs attested and persisted on confidential storage. This is the Bittensor-native path to a confidential AI Factory that is **not locked to a single vendor's experimental stack**, and it is the concrete way KubeTEE could "work with the ecosystem" rather than waiting on the NIM Operator's CoCo roadmap.
+**Agent Skills Hub availability:** selected hub packages will be independently reviewed for compatibility, security, attribution, and usefulness; no subnet marketplace will be imported wholesale. As of November 15, 2026, SN11 currently burns miner emissions and SN121 pauses competition rewards between Challenges. Both require current artifact and supply verification before dependency or production claims.
 
+**Guardrails track (active proposal):** the SN23 and SN61 rows above are more than generic ecosystem candidates — a dedicated proposal evaluates both detector stacks inside KubeTEE TEEs as the **NeMo Guardrails detector layer in front of LiteLLM**. The full rail-orchestration and detector pipeline would run inside a confidential workload, with attested confidential communication between LiteLLM and the rail services. No ordinary operator-issued workload certificate would establish this trust boundary. The integration remains an engineering proposal, not a shipping guardrail service, and it does not replace the existing LiteLLM gateway protections until independent security and streaming validation is complete.
+
+**Agent routing versus guardrails:** the Switchyard, REAX, and Fugal rows above are model-selection candidates; the SN23 and SN61 track is a separate input/output safety and security pipeline. Neither should be described as the other.
+
+KubeTEE treats this as an **open set**: any Bittensor subnet with a SOTA, verifiable solution for a NeMo stack layer — data, training, retrieval, inference, storage, guardrails, or evaluation — is a potential partnership and candidate integration, with suitable workloads adapted to run inside TEE and outputs attested and persisted on approved confidential storage. This is the Bittensor-native path to a confidential AI Factory that is **not locked to a single vendor's experimental stack**.
 
 ---
 
 ## 6. Stage 0 — Supply-Chain Security Gate
 
-> **Status: design reference (manual/advisory practice).** Gate rules below are supply-chain CI, not a staging promotion workflow. See [Deploying in a TEE](./TEE-DEPLOYMENT-AND-CICD.md#supply-chain-ci).
+> **Status: design reference (manual/advisory practice).** The following describes supply-chain security, not a staging promotion workflow. See [Deploying in a TEE](./TEE-DEPLOYMENT-AND-CICD.md#supply-chain-ci).
 
-Stage 0 scans the workload's **code, container image, and deploying IaC** — not the confidential data the workload will process in production — so the production TEE boundary stays intact.
+Before an AI service or third-party agent capability enters a confidential environment, review both its artifacts and its supply chain. Confidential execution protects data during approved processing; it does not make untrusted code safe.
 
-```mermaid
-flowchart LR
-    WL["AI service<br/>(image, Helm/IaC)"] -->|"CI on source + image + manifests"| S0["Supply-chain CI<br/>SAST, Trustee secrets, CVE, IaC, provenance"]
-    S0 -->|"critical/high findings"| Fix["Remediate and resubmit"]
-    Fix --> S0
-    S0 -->|"clean report"| Miners["Miner clusters<br/>CC on, guest debug off; Trustee attests"]
-    Miners -.->|"on failure, debug"| Staging["Staging cluster<br/>CC-capable; CC off / per-pod debug"]
-```
+The review covers:
 
-**Gate rules:**
-- **Scope** — job templates, model-serving / subnet-integration glue, the container image that will run under Kata, and the IaC/Helm/Fleet values that deploy it.
-- **Checks** — SAST (CodeQL, Semgrep); **secrets in CoCo Trustee / KBS** (attestation-gated release into the guest — not Kubernetes Secrets, not Git); SCA + image CVE (Trivy, Grype); IaC/Helm/Fleet policy (Checkov, kube-linter, Kyverno); image provenance (cosign / digest pins — Fleet already digest-pins). Stage 0 fails if credentials appear in Git, Helm values, or image layers.
-- **Pass condition** — no unresolved critical or high-severity findings. Findings are remediated and resubmitted, or accepted as documented risk with owner sign-off. Production has no sign-off bypass for critical/high.
-- **Re-run on change** — a new image tag, job template, guest image, or driver version re-triggers Stage 0.
-- **Confidentiality** — the gate never sees production TEE contents or Trustee-held secrets. Scanners run in CI against source and image artifacts; the guest fetches secrets from Trustee only after it attests.
+- source and dependency security;
+- container and artifact integrity;
+- infrastructure and deployment-policy safety;
+- secrets handling and attestation requirements;
+- behavioral evaluation against the intended workload.
 
-**Why a gate, not a scanner inside the cluster:** production SN90 clusters run confidential workloads under Kata + CoCo with attested, encrypted memory. A security agent *inside* the TEE would either see confidential data (breaking the trust boundary) or see nothing useful.
+New artifacts or substantive changes require renewed evaluation. Production policy does not waive a failing security gate. Review infrastructure must not receive confidential production content merely to scan public or build-time artifacts.
 
 ---
 
-## References
+## Public References
 
 - [NVIDIA Documentation Hub](https://docs.nvidia.com/)
-- [NVIDIA NeMo Platform — Kubernetes setup](https://docs.nvidia.com/nemo-platform/documentation/kubernetes-deployment/setup)
+- [NVIDIA NeMo Platform](https://docs.nvidia.com/nemo-platform/documentation/kubernetes-deployment/setup)
 - [Former NeMo Microservices suite — sunset notice](https://catalog.ngc.nvidia.com/orgs/nvidia/nemo-microservices/collections/nemo-microservices/-)
-- [NVIDIA NeMo Switchyard](https://github.com/NVIDIA-NeMo/Switchyard) — [routing algorithms](https://github.com/NVIDIA-NeMo/Switchyard/blob/main/docs/routing_algorithms/overview.md) · [TOML schema](https://github.com/NVIDIA-NeMo/Switchyard/blob/main/docs/reference/toml_schema.md) · [LiteLLM plugin example](https://github.com/NVIDIA-NeMo/Switchyard/blob/main/examples/litellm/README.md)
-- [NVIDIA NIM Operator](https://docs.nvidia.com/nim-operator/latest/) — [Kata Sandbox (Experimental)](https://docs.nvidia.com/nim-operator/latest/kata-sandbox.html) | [Dynamo (Experimental)](https://docs.nvidia.com/nim-operator/latest/dynamo.html) | [Release Notes](https://docs.nvidia.com/nim-operator/latest/release-notes.html)
-- [NVIDIA Confidential Containers Reference Architecture](https://docs.nvidia.com/datacenter/cloud-native/confidential-containers/latest/overview.html)
+- [LiteLLM Auto Routing](https://docs.litellm.ai/docs/proxy/auto_routing) · [Decision-model classifiers](https://docs.litellm.ai/docs/auto_router/decision_classifiers)
+- [NVIDIA NeMo Switchyard](https://github.com/NVIDIA-NeMo/Switchyard) · [Switchyard routing overview](https://github.com/NVIDIA-NeMo/Switchyard/blob/main/docs/routing_algorithms/overview.md)
+- [REAX SN92](https://reax.co/) · [Decision Models](https://decisionmodels.io/) · [Fugal SN70](https://www.fugalai.com/)
+- [TrajectoryRL SN11](https://trajrl.com/) · [sundae_bar SN121](https://www.sundaebar.ai/)
+- [NVIDIA NIM Operator](https://docs.nvidia.com/nim-operator/latest/) · [NVIDIA Confidential Containers architecture](https://docs.nvidia.com/datacenter/cloud-native/confidential-containers/latest/overview.html)
 - [Intel Trust Authority](https://www.intel.com/content/www/us/en/security/trust-authority.html)
-- Bittensor subnets: [Gradients SN56](https://www.gradients.io/) · [Affine SN120](https://www.affine.io/) · [Desearch SN22](https://desearch.ai/) · [Score SN44](https://github.com/score-technologies/turbovision) · [sayGM SN28](https://saygm.com/) · [Chutes SN64](https://chutes.ai/) · [Hippius SN75](https://hippius.com/) · [Trishool SN23](https://github.com/TrishoolAI/trishool-phase2) · [RedTeam SN61](https://github.com/RedTeamSubnet/RedTeam)
-- TEE inference fallbacks (LiteLLM HA, not Bittensor netuids): [Phala](https://phala.network/) · [Near AI](https://near.ai/)
+- Other ecosystem candidates: [sayGM SN28](https://saygm.com/) · [Gradients SN56](https://www.gradients.io/) · [Affine SN120](https://www.affine.io/) · [Desearch SN22](https://desearch.ai/) · [Score SN44](https://github.com/score-technologies/turbovision) · [Chutes SN64](https://chutes.ai/) · [Hippius SN75](https://hippius.com/)
+- TEE inference alternatives: [Phala](https://phala.network/) · [Near AI](https://near.ai/)
