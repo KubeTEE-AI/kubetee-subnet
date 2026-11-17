@@ -21,12 +21,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
     && rm -rf /var/lib/apt/lists/* \
     && update-ca-certificates
 
-# Official PyPI SDK matching subtensor v488. Pin the SDK and its native core
-# together: v488 requires bittensor-core>=0.1.9 for its cryptographic APIs.
-# Published wheels avoid a Rust source build from the vendored SDK.
+# Official PyPI SDK matching subtensor v491 (release-train rc channel: the rc
+# is built from the v491 tree and published after the testnet smoke suite).
+# Pin the SDK and its native core TOGETHER -- the SDK pins its core exactly
+# (bittensor 11.3.4rc82 -> bittensor-core==0.1.11rc82) so the pair always
+# resolves as one vintage. Published abi3 wheels avoid a Rust source build
+# from the vendored SDK. Re-pin to stable 11.3.4/0.1.11 when the mainnet
+# promotion publishes it.
 RUN pip install --no-cache-dir \
-    "bittensor==11.3.2" \
-    "bittensor-core==0.1.9" \
+    "bittensor==11.3.4rc82" \
+    "bittensor-core==0.1.11rc82" \
     "httpx>=0.27" \
     "prometheus-client>=0.20"
 
