@@ -2,7 +2,11 @@
 
 from datetime import datetime, timedelta, timezone
 
-from infrastructure_validation import node_posture, validate_miner
+from infrastructure_validation import (
+    node_posture,
+    scored_worker,
+    validate_miner,
+)
 
 HOTKEY = "5EHotkeyAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
 
@@ -156,6 +160,68 @@ def test_gpu_node_without_passthrough_fails():
             del node["labels"]["nvidia.com/gpu.workload.config"]
     verdict = validate_miner(HOTKEY, clusters, nodes, _cid)
     assert not verdict.ready
+
+
+def test_non_worker_is_excluded_from_scoring():
+    assert scored_worker(node_posture(_gpu_node("B300")))
+    control_plane = _node(
+        8,
+        "16Gi",
+        ["etcd", "control-plane"],
+        {
+            "nvidia.com/gpu.workload.config": "vm-passthrough",
+            "nvidia.com/gpu.model": "B300",
+            "kubetee.ai/runtime": "kata-qemu-nvidia-gpu-tdx",
+        },
+    )
+    assert not scored_worker(node_posture(control_plane))
+
+
+def test_dedicated_control_plane_does_not_affect_readiness():
+    """An etcd/control-plane VM is not a scored or validated node.
+
+    Luxembourg's lu-cpu-94 is an 8-core, 16 GiB etcd member. Worker capacity,
+    GPU posture, and weighting apply only to nodes with the worker role.
+    """
+    clusters, nodes = _healthy_cluster()
+    worker = _gpu_node("B300")
+    worker["labels"].update(
+        {
+            "node-role.kubernetes.io/etcd": "",
+            "node-role.kubernetes.io/control-plane": "",
+        }
+    )
+    worker["capacity"] = {"cpu": "256", "memory": "2010Gi"}
+    nodes[clusters[0]["id"]] = [
+        worker,
+        _node(8, "16Gi", ["etcd", "control-plane"]),
+    ]
+    verdict = validate_miner(HOTKEY, clusters, nodes, _cid)
+    assert verdict.ready, verdict.reasons
+
+
+def test_non_worker_cannot_satisfy_worker_gates():
+    clusters, nodes = _healthy_cluster()
+    control_plane = _node(
+        8,
+        "16Gi",
+        ["etcd", "control-plane"],
+        {
+            "nvidia.com/gpu.workload.config": "vm-passthrough",
+            "nvidia.com/gpu.model": "B300",
+            "kubetee.ai/runtime": "kata-qemu-nvidia-gpu-tdx",
+        },
+    )
+    nodes[clusters[0]["id"]] = [
+        control_plane,
+        _node(96, "1500Gi", ["worker"]),
+    ]
+    verdict = validate_miner(HOTKEY, clusters, nodes, _cid)
+    assert not verdict.ready
+    joined = "; ".join(verdict.reasons)
+    assert "8-GPU" in joined
+    assert "cpu 8" not in joined
+    assert "16Gi" not in joined
 
 
 def test_unschedulable_worker_fails():

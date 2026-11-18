@@ -6,7 +6,7 @@
 # and the BT-Validator-Version proxy header / User-Agent).
 FROM python:3.14-slim AS base
 
-ARG VERSION=1.4.2
+ARG VERSION=1.4.3
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \

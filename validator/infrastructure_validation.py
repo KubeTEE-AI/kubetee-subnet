@@ -3,10 +3,12 @@
 A miner's verdict is binary: every required signal must pass, else score 0.
 The documented eligibility contract is: eligible cluster carries a
 `kubetee.ai/hotkey` label matching the miner's registered hotkey (one cluster
-per hotkey), is not banned (`kubetee.ai/ban != "true"`), and has Ready active
-nodes with etcd + control-plane + worker roles, >=72 CPU + >=1024 GiB per
-active node, and at least one schedulable 8-GPU (H100/H200/B200/B300) worker
-with vm-passthrough plus a confidential kata runtime handler. There is NO
+per hotkey), is not banned (`kubetee.ai/ban != "true"`), and has Ready etcd
+and control-plane roles. Capacity, scheduling, GPU, and confidential-runtime
+checks apply only to Ready worker nodes: >=72 CPU + >=1024 GiB, plus at least
+one schedulable 8-GPU (H100/H200/B200/B300) worker with vm-passthrough and a
+confidential kata runtime handler. Dedicated etcd/control-plane nodes are
+neither validated nor weighted. There is NO
 minimum node-count gate (removed 2026-10-29 — the 3-node same-GPU-type
 topology in the docs is guidance, not a readiness gate). Any explicit
 missing/malformed/ambiguous/unhealthy evidence is a failure. (A Rancher
@@ -261,6 +263,11 @@ def node_posture(node: dict, *, now: datetime | None = None) -> NodePosture:
     )
 
 
+def scored_worker(posture: NodePosture) -> bool:
+    """Nodes without the worker role are neither validated nor weighted."""
+    return "worker" in posture.roles
+
+
 def _has_role(labels: dict, role: str) -> bool:
     for key, value in labels.items():
         if key == f"node-role.kubernetes.io/{role}" and str(value) in (
@@ -383,15 +390,16 @@ def validate_miner(
 
     etcd = [p for p in active if "etcd" in p.roles]
     control_plane = [p for p in active if "control-plane" in p.roles]
-    workers = [p for p in active if "worker" in p.roles]
+    workers = [p for p in active if scored_worker(p)]
     # Single-node (all-in-one) clusters are allowed for staging: a node may
-    # hold several roles. Production HA requires 3 etcd + 3 control-plane.
+    # hold several roles. Dedicated etcd/control-plane nodes can satisfy the
+    # role checks, but their CPU, memory, and GPU posture are not validated.
     if len(etcd) < 1:
         reasons.append("no etcd node")
     if len(control_plane) < 1:
         reasons.append("no control-plane node")
 
-    for posture in active:
+    for posture in workers:
         if posture.cpu_cores < _MIN_CPU_CORES:
             reasons.append(
                 f"node cpu {posture.cpu_cores:g} < {_MIN_CPU_CORES}"
@@ -410,7 +418,7 @@ def validate_miner(
         and p.vm_passthrough
         and p.kata_confidential_runtime
         and p.gpu_class in _GPU_CLASSES
-        for p in active
+        for p in workers
     )
     if not gpu_ok:
         reasons.append(

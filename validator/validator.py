@@ -27,7 +27,11 @@ from hippius_store import (
     fetch_published_dashboard,
     fetch_published_payout,
 )
-from infrastructure_validation import node_posture, validate_miner
+from infrastructure_validation import (
+    node_posture,
+    scored_worker,
+    validate_miner,
+)
 from miner_scoring import MinerInput, compute_weights
 from price_card import (
     DEFAULT_PRICING,
@@ -857,7 +861,9 @@ class Validator:
         breakdown: dict[str, int] = {}
         for node in nodes_by_cluster.get(cid, []):
             p = node_posture(node)
-            if not (p.ready and p.schedulable and p.gpu_class):
+            if not (
+                scored_worker(p) and p.ready and p.schedulable and p.gpu_class
+            ):
                 continue
             labels = node.get("labels") or {}
             raw = labels.get("nvidia.com/gpu.count")
