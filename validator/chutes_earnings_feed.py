@@ -17,9 +17,8 @@ import httpx
 NODES_URL = "https://api.chutes.ai/nodes/?detailed=true"
 STATS_URL = "https://api.chutes.ai/miner/stats?per_chute=true"
 CATALOG_URL = "https://api.chutes.ai/chutes/?limit=500"
-METAGRAPH_URL = (
-    "https://api.taostats.io/v1/subnets/metagraph?netuid=64&limit=1000"
-)
+# Taostats accepts limit <= 256. Follow total_pages to retain every neuron.
+METAGRAPH_URL = "https://api.taostats.io/v1/subnets/metagraph?netuid=64&limit=100"
 CLASS_LABELS = {
     "H100": "H100",
     "H200": "H200",
@@ -273,12 +272,13 @@ class ChutesEarningsFeed:
             ]
             jobs = [
                 self.executor.submit(self._get, url, key, deadline)
-                for url, key in requests
+                for url, key in requests[:3]
             ]
             inputs = [
                 job.result(timeout=max(0.001, deadline - time.monotonic()))
                 for job in jobs
             ]
+            inputs.append(self._get_metagraph(deadline))
             metrics = calculate_medians(*inputs, tao_usd)
             self.last = {
                 "per_class_usd": metrics["per_class_usd"],
@@ -300,6 +300,17 @@ class ChutesEarningsFeed:
         if self.last:
             self.last["stale"] = bucket != self.last["bucket"]
         return dict(self.last) if self.last else None
+
+    def _get_metagraph(self, deadline: float) -> dict:
+        merged = {"data": []}
+        for page in range(1, 101):
+            payload = self._get(
+                f"{METAGRAPH_URL}&page={page}", self.api_key, deadline
+            )
+            merged["data"].extend(payload.get("data") or [])
+            if page >= int(payload.get("total_pages") or 1):
+                return merged
+        raise ValueError("Taostats metagraph exceeded 100 pages")
 
     def _get(self, url: str, key: str, deadline: float) -> dict:
         # This credential is scoped to Taostats; never send it to Chutes.

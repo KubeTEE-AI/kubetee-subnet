@@ -50,6 +50,50 @@ def test_four_bound_reads_and_raw_key_only_to_rewards(fixtures):
             assert "authorization" not in call.headers
 
 
+def test_metagraph_follows_all_pages_and_retains_rewards():
+    calls = []
+
+    def handler(request):
+        calls.append(request)
+        page = int(request.url.params.get("page", "1"))
+        return httpx.Response(
+            200,
+            json={
+                "total_pages": 2,
+                "data": [
+                    {
+                        "hotkey": "page-two-token",
+                        "daily_total_rewards_as_tao": 12,
+                    }
+                ],
+            },
+        )
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    collector = feed.ChutesEarningsFeed("test-key", client=client)
+    rewards = collector._get_metagraph(float("inf"))
+    assert [call.url.params["page"] for call in calls] == ["1", "2"]
+    assert all(
+        call.url.params["limit"] == "100"
+        and call.headers["Authorization"] == "test-key"
+        for call in calls
+    )
+    nodes = {
+        "page-two-token": {
+            "provisioned": [
+                {
+                    "gpu": "b300",
+                    "chute": {"chute_id": "tee", "name": "private"},
+                }
+            ]
+        }
+    }
+    catalog = {"items": [{"chute_id": "tee", "tee": True}]}
+    assert feed.calculate_medians(nodes, {}, catalog, rewards, 200)["rows"][
+        0
+    ]["daily_usd"] == 2400
+
+
 class InlineExecutor:
     """Join all mock requests inside snapshot; concurrency is tested above."""
 
