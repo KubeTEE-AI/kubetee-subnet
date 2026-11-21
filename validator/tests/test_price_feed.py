@@ -382,6 +382,127 @@ def test_tao_usd_caches_live_and_reuses_on_429(tmp_path, monkeypatch):
     assert feed.tao_usd() == pytest.approx(228.5)
 
 
+class _OracleChain:
+    def __init__(self, state):
+        self._state = state
+        self.calls = 0
+
+    def tao_usd_price(self):
+        self.calls += 1
+        if isinstance(self._state, Exception):
+            raise self._state
+        return self._state
+
+
+def _oracle_state(**overrides):
+    state = {
+        "oracle": "5G1tkR8SckuTi6r3EVqAkZQ8X5uhjj9vyVFroLyDdQDrhM24",
+        "accepted_usd": 178.198049907,
+        "feed_usd": 179.0,
+        "fed_at": 9552090,
+        "blocks_since_last_feed": 4,
+    }
+    return {**state, **overrides}
+
+
+def test_tao_usd_uses_chain_accepted_oracle_and_skips_markets(
+    tmp_path, monkeypatch
+):
+    from price_feed import PriceFeed
+
+    monkeypatch.setattr("price_feed.CACHE_PATH", str(tmp_path / "none.json"))
+    chain = _OracleChain(_oracle_state())
+    feed = PriceFeed(_Cfg(), chain_state=chain)
+
+    def no_markets(url, key="", label="taostats"):
+        raise AssertionError(
+            "a fresh chain oracle must prevent market requests"
+        )
+
+    monkeypatch.setattr("price_feed._get_json", no_markets)
+    monkeypatch.setattr("price_feed._tao_usd_from_coingecko", no_markets)
+
+    assert feed.tao_usd() == pytest.approx(178.198049907)
+    assert chain.calls == 1
+
+
+def test_chain_state_oracle_wrapper_uses_gamma_read():
+    from chain_state import ChainState
+
+    gamma = _OracleChain(_oracle_state())
+    chain = object.__new__(ChainState)
+    chain._subtensor = type("Subtensor", (), {"gamma": gamma})()
+
+    assert chain.tao_usd_price() == _oracle_state()
+    assert gamma.calls == 1
+
+
+def test_tao_usd_accepts_exactly_300_block_oracle(tmp_path, monkeypatch):
+    from price_feed import PriceFeed
+
+    monkeypatch.setattr("price_feed.CACHE_PATH", str(tmp_path / "none.json"))
+    chain = _OracleChain(_oracle_state(blocks_since_last_feed=300))
+    feed = PriceFeed(_Cfg(), chain_state=chain)
+    monkeypatch.setattr(
+        "price_feed._get_json",
+        lambda url, key="": (_ for _ in ()).throw(AssertionError("no HTTP")),
+    )
+
+    assert feed.tao_usd() == pytest.approx(178.198049907)
+
+
+def test_tao_usd_unavailable_chain_falls_back_to_taostats(
+    tmp_path, monkeypatch, caplog
+):
+    from price_feed import PriceFeed
+
+    monkeypatch.setattr("price_feed.CACHE_PATH", str(tmp_path / "none.json"))
+    from chain_state import ChainState
+
+    # No live network here: the local-chain endpoint lacks the Gamma oracle.
+    chain = object.__new__(ChainState)
+    chain._subtensor = ChainState(
+        "Finney", "ws://127.0.0.1:1", "0x" + "11" * 32
+    )._subtensor
+    caplog.set_level("INFO", logger="validator")
+    feed = PriceFeed(_Cfg(), chain_state=chain)
+    monkeypatch.setattr(
+        "price_feed._get_json", lambda url, key="": {"price": 228.5}
+    )
+
+    assert feed.tao_usd() == pytest.approx(228.5)
+    assert chain._subtensor.endpoint == "ws://127.0.0.1:1"
+    assert "chain TAO/USD oracle unavailable" in caplog.text
+
+
+@pytest.mark.parametrize(
+    "oracle",
+    [
+        None,
+        _oracle_state(accepted_usd=None, feed_usd=999.0),
+        _oracle_state(blocks_since_last_feed=301),
+        _oracle_state(blocks_since_last_feed=None),
+        _oracle_state(accepted_usd=-1),
+    ],
+)
+def test_tao_usd_bad_oracle_keeps_coingecko_order(
+    tmp_path, monkeypatch, oracle
+):
+    from price_feed import PriceFeed
+
+    monkeypatch.setattr("price_feed.CACHE_PATH", str(tmp_path / "none.json"))
+    feed = PriceFeed(_Cfg(), chain_state=_OracleChain(oracle))
+    monkeypatch.setattr(
+        "price_feed._get_json",
+        lambda url, key="": (_ for _ in ()).throw(
+            PriceFeedError("taostats down")
+        ),
+    )
+    monkeypatch.setattr("price_feed._tao_usd_from_coingecko", lambda: 231.47)
+
+    assert feed.tao_usd() == pytest.approx(231.47)
+
+
 # --- Taostats v1 API shapes (old /api/* paths retire 2026-11-09) --------------
 
 

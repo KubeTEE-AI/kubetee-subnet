@@ -115,7 +115,7 @@ wheels = [
 
 [[package]]
 name = "bittensor"
-version = "11.3.2"
+version = "11.3.5"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "bittensor-core" },
@@ -125,21 +125,21 @@ dependencies = [
     { name = "typer" },
     { name = "websockets" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/4b/6f/2f572aef87a756b18c33bf080a7ad4a8f47c728c9519ec05946c68fba5b9/bittensor-11.3.2.tar.gz", hash = "sha256:a25adb9e9ce9614d188e1da9e4c56d1b0eda5d133b32238f7046fe4eb8cd3ee8", size = 1730430, upload-time = "2026-11-06T17:36:35.841Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/16/e9/3075647afee2c48885d2a6df0db88f654c216f42122f92a58c2e5c7bfd79/bittensor-11.3.5.tar.gz", hash = "sha256:17e761f5abd7a7ceb5cb391088bc1d5187f55a9be03cea21234a10cbaa805c64", size = 1845204, upload-time = "2026-11-20T18:09:33.965Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/df/af/f5959f71fc4a4172130b52b707f44831ea5cf495d97c563ce70e178bd518/bittensor-11.3.2-py3-none-any.whl", hash = "sha256:730bf1ee7f46617b2c5e9c83625dea4e8309363c560a7087824058aa77ca5efa", size = 936299, upload-time = "2026-11-06T17:36:22.901Z" },
+    { url = "https://files.pythonhosted.org/packages/21/5f/62052d73bdafe9fb229b7b45fd193174194800b35317bd5bf847b86b4e78/bittensor-11.3.5-py3-none-any.whl", hash = "sha256:7e86e37fc401481c933897b238ea7b9a22231af5728e3bdbaf826f155a05e050", size = 998490, upload-time = "2026-11-20T18:09:25.705Z" },
 ]
 
 [[package]]
 name = "bittensor-core"
-version = "0.1.9"
+version = "0.1.12"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/22/e8/8a50f7cd5b70c5001fda9dcb7c50591a93f9fbfa8f1888733ac305fd165d/bittensor_core-0.1.9.tar.gz", hash = "sha256:7c4f12d937f76bc7cc6e6cda3a545898d1b5d2d60fa14bda853bee5b035df037", size = 519133, upload-time = "2026-11-06T17:36:37.442Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/83/43/5f8dfd7fe3fe44bebfc2107a54d60059d842509c16d51432c2f899b8e4bf/bittensor_core-0.1.12.tar.gz", hash = "sha256:8fb4a05289b18f4e958e66204a49640880b74b05c429ad424c60bb312fa5a283", size = 523918, upload-time = "2026-11-20T18:09:35.182Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/bc/fb/40aa233c6ed7d7dbad9e9745878749cbae5df3df669f458ac12a893966ae/bittensor_core-0.1.9-cp310-abi3-macosx_10_12_x86_64.whl", hash = "sha256:7126d1bcf9ea2f6d82356b70513760d21777f189aa7ad963fdb2016fdfe0cddd", size = 4843739, upload-time = "2026-11-06T17:36:25.836Z" },
-    { url = "https://files.pythonhosted.org/packages/81/0f/3a27567ccd46232d8b7c6daa937da595116efce863fc79b91e9f23b45caa/bittensor_core-0.1.9-cp310-abi3-macosx_11_0_arm64.whl", hash = "sha256:217e20d8ffa0da610da52f360bbce67255dfa56882cab7d1b627cc29b309f394", size = 5001863, upload-time = "2026-11-06T17:36:29.175Z" },
-    { url = "https://files.pythonhosted.org/packages/26/7f/2e1dc0ee71999b7a9af3cf4a8968d125b5b0b11e0d904355a1cd9f780a10/bittensor_core-0.1.9-cp310-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:5ca4484a65f6f354162458e793a87017546155bc4f15d91235c553d8fea28bf1", size = 5483691, upload-time = "2026-11-06T17:36:31.513Z" },
-    { url = "https://files.pythonhosted.org/packages/e2/0e/27d269468cc63ca880599b0a2d9f8eebdefc07c0bd61ce73fd4b69c24238/bittensor_core-0.1.9-cp310-abi3-manylinux_2_28_aarch64.whl", hash = "sha256:d67a6b6b1227bd6b15ee25a6d20d6decd1f4ab532b11abd5a5321b0a70d61797", size = 5528563, upload-time = "2026-11-06T17:36:33.782Z" },
+    { url = "https://files.pythonhosted.org/packages/39/25/16da1896200f885c2dd7b4de35d9ddd92daa7077643dbb4d50bad7c39737/bittensor_core-0.1.12-cp310-abi3-macosx_10_12_x86_64.whl", hash = "sha256:2e5288e817ee968ca2955a86610366e8329a9e088a45c2557e1b0f55a857af5c", size = 4848231, upload-time = "2026-11-20T18:09:27.809Z" },
+    { url = "https://files.pythonhosted.org/packages/72/20/051efcbb95b6f00a7504f8296dcd4c31f3628e3a186fda2df7587d820d48/bittensor_core-0.1.12-cp310-abi3-macosx_11_0_arm64.whl", hash = "sha256:138d2bf2a13c0ba6c537eae36ce99d61681971917a59ec25ffc0accbc0f5fba1", size = 5004697, upload-time = "2026-11-20T18:09:29.465Z" },
+    { url = "https://files.pythonhosted.org/packages/54/20/2ad0c806fbf7a1e4a8a5ffe699f34549a3e8b6baedd52fc54aa257a1be5c/bittensor_core-0.1.12-cp310-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:30a7837506b20f4b2a4114625e1d53ae3f7cda5c5f1e5ce440e040e8dcbc5f60", size = 5487737, upload-time = "2026-11-20T18:09:31.028Z" },
+    { url = "https://files.pythonhosted.org/packages/02/4e/09cd79e82afe672899576928dd4be6c5fd40a5e4580bd4604ec276dd6049/bittensor_core-0.1.12-cp310-abi3-manylinux_2_28_aarch64.whl", hash = "sha256:45f17b4a3e4be36cdf8775e7aaff2223b83bce3a2814488c9514b6ebea444b39", size = 5534169, upload-time = "2026-11-20T18:09:32.493Z" },
 ]
 
 [[package]]
@@ -550,8 +550,8 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "bittensor", specifier = "==11.3.2" },
-    { name = "bittensor-core", specifier = "==0.1.9" },
+    { name = "bittensor", specifier = "==11.3.5" },
+    { name = "bittensor-core", specifier = "==0.1.12" },
     { name = "black", marker = "extra == 'dev'", specifier = ">=24.0" },
     { name = "httpx", specifier = ">=0.27" },
     { name = "prometheus-client", specifier = ">=0.20" },

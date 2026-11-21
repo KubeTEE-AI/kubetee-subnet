@@ -1,13 +1,13 @@
 """Compensation price feed — TAO/USD then on-chain alpha->TAO.
 
 The alpha->TAO rate is read directly from the chain's metagraph (`mg.price`)
-to avoid Taostats delay. TAO/USD (the chain doesn't know USD) is:
+to avoid Taostats delay. TAO/USD uses the Finney mainnet oracle first:
 
-  1. Taostats live v1 API (`/v1/price/simple`, needs ``TAOSTATS_API_KEY``;
-     the old `/api/*` paths retire 2026-11-09)
-  2. CoinGecko public simple/price (no API key)
-  3. Last good in-process / disk cache
-  4. Caller then tries S3 payout.json
+  1. Chain accepted oracle price (`gamma.tao_usd_price`), at most 300 blocks old
+  2. Taostats live v1 API (`/v1/price/simple`, needs ``TAOSTATS_API_KEY``)
+  3. CoinGecko public simple/price (no API key)
+  4. Last good in-process / disk cache
+  5. Caller then tries S3 payout.json
 
 A 429 / outage must not skip the cycle when any of those succeed.
 """
@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import os
 import urllib.error
 import urllib.request
@@ -152,12 +153,47 @@ class PriceFeed:
         _save_tao_usd_cache(value)
         return value
 
-    def tao_usd(self) -> float:
-        """TAO/USD: Taostats → CoinGecko (no key) → last cached value.
+    def _tao_usd_from_chain(self) -> float | None:
+        """Chain-accepted TAO/USD, or None when the mainnet feed is unusable.
 
-        The chain doesn't know USD. CoinGecko's public simple/price needs no
-        API key and unblocks a cold start during a Taostats 429.
+        Finney expires a feed after 300 blocks. The accepted price differs from
+        the raw feed when the chain is limiting an upward price transition.
         """
+        if self._chain_state is None:
+            return None
+        try:
+            oracle = self._chain_state.tao_usd_price()
+        except Exception as exc:  # ChainState normally converts these to None.
+            log.warning("chain TAO/USD oracle unavailable: %s", exc)
+            return None
+        if not isinstance(oracle, dict):
+            return None
+        value = oracle.get("accepted_usd")
+        age = oracle.get("blocks_since_last_feed")
+        if (
+            isinstance(value, bool)
+            or not isinstance(value, (int, float))
+            or not math.isfinite(value)
+            or value <= 0
+            or isinstance(age, bool)
+            or not isinstance(age, int)
+            or not 0 <= age <= 300
+        ):
+            return None
+        return float(value)
+
+    def tao_usd(self) -> float:
+        """TAO/USD: chain oracle → Taostats → CoinGecko → last cached value.
+
+        The oracle is available only on mainnet; configured testnets fall back
+        to the existing market feeds without any separate chain connection.
+        """
+        value = self._tao_usd_from_chain()
+        if value is not None:
+            return self._remember(value)
+        log.info(
+            "chain TAO/USD oracle unavailable or stale — trying market feeds"
+        )
         try:
             payload = _get_json(_TAO_USD_URL, self._api_key)
             value = _extract_first(payload, ("price", "usd", "rate"))

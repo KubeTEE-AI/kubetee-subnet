@@ -36,7 +36,7 @@ def derive_hotkey_keypair(seed: str) -> Keypair:
 
 
 class ChainState:
-    """Thin wrapper over the official bittensor SDK (subtensor v488)."""
+    """Thin wrapper over the official bittensor SDK (subtensor v493)."""
 
     def __init__(self, network: str, endpoint: str, hotkey_seed: str) -> None:
         network = (network or "finney").strip()
@@ -152,6 +152,19 @@ class ChainState:
         if total_alpha <= 0 or spot <= 0 or tao_usd <= 0:
             return 1.0
         return total_alpha * self.MINER_EMISSION_SHARE * tao_usd * spot
+
+    def tao_usd_price(self) -> dict | None:
+        """Mainnet TAO/USD oracle state, including the chain-accepted price.
+
+        The SDK reads a consistent block and decodes gamma units. Consumers
+        should use accepted_usd, not feed_usd: an upward raw feed is limited
+        to 66 ppm per block by the chain before mints accept it.
+        """
+        try:
+            state = self._subtensor.gamma.tao_usd_price()
+        except Exception:  # noqa: BLE001 - caller falls back to market feeds
+            return None
+        return state if isinstance(state, dict) else None
 
     def hyperparams(self, netuid: int) -> dict | None:
         """Subnet hyperparameters as a flat name -> value map, or None."""
