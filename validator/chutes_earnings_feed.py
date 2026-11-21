@@ -18,7 +18,7 @@ NODES_URL = "https://api.chutes.ai/nodes/?detailed=true"
 STATS_URL = "https://api.chutes.ai/miner/stats?per_chute=true"
 CATALOG_URL = "https://api.chutes.ai/chutes/?limit=500"
 METAGRAPH_URL = (
-    "https://api.taostats.io/api/metagraph/latest/v1?netuid=64&limit=1000"
+    "https://api.taostats.io/v1/subnets/metagraph?netuid=64&limit=1000"
 )
 CLASS_LABELS = {
     "H100": "H100",

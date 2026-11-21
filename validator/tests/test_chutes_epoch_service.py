@@ -40,7 +40,7 @@ def test_four_bound_reads_and_raw_key_only_to_rewards(fixtures):
         "/nodes/",
         "/miner/stats",
         "/chutes/",
-        "/api/metagraph/latest/v1",
+        "/v1/subnets/metagraph",
     }
     assert result["bucket"] == 1 and result["stale"] is False
     for call in calls:
