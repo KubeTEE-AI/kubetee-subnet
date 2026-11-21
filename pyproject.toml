@@ -35,18 +35,10 @@ classifiers = [
     "Topic :: System :: Distributed Computing",
 ]
 dependencies = [
-    # Official PyPI release, not the vendored SDK. Matches subtensor v491
-    # (the release-train "SDK rc channel": the rc is the only artifact built
-    # from the v491 tree and published after the testnet smoke suite; the
-    # stable 11.3.2/0.1.9 pair is the older v488 vintage). rc82 = release-train
-    # run 82; the SDK pins bittensor-core==0.1.11rc82 exactly so the pair
-    # resolves together. Prebuilt abi3 wheels -- no Rust build. Verified
-    # byte-identical to the v491 sdk/python tree and against live Finney
-    # spec_version 491 (2026-11-17): metagraph reads, hyperparameters,
-    # weights_rate_limit, and hotkey derivation.
-    # Re-pin to stable 11.3.4/0.1.11 once the mainnet promotion publishes it.
-    "bittensor==11.3.4rc82",
-    "bittensor-core==0.1.11rc82",
+    # Official stable PyPI releases, with the native core pinned alongside
+    # the SDK. Prebuilt abi3 wheels cover Linux AMD64 and ARM64.
+    "bittensor==11.3.5",
+    "bittensor-core==0.1.12",
     "httpx>=0.27",
     "prometheus-client>=0.20",
 ]
