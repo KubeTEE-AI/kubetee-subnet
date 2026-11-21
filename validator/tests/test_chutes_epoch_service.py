@@ -89,9 +89,12 @@ def test_metagraph_follows_all_pages_and_retains_rewards():
         }
     }
     catalog = {"items": [{"chute_id": "tee", "tee": True}]}
-    assert feed.calculate_medians(nodes, {}, catalog, rewards, 200)["rows"][
-        0
-    ]["daily_usd"] == 2400
+    assert (
+        feed.calculate_medians(nodes, {}, catalog, rewards, 200)["rows"][0][
+            "daily_usd"
+        ]
+        == 2400
+    )
 
 
 class InlineExecutor:
