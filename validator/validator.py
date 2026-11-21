@@ -16,6 +16,7 @@ import time
 import traceback
 
 import validator_metrics as metrics
+import cycle_watchdog
 import dashboard as _dashboard
 from chain_state import ChainState
 from config import Config, ConfigError, load_config
@@ -1049,6 +1050,9 @@ class Validator:
                 log.warning("startup dashboard publish failed: %s", exc)
         while True:
             started = time.monotonic()
+            watchdog = cycle_watchdog.start_stall_watchdog(
+                started, timeout_seconds=900
+            )
             try:
                 self.run_cycle()
             except KeyboardInterrupt:
@@ -1061,6 +1065,7 @@ class Validator:
             if self.once:
                 log.info("--once: single cycle done")
                 return
+            watchdog.set()
             elapsed = time.monotonic() - started
             time.sleep(max(0.0, self.config.cycle_seconds - elapsed))
 
