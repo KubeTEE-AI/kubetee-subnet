@@ -1062,10 +1062,16 @@ class Validator:
                     "unexpected cycle error:\n%s", traceback.format_exc()
                 )
                 metrics.record_skip("unexpected")
+            except BaseException:
+                watchdog.set()
+                raise
+            else:
+                metrics.record_cycle_completed()
+            finally:
+                watchdog.set()
             if self.once:
                 log.info("--once: single cycle done")
                 return
-            watchdog.set()
             elapsed = time.monotonic() - started
             time.sleep(max(0.0, self.config.cycle_seconds - elapsed))
 

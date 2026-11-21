@@ -3,6 +3,42 @@
 import time
 
 import cycle_watchdog
+from validator import Validator
+import validator_metrics as metrics
+
+
+def test_heartbeat_only_advances_after_a_full_cycle(monkeypatch):
+    completed = []
+    monkeypatch.setattr(
+        metrics, "record_cycle_completed", lambda: completed.append(True)
+    )
+    obj = object.__new__(Validator)
+    obj.once = True
+    obj.config = type(
+        "Config",
+        (),
+        {
+            "cycle_seconds": 0,
+            "netuid": 90,
+            "network": "finney",
+            "is_publisher": False,
+            "owner_uid": 0,
+        },
+    )()
+    obj.chain = type("Chain", (), {"endpoint": "test"})()
+    obj.dry_run = True
+    obj.hippius = None
+    monkeypatch.setattr(obj, "_log_chain_hyperparams", lambda: None)
+    obj.run_cycle = lambda: completed.append("cycle")
+    obj.run_forever()
+    assert completed == ["cycle", True]
+
+    completed.clear()
+    obj.run_cycle = lambda: (_ for _ in ()).throw(
+        RuntimeError("stalled fetch")
+    )
+    obj.run_forever()
+    assert completed == []
 
 
 def test_stalled_main_cycle_dumps_threads_before_exiting(monkeypatch):

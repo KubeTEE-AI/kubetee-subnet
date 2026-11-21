@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
+import time
+
 from prometheus_client import Counter, Gauge, start_http_server
 
 CYCLES = Counter(
     "kubetee_validator_cycles_total",
     "Validator cycles, partitioned by outcome.",
     ["outcome"],  # ok | skip
+)
+LAST_CYCLE_COMPLETED = Gauge(
+    "kubetee_validator_last_completed_cycle_timestamp_seconds",
+    "Unix time of the last fully completed synchronous scoring cycle.",
 )
 SKIP = Counter(
     "kubetee_validator_skip_total",
@@ -68,6 +74,10 @@ def _reset_gauge_family(gauge: Gauge, label_names) -> None:
             gauge.labels(*label_values).set(0)
     except Exception:  # noqa: BLE001 - metrics must never break the cycle
         pass
+
+
+def record_cycle_completed() -> None:
+    LAST_CYCLE_COMPLETED.set(time.time())
 
 
 def record_skip(reason: str) -> None:
