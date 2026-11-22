@@ -14,9 +14,9 @@ Lium input (owner decision 2026-11-07):
   7 days" (panel 7 of grafana.lium.io's `price-your-gpus` dashboard),
   with its GPU type variable set to All. This is estimated rental earnings
   per listed GPU-hour: 95% of asking price while rented; idle pay excluded.
-- SKU rule: one card class maps to several Lium GPU types (e.g.
-  `NVIDIA B300 SXM6 AC` vs `NVIDIA B300 SXM6 PC`); the class takes the
-  HIGHEST type value (B300 rule, applied to every multi-SKU class).
+- SKU rule: B300 uses ONLY `NVIDIA B300 SXM6 AC`; every B300 PC row is
+  ineligible, independent of its price. Other multi-SKU classes take their
+  highest type value.
 - source: Lium's public Grafana (`grafana.lium.io`), anonymous read —
   same query the dashboard runs against `executor_price_history`.
 
@@ -80,11 +80,14 @@ class MarketFeedError(RuntimeError):
 def _class_of_type(raw_type: str) -> str | None:
     """Map a Lium `gpu_type` name to a KubeTEE card class, or None.
 
-    "RTX 6000" must not match "RTX A6000" (Ampere) and RTX PRO 5000 must
-    not match at all; GB300-class (Vera Rubin) names contain "B300" and
-    collapse into B300.
+    Only B300 SXM6 AC participates in the B300 rate; B300 PC must never
+    displace it. A generic B300 row remains eligible when offered because
+    it is not a PC variant. "RTX 6000" must not match "RTX A6000" (Ampere),
+    and RTX PRO 5000 must not match at all.
     """
     text = str(raw_type).upper()
+    if "B300" in text and " PC" in text:
+        return None
     if "RTX PRO 6000" in text or "RTX 6000" in text:
         return "RTX6000"
     for klass in ("H100", "H200", "B200", "B300"):
@@ -94,7 +97,7 @@ def _class_of_type(raw_type: str) -> str | None:
 
 
 def _per_class_from_rows(rows: list[dict]) -> dict[str, float]:
-    """Collapse per-type seven-day Earned p75s to the highest SKU/class."""
+    """Use B300 AC only; otherwise select the highest SKU per class."""
     per_class: dict[str, float] = {}
     for row in rows:
         klass = _class_of_type(row.get("GPU type", ""))

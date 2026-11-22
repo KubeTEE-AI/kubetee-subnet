@@ -107,21 +107,41 @@ def test_targon_switch_off_pays_flat_card(monkeypatch):
 # --- parser: Lium grafana response -> per-class -----------------------------
 
 
-def test_parse_response_maps_types_and_takes_highest_sku():
+def test_parse_response_uses_b300_ac_other_classes_highest_sku():
     frame = _frame(
         ["GPU type", "Nodes", "Earned p75"],
         [
             ("NVIDIA B300 SXM6 AC", 40, 8.0),
-            ("NVIDIA B300 SXM6 PC", 21, 4.99),
+            ("NVIDIA B300 SXM6 PC", 21, 12.0),
             ("NVIDIA H200", 43, 3.9),
             ("NVIDIA H200 NVL", 6, 3.75),
             ("NVIDIA B200", 18, 6.025),
         ],
     )
     per_class = parse_market_response(_payload(frame))
-    assert per_class["B300"] == pytest.approx(8.0)  # highest SKU
+    assert per_class["B300"] == pytest.approx(8.0)  # AC, never PC
     assert per_class["H200"] == pytest.approx(3.9)
     assert per_class["B200"] == pytest.approx(6.025)
+
+
+def test_parse_response_ignores_every_b300_pc_sku():
+    frame = _frame(
+        ["GPU type", "Nodes", "Earned p75"],
+        [
+            ("NVIDIA B300 SXM6 PC", 21, 12.0),
+            ("NVIDIA B300 SXM6 AC", 40, 8.0),
+        ],
+    )
+    assert parse_market_response(_payload(frame))["B300"] == pytest.approx(8.0)
+
+
+def test_b300_pc_without_ac_cannot_supply_b300():
+    frame = _frame(
+        ["GPU type", "Nodes", "Earned p75"],
+        [("NVIDIA B300 SXM6 PC", 21, 12.0)],
+    )
+    with pytest.raises(MarketFeedError, match="no usable per-class data"):
+        parse_market_response(_payload(frame))
 
 
 def test_parse_response_does_not_use_asking_price_fallback():
@@ -208,7 +228,8 @@ def test_parse_response_rejects_bad_status():
 
 def test_class_mapping_rules():
     assert _class_of_type("NVIDIA B300 SXM6 AC") == "B300"
-    assert _class_of_type("NVIDIA B300 SXM6 PC") == "B300"
+    assert _class_of_type("NVIDIA B300 SXM6 PC") is None
+    assert _class_of_type("NVIDIA B300") == "B300"
     assert _class_of_type("NVIDIA H200 NVL") == "H200"
     assert _class_of_type("NVIDIA B200") == "B200"
     # RTX PRO 6000 Blackwell maps; RTX A6000 (Ampere) must NOT map; RTX PRO
