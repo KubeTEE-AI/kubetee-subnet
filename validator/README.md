@@ -127,7 +127,7 @@ The pricing **mode** — which feeds price the epoch — lives on the published 
 When `lium_pricing` is **on**, the market formula reads the live Targon snapshot as one of its two market inputs regardless of `targon_pricing` — the `targon_pricing` switch only gates the *clamp* mode used when `lium_pricing` is off.
 
 - **Lium input**: `Earned p75` from **Utilisation and earnings by GPU type, last 7 days** in Lium's public Grafana ([provider-pricing dashboard](https://grafana.lium.io/d/provider-pricing-v1/price-your-gpus)), with GPU type **All**, anonymous read. It estimates rental earnings per listed GPU-hour (95% of asking price while rented), excluding idle pay
-- **SKU rule**: one card class maps to several Lium GPU types (e.g. `NVIDIA B300 SXM6 AC` / `NVIDIA B300 SXM6 PC`); the class takes the **highest** SKU value
+- **SKU rule**: B300 uses **only `NVIDIA B300 SXM6 AC`**, never `NVIDIA B300 SXM6 PC` or the highest of the two; other multi-SKU classes take the **highest** SKU value
 - **No card cap** when `lium` is on (owner decision 2026-10-29): a market above the card pays market + 10%
 - **Static floor holds**: when both feeds price a class below the floor, the class pays the floor
 
