@@ -1,71 +1,86 @@
-# Client-facing attestation of inference on `llm.kubetee.ai`
+# Client attestation for `llm.kubetee.ai`
 
-**Audience:** miners and clients calling the KubeTEE inference API who want cryptographic proof that responses came from a TDX confidential guest.
-**Related:** [EAST-WEST-ATTESTED-MTLS.md](./EAST-WEST-ATTESTED-MTLS.md) (live east-west spec + roadmap, merged 2026-10-27).
+**Current deployment:** three **AMD SEV-SNP** Kata guests on the
+Subnet-Owner-controlled `kubetee` cluster, running **LiteLLM
+`1.110.2-kubetee.1`** with `kata-qemu-snp-runtime-rs`.
+**Partner contract:** [ATTESTATION-SPEC-v1.md](./ATTESTATION-SPEC-v1.md).
+**Backend hop:** [EAST-WEST-ATTESTED-MTLS.md](./EAST-WEST-ATTESTED-MTLS.md).
 
-> **`kubetee.attestation.v1` is the wire construction since 2026-10-27** — the
-> quote is bound to the v1 JCS statement (`bindings.report_data_statement` +
-> `keyset_digest`), and `keyset`/`bindings`/`evidence`/`appraisal` ship in the
-> bundle. `report_data_input` names the active construction on every response
-> ("kubetee.attestation.v1" today; "sha512(nonce)" is the legacy rollback
-> shape). The binding a verifier **must** recompute is
-> [ATTESTATION-SPEC-v1.md](./ATTESTATION-SPEC-v1.md) §4 — not `SHA512(nonce)`.
-> `appraisal` is omitted when the per-boot cached Trustee EAR is absent
-> (best-effort); verify the quote + binding in that case.
+The client can verify a fresh, nonce-bound AMD report for the gateway guest
+that terminates its TLS connection. The release's exact source, image,
+measurements and verifier observations are published in the signed
+[`tee-measurements.json`](https://kubetee.ai/.well-known/tee-measurements.json)
+registry.
 
 ---
 
-## What the client-facing attestation proves
+## 1. What clients can verify
 
 | Claim | Evidence |
-|-------|----------|
-| The response was produced by a genuine Intel TDX confidential VM (guest debug off) | TDX quote in the response, verified against Intel-signed DCAP collateral |
-| The quote was minted **fresh** (not replayed) and is bound to this request | Client-supplied 64-hex nonce is hashed into the quote's `REPORTDATA` |
-| The guest that minted the quote is the one terminating **your TLS session** | The guest signs your nonce with the pod's TLS private key; you verify the signature against the leaf cert from your own TLS session (`tls_possession` / `X-KubeTEE-TLS-*`) |
-| The gateway guest runs an unmodified container set | The measured container allowlist is part of the guest's initdata (`cc_init_data`), which is measured into the TD; the AS extraction surfaces `agent_policy_claims` |
-| Which replica minted it | `pod` field (endpoint payload) / replica identity headers |
-| Which inference backend served the request (boot-time attested) | `X-KubeTEE-Backend*` headers on inline evidence |
+|---|---|
+| The serving endpoint is a genuine AMD SNP confidential guest | Signed SNP report and ARK/ASK/VCEK chain, independently verified for the relevant processor generation. |
+| The evidence is fresh for this request | The report contains the hash of the caller's v1 nonce/keyset statement, not a reused fixed challenge. |
+| The same guest terminates the caller's TLS connection | The gateway signs the nonce with its serving key; the client verifies it against the leaf certificate of its own TLS session and compares that key with the keyset. |
+| The approved guest composition is running | Launch `MEASUREMENT`, `HOST_DATA`, guest policy, TCB and approved images/policy are compared with the independently signed reference registry. |
+| Which serving replica minted the report | The endpoint's `pod` field and the TLS-session binding. A standalone request is load-balanced; it does not identify a separate chat request's replica. |
 
-**What it does NOT prove (scope decisions, 2026-09-17/18):**
-- Per-request GPU quotes from the inference backend. Backends attest at **boot** to Trustee for their mTLS certs; relaying a per-request GPU quote is a much bigger lift (each SGLang guest would need the attestation REST API + per-request minting). Backend identity headers are the current contract.
-- That the *content* of a specific chat response was computed by the quoted guest (the quote is minted adjacent to the response, both from the same replica, but the connection is by identity, not cryptographic chaining).
+### What this does not prove
+
+- It does not send an Intel quote, and Intel DCAP or ITA does not verify an
+  SNP gateway report.
+- It does not prove a new hardware keypair was generated for every boot.
+  The gateway retrieves its approved serving identity after appraisal at
+  each start; that identity can persist across starts.
+- It does not turn reusable, KBS-released keys into a zero-operator-trust
+  claim. KBS administration and trusted storage remain in the trust
+  boundary.
+- The backend is boot-attested for mTLS. No fresh per-request backend GPU
+  quote is supplied by this gateway deployment. A per-backend fresh-evidence
+  contract (scheduled composite CPU + 8-GPU appraisal via stock CoCo
+  attestation-agent and Trustee AS, plus a per-nonce CPU quote binding the
+  caller's challenge to the serving key) is designed and in implementation;
+  it is **not deployed**.
+- The endpoint's hardware evidence is adjacent to the response identity;
+  it is not a signature over the full model-output bytes.
 
 ---
 
-## API surface
+## 2. Standalone report endpoint
 
-### 1. Standalone fresh quote — `GET /v1/attestation?nonce=<64 hex>`
-
-Mints a **fresh TDX quote** with the nonce bound into `REPORTDATA`.
+Send exactly 64 lowercase hexadecimal characters as the caller's nonce:
 
 ```bash
-NONCE=$(openssl rand -hex 32)   # exactly 64 hex chars = 32 bytes
-curl -s "https://llm.kubetee.ai/v1/attestation?nonce=$NONCE"
+NONCE="$(openssl rand -hex 32)"
+curl --fail-with-body \
+  --get 'https://llm.kubetee.ai/v1/attestation' \
+  --data-urlencode "nonce=${NONCE}" \
+  --output attestation.json
 ```
 
-Response (200):
+Save the response only with the original exact byte strings; a verifier
+uses `bindings.report_data_statement` exactly as received. The endpoint is
+public but exposes no keys or protected model inputs.
+
+### Response shape
+
+The following is a **schema illustration**, not a real nonce, signature,
+certificate or verified report:
 
 ```json
 {
-  "nonce": "<your 64-hex nonce, lowercased>",
-  "report_data_input": "kubetee.attestation.v1",
-  "quote": "<base64 TDX quote, ~7KB>",
-  "cc_eventlog": "<base64 eventlog or null>",
-  "tee": "tdx",
-  "runtime_class": "kata-qemu-tdx-runtime-rs",
-  "tls_possession": {
-    "tls_signature": "<base64 RSA signature>",
-    "tls_signature_alg": "RS256",
-    "tls_signature_input": "sha256(nonce)",
-    "tls_cert_sha256": "<sha256 of the serving cert's DER>"
-  },
-  "pod": "litellm-6d48d45cbc-xgj7w",
   "spec_version": "kubetee.attestation.v1",
-  "tee_type": "tdx",
+  "tee": "snp",
+  "tee_type": "snp",
+  "runtime_class": "kata-qemu-snp-runtime-rs",
+  "quote": null,
+  "cc_eventlog": null,
+  "nonce": "<64-lowercase-hex>",
+  "report_data_input": "kubetee.attestation.v1",
+  "pod": "<serving-replica>",
   "keyset": {
     "subject": "kubetee.attestation.v1/llm.kubetee.ai",
-    "not_after": "<cert notAfter>",
-    "tls_public_keys": [{"domain": "llm.kubetee.ai", "spki_sha256": "<sha256 of the DER SPKI>"}],
+    "not_after": "<RFC3339>",
+    "tls_public_keys": [{"domain": "llm.kubetee.ai", "spki_sha256": "<hex>"}],
     "signing_keys": [],
     "e2ee_keys": []
   },
@@ -75,286 +90,197 @@ Response (200):
     "keyset_digest": "sha256:<hex>"
   },
   "evidence": {
-    "quote": "<same base64 quote>",
-    "quote_report_data": "<base64 of the 64-byte REPORTDATA>",
-    "event_log": "<base64 eventlog or null>",
-    "vm_config": {"algorithm": "sha384", "version": "0.1.0", "role": "litellm", "files": {...}, "initdata_sha384": "<hex>", "agent_policy_claims": {...}}
+    "snp": {
+      "schema": "kubetee.snp-evidence/1",
+      "attestation_report": {
+        "version": 5,
+        "vmpl": 0,
+        "report_data": ["64 unsigned byte values"],
+        "measurement": ["48 unsigned byte values"],
+        "host_data": ["32 unsigned byte values"],
+        "signature": {"r": ["72 unsigned byte values"], "s": ["72 unsigned byte values"]}
+      },
+      "cert_chain": [{"cert_type": "<CoCo serialization label>", "data": ["DER byte values"]}]
+    },
+    "vm_config": {"role": "litellm", "files": {}, "agent_policy_claims": {}}
   },
-  "appraisal": {"ear_token": "<Trustee EAR JWT>", "ar4si": {...}}
+  "tls_possession": {
+    "tls_signature": "<base64 signature>",
+    "tls_signature_alg": "RS256",
+    "tls_signature_input": "sha256(nonce)",
+    "tls_cert_sha256": "<hex DER-certificate digest>"
+  },
+  "appraisal": {"ear_token": "<optional boot Trustee EAR>", "ar4si": {}}
 }
 ```
 
-`appraisal` is **omitted when the per-boot cached Trustee EAR is absent** (best-effort) — verify the quote + binding in that case. `report_data_input` names the active construction ("sha512(nonce)" is the legacy rollback shape; branch on it).
+The producer preserves CoCo's structured report and certificate chain rather
+than translating them into a quote or base64 string. Numeric fields are JSON
+unsigned-byte arrays. A `cert_type` label is not proof that a certificate is
+an ARK, ASK or VCEK; verify the actual chain and chip relation.
 
-**TLS-possession proof (what `tls_possession` is):** `llm.kubetee.ai` is TLS **passthrough** — your TLS session terminates inside the same TDX guest that served this payload. The guest signed your nonce with the private key of the certificate your TLS session used. Verify it against the leaf certificate from **your own TLS session** (`ssl.get_server_certificate` / `openssl s_client`), and check the reported `tls_cert_sha256` matches that same cert:
+The signing algorithm shown in the production keyset is RS256. A verifier
+can support ES256 as a permitted key type for an appropriate serving leaf,
+but must not accept a mismatch between declared algorithm and certificate
+public key.
 
-```python
-import base64, hashlib, ssl, socket
-from cryptography import x509
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.asymmetric import padding
+`appraisal` can be omitted if the boot EAR is unavailable. That does not
+remove the need for the report, request binding and TLS-possession checks.
 
-# 1. leaf cert straight from your TLS session
-pem = ssl.get_server_certificate(("llm.kubetee.ai", 443))
-cert = x509.load_pem_x509_certificate(pem.encode())
+Errors are fail-closed for the evidence surface: a malformed nonce returns
+400, and inability to obtain evidence returns 502. A gateway can continue
+ordinary inference while evidence is unavailable; this is not a successful
+attestation.
 
-# 2. fingerprint must equal tls_cert_sha256
-der = base64.b64decode("".join(l for l in pem.splitlines() if "CERTIFICATE" not in l))
-assert hashlib.sha256(der).hexdigest() == payload["tls_possession"]["tls_cert_sha256"]
+---
 
-# 3. verify the nonce signature with the session cert's public key
-cert.public_key().verify(
-    base64.b64decode(payload["tls_possession"]["tls_signature"]),
-    payload["nonce"].encode(),
-    padding.PKCS1v15(),
-    hashes.SHA256(),
-)
-```
+## 3. Inline evidence on inference responses
 
-If both checks pass, the TDX guest that minted the quote holds the private key of the exact certificate you are connected to — the quote and the TLS endpoint are the **same machine**, not just the same fleet.
-
-- 400 if the nonce is not exactly 64 hex characters.
-- 502 if the in-guest attestation service is unavailable (fail-closed for evidence, fail-open for the gateway itself — chat keeps working).
-- **3-replica caveat:** the Service load-balances; the quote proves *a gateway replica* is a TDX guest, not *the* replica that served a given chat. Use inline evidence for per-response binding.
-
-### 2. Inline evidence on chat — `X-KubeTEE-Nonce` request header
-
-Send the nonce **with a chat completion**; the same HTTP response carries the evidence headers.
+Opt in by sending the **same nonce in the request**:
 
 ```bash
-NONCE=$(openssl rand -hex 32)
-curl -s "https://llm.kubetee.ai/v1/chat/completions" \
-  -H "Authorization: Bearer $KUBETEE_KEY" \
-  -H "Content-Type: application/json" \
-  -H "X-KubeTEE-Nonce: $NONCE" \
-  -d '{"model": "z-ai/glm-5.3", "messages": [{"role": "user", "content": "Say OK"}], "max_tokens": 8}' \
-  -D /tmp/headers.txt
-grep -i x-kubetee /tmp/headers.txt
+NONCE="$(openssl rand -hex 32)"
+curl --fail-with-body \
+  'https://llm.kubetee.ai/v1/chat/completions' \
+  -H "Authorization: Bearer ${KUBETEE_KEY}" \
+  -H 'Content-Type: application/json' \
+  -H "X-KubeTEE-Nonce: ${NONCE}" \
+  --data '{
+    "model": "moonshotai/kimi-k3.1-pro",
+    "messages": [{"role": "user", "content": "Reply with OK."}],
+    "reasoning_effort": "low",
+    "temperature": 0,
+    "max_tokens": 20
+  }' \
+  --dump-header response-headers.txt \
+  --output response-body.json
 ```
 
-Response headers (both streaming and non-streaming):
+An API key is required for inference, not to fetch the public report. This
+example uses modest Kimi token/reasoning budgets; it is not a claim of
+SayGM worker acceptance or of model-output attestation.
+
+The inline headers arrive on both streaming and non-streaming responses.
+Streaming carries evidence in the initial SSE response headers, so capture
+headers before consuming the event stream. The completion body remains
+ordinary OpenAI-compatible JSON/SSE.
+
+### Current response headers
 
 | Header | Meaning |
-|--------|---------|
-| `X-KubeTEE-Nonce` | your nonce, echoed (lowercase hex) |
-| `X-KubeTEE-Attestation-Quote` | base64 TDX quote minted on this replica for this request |
-| `X-KubeTEE-Attestation-Tee` | `tdx` |
-| `X-KubeTEE-Report-Data-Input` | the active construction (`kubetee.attestation.v1`; `sha512(nonce)` = legacy rollback shape) |
-| `X-KubeTEE-Binding-Statement` | the exact JCS statement string bound into REPORTDATA (v1) |
-| `X-KubeTEE-Binding-Keyset-Digest` | `sha256:<hex>` of the served keyset (recompute it from the keyset — spec §5) |
-| `X-KubeTEE-TLS-Signature` | base64 RSA signature of your nonce, made with the private key of the cert your TLS session is using (RS256) — verify against your session's leaf cert |
-| `X-KubeTEE-TLS-Signature-Alg` | `RS256` |
-| `X-KubeTEE-TLS-Signature-Input` | `sha256(nonce)` |
-| `X-KubeTEE-TLS-Cert-SHA256` | sha256 of the serving cert's DER — must match your session's leaf cert |
-| `X-KubeTEE-Backend` | model name that served (e.g. `z-ai/glm-5.3`) |
-| `X-KubeTEE-Backend-Endpoint` | the backend Service the gateway routed to |
-| `X-KubeTEE-Backend-Attested` | `boot-time (Trustee EAR; east-west mTLS)` — the backend's TLS cert was issued only after its TDX quote passed Trustee appraisal |
-| `X-KubeTEE-Attestation-Error` | present instead of the quote on failure (e.g. `invalid nonce`, `quote unavailable`) |
+|---|---|
+| `X-KubeTEE-Nonce` | 64-hex caller nonce, lowercased. |
+| `X-KubeTEE-Attestation-Tee` | `snp` for this gateway. |
+| `X-KubeTEE-Runtime-Class` | `kata-qemu-snp-runtime-rs`. |
+| `X-KubeTEE-Attestation-SNP` | Base64url(JSON) of exactly `evidence.snp`: native report plus certificate chain. It does not carry `vm_config`. |
+| `X-KubeTEE-Attestation-SNP-Encoding` | `base64url-json`; add required base64 padding and decode JSON, then validate the schema and field sizes. |
+| `X-KubeTEE-Attestation-Report-Data` | Base64 of the 64-byte signed binding value. |
+| `X-KubeTEE-Report-Data-Input` | `kubetee.attestation.v1`. |
+| `X-KubeTEE-Binding-Statement` | Exact JCS statement to hash. |
+| `X-KubeTEE-Binding-Keyset-Digest` | Served digest of the keyset; independently recompute it from that keyset. |
+| `X-KubeTEE-TLS-Signature`, `X-KubeTEE-TLS-Signature-Alg`, `X-KubeTEE-TLS-Signature-Input` | TLS-key nonce signature, algorithm and signature-input convention. |
+| `X-KubeTEE-TLS-Cert-SHA256` | SHA-256 of the serving leaf's DER, to match the caller's own TLS certificate. |
+| `X-KubeTEE-Backend`, `X-KubeTEE-Backend-Endpoint` | Routed model/backend identity. |
+| `X-KubeTEE-Backend-Attested` | `boot-time (Trustee EAR; east-west mTLS)`: a boundary statement, not a fresh GPU report. |
+| `X-KubeTEE-Attestation-Error` | Error when inline evidence cannot be supplied; ordinary inference need not fail with it. |
 
-Notes:
-- **Opt-in:** without the header, requests are normal OpenAI calls with zero overhead.
-- Works on **streaming** responses too (evidence rides the initial SSE response headers).
-- The response body stays 100% OpenAI-schema — no `attestation` field mixed into chat objects.
-- A malformed nonce returns `X-KubeTEE-Attestation-Error: invalid nonce (need 64 hex)` instead of failing the completion.
-- Small latency cost per attested request (one in-guest quote mint, measured ~sub-second on the CPU TDX guest).
+The native inline SNP value has a header-size limit. If evidence cannot be
+framed safely, the endpoint instructs the client to obtain the standalone
+bundle rather than silently accepting a truncated report.
 
----
-
-## The critical nonce-binding semantics (read before verifying)
-
-**`kubetee.attestation.v1` binds a JCS statement, not the nonce alone.** The
-binding is **verifier-agnostic by construction** — you recompute it yourself,
-byte-for-byte, and compare it to the quote's `REPORTDATA`. It is *not* a
-verifier's built-in nonce check (see path A for why those two diverge).
-
-The quote's `REPORTDATA` (64 bytes) is:
-
-```
-REPORTDATA = SHA-256(statement) || 32 zero bytes
-```
-
-where `statement` is the exact JSON string served verbatim as
-`bindings.report_data_statement` (RFC 8785 JCS, keys sorted by UTF-16 code
-units):
-
-```
-{"keyset_digest":"sha256:<hex>","nonce":"<64-hex>","purpose":"kubetee.attestation.v1"}
-```
-
-and `keyset_digest` = `SHA-256(JCS(keyset))` over the served `keyset` object
-(spec §5) — the digest that ties this quote to the TLS keyset you are talking
-to.
-
-```
-client generates nonce (64 hex)
-   │
-   ├─► GET /v1/attestation?nonce=…          (or X-KubeTEE-Nonce on chat)
-   │      gateway: REPORTDATA := SHA256(statement) + 32 zero bytes → quote
-   │      quote + {keyset, bindings, evidence, appraisal} returned
-   │
-   └─► YOU verify (two independent checks):
-        (1) quote crypto / TCB / debug-off  → path A (ITA) or path B (DCAP)
-        (2) v1 nonce + keyset binding       → recompute over the served
-             statement bytes + served keyset; compare to quote REPORTDATA
-```
-
-Rules:
-- **Do not** pre-hash the nonce — send KubeTEE the raw 64-hex nonce; the gateway builds the statement.
-- **Do not** re-serialize the statement — hash the **exact bytes** of `bindings.report_data_statement` (re-canonicalizing can change bytes and break the match).
-- **Recompute `keyset_digest` from the served `keyset`** — never trust the echoed `keyset_digest` alone (spec §5).
-
-```python
-import base64, hashlib, json
-
-payload = json.load(open("attest.json"))
-stmt   = payload["bindings"]["report_data_statement"].encode()   # exact served bytes
-qb     = base64.b64decode(payload["quote"])
-rd     = qb[568:568 + 64]                                        # TDREPORT1.6 REPORTDATA
-
-# (2) v1 binding — statement bound, keyset bound (recompute keyset_digest per spec §5)
-assert rd == hashlib.sha256(stmt).digest() + b"\x00" * 32, "v1 binding mismatch"
-```
-
-**Legacy rollback shape** (`report_data_input: "sha512(nonce)"`, no `keyset`/`bindings`)
-binds `REPORTDATA = SHA512(raw nonce)` — the old construction. Branch on
-`report_data_input`; every response names the active construction.
+Without `X-KubeTEE-Nonce`, a request is an ordinary OpenAI call with no
+additional report work. A malformed nonce produces an inline evidence error
+rather than fabricating a report.
 
 ---
 
-## Verification path A — Intel Trust Authority (ITA)
+## 4. Verification checklist
 
-KubeTEE quotes are standard Intel TDX DCAP quotes and their **quote crypto + TCB** can be appraised by Intel Trust Authority (or any TDX quote verifier). But understand the split before you build a verifier:
+The full rules and exact reference values are in
+[ATTESTATION-SPEC-v1.md](./ATTESTATION-SPEC-v1.md). Use a native SNP
+implementation such as stock **`sev 7.1.0`**, with SNP/OpenSSL support.
+No patch to CoCo, Trustee or KBS is needed to consume this contract.
 
-> **ITA verifies the quote; you verify the binding.** ITA's TDX `tdx_report_data`
-> rule is a cumulative **SHA-512** over `verifier_nonce ‖ runtime_data ‖
-> user_data ‖ held_data`, while the v1 quote binds `SHA-256(statement) + 32
-> zeros` — so the two bindings are different constructions and no plain
-> `runtime_data` value makes them coincide. Submit the quote to ITA for
-> DCAP/TCB appraisal **without** `runtime_data`, and run the v1 nonce + keyset
-> check yourself (two lines — "The critical nonce-binding semantics" above).
-> (ITA's `held_data`/`user_data` terms are a possible hook to make its hash
-> coincide with a quote binding — the way CoCo/Trustee binds a runtime-data
-> digest — but the gateway binds the v1 statement, so a verifier cannot
-> recover a preimage for that SHA-512 rule. Whether an unenforced
-> `runtime_data` mismatch errors or is ignored is **tenant/config dependent**;
-> treat the split above as the contract.)
+1. **Explicit type and framing.** Require `tee=snp`, `tee_type=snp`,
+   `runtime_class=kata-qemu-snp-runtime-rs` and
+   `evidence.snp.schema=kubetee.snp-evidence/1`.
+2. **AMD authenticity.** Support report versions 3–5; require VMPL0 and
+   expected field lengths. Validate ARK/ASK/VCEK by cryptographic roles,
+   AMD root and processor/chip generation. Verify the report signature and
+   approved reported TCB. Certificate labels alone are insufficient.
+3. **Composition and policy.** Compare the signed report's 48-byte launch
+   `measurement`, 32-byte `host_data`, guest policy and TCB with the signed
+   registry. Require debug-off, migration-agent-off and measured denied
+   guest-control operations; text declaring these alone is not enough.
+4. **Keyset digest.** Canonicalize the served keyset using RFC 8785 JCS,
+   compute its SHA-256, and check the resulting value in the statement.
+   `signing_keys` is empty in this deployment.
+5. **Binding.** Compute:
 
-### Prerequisites
-- An ITA tenant with API key (`*` or `tdx` product), and the verifier URL, e.g. `https://api.trustauthority.intel.com` (US) or `https://api.eu.trustauthority.intel.com` (EU) — see the [ITA REST API](https://docs.trustauthority.intel.com/main/articles/articles/ita/restapi/restapi-intro.html).
-- `pip install intel-trustauthority-client` (the Python client) — but note the client-flow caveat below.
+   ```python
+   expected = hashlib.sha256(
+       payload["bindings"]["report_data_statement"].encode("utf-8")
+   ).digest() + bytes(32)
+   actual = bytes(
+       payload["evidence"]["snp"]["attestation_report"]["report_data"]
+   )
+   assert actual == expected
+   ```
 
-### The one ITA caveat (important)
+   This is deliberately a fragment, not a complete verifier. The report's
+   signature and provenance checks must precede acceptance; parsing a native
+   AMD report must not be replaced by slicing a different evidence format.
+6. **TLS possession.** Read the leaf directly from your TLS socket, hash its
+   DER and SPKI, match the keyset plus `tls_cert_sha256`, and verify the
+   nonce signature. The report signature, TLS signature and registry
+   signature are three separate trust operations.
+7. **Registry.** Validate the schema, canonicalize the registry without its
+   `signature` member, and verify its Ed25519 signature using the separately
+   published public key.
+8. **Optional EAR.** Validate the boot RCAR's native evidence and Trustee
+   policy if present. Do not substitute it for the caller's nonce binding or
+   the current connection's possession proof.
 
-The ITA client's `collect_evidence` **hashes the nonce itself** (the cumulative SHA-512 rule) before binding — that matches ITA's verification but NOT KubeTEE's binding (KubeTEE already baked `SHA256(statement)` into the quote). **Use pre-collected evidence:** submit the KubeTEE-issued quote directly to ITA's `/attest` API with `runtime_data` **omitted**, then run the v1 binding check yourself.
+Reject missing evidence, unknown types, certificate failures, report
+mismatches, bad guest policy, unapproved measurements and TLS mismatches.
+Do not downgrade failed native SNP verification to a transport or key-label
+check.
 
-```python
-# pip install intel-trustauthority-client requests
-import requests
-
-quote_b64 = "<X-KubeTEE-Attestation-Quote or /v1/attestation .quote>"
-
-# 1. ITA appraisal — quote crypto + TCB + debug-off (runtime_data OMITTED:
-#    the v1 REPORTDATA is not ITA's SHA-512 runtime-data binding, so passing
-#    the nonce here cannot bind to the v1 statement)
-resp = requests.post(
-    "https://api.trustauthority.intel.com/appraisal/v1/attest",
-    headers={"x-api-key": ITA_API_KEY, "Accept": "application/json"},
-    json={"quote": quote_b64, "policy_ids": [YOUR_POLICY_ID]},  # verifier_nonce optional
-    timeout=30,
-)
-token = resp.json()["token"]                # appraised JWT (quote/TCB claims)
-
-# 2. KubeTEE v1 binding — the nonce + keyset check ITA does not do
-#    (full snippet under "The critical nonce-binding semantics" above):
-#    assert qb[568:656] == SHA256(bindings.report_data_statement) + 32 zeros
-#    and recomputed keyset_digest matches the served keyset (spec §5)
-```
-
-**What ITA checks:** Intel-signed DCAP quote, TCB level against its TCB policy (configured in the ITA tenant), debug flags off. It returns a signed appraisal token (JWT) with policy claims. **What only you check:** that the quote is bound to *your* nonce and to the served keyset (the v1 statement) — plus `tls_possession` if you want the "quote == TLS endpoint" property.
-
-> If your ITA tenant policy allows, set the TCB policy to match your security requirement (e.g. match KubeTEE's PCCS-configured TCB-R `standard` channel). `runtime_data` in the ITA request is `optional` per the API — leave it out for KubeTEE quotes.
-
-### Decode the appraisal token
-
-```python
-import jwt  # pip install PyJWT
-claims = jwt.decode(token, options={"verify_signature": False})  # verify sig per ITA docs
-print(claims["policy_ids"], claims["results"])  # 'affirming' / 'constrained' etc.
-```
-
-## Verification path B — local DCAP quote verify (offline)
-
-If you run your own DCAP tooling (e.g. `sgx-dcap-quote` verify, Intel DCAP library + PCK cache, or the CoCo `app-starter` verifier), the quote from `/v1` is a raw TDX quote — verify:
-1. The quote's `REPORTDATA` equals `SHA-256(bindings.report_data_statement) || 32 zero bytes` (v1), or `SHA-512(your nonce)` in the legacy rollback shape (offset 568 in the TDREPORT; see the layout below).
-2. The Intel DCAP signature chain (PCK cert → Intel root) against Intel's PCS.
-3. `td_attributes.debug == 0` (no debug).
-4. TCB/TEE TSV values against your policy.
-
-`REPORTDATA` offset: the TDX quote starts with a 48-byte header (incl. `HEADER` type, version, vendor), and `REPORTDATA` is at **offset 568** in the standard `TDREPORT1.6` layout used by the CoCo attester (verified live 2026-09-18: `SHA512(nonce)` bytes found at offset 568 in every KubeTEE quote; v1 verified live 2026-10-27: `SHA-256(statement)+zeros` at the same offset).
-
-```python
-import base64, hashlib, json
-
-payload = json.load(open("attest.json"))
-qb = base64.b64decode(payload["quote"])
-rd = qb[568:568 + 64]
-
-if payload["report_data_input"] == "kubetee.attestation.v1":
-    stmt = payload["bindings"]["report_data_statement"].encode()
-    assert rd == hashlib.sha256(stmt).digest() + b"\x00" * 32, "v1 binding mismatch"
-    # plus keyset_digest recomputation over the served keyset (spec §5)
-else:  # legacy rollback shape "sha512(nonce)"
-    assert rd == hashlib.sha512(payload["nonce"].encode()).digest(), "nonce not bound"
-```
+The AMD root material, guest reference and processor expectations must be
+maintained independently. KubeTEE's signed registry identifies the approved
+software/guest reference; it cannot solely establish AMD's root of trust.
 
 ---
 
-## Frequently asked questions
+## 5. Current serving-key custody
 
-**Q: Why is `REPORTDATA` the SHA-256 of a statement, not the raw nonce?**
-The statement binds three things a raw nonce cannot: **your nonce** (freshness), **the served keyset digest** (this quote belongs to the TLS keyset you are talking to), and **a fixed `purpose`** (the quote is not reusable in another protocol's statement space). It is SHA-256-of-statement zero-padded to 64 bytes because `REPORTDATA` is 64 bytes and TDX takes exactly what the attester writes — the construction is defined in [ATTESTATION-SPEC-v1.md](./ATTESTATION-SPEC-v1.md) §4 and pinned by conformance vectors.
+Traefik uses Gateway API TLS **Passthrough** to the LiteLLM process, and
+Cloudflare is DNS-only. The public CA-valid TLS identity is retrieved by
+the measured gateway bootstrap through CDH loopback into Memory
+`emptyDir` at `/etc/tls`. It is not directly mounted as a traditional
+Kubernetes TLS Secret.
 
-**Q: Does Intel Trust Authority check this binding for me?**
-No — and it cannot (ITA's `tdx_report_data` rule is a cumulative **SHA-512**, so it can never equal a SHA-256-plus-zeros `REPORTDATA`). ITA appraises the **quote** (DCAP chain, TCB, debug-off); the **binding** — your nonce + the keyset — is a two-line check you run over the served bytes. See path A.
+The gateway obtains this identity at each start after appraisal.
+The registry's `fresh_certificate_per_boot: true` field describes this
+current identity retrieval; it does **not** assert a distinct keypair is
+generated inside each new guest. The key can be reusable. Trustee/KBS
+appraisal, resource authorization and its privileged storage/administration
+remain part of the security boundary.
 
-**Q: Why is `REPORTDATA` the SHA512 of my nonce in the legacy shape?**
-That was the pre-flip construction (`report_data_input: "sha512(nonce)"`, kept as the rollback shape): ITA's verification rule (`tdx_report_data` = cumulative SHA512 of `verifier_nonce || runtime_data || user_data || held_data`) — passing the raw nonce as `runtime_data` meant ITA hashed it and matched `REPORTDATA`. That rule applies **only** to the legacy shape; it is not the v1 contract.
+The gateway's outbound mTLS identity is separately fetched into
+container-local `/run/kubetee-eastwest`. Its backend CA checks and client
+identity are loaded by measured image-local code only for the approved
+east-west trust anchor.
 
-**Q: Can I verify the quote on-chain / trustlessly?**
-The quote is Intel-signed; on-chain verification would require an Intel PCS oracle — out of scope today. Standard off-chain ITA or DCAP verification is the contract.
+Backend serving-key custody (2026-11-23): on backends deployed with the
+measured **Granian mTLS frontend**, the model server itself holds the
+CDH-released server identity and terminates strict mTLS inside the guest —
+there is no transport proxy in the trust path, and the health probe surface
+is a separate loopback-only HTTP listener exposing `/health` and
+`/health_generate` only. Backends still on the earlier in-CVM HAProxy
+frontend carry an equivalent evidence contract with one additional in-guest
+process; they migrate as their images rebuild. Neither frontend's key is
+proved generated inside the guest — see the custody limits above.
 
-**Q: Does attestation add latency to my inference?**
-Opt-in only. No header → zero overhead. With the header, one in-guest quote mint rides the response (sub-second, measured on CPU TDX).
-
-**Q: What if the endpoint returns 502?**
-The gateway is alive but the in-guest attestation agent is not answering (rare; e.g. right after a guest restart). Chat still works; retry evidence later.
-
-**Q: How do I know the backend GPU guests are also attested?**
-Two signals: (1) `X-KubeTEE-Backend-Attested: boot-time (Trustee EAR; east-west mTLS)` — the gateway only has working mTLS to the backend because Trustee issued that backend's cert after a passing TDX quote; (2) the east-west spec (link above) documents the boot-time protocol.
-
-**Q: My language is not Python — what do I do?**
-The endpoint contract is plain HTTP + JSON/headers. Verification path B needs any TDX DCAP verifier. ITA also ships Go/Java clients — the same split (ITA appraises the quote; you check the v1 binding) and the same exact-statement-bytes rule apply.
-
----
-
-## Endpoint reference (summary)
-
-| Endpoint / header | Type | Description |
-|---|---|---|
-| `GET /v1/attestation?nonce=<64hex>` | HTTP | Fresh TDX quote, JSON payload, v1 JCS statement bound into REPORTDATA (legacy shape: SHA512(nonce)), plus keyset/bindings/evidence(/appraisal) and TLS-possession signature |
-| `X-KubeTEE-Nonce: <64hex>` (request) | header | Opt-in inline evidence on any chat completion (streaming + non-streaming) |
-| `X-KubeTEE-Attestation-Quote` (response) | header | base64 TDX quote minted for this request |
-| `X-KubeTEE-TLS-Signature` (+`-Alg`/`-Input`/`Cert-SHA256`) (response) | header | Nonce signed with the serving TLS key — proves the quote minted is the cert holder you're connected to |
-| `X-KubeTEE-Backend*` (response) | header | Backend identity + boot-time attestation signal |
-| `X-KubeTEE-Attestation-Error` (response) | header | Failure reason when evidence could not be minted |
-
----
-
-## Implementation notes (KubeTEE operators)
-
-- Module: `nim/eastwest/kubetee_attestation.py` (source of truth; embedded in the `eastwest-fetch-certs` ConfigMap in `fleet-gitops/infrastructure/litellm/staging/values.yaml`).
-- Callback registration: `litellm_settings.callbacks: [..., "kubetee_attestation.kubetee_attestation_logger"]` (both base values + oakland overlay).
-- The hook is `async_post_call_response_headers_hook` — it fires **before** headers freeze on BOTH streaming and non-streaming chat paths. (`async_post_call_success_hook` would be too late for streaming: the `StreamingResponse` is already constructed when that hook runs.)
-- `POD_NAME` env var (extraEnvVars fieldRef) pins the minting replica in the endpoint payload.
-- Guest requirements: `agent.guest_components_rest_api=all` kernel param (enables `/aa/evidence` AND `/cdh/resource`), `ExecProcessRequest` blocked by agent policy (todo 4) — `kubectl exec` into the guest is denied by design; use port-forward/curl pods for testing.
-- 26 unit tests at `/tmp/test-kubetee-attestation/` (mocked httpx+litellm; recreate from the repo module if needed).
+`signing_keys: []` does not expose the offline measurement public key;
+obtain that public key from the registry's `key_url`.

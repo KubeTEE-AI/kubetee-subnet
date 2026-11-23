@@ -8,17 +8,59 @@ This document is the full analysis behind the README [Tokenomics — Utility Tok
 
 ## Overview
 
+> **Phase 1 direction—not a claim of implemented settlement:** all customer/service revenue follows the Alpha burn path described below. Unused miner emissions retain the separate protocol recycling path. Each actual payment rail still requires reviewed, tested implementation and explicit financial-operation approval.
+
 SN90 (KubeTEE) Alpha is a **utility token consumed to access confidential compute**, not a security. The design follows a DePIN subsidy model:
 
 - External inference demand buys Alpha on the **open market** and spends it to consume compute. TAO — the asset swapped for Alpha — is now also **live on Base** as a Chainlink CCIP-bridged ERC-20 (2026-08-21; see [TAO on Base](#tao-on-base)).
-- Spent Alpha is **recycled** to unissued supply and can return through the protocol's emission process — a self-sustaining security budget for the compute network (the Bitcoin-fee model applied to Alpha). SN90's **default** emission split is 41% miners / 41% validators / 18% owner; this is configurable, not an immutable protocol guarantee.
+- Spent Alpha is **burned** irreversibly, rather than recycled to replenish future issuance. This is the owner-selected Phase 1 direction for service revenues; no live Alpha/USDC payment/burn flow is implied. SN90's **default** emission split is 41% miners / 41% validators / 18% owner; this is configurable, not an immutable protocol guarantee.
 - No entity sells tokens against promises, holds customer balances, or accumulates an operational treasury from unused miner emissions. All unused miner emissions are recycled; the owner-cut position remains owner-held under a non-decaying lock commitment. Value reaches each entity only through protocol safe-harbor channels (owner emissions, scored miner emissions).
 
 The goal is a token whose value narrative is **compute access**, verifiable on-chain by anyone — the cleanest fact pattern for a utility-token / DePIN classification.
 
 ---
 
+## Phase 1 revenue direction: all service revenue is burned (WIP)
+
+The selected **Gamma-aligned service-revenue burn direction** covers every customer/service payment rail. **Gamma integration and the complete settlement implementation are work in progress; this section does not describe an enabled service.** The subnet, emissions-backed miner/validator cooperation and separate unearned-miner-emission recycle path remain unchanged. The protocol miner-emission recycle setting is independent of customer-service settlement.
+
+### What "all service revenue is burned" means (design target)
+
+- The design target for paid compute, inference, tool, agent and other customer-service revenue is accounting in approved payment units, acquisition of SN90 Alpha as required by the selected settlement rail, and permanent Alpha burn. These flows are not implemented or enabled yet; the exact split and route remain under active development.
+- The design intends direct Alpha receipts to use `burn_alpha`-equivalent recognized operations once implemented. Gamma TAO/Alpha mint burns SN90 Alpha directly under the referenced protocol rules; subsequent Gamma spending destroys the credit, not another Alpha batch. This protocol distinction is not a claim that KubeTEE's Gamma integration works today.
+- USDC-on-Base, TAO-on-Base, Finney TAO, or any future payment rail require a separately reviewed, atomic, receipt-bound and audited route to Alpha acquisition and permanent burning. Such automation is **not implemented** by this documentation or by merely setting Gamma enabled or `recycle_or_burn`.
+- "All revenue" means customer/service revenue in this milestone, not automatic destruction of owner 18% emissions, miner emissions, validator rewards, locked registration collateral, or unearned miner-weight remainder. Expanding that boundary would require a different owner policy and technical/financial design review.
+
+### Gamma and operating-cost boundaries
+
+The [official Gamma guide](https://www.bittensor.com/docs/guides/gamma) states that a TAO-funded mint buys the subnet's Alpha and burns it; a stake-funded mint burns the existing Alpha position. One dollar-denominated credit is created at protocol valuation. Gamma is nontransferable between coldkeys and nonredeemable. Its subsequent spend destroys Gamma and pays no Alpha or TAO to the service spender. KubeTEE must therefore not advertise a Gamma debit as a second burn, as a direct miner payout, as an automatic burn of unrelated revenue, or as automatic operator cash flow.
+
+Gamma's dollar credit and provider spending charge need a strict accounting and enforcement boundary: signed request verification, exact deposit/spender selection, budget/access verification, spend finality, unique request references, idempotent retry and no delivery-before-settlement race. No Gamma payment worker is certified or enabled as an SN90 service. Separate implementation work is **WIP**, does not belong in this public documentation and validator repository, and requires its own visibility/review. Any production-like test requires explicit user approval, regardless of value.
+
+### Consequence for the economics analysis
+
+Permanent burning does not restore consumed Alpha to unissued issuance. Customer revenue cannot be described as refilling a miner-emission budget or achieving the consumption-recycle crossover modeled later in this document.
+
+The network remains emission-funded under its configured miner/validator/root and owner split. Any operating-disbursement mechanism, reserve policy, litigation/accounting analysis or operating-cost claim requires a distinct design. Scarcity preference alone is not a sustainable operator-revenue model.
+
+---
+
+# Retained background: consumption-recycle design analysis
+
+The remainder of this document analyzes a **consumption-recycle design and
+its original economic projections**. It is retained to explain protocol
+mechanics and the rationale behind the current choice; it is not the current
+Phase 1 service-revenue policy. Sections such as "the spend leg", "The
+flywheel", and "Net issuance and the crossover" describe the recycle model's
+draft direction. Customer/service revenue follows the burn direction above.
+Protocol mining operations and unused-miner-emission recycling remain
+separate flows.
+
 ## Recycle vs Burn
+
+This is the reference comparison of burn and recycle protocol operations.
+The selected customer-revenue path is burn; unused-miner-emission recycling
+is a separate current flow.
 
 ### Mechanics
 
@@ -30,11 +72,11 @@ The amount of Alpha a subnet emits per block is derived from its Alpha issuance 
 
 "Burn" and "recycle" are used for three different operations in this model. Combining their numbers would misstate the supply effects:
 
-1. **Consumption spend.** When Alpha is spent for compute, the service-side payment flow calls the chain's `recycle_alpha` operation on the received Alpha. The tokens return to unissued supply; no entity retains them. This flow is planned together with paid jobs, not a statement that Early Access already bills customers.
+1. **Customer-service revenue.** The selected Phase 1 direction acquires Alpha for each settled payment and burns it irreversibly using the reviewed mechanism for that rail. Direct Alpha and Gamma spending have distinct accounting rules, as described above. USDC/TAO exchanges and payout implementation are not claimed live.
 2. **Unused miner emission.** The validator's USD-denominated scoring assigns the unearned remainder as weight on the owner UID. The protocol does not pay that remainder to the owner: under SN90's `recycle_or_burn=recycle` setting it is recycled (the alternative is burn). The withheld proportion is recorded in `MinerBurned` and reduces SN90's cross-subnet emission share before the emission gate, so this is a deliberate subsidy cost with no offsetting routing advantage.
 3. **Per-block emission-weight slots.** A subnet has a `[burn, recycle, owner, validator, miner]` vector controlling that block's new Alpha emission. The burn and recycle slots are configured shares of **new emission**, not a limit on recycled customer spend or registration fees. Under SN90's intended default the vector is `[0%, 0%, 18%, 41%, 41%]`; the owner can change it subject to protocol bounds and rate limits. Root holders are paid out of the validator slot, so the amount ultimately available to Alpha validators need not equal the nominal 41%.
 
-**Small burn, large recycle is supported by the mechanics — with an important qualification.** The per-block emission-weight vector caps the **combined burn and recycle shares at 33% of new emission**. It does not impose that cap on the separate `recycle_alpha` consumption-spend operation. That distinction supports the intended flow of a small emission-slot burn alongside unconstrained consumption recycling; it is not a claim that burning can never handle a large amount of Alpha. A single `burn_alpha` operation does not have that 33% cap. However, burning consumption leaves future miner compensation to the declining fresh-emission stream: at the issuance halving the original per-block rate is split in two, at the next into four, and so on. Refilling issuance is what makes the consumption-reflow model self-sustaining instead of waiting for fresh emission to approach zero. Nor should a large recycle be presented as boosting cross-subnet emission share: withheld miner emission is penalized through `MinerBurned` either way.
+**The emission-slot cap is separate from customer-revenue settlement.** The per-block emission-weight vector caps the **combined burn and recycle shares at 33% of new emission**. It does not set a 33% limit on a direct receipt's `burn_alpha` operation. This distinction matters for the selected service-revenue burn path: it must not be confused with choosing an emission-slot percentage or with recycling unused miner emissions. Customer-service revenue is not redirected to replenish future miner issuance.
 
 ### Where "recycle instead of burn" does not buy anything
 
@@ -47,9 +89,9 @@ Choosing between recycle and burn of tokens is **not an emission-share optimizat
 
 The choice is a **sustainability versus terminal-scarcity trade**: recycle optimizes the network's long-run Alpha emission budget and future miner compensation; burn optimizes irrevocable holder scarcity.
 
-### Why recycle for a compute subnet
+### Why the recycle comparison is retained
 
-For a compute subnet whose product is **ongoing work** (inference, training), recycle is the right economics: consumption funds future miner emissions — a self-sustaining security budget. The honest framing of the tradeoff: burn optimizes holder value and legal defensibility; recycle optimizes network sustainability and the operator's own future emission entitlement. A subnet can legitimately choose recycle and defend it as the more "commodity-like" behavior — reinvesting fees into the programmatic production of the commodity itself.
+The comparison illustrates a sustainability versus terminal-scarcity trade: recycling consumption could fund future miner emissions, whereas burning cannot replenish that budget. SN90 has selected the burn direction for service revenue. This remains explanatory background, not an approval for automatic cross-rail buybacks, direct miner payments or miner-emission policy changes.
 
 ### Registration collateral can change where the registration fee goes (Phase 1)
 

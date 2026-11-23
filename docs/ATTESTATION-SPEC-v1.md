@@ -1,225 +1,251 @@
-# KubeTEE attestation specification — v1 (partner contract)
+# KubeTEE attestation specification — `kubetee.attestation.v1`
 
-**Status:** published 2026-10-23. **This document is the contract** for partners integrating KubeTEE attestation: the reference-value publication schema, the verifier contract, the binding construction, key custody as shipped, and the measurement map. `CLIENT-FACING-ATTESTATION.md` describes the live endpoint behavior and stays the operational companion; where the two describe different binding constructions, **this spec's v1 section is the target contract** and the live section records what runs today.
+**Deployment described:** KubeTEE's public **AMD SEV-SNP** gateway on the
+Subnet-Owner-controlled `kubetee` cluster, running **LiteLLM
+`1.110.2-kubetee.1`** from source commit
+`836124e8830c51c8f07ccfe013e21cfaedfac420`. Three gateway replicas are
+deployed with `kata-qemu-snp-runtime-rs`.
 
-**Audience:** partner verifiers (e.g. RedPILL-style automation) that consume KubeTEE reference values and verify KubeTEE attestation evidence.
-**Related:** [CLIENT-FACING-ATTESTATION.md](./CLIENT-FACING-ATTESTATION.md) (live endpoint), [EAST-WEST-ATTESTED-MTLS.md](./EAST-WEST-ATTESTED-MTLS.md) (east-west mTLS), `gm-miner/attestd/src/eventlog.rs` (reference eventlog replay implementation).
+**Audience:** clients and partner verifiers integrating with
+`https://llm.kubetee.ai`. This is the partner contract for the current
+producer, signed reference registry, report-data binding, TLS possession and
+key custody. [CLIENT-FACING-ATTESTATION.md](./CLIENT-FACING-ATTESTATION.md)
+is its endpoint guide. [EAST-WEST-ATTESTED-MTLS.md](./EAST-WEST-ATTESTED-MTLS.md)
+describes the separate backend hop.
 
 ---
 
-## 1. Standards map
+## 1. Evidence and scope
 
-KubeTEE attestation speaks standard building blocks; where a standard exists we use it and name the non-standard part explicitly:
+The gateway exposes a fresh standard **AMD SEV-SNP attestation report** in
+CoCo's structured `attestation_report` / `cert_chain` representation beneath
+`evidence.snp`. A verifier must use AMD's VCEK certificate path, not Intel
+DCAP/ITA, and must not apply image or measurement fields of a different TEE.
 
-| Concept | Standard | As used by KubeTEE |
-|---|---|---|
-| Evidence | IETF RATS CTR (`conceptual-msg-wrap` / CoRIM evidence profile) — concretely an **Intel TDX quote** | TDX quote + TCG2 CCEL event log, served by the attestation endpoint |
-| Reference values | **CoRIM / CoMID** (`tee-reference-values`) | `.well-known/tee-reference-values.cbor` (CoRIM, CBOR/COSE) + a signed JSON projection (below) — **publication in progress** (§3 status; contact KubeTEE meanwhile) |
-| Appraisal results | **EAR / AR4SI** (EAT + AR4SI trustworthiness vector) | Trustee's appraisal token (AR4SI claims) is included in the evidence bundle |
-| Evidence↔response binding | — | **KubeTEE construction** (§4): SHA-256 of a fixed-template RFC 8785 JCS statement, zero-padded to 64 bytes into the quote's `REPORTDATA` |
-| Reference-value projection | — | **KubeTEE schema** (§3): `/.well-known/tee-measurements.json` (documented, signed) |
+The optional `appraisal` object carries a Trustee EAR with AR4SI
+trustworthiness claims. This is **boot appraisal**, supplementary to the
+fresh report for the caller's nonce. If `appraisal` is absent, the report,
+its request binding and TLS possession still stand independently.
 
-The AR4SI claim → KubeTEE claim mapping for partner adapters (TRUSTWORTHY_* style → RedPILL claims):
+The production confidentiality boundary has two distinct hops:
 
-| AR4SI group | Maps to |
+1. The public request terminates in an SNP LiteLLM guest. Its current report
+   and TLS-possession signature can be verified by the client.
+2. The gateway calls a TDX/NVIDIA-CC model backend through mTLS. That backend
+   is appraised at boot before Trustee releases its identity. It does **not**
+   return a fresh per-request GPU report in this deployment. A scheduled
+   composite CPU + 8-GPU appraisal with a per-nonce CPU-quote binding is
+   designed and in implementation (see [EAST-WEST-ATTESTED-MTLS.md](./EAST-WEST-ATTESTED-MTLS.md)
+   §6); it is not deployed.
+
+Trustee v0.23.0 accepts both platforms in their own evidence formats. CoCo,
+Trustee and KBS remain standard upstream components; the gateway is not
+presented as a miner or as a replacement for either party's independent
+hardware appraisal.
+
+---
+
+## 2. SNP measurement composition
+
+| SNP report field | Current contract |
 |---|---|
-| `executables` | `serving_software_known_good` |
-| `configuration` | `tcb_up_to_date` |
-| `environment` | `os_known_good` |
+| `measurement` | 48-byte SHA-384 launch measurement covering the declared guest composition. Compare against the independent published reference, not a value supplied only by the serving guest. |
+| `host_data` | 32-byte prefix of the SHA-384 digest of the exact **uncompressed InitData TOML**. Kata 4.4 computes that digest and truncates it to 32 bytes for `HOST_DATA`. It is not a SHA-256 digest. |
+| `report_data` | The exact 64-byte v1 request binding defined in §4. |
+| `policy` | Require `debug_allowed=false`, `migrate_ma_allowed=false`, the documented guest ABI/policy, VMPL0 and report version 3–5. |
+| `tcb` | Validate the AMD VCEK chip/TCB relationship and approve the reported platform TCB independently. A TLS success is not TCB verification. |
+| `cert_chain` | Cryptographically validate ARK/ASK/VCEK by certificate roles, AMD roots and processor generation. CoCo's `cert_type` strings are serialization labels, not trust decisions. |
+| `signature` | Verify the report using the processor's verified VCEK. VLEK is not supported by this release contract. |
+
+The published launch measurement for this release is:
+
+`20f0e183b7844cc835118d804699ab8b6cdab297414d8f54d70331378ff0d7fdd8a7548a0253ba561bec21e13a0dcc67`
+
+The full uncompressed InitData digest is:
+
+`sha384:5bd1fe028a632b9efc6eceedcbf5a344b13ed1dab6c1b3a8295f0ff20aebe3aa3cd773703afb77f5ee2c2fbe567b50ab`
+
+Its first 32 bytes, `5bd1fe028a632b9efc6eceedcbf5a344b13ed1dab6c1b3a8295f0ff20aebe3aa`,
+must equal the report's `HOST_DATA`.
+
+The signed registry supplies the exact firmware, kernel, kernel command line
+and image inputs that define this release. Guests are verified individually;
+`all_replicas_verified` in the registry records verification observations,
+not a substitute for checking the caller's current session.
 
 ---
 
-## 2. Measurement map — what each register is and what moves it
+## 3. Signed reference publication
 
-| Register | Source | What moves it |
-|---|---|---|
-| **MRTD** | TDX module (SEAM) | OVMF firmware build, TDVF configuration — the immutable VM firmware measurement |
-| **RTMR0** | TDX boot-time extend | vmlinuz + initrd (guest kernel 6.18.x, NVIDIA-guest initrd) |
-| **RTMR1** | boot kernel params | `KERNELPARAMS_CONFIDENTIAL_NV` + the kata config's kernel_params |
-| **RTMR2** | boot scripts (init) | guest image init stage |
-| **RTMR3** | init binary + **InitData** | measured rootfs contents; the `cc_init_data` blob (see MRCONFIGID) |
-| **MRCONFIGID** | `SHA-384(initdata)` | Any byte of any `initdata-*.toml` — incl. the `policy.rego` container allowlist and the aa/cdh KBS URLs |
+The current production registry consists of exactly these public documents:
 
-Event-log semantics (verified implementation: `gm-miner/attestd/src/eventlog.rs`): the TDX CC event log (CCEL) is TCG2 crypto-agile (`Spec ID Event03` header, SHA-384 digests); replay starts each RTMR at zero and extends `RTMR = SHA-384(RTMR || digest)` per `TDG.MR.RTMR.EXTEND`. Event indices 1–4 are RTMR0–RTMR3; MRTD (index 0) is never extended by a log record. `EV_NO_ACTION` records are informational only. Partners may replay the served `evidence.event_log` against the published RTMRs with any conforming TCG2 replay implementation.
+| Document | Purpose |
+|---|---|
+| [`/.well-known/tee-measurements.json`](https://kubetee.ai/.well-known/tee-measurements.json) | Signed, immutable **schema `kubetee.tee-measurements/2`**, SNP role `litellm` reference record. |
+| [`/.well-known/tee-measurements-signing-key-2026.json`](https://kubetee.ai/.well-known/tee-measurements-signing-key-2026.json) | Independently published Ed25519 public verification key. |
+| [`/.well-known/tee-measurements.schema.json`](https://kubetee.ai/.well-known/tee-measurements.schema.json) | Machine-readable schema for the record and its verification expectations. |
 
-### MRCONFIGID — the composition anchor
+The registry schema is authoritative. It includes `schema`, `version`,
+`role`, `tee`, `runtime_class`, `status`, `not_before`, `key_id`, `subject`,
+`provenance`, `snp` and `signature`, plus an `attestation` observation block.
 
-**MRCONFIGID = SHA-384(initdata blob) and is THE allowlist anchor** of the KubeTEE verifier contract: the measured container allowlist lives inside the initdata (`policy.rego`'s `policy_data.containers` — image names + UIDs, mirrored out by the attestation service as `agent_policy_claims`), so **an allowlist change moves MRCONFIGID and RTMR3** and requires a new reference-value version (§3).
+### Provenance
 
-Implementation facts (for anyone recomputing it): `nim/eastwest/encode-initdata.py` assembles the TOML (`algorithm = "sha384"`, `version = "0.1.0"`) and emits **gzip(mtime=0) + base64** for the `cc_init_data` annotation; the guest measurements extend the SHA-384 over that blob. The CoCo eventlog's RTMR3 InitData event is the anchor's eventlog form.
+This release identifies:
 
-**dstack mapping (partner side):** RedPILL's check-4 "compose-hash" has no dstack-compatible compose-hash event emitted from KubeTEE guests. RedPILL maps that check to **our anchor (MRCONFIGID / InitData digest)** on their side; we publish the value both in the CoRIM (as the MRCONFIGID CoMID environment claim) and in the JSON projection. **Mapping is the partner's adapter responsibility** — we do not fabricate a compose-hash event.
+| Field | Value |
+|---|---|
+| Source | `KubeTEE-AI/litellm`, `kubetee-prod@{836124e8830c51c8f07ccfe013e21cfaedfac420}` |
+| Image | `ghcr.io/kubetee-ai/litellm-database:1.110.2-kubetee.1@sha256:2f47378d242aba5d4a73d4f6b7853e3fa1160e1c6020545960fa4a04cd651a96` |
+| GitHub build | [run `44991222190`](https://github.com/KubeTEE-AI/litellm/actions/runs/44991222190) |
+| Guest | Kata 4.4.0, AMD EPYC-v4, 9 effective vCPUs; measured agent policy denies `ExecProcessRequest` and guest evidence write streams. |
+| Measurement derivation | Independently recomputed with `sev-snp-measure` and compared with live signed reports |
 
----
+The exact image is digest-pinned in the deployment and measured InitData
+policy. Provenance links source, signed build and digest. This does **not**
+by itself promise bit-for-bit reproducibility of every upstream base image
+or build dependency; verifiers use the signed measurement reference and live
+hardware report to establish the running composition.
 
-## 3. Reference-value publication (the partner-facing artifact)
+### Signature and lifecycle
 
-> **Publication status (2026-10-27): publication in progress — the shape below is the contract, the endpoints are not yet served.** `/.well-known/tee-measurements.json` and `/.well-known/tee-reference-values.cbor` do not answer today (HTTP 404 as of this date). **Contact KubeTEE for current reference values** until the endpoints go live — that is the interim path for verification-contract step 3's "published values". Treat every schema/lifecycle rule below as binding for what will be served.
+Verify `signature.sig` as **Ed25519 over RFC 8785 (JCS) canonicalized JSON
+with the `signature` member removed**. The record's `key_id` and `key_url`
+identify the independent HTTPS public key.
 
-Three publications, one version, one lifecycle:
+Versions are append-only and monotonic within their role-scoped stream.
+Status is `upcoming`, `active` or `revoked`; a prior immutable record is not
+silently reused or rewritten. Retention is what lets a verifier establish
+that a measured release is approved; it does not establish that a different
+live replica has the same identity without appraisal.
 
-### 3.1 `/.well-known/tee-measurements.json` — signed JSON projection (human + automation)
+The optional `attestation.observed_pod_identities` records which running
+replicas were verified, at what time and against which verifier reference.
+Verifier [PR #419](https://github.com/taostat/gm-miner/pull/419) is the
+separate SayGM consumer contribution awaiting its maintainers' review. It is
+not presented as a merged worker release.
 
-The **KubeTEE measurement-projection schema** (this section defines it; partners adapt their automation to it — we do not ship a dstack `rtmrs.json` clone):
-
-```json
-{
-  "schema": "kubetee.tee-measurements/1",
-  "version": 3,
-  "status": "active",
-  "not_before": "2026-10-23T00:00:00Z",
-  "key_id": "kubetee-measurements-2026",
-  "measurements": {
-    "mrtd": "hex:48",
-    "rtmr0": "hex:48",
-    "rtmr1": "hex:48",
-    "rtmr2": "hex:48",
-    "rtmr3": "hex:48",
-    "mrconfigid": "hex:48"
-  },
-  "initdata": {
-    "sha384": "hex:48",
-    "algorithm": "sha384",
-    "files": { "aa.toml": "...", "cdh.toml": "...", "policy.rego": "..." }
-  },
-  "guest": {
-    "kata_version": "4.3.1",
-    "ovmf_fd_sha256": "hex:64",
-    "shim_sha256": "hex:64",
-    "kernel": "6.18.x-202-nvidia-gpu",
-    "nvidia_guest_driver": "615.71.09"
-  },
-  "signature": { "alg": "ed25519", "key_id": "kubetee-measurements-2026", "sig": "base64" }
-}
-```
-
-Signing: `signature.sig` is **Ed25519 over the RFC 8785 (JCS) canonicalized document with `signature` removed**. The verification public key and `key_id` are carried in the attestation **keyset** (`signing_keys`, §5) — bound into the quote via `keyset_digest`, so a partner extracts and trusts it from verified evidence. **No out-of-band key distribution** (explicit design decision 2026-10-27: end-to-end east-west). The signing key itself is offline (§5).
-
-**Version lifecycle (strictly enforced by the signer, never rewritten):**
-
-- `version` is a monotonically increasing integer per publication; **history is append-only** — a published version is never edited.
-- `status`: `upcoming` (published before the change goes live — partners pre-load) → `active` (live fleet matches) → `revoked` (superseded; stop accepting).
-- Multiple `active` rows may exist across role families (gateway CPU-TDX vs GPU-TDX guests differ — one row per guest class), each with its own version stream.
-
-### 3.2 `/.well-known/tee-reference-values.cbor` — the CoRIM (machines)
-
-The same reference values as a standard **CoRIM/CoMID** (veraison `corim-rs` structure; RVPS ingests it natively) — this is the machine format; the JSON projection is its signed human/automation twin. The same CoRIM is pushed to the fleet RVPS (Phase 4 feed).
-
-### 3.3 `ATTESTATION-REFERENCE-MEASURES.md` — human-readable twin
-
-> Pending — ships with the §3 publication (same version stream, same lifecycle).
-
-Full `cc_init_data` TOML + blob hash, MRTD/RTMR0-3 + MRCONFIGID values, OVMF/shim sha256, kata version, guest driver — everything a human needs to diff a fleet change against the published baseline.
+The publication is signed JSON, not a claim that CoRIM/COSE ingestion is
+part of this release.
 
 ---
 
-## 4. Binding — the `kubetee.attestation.v1` construction (target contract)
+## 4. Request binding — `kubetee.attestation.v1`
 
-**One construction for all surfaces** (endpoint payload, inline evidence headers, gm-miner keyset). `REPORTDATA` (64 bytes in the quote) is:
+Both the complete endpoint and inline chat evidence use exactly this
+64-byte value for SNP `report_data`:
 
+```text
+SHA256(exact bindings.report_data_statement bytes) || 32 zero bytes
 ```
-report_data = SHA-256(JCS(statement)) || 32 zero bytes
-```
 
-The statement is this **fixed template** (all three keys required, exact strings, one purpose tag = domain separation):
+The served statement is RFC 8785 JCS with this fixed template:
 
 ```json
 {"keyset_digest":"sha256:<hex>","nonce":"<64-hex>","purpose":"kubetee.attestation.v1"}
 ```
 
-- `keyset_digest` = `sha256:<hex>` of the **RFC 8785 JCS** encoding of the currently served keyset (§5) — recomputed by the verifier from the served keyset, never trusted from the response alone.
-- `nonce` = the caller's 64-hex nonce (lowercase).
-- `purpose` = the literal `kubetee.attestation.v1`.
+- `nonce` is the caller's 64 lowercase hexadecimal characters.
+- `keyset_digest` is SHA-256 over the served `keyset` after RFC 8785
+  canonicalization, written as `sha256:<hex>`.
+- `purpose` is the literal `kubetee.attestation.v1`.
+- `bindings.report_data_statement` carries the exact string to hash. Do not
+  substitute or reserialize it.
 
-### Conformance vectors (pinned — unit tests must match byte-for-byte)
+### Conformance vector
 
-Input keyset (canonical fixture):
+For fixture keyset:
 
 ```json
 {"not_after":"2030-01-01T00:00:00Z","subject":"kubetee.attestation.v1/test-vector","tls_public_keys":[{"domain":"llm.kubetee.ai","spki_sha256":"0000000000000000000000000000000000000000000000000000000000000000"}]}
 ```
 
-| Step | Value |
-|---|---|
-| `keyset_digest` | `sha256:693868b5f94f4dad208e8e37fe93ebf1be212f3451462b079dc9ba828b8d33ea` |
-| Statement (nonce = `0123456789abcdef…` ×4) | `{"keyset_digest":"sha256:693868b5f94f4dad208e8e37fe93ebf1be212f3451462b079dc9ba828b8d33ea","nonce":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef","purpose":"kubetee.attestation.v1"}` |
-| `SHA-256(statement)` | `755d36ae1b2ea98e9bdb32350b7356b75515e4ecae711a198ade29ec325b14f4` |
-| `report_data` (64 B) | `755d36ae…b14f4` + 32 × `00` (see `report_data` row of the JSON projection's `bindings` on any live response) |
+the keyset digest must be:
 
-The statement itself travels in the bundle as `bindings.report_data_statement` (the exact JCS string), so a verifier recomputes `SHA-256(statement)` and compares to the quote's `REPORTDATA` — no reconstruction ambiguity.
+`sha256:693868b5f94f4dad208e8e37fe93ebf1be212f3451462b079dc9ba828b8d33ea`
 
-### Live constructions (what runs today)
+For the nonce made by repeating `0123456789abcdef` four times, the complete
+statement is
 
-**FLIPPED 2026-10-27** — the gateway now serves the **v1 construction** as the
-wire default. Both gate conditions closed: the gm-miner switch PR
-(`kubetee_verify`, [taostat#356](https://github.com/taostat/gm-miner/pull/356))
-merged upstream in **v0.5.12**, and the Phala fleet was redeployed on v0.5.12
-(`gm-miner-23/24/25`, 2026-10-27). Flip mechanism: `KUBETEE_ATTESTATION_V1=1`
-in `values-litellm-na-us-oakland-56.yaml` `envVars` (fleet `8ee7868`) —
-switches the quote binding AND adds `keyset`/`bindings`/`evidence`/`appraisal`
-atomically. Rollback = unset the flag (the exact legacy shape returns; the
-`BindingGuard` fails mixed shapes closed in both directions — never ship v1
-fields with the legacy binding or vice versa). Reference-value rows in the
-publication schema are **specified but not yet published** (§3 status:
-publication in progress).
+`{"keyset_digest":"sha256:693868b5f94f4dad208e8e37fe93ebf1be212f3451462b079dc9ba828b8d33ea","nonce":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef","purpose":"kubetee.attestation.v1"}`
 
-| Surface | Live binding | Status |
-|---|---|---|
-| `GET /v1/attestation` + `X-KubeTEE-Nonce` (gateway) | **v1 JCS statement** as `report_data` (§4; travels verbatim as `bindings.report_data_statement`, `keyset_digest` covers the served keyset) | **live since 2026-10-27** — verified live: `report_data_input: "kubetee.attestation.v1"`, v1 bundle present, nonce echoed, dual-ES256/RS256 `tls_possession` (RS256 via the cert-manager `litellm-tls` key). `appraisal` is **omitted when the per-boot cached EAR is absent** (`/run/kubetee-eastwest/boot-ear.jwt`, minted at startup via the Trustee RCAR path — best-effort by design; the quote + binding stand alone) |
-| gm-miner `attestd` (`kubetee_verify`) | accepts the v1 shape **and** legacy dual-read (`BindingGuard` fails mixed shapes closed) | **live since 2026-10-27** (v0.5.12 fleet) — verified live: nonce-bound chat smoke through a v0.5.12 worker HTTP 200 |
-
-The legacy `SHA512(nonce)` construction remains the **rollback shape only** (it
-was the wire default 2026-09-18 → 2026-10-27; `report_data_input` names the
-active construction on every response). The earlier `SHA512(SPKI-DER ‖ nonce)`
-draft is **dropped** — the JCS-statement construction is the single mechanism.
+The statement digest must be
+`755d36ae1b2ea98e9bdb32350b7356b75515e4ecae711a198ade29ec325b14f4`. Its 32
+bytes followed by 32 zero bytes must equal the report's 64-byte `report_data`.
 
 ---
 
-## 5. Keyset and key custody (as shipped)
+## 5. Keyset and key custody
 
-The attestation bundle's `keyset` (served on the endpoint; bound into `report_data` via `keyset_digest`):
+The current endpoint serves this keyset shape:
 
 ```json
 {
-  "subject": "…",
-  "not_after": "RFC3339",
-  "tls_public_keys": [{ "spki_sha256": "hex:64", "domain": "llm.kubetee.ai" }],
-  "signing_keys": [ … ],
-  "e2ee_keys": [ … ]
+  "subject": "kubetee.attestation.v1/llm.kubetee.ai",
+  "not_after": "RFC3339 timestamp",
+  "tls_public_keys": [{"spki_sha256": "hex:64", "domain": "llm.kubetee.ai"}],
+  "signing_keys": [],
+  "e2ee_keys": []
 }
 ```
 
-`tls_public_keys[].spki_sha256` is the SHA-256 of the DER SubjectPublicKeyInfo of the serving TLS key — **per boot** (below). The same key signs the TLS-possession proof, so the quote, the keyset, and the client's TLS session are the same machine (the split-identity gap is closed).
+The SPKI digest is SHA-256 of the TLS leaf certificate's DER
+SubjectPublicKeyInfo. The same serving key signs the nonce for
+`tls_possession`. A client must compare it with the certificate of **its own
+TLS connection**, not accept a certificate supplied only inside a response.
 
-### Custody classes (documented as-shipped, plus the Phase 5 target)
-
-| Key | Custody as shipped | Notes |
+| Key | Production custody | Trust boundary |
 |---|---|---|
-| Client TLS key (`llm.kubetee.ai`) | **K8s Secret `litellm-tls`** mounted at `/etc/tls` (fleet `values-litellm-na-us-oakland-56.yaml`) — external PKI / cert-manager issuance path is **retired history** (Vault/VSO removed 2026-07-23; `SECRET-MANAGEMENT-STRATEGY.md`) | **Phase 5 target:** per-boot P-256 keygen in memory → ACME DNS-01 (SANs: `llm.kubetee.ai` + a unique per-boot SAN vs LE's 5-duplicate limit) → cert+key only to container-local tmpfs `/run/kubetee-tls` → fail-closed. The per-boot SPKI feeds `tls_public_keys` and `keyset_digest` |
-| East-west keys (`eastwest-ca`, `eastwest-nim`, `eastwest-litellm`) | **KBS (Trustee) secret store** — seeded with `kbs-client set-resource` (`default/eastwest-ca`, `default/eastwest-nim`, `default/eastwest-litellm`), fetched in-guest via CDH (`fetch-certs.sh` → `http://127.0.0.1:8006/cdh/resource/…`) | Written to the host-shared `/certs` emptyDir **today**; Phase 5 same-roll scope moves the fetch into the using container's entrypoint → that container's tmpfs |
-| Signing keys (`signing_keys` in keyset) | Same custody class as east-west (KBS) unless a row documents otherwise | |
-| Reference-value signing key (`key_id: kubetee-measurements-2026`) | **Offline Ed25519** — private key never in cluster or repo. The **public** key + `key_id` ride in the attestation keyset (`signing_keys`) and are quote-bound via `keyset_digest` — partners never receive them out-of-band (2026-10-27: out-of-band distribution rejected; east-west end to end) | The served keyset embeds the offline key's pubkey; a partner trusts it because the quote binds it. CoRIM signing uses COSE_Sign1 per the standard (evaluated at build time); the JSON projection's Ed25519 signature is as specified above |
+| Public gateway TLS identity | Measured gateway bootstrap retrieves `default/litellm-confidential/{tls.crt,tls.key}` over CDH loopback `127.0.0.1:8006` into Memory `emptyDir` `/etc/tls`. LiteLLM serves `:4000`; Traefik TLS passthrough and DNS-only Cloudflare do not terminate it. This is not a direct conventional Kubernetes TLS Secret projection. | At every guest start the current identity is loaded after KBS appraisal—the registry's `fresh_certificate_per_boot` convention describes this retrieval, **not generation of a new keypair per boot**. The identity can persist across boots. Trustee/KBS and its authorized storage/admin boundary remain trusted key-release parties. |
+| Gateway east-west identity | `kubetee_bootstrap` retrieves the approved CA and gateway leaf over CDH loopback into container-local `/run/kubetee-eastwest`. Startup fails closed if unavailable. This path is not a declared pod-shared host-visible volume. | It is protected by guest/policy custody and role-scoped key release, not a claim that privileged KBS administrators cannot access escrowed identity material. |
+| Kimi/MiMo backend identities | A measured CDH-fetch init container inside each backend Kata CVM retrieves its role-specific cert/key, CA and HF resource into disk-backed `emptyDir: {}` `/certs`. On the Granian frontend the measured SGLang process reads `/certs` and terminates strict mTLS directly; on the legacy frontend an in-CVM HAProxy container reads `/certs` and fronts loopback SGLang. | The volume is in-sandbox guest storage, not a mounted ordinary Kubernetes TLS Secret; it is also not Memory tmpfs. The backend key is released to an appraised guest, not proved generated only inside it. |
+| Measurement signing key | Offline Ed25519 private key. Only its public document is served over HTTPS; it is separate from the gateway keyset. | Compromise of that public document/HTTPS publication path is a distinct reference-distribution risk from compromise of a serving guest. |
 
-### Verification contract (what a partner must check)
-
-1. **Quote authenticity:** Intel TDX DCAP chain (PCK → Intel root) against Intel PCS or ITA; `td_attributes.debug == 0`; TCB status per your policy (KubeTEE PCCS runs TCB-R `standard`).
-2. **Binding:** `SHA-256(bindings.report_data_statement)` + 32 zero bytes == quote `REPORTDATA` (offset 568 in the TDREPORT1.6 layout — live-verified 2026-09-18), and the statement's `keyset_digest` == `sha256(JCS(keyset))` **recomputed from the served keyset**, and the statement's `nonce` == your request nonce.
-3. **Reference values:** replay `evidence.event_log` (TCG2 crypto-agile, SHA-384 extends) → RTMR0-3 == published values; MRTD == published; **MRCONFIGID == published `initdata.sha384`** (the anchor). `evidence.vm_config` (incl. `agent_policy_claims`) must match the published `initdata` files.
-4. **Appraisal:** `evidence.ear_token` (Trustee AR4SI) carries the TCB/config appraisal; map per §1.
-5. **Keyset freshness:** `keyset.not_after` in the future; `spki_sha256` matches **your TLS session's leaf SPKI** (TLS-possession) if you are binding to the serving guest.
-
-Conformance: a verifier that passes the §4 vectors and the five checks above is a conforming KubeTEE v1 verifier. Report gaps to KubeTEE — do not patch around them in the adapter without telling us.
+`signing_keys: []` is intentional for this deployment. The offline
+measurement public key is not embedded in this keyset. The gateway processes
+requests and responses in its confidential guest.
 
 ---
 
-## 6. Claim → control mapping (scope honesty)
+## 6. Required client verification
 
-| Claim | Control | Honesty note |
-|---|---|---|
-| Serving software is known-good | event-log replay vs published RTMRs/MRTD + allowlist (MRCONFIGID) | Images are **digest-pinned** (`@sha256:` in pod specs and `policy_data.containers`) — **NOT signed or encrypted**; digest pinning is the whole control |
-| TCB up to date | TDX quote TCB status (TCB-R `standard` channel) | Partner policy must choose its TCB floor |
-| OS / guest known-good | RTMR0-2 + guest image measurement | Guest kernel 6.18.x + NVIDIA guest driver 615.71.09 (measured) |
-| Composition / allowlist | **MRCONFIGID (InitData digest)** | See §2 anchor semantics; partners with a compose-hash concept map it themselves |
-| Boot-time backend attestation | east-west mTLS (Trustee-gated cert issuance) | Per-request GPU quotes are **out of scope** (`X-KubeTEE-Backend-Attested: boot-time`) |
+Accept a gateway only after all of these succeed on the caller's connection:
 
-**Intel Trust Authority attestation tokens available on request** — KubeTEE quotes are standard Intel TDX DCAP quotes; ITA appraisal works per `CLIENT-FACING-ATTESTATION.md` (path A): ITA appraises the **quote** (DCAP/TCB/debug-off), and the relying party checks the **v1 binding** (`SHA-256(bindings.report_data_statement) + 32 zero bytes == REPORTDATA`, keyset digest recomputed). The legacy `SHA512(nonce)` + raw-nonce-as-`runtime_data` rule applies only to the rollback shape, not the live v1 construction.
+1. Require explicit `tee` and `tee_type` equal to `snp`,
+   `runtime_class=kata-qemu-snp-runtime-rs` and
+   `evidence.snp.schema=kubetee.snp-evidence/1`.
+2. Decode CoCo's unsigned-byte JSON fields with their native sizes. Require
+   the supported report version, VMPL0 and valid certificate roles.
+3. Verify the AMD ARK/ASK/VCEK chain, processor/chip identity and report
+   signature independently using stock SNP tooling such as `sev 7.1.0`.
+4. Compare launch `MEASUREMENT`, `HOST_DATA`, TCB and guest policy with the
+   signed registry and the verifier's own policy. Validate the measured
+   InitData/image composition and denied guest control operations.
+5. Recompute `SHA256(JCS(keyset))`, hash the exact statement bytes and check
+   the report's 64-byte `report_data` equals digest plus 32 zero bytes.
+6. Require keyset validity, correct `llm.kubetee.ai` scope and match of the
+   reported SPKI/certificate fingerprint to the caller's TLS session.
+7. Verify the nonce possession signature with the session certificate. This
+   is separate from the AMD report signature and from any optional boot EAR.
+8. If `appraisal` exists, verify its native Trustee evidence and approval;
+   never substitute a boot EAR for the current request binding.
+
+A response declaring "attested", an ordinary HTTP 200, image text, pod name
+or permitted API route is not evidence of any of those checks.
+
+---
+
+## 7. Deployment boundaries
+
+| Question | Current answer |
+|---|---|
+| Is the public TLS session inside the confidential gateway? | **Yes.** TLS passthrough reaches LiteLLM in the SNP guest; neither Traefik nor Cloudflare terminates the payload. |
+| Is client-to-gateway evidence fresh and nonce-bound? | **Yes.** The current connection receives an SNP report with the v1 statement binding and TLS possession. |
+| Are measurements publicly available? | **Yes.** The signed SNP registry, schema and independent Ed25519 public key are live at the links in §3. |
+| Is the backend GPU quote fresh per inference request? | **No.** The backend is boot-attested for mTLS key release. Per-request backend GPU evidence is designed (scheduled composite appraisal + per-nonce CPU-quote binding) but not deployed. |
+| Are all three gateway instances exactly the released image? | The deployment pins the exact image and measured policy; all three captured replicas passed independent SNP verification. Each session still requires its own possession check. |
+| Does this establish zero-operator trust? | **No.** Trustee/KBS release authority, protected administration/storage, infrastructure control and reusable identities remain explicit trust boundaries. |
+
+This contract does not invent per-request GPU freshness, encrypted weights,
+in-guest-only key generation, a completed consumer rollout or full
+reproducible-build equivalence.
