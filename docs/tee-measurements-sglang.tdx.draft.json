@@ -1,0 +1,155 @@
+{
+  "_comment": "SIGNED INPUT READY — measurements captured & cross-validated 2026-11-25; the Ed25519 signature is the only remaining step (offline key). Human twin: docs/ATTESTATION-REFERENCE-MEASURES-SGLANG.md. Schema: docs/tee-measurements.schema.json (kubetee.tee-measurements/1, TDX shape). MRTD/RTMR0-3/MRCONFIGID were read from a booted guest's hardware quote and cross-checked (report_data binding MATCH + CCEL replay reproduces all four RTMRs) before this record was prepared for signing. To sign: RFC 8785 (JCS) canonicalize this document with the signature member removed, sign with offline Ed25519 key_id kubetee-measurements-2026-11-22, and write signature.sig (base64url).",
+  "schema": "kubetee.tee-measurements/1",
+  "version": 1,
+  "status": "draft",
+  "not_before": "2026-11-24T00:00:00Z",
+  "key_id": "kubetee-measurements-2026-11-22",
+  "role": "nim-terminator",
+  "subject": "sglang-strict-mtls-backend",
+  "tee": "tdx",
+  "runtime_class": "kata-qemu-nvidia-gpu-tdx-runtime-rs",
+  "provenance": {
+    "source_repo": "https://github.com/KubeTEE-AI/sglang",
+    "source_repo_note": "KubeTEE SGLang fork (public fork of sgl-project/sglang); default branch kubetee/mimo-penfix",
+    "transport_branch": "kubetee/kimi-k31-granian-mtls-day0",
+    "source_commit": "b8f8015d329182a8d973aacc71e3d7ca371a5e22",
+    "transport_fix_commit": "ab5a17e89e64",
+    "image_ref": "ghcr.io/kubetee-ai/sglang:kimi-k31-granian-mtls-45497390909-b8f8015d@sha256:68cb8790dd1a959831f9bb10403c6f68142ddf9b5963722d3aa2b5b3f1cf59cb",
+    "amd64_manifest_digest": "sha256:68cb8790dd1a959831f9bb10403c6f68142ddf9b5963722d3aa2b5b3f1cf59cb",
+    "build_run": "https://github.com/KubeTEE-AI/sglang/actions/runs/45497390909",
+    "validated_at": "2026-11-25",
+    "validated_on": "kimi-k3-1-pro39-sglang-b300-cc-0 (lu-b300-39)",
+    "_quote_minting_image": "The TDX quote whose MRTD/RTMR0-3/MRCONFIGID this record pins was minted by THIS image (run 45497390909, source b8f8015d3291). Source b8f8015d3291 adds the in-guest GET /kubetee/evidence route (root path) over the ab5a17e89e64 strict-mTLS transport. The in-app route does not affect the guest's launch registers (see measurements._capture), so an earlier transport-only canary and this one share identical MRTD/RTMR.",
+    "superseded_canary": "ghcr.io/kubetee-ai/sglang:kimi-k31-granian-mtls-45228495550-bf52f822@sha256:d808dd7bec0d1ebb3f6942e47f636a69c57ec4d74497eaad4a81030da0a0437a (transport-only canary bf52f8223b88, run 45228495550) — the strict-mTLS transport validated live 2026-11-23; rolled out in favor of the quote-minting canary above.",
+    "pending_roll_image": "ghcr.io/kubetee-ai/sglang:kimi-k31-granian-mtls-45514864315-f3683545@sha256:8cb76869163f94ec190e3431a2f26e440da00e60e454f2fd7ce6ad504661c095 (source f3683545f8cf, run 45514864315) — adds the /v1/kubetee/evidence alias for the LiteLLM gateway relay path; same launch registers as above (in-app route), scheduled roll.",
+    "transport_overlay_base_images": [
+      {
+        "tag": "mtls-297e54fd-20261124",
+        "base": "sgl-project/sglang release/v0.5.23 @ 297e54fd105e974cdf401e5b4d20253a22c16f90",
+        "build_run": "https://github.com/KubeTEE-AI/sglang/actions/runs/45354817361",
+        "image_ref": "ghcr.io/kubetee-ai/sglang:mtls-297e54fd-20261124@sha256:c2be72ebf5b2d5c892add32ef4636858a303ff53c55a5df0b67bf88657c9a58b",
+        "model_layer_patches": "none"
+      },
+      {
+        "tag": "mtls-3117f580-20261124",
+        "base": "sgl-project/sglang nightly-cu134-20261122-3117f58 @ 3117f5801752bfd8ea9aee8d3ba3dff8562378fd",
+        "upstream_base_image": "lmsysorg/sglang:nightly-cu134-20261122-3117f58@sha256:ffb8652016b1b895cd2dee12f6bffcb7a5fa65af71378e1018c9f702faa05063",
+        "build_run": "https://github.com/KubeTEE-AI/sglang/actions/runs/45359236784",
+        "image_ref": "ghcr.io/kubetee-ai/sglang:mtls-3117f580-20261124@sha256:7978ad60c3f7b64c24993eed747eeea1d0e1be6396f4bb9357a1c19934419348",
+        "model_layer_patches": "none"
+      }
+    ]
+  },
+  "measurements": {
+    "mrtd":      "hex:382d7bb61e152a5cc6eb22922a4dc9d33025211e24ec199fe38d6233c39cd86bf633e3c4f6e62393cf7ce6da91069ca0",
+    "rtmr0":     "hex:14f01287aefb3ac196451163aa8cf68cc1635083b24eb317256288815a5b48bbe7cdf2e2395ebf0474b3e528d2004014",
+    "rtmr1":     "hex:97fa8ac275f656b876de7c68709608bfe6ace60b58a3b8fb6e990c15bd8711ce8807ed86956f39b62afb9a9daee80227",
+    "rtmr2":     "hex:77903a48ffcc66809d3f01a9853186ac08bc0081d06e4d05a0e0307450188e08d9f21b9c77e6747df0a90e65d7e3bff9",
+    "rtmr3":     "hex:000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "mrconfigid": "hex:0484a58e5927efd31bf871c74bcc9f1768f4335bb92340176989b3c5b320f9341d772b9e3e9c4fe4d824613cc19e6e0b",
+    "_capture": "CAPTURED 2026-11-25T01:26:30Z from the booted TDX guest kimi-k3-1-pro39-sglang-b300-cc-0 (lu-b300-39) via the in-guest evidence route GET https://kimi-k3-1-pro39.eu-lu-luxembourg-133.inference.kubetee.ai:8443/kubetee/evidence?role=nim-terminator&nonce=<64-hex> over strict mTLS (gateway east-west identity litellm.crt), HTTP 200. Envelope archived: docs/captures/kimi-k3-1-pro39-tdx-20261125T012817Z.evidence.json (+ .regs.json). MRTD + MRCONFIGID + RTMR0-3 read from the TDX quote body (TDINFO). TWO cross-checks passed: (1) the quote's 64-byte report_data == sha256(epoch statement)||32 zero bytes — recomputed independently, MATCH; (2) the CCEL event log (22 extending records, RTMR0-2) replayed with RTMR[i]=SHA-384(RTMR[i]||digest) reproduces all four quote RTMRs EXACTLY. mrconfigid live-CONFIRMED == the recomputed InitData SHA-384 (0484a58e…) and the QEMU tdx-guest mrconfigid object. RTMR1 (kernel cmdline) includes agent.guest_components_rest_api=all — the guest-components REST enable that exposes /aa/evidence. MRTD/RTMR are launch-config-derived (OVMF edk2-stable202608 + kernel 6.18.62 + initrd + cmdline + init_data) and are independent of the in-guest sglang container image (build1 vs build2 give identical registers)."
+  },
+  "initdata": {
+    "sha384": "0484a58e5927efd31bf871c74bcc9f1768f4335bb92340176989b3c5b320f9341d772b9e3e9c4fe4d824613cc19e6e0b",
+    "algorithm": "sha384",
+    "host_data_prefix32": "0484a58e5927efd31bf871c74bcc9f1768f4335bb92340176989b3c5b320f934",
+    "host_data_semantics": "kata4-sha384-uncompressed-initdata-toml-prefix32",
+    "role": "image-gen",
+    "annotation": "io.katacontainers.config.hypervisor.cc_init_data",
+    "kbs_url": "https://kbs.kubetee.ai",
+    "files": {
+      "aa.toml": "token_configs.kbs.url = https://kbs.kubetee.ai",
+      "cdh.toml": "kbc.name = cc_kbc, kbc.url = https://kbs.kubetee.ai",
+      "policy.rego": "agent_policy defaults; ExecProcessRequest=false, WriteStreamRequest=false, ReadStreamRequest=true"
+    }
+  },
+  "agent_policy": {
+    "_note": "Measured — changing any of these changes MRCONFIGID.",
+    "ExecProcessRequest": false,
+    "WriteStreamRequest": false,
+    "ReadStreamRequest": true,
+    "exec_process_allowed": false
+  },
+  "capture_evidence": {
+    "_note": "Host-side live capture 2026-11-24 from the serving guest kimi-k3-1-pro39-sglang-b300-cc-0 on lu-b300-39 (2.152.70.39), sandbox-cc38fa4efb4f465a0b9534b3e749fd7418a85d3b65b7d62223ce34f028171b84. Non-invasive: read QEMU launch argv (/proc/<pid>/cmdline) + the tdx-guest launch object + on-disk launch input shas. No pod disruption, no exec.",
+    "qemu_binary": "/opt/kata/bin/qemu-system-x86_64-tdx-experimental",
+    "machine": "q35,accel=kvm,kernel_irqchip=split,memory-backend=entire-guest-memory,confidential-guest-support=tdx",
+    "vcpus": 33,
+    "memory": "1638912M",
+    "kernel_file": "/opt/kata/share/kata-containers/vmlinuz-6.18.62-211-nvidia-gpu",
+    "kernel_sha256": "aee5e68edf457219108f1a378b774deefa186cf9be45ed379afd20ff056d58ae",
+    "rootimg_file": "/opt/kata/share/kata-containers/kata-containers.img",
+    "rootimg_sha256": "fc35c58f5cb1be3a4ea96a7695306fffd81ab7878a8efdb4bbea204963af9726",
+    "bios_file": "/opt/kata/share/ovmf/OVMF.inteltdx.fd",
+    "bios_sha256": "2a2dc2710b0cfafc813310c7e98c67b72b919b8e1572d52a4c79466a2e499226",
+    "tdx_guest_mrconfigid_b64": "BISljlkn79Mb+HHHS8yfF2j0M1u5I0AXaYmzxbMg+TQddyuePpxP5NgkYTzBnm4L",
+    "quote_generation_socket": "/var/run/tdx-qgs/qgs.socket",
+    "kernel_cmdline_measured_params": {
+      "dm_verity_root": "sha256 70aff1c8542f2a3e90b88712455a15d395dd5a2202ca7a520dbd8df2fdb6f6e6 (roothash) / 6b35e5884ee367fc492427ecc99c0913d5e6a1f3b2fedd08e33c8fe78fbf8d10 (salt)",
+      "extension_gpu_root_hash": "4aba662fea3350ab9f310fd48fd7afb1179ae35202c2d85a00ec064009bc68b4",
+      "extension_coco_root_hash": "46c7450fdf874ce4087fa7c888f744780a696cfa764691db79b5b6b2adfe0781"
+    },
+    "rtmr_replay_rule": "RTMR[i] = SHA-384(RTMR[i] || event_digest) per TCG2 crypto-agile CCEL record, index 1-4 -> RTMR0-3; EV_NO_ACTION never extended; MRTD (index 0) is TDX-module measured, no event extends it. Source: gm-miner/attestd/src/eventlog.rs.",
+    "initdata_toml_match": "The pinned initdata SHA-384 corresponds to exactly ONE local file: nim/eastwest/initdata-imagegen.toml (sha384 computed 2026-11-24 = 0484a58e...). No other initdata-*.toml carries it (dsv4=9274dfc6, external-dns=3284a5aa, firecrawl=e1661fad, gamma-funder=8a6c47db, glm=4d113ffb, imagegen-incluster=7f7b2ab8, litellm=c480c598, nim=5175eee8, recycler=a8f5d67b). So the image-gen backend class has exactly one measured InitData identity."
+  },
+  "capture_blockers": {
+    "_note": "RESOLVED 2026-11-25. The five TDX launch registers (MRTD + RTMR0-3) are now CAPTURED from the booted guest's hardware quote + CCEL replay (see measurements._capture). Retained as provenance for why a host-side path was never viable and how the capture was unblocked.",
+    "resolved_fields": ["mrtd", "rtmr0", "rtmr1", "rtmr2", "rtmr3"],
+    "why_host_side_was_blocked": "MRTD is computed by the TDX module from the OVMF/initial-TD content with hardware-specified ordering that is not the naive OVMF+kernel+append concatenation; RTMR0-3 are zero at launch and are extended ONLY by in-guest TDG.MR.RTMR.EXTEND calls logged in the guest CCEL event log. Neither is a pure function of the host-side launch argv. The measured agent policy denies ExecProcessRequest, so no kubectl-exec path reaches the loopback /aa/evidence either.",
+    "root_cause_of_initial_404": "CoCo's in-guest Get-Attestation (GET 127.0.0.1:8006/aa/evidence) is DISABLED by default and gated behind the guest kernel parameter agent.guest_components_rest_api=all. The first canary booted without it -> /aa/evidence 404 -> the /kubetee/evidence route failed closed. The SNP gateway manifest carries this flag (why its evidence worked). FIXED by adding agent.guest_components_rest_api=all to the io.katacontainers.config.hypervisor.kernel_params annotation (this is why RTMR1 carries it).",
+    "recomputation_tool_gap": "The reference launch-measurement tool sev-snp-measure supports ONLY AMD SEV/SEV-ES/SEV-SNP modes; it has no Intel TDX MRTD mode. Rather than reconstructing registers from launch inputs, this record reads MRTD/RTMR0-3/MRCONFIGID from the hardware quote and cross-checks RTMR0-3 by CCEL replay (gm-miner/attestd/src/eventlog.rs) — the captured-and-replayed bar the SNP gateway record set."
+  },
+  "guest": {
+    "kata_version": "4.4.0",
+    "kata_commit": "f9cbda4d235b345340bf461e4aaba8c89e841d8d",
+    "kata_deploy_chart": "4.4.0+kubetee.1",
+    "ovmf_version": "edk2-stable202608",
+    "ovmf_fd_sha256": "2a2dc2710b0cfafc813310c7e98c67b72b919b8e1572d52a4c79466a2e499226",
+    "ovmf_note": "in-tree lazy-accept OVMF.inteltdx.fd (edk2-stable202608); CAPTURED 2026-11-24 on lu-b300-39 at the exact -bios path this guest launches from (/opt/kata/share/ovmf/OVMF.inteltdx.fd). Matches the lazy-accept pin.",
+    "shim_sha256": "82cd97b52ac89b6a73871d5ca68b61f840c5d84e030f28b72dc03f9baab9a73a",
+    "shim_note": "/opt/kata/runtime-rs/bin/containerd-shim-kata-v2, overlay v4.4.0-fix11649-t15t16-vsocktimeout (branch kubetee-fix11649-t15t16-440)",
+    "shim_overlay_image": "ghcr.io/kubetee-ai/kata-deploy-shim-overlay:v4.4.0-fix11649-t15t16-vsocktimeout@sha256:a8699a8705d95d2287685b59321e70a326cfdb19a54345524edadd6b3635e10c",
+    "shim_carried_fixes": ["fix15 (#11649 idempotent block hotplug + stale-fdset reclaim)", "T15/T16 (#13665/#13746 missing-task VM stop)"],
+    "shim_dropped_fixes": ["fix16 (#13641 inotify) — consciously dropped", "fix9-12 orphan reaper — consciously dropped"],
+    "nvidia_guest_driver": "615.71.09"
+  },
+  "images": {
+    "sglang": "ghcr.io/kubetee-ai/sglang:kimi-k31-granian-mtls-45497390909-b8f8015d@sha256:68cb8790dd1a959831f9bb10403c6f68142ddf9b5963722d3aa2b5b3f1cf59cb",
+    "fetch-secrets": "docker.io/curlimages/curl:8.11.1",
+    "sandbox_image": "docker.io/rancher/mirrored-pause:3.10.2"
+  },
+  "report_data": {
+    "schema": "kubetee.attestation.v1",
+    "purpose": "kubetee.attestation.v1",
+    "algorithm": "sha256-rfc8785-statement-then-32-zero-bytes",
+    "statement": "{\"keyset_digest\":\"sha256:<hex>\",\"nonce\":\"<64-hex>\",\"purpose\":\"kubetee.attestation.v1\"}",
+    "size": 64,
+    "nonce": "caller-supplied-64-lowercase-hex",
+    "certificate_anchor": "intel-dcap-tdx",
+    "_surface_note": "This binding is the v1 contract as defined for the SNP gateway role. The nim-terminator backend evidence surface is DEPLOYED and was used for the capture: GET /kubetee/evidence (and /v1/kubetee/evidence for the LiteLLM gateway relay path) on the in-guest strict-mTLS :8443 listener returns {quote, cc_eventlog, keyset, bindings, tee_pubkey, signature} with the epoch statement (epoch_id/issued_at/valid_until/keyset_digest) minted at most once per 5 minutes per replica and cached in the serving guest's memory, plus a per-request signature over sha256(quote)||sha256(nonce)||epoch_id||counter with the per-epoch Ed25519 tee-pubkey. A nonce-bound quote (report_data binding the caller's nonce directly) is available at 1 per 5 minutes per client key. The epoch-statement form is what the 2026-11-25 capture exercised (report_data = sha256(epoch statement)||32 zero bytes, verified). See CLIENT-FACING-ATTESTATION.md 'Backend evidence for nim-terminator'."
+  },
+  "transport": {
+    "kind": "granian-strict-mtls+health-only",
+    "mtls_port": 8443,
+    "mtls_mode": "strict (ssl_client_verify=True, ssl_ca_certs configured; no allow_unauthenticated)",
+    "health_port": 8000,
+    "health_paths": ["/health", "/health_generate"],
+    "health_behavior": "GET only; all other paths and every non-GET request return 404",
+    "client_cert_required": true,
+    "leaf_eku": "serverAuth,clientAuth (dual-EKU)",
+    "private_key_custody": "in-guest via attested CDH delivery; no Kubernetes Secret, no host mount, no unmeasured proxy in the trust path",
+    "exec_probes": false
+  },
+  "claims_not_made": [
+    "byte-identical reproducible digest from a third-party rebuild (two bounded fixes pending: transitive dependency hash-locking and SOURCE_DATE_EPOCH / layer-tar normalization)",
+    "fresh per-request GPU evidence on the backend hop (boot appraisal today; composite CPU+8-GPU appraisal designed and in implementation)"
+  ],
+  "signature": {
+    "_note": "PENDING — the only remaining step. Sign with the offline Ed25519 key_id kubetee-measurements-2026-11-22 over RFC 8785 (JCS) of this document with the signature member removed (i.e. with sig excluded), write signature.sig base64url. The private half never enters the cluster or the repo. A generated-but-unsigned record is a draft, not evidence — do not publish until sig is filled.",
+    "alg": "ed25519",
+    "key_id": "kubetee-measurements-2026-11-22",
+    "canonicalization": "RFC8785-without-signature-member",
+    "sig": "PENDING-SIGNATURE"
+  }
+}
