@@ -1,10 +1,10 @@
 {
-  "_comment": "SIGNED INPUT READY — measurements captured & cross-validated 2026-11-25; the Ed25519 signature is the only remaining step (offline key). Human twin: docs/ATTESTATION-REFERENCE-MEASURES-SGLANG.md. Schema: docs/tee-measurements.schema.json (kubetee.tee-measurements/1, TDX shape). MRTD/RTMR0-3/MRCONFIGID were read from a booted guest's hardware quote and cross-checked (report_data binding MATCH + CCEL replay reproduces all four RTMRs) before this record was prepared for signing. To sign: RFC 8785 (JCS) canonicalize this document with the signature member removed, sign with offline Ed25519 key_id kubetee-measurements-2026-11-22, and write signature.sig (base64url).",
+  "_comment": "CAPTURE + PROVENANCE WORKING RECORD (SUPERSEDED AS EVIDENCE). Measurements captured & cross-validated 2026-11-25. The AUTHORITATIVE SIGNED evidence record is the published /.well-known/tee-measurements-sglang.tdx.json — signed 2026-11-25 with Ed25519 key_id kubetee-measurements-2026-11-25 (RFC 8785 JCS over the 9-key gold record with the signature member removed). This draft retains the full capture provenance (quote body, CCEL replay, launch-input hashes, image lineage) that the published record compresses; it is NOT itself the evidence and is unsigned by design. Human twin: docs/ATTESTATION-REFERENCE-MEASURES-SGLANG.md. MRTD/RTMR0-3/MRCONFIGID were read from a booted guest's hardware quote and cross-checked (report_data binding MATCH + CCEL replay reproduces all four RTMRs).",
   "schema": "kubetee.tee-measurements/1",
   "version": 1,
   "status": "draft",
   "not_before": "2026-11-24T00:00:00Z",
-  "key_id": "kubetee-measurements-2026-11-22",
+  "key_id": "kubetee-measurements-2026-11-25",
   "role": "nim-terminator",
   "subject": "sglang-strict-mtls-backend",
   "tee": "tdx",
@@ -19,7 +19,7 @@
     "amd64_manifest_digest": "sha256:68cb8790dd1a959831f9bb10403c6f68142ddf9b5963722d3aa2b5b3f1cf59cb",
     "build_run": "https://github.com/KubeTEE-AI/sglang/actions/runs/45497390909",
     "validated_at": "2026-11-25",
-    "validated_on": "kimi-k3-1-pro39-sglang-b300-cc-0 (lu-b300-39)",
+    "validated_on": "kimi-k3-1-pro-sglang-b300-cc-0 (lu-b300-39)",
     "_quote_minting_image": "The TDX quote whose MRTD/RTMR0-3/MRCONFIGID this record pins was minted by THIS image (run 45497390909, source b8f8015d3291). Source b8f8015d3291 adds the in-guest GET /kubetee/evidence route (root path) over the ab5a17e89e64 strict-mTLS transport. The in-app route does not affect the guest's launch registers (see measurements._capture), so an earlier transport-only canary and this one share identical MRTD/RTMR.",
     "superseded_canary": "ghcr.io/kubetee-ai/sglang:kimi-k31-granian-mtls-45228495550-bf52f822@sha256:d808dd7bec0d1ebb3f6942e47f636a69c57ec4d74497eaad4a81030da0a0437a (transport-only canary bf52f8223b88, run 45228495550) — the strict-mTLS transport validated live 2026-11-23; rolled out in favor of the quote-minting canary above.",
     "pending_roll_image": "ghcr.io/kubetee-ai/sglang:kimi-k31-granian-mtls-45514864315-f3683545@sha256:8cb76869163f94ec190e3431a2f26e440da00e60e454f2fd7ce6ad504661c095 (source f3683545f8cf, run 45514864315) — adds the /v1/kubetee/evidence alias for the LiteLLM gateway relay path; same launch registers as above (in-app route), scheduled roll.",
@@ -48,7 +48,7 @@
     "rtmr2":     "hex:77903a48ffcc66809d3f01a9853186ac08bc0081d06e4d05a0e0307450188e08d9f21b9c77e6747df0a90e65d7e3bff9",
     "rtmr3":     "hex:000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
     "mrconfigid": "hex:0484a58e5927efd31bf871c74bcc9f1768f4335bb92340176989b3c5b320f9341d772b9e3e9c4fe4d824613cc19e6e0b",
-    "_capture": "CAPTURED 2026-11-25T01:26:30Z from the booted TDX guest kimi-k3-1-pro39-sglang-b300-cc-0 (lu-b300-39) via the in-guest evidence route GET https://kimi-k3-1-pro39.eu-lu-luxembourg-133.inference.kubetee.ai:8443/kubetee/evidence?role=nim-terminator&nonce=<64-hex> over strict mTLS (gateway east-west identity litellm.crt), HTTP 200. Envelope archived: docs/captures/kimi-k3-1-pro39-tdx-20261125T012817Z.evidence.json (+ .regs.json). MRTD + MRCONFIGID + RTMR0-3 read from the TDX quote body (TDINFO). TWO cross-checks passed: (1) the quote's 64-byte report_data == sha256(epoch statement)||32 zero bytes — recomputed independently, MATCH; (2) the CCEL event log (22 extending records, RTMR0-2) replayed with RTMR[i]=SHA-384(RTMR[i]||digest) reproduces all four quote RTMRs EXACTLY. mrconfigid live-CONFIRMED == the recomputed InitData SHA-384 (0484a58e…) and the QEMU tdx-guest mrconfigid object. RTMR1 (kernel cmdline) includes agent.guest_components_rest_api=all — the guest-components REST enable that exposes /aa/evidence. MRTD/RTMR are launch-config-derived (OVMF edk2-stable202608 + kernel 6.18.62 + initrd + cmdline + init_data) and are independent of the in-guest sglang container image (build1 vs build2 give identical registers)."
+    "_capture": "CAPTURED 2026-11-25T01:26:30Z from the booted TDX guest kimi-k3-1-pro-sglang-b300-cc-0 (lu-b300-39) via the in-guest evidence route GET https://kimi-k3-1-pro.eu-lu-luxembourg-133.inference.kubetee.ai:8443/kubetee/evidence?role=nim-terminator&nonce=<64-hex> over strict mTLS (gateway east-west identity litellm.crt), HTTP 200. Envelope archived: docs/captures/kimi-k3-1-pro-tdx-20261125T012817Z.evidence.json (+ .regs.json). MRTD + MRCONFIGID + RTMR0-3 read from the TDX quote body (TDINFO). TWO cross-checks passed: (1) the quote's 64-byte report_data == sha256(epoch statement)||32 zero bytes — recomputed independently, MATCH; (2) the CCEL event log (22 extending records, RTMR0-2) replayed with RTMR[i]=SHA-384(RTMR[i]||digest) reproduces all four quote RTMRs EXACTLY. mrconfigid live-CONFIRMED == the recomputed InitData SHA-384 (0484a58e…) and the QEMU tdx-guest mrconfigid object. RTMR1 (kernel cmdline) includes agent.guest_components_rest_api=all — the guest-components REST enable that exposes /aa/evidence. MRTD/RTMR are launch-config-derived (OVMF edk2-stable202608 + kernel 6.18.62 + initrd + cmdline + init_data) and are independent of the in-guest sglang container image (build1 vs build2 give identical registers)."
   },
   "initdata": {
     "sha384": "0484a58e5927efd31bf871c74bcc9f1768f4335bb92340176989b3c5b320f9341d772b9e3e9c4fe4d824613cc19e6e0b",
@@ -72,7 +72,7 @@
     "exec_process_allowed": false
   },
   "capture_evidence": {
-    "_note": "Host-side live capture 2026-11-24 from the serving guest kimi-k3-1-pro39-sglang-b300-cc-0 on lu-b300-39 (2.152.70.39), sandbox-cc38fa4efb4f465a0b9534b3e749fd7418a85d3b65b7d62223ce34f028171b84. Non-invasive: read QEMU launch argv (/proc/<pid>/cmdline) + the tdx-guest launch object + on-disk launch input shas. No pod disruption, no exec.",
+    "_note": "Host-side live capture 2026-11-24 from the serving guest kimi-k3-1-pro-sglang-b300-cc-0 on lu-b300-39 (2.152.70.39), sandbox-cc38fa4efb4f465a0b9534b3e749fd7418a85d3b65b7d62223ce34f028171b84. Non-invasive: read QEMU launch argv (/proc/<pid>/cmdline) + the tdx-guest launch object + on-disk launch input shas. No pod disruption, no exec.",
     "qemu_binary": "/opt/kata/bin/qemu-system-x86_64-tdx-experimental",
     "machine": "q35,accel=kvm,kernel_irqchip=split,memory-backend=entire-guest-memory,confidential-guest-support=tdx",
     "vcpus": 33,
@@ -146,10 +146,10 @@
     "fresh per-request GPU evidence on the backend hop (boot appraisal today; composite CPU+8-GPU appraisal designed and in implementation)"
   ],
   "signature": {
-    "_note": "PENDING — the only remaining step. Sign with the offline Ed25519 key_id kubetee-measurements-2026-11-22 over RFC 8785 (JCS) of this document with the signature member removed (i.e. with sig excluded), write signature.sig base64url. The private half never enters the cluster or the repo. A generated-but-unsigned record is a draft, not evidence — do not publish until sig is filled.",
+    "_note": "This working record is intentionally unsigned — it is capture/provenance, not the evidence. The signature lives on the published 9-key record /.well-known/tee-measurements-sglang.tdx.json (Ed25519 key_id kubetee-measurements-2026-11-25, RFC 8785 JCS over that record with the signature member removed). The private half never enters the cluster or the repo.",
     "alg": "ed25519",
-    "key_id": "kubetee-measurements-2026-11-22",
+    "key_id": "kubetee-measurements-2026-11-25",
     "canonicalization": "RFC8785-without-signature-member",
-    "sig": "PENDING-SIGNATURE"
+    "sig": "UNSIGNED-BY-DESIGN (see _note)"
   }
 }
