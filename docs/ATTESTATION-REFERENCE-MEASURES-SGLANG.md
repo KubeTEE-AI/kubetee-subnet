@@ -1,7 +1,9 @@
 # Attestation reference measures — SGLang serving backend (`nim-terminator`)
 
-**Status: MEASURES CAPTURED & CROSS-VALIDATED (2026-11-25) — offline signature
-is the only step before publication.** Prepared 2026-11-24, captured 2026-11-25.
+**Status: PUBLISHED (2026-11-25) — measures captured & cross-validated, record
+signed (Ed25519, `key_id: kubetee-measurements-2026-11-22`) and live at
+[`tee-measurements-sglang.tdx.json`](https://kubetee.ai/.well-known/tee-measurements-sglang.tdx.json).**
+Prepared 2026-11-24, captured 2026-11-25, signed & published 2026-11-25.
 This is the human twin of the machine record
 [`tee-measurements-sglang.tdx.draft.json`](./tee-measurements-sglang.tdx.draft.json).
 It documents **the measures and the container used for the attestation** of the
@@ -17,10 +19,12 @@ separate `tee: "snp"` sibling record with `evidence.snp` populated and
 `quote`/`event_log`/`tdx` null — the same `role`, a different TEE. Do not treat
 the TDX registers below as intrinsic to the role.
 
-Publication target (once the capture steps below complete and the record is
-signed): `https://kubetee.ai/.well-known/tee-measurements.json` (this role's
-record) + the human twin here. Do **not** publish a record containing a
-`PENDING-CAPTURE` field — see [Publication gate](#5-publication-gate).
+Published 2026-11-25 as
+`https://kubetee.ai/.well-known/tee-measurements-sglang.tdx.json` (role-scoped
+`.tdx.` filename — the same `role`, a different TEE sibling of the SNP
+`litellm` record at `/.well-known/tee-measurements.json`, which is a separate
+document and is not overwritten by this record) + this human twin. The record
+contains no `PENDING-CAPTURE` field — see [Publication gate](#5-publication-gate).
 
 Companion specs (authoritative; this file is a role record, not a
 re-statement of the protocol):
@@ -30,7 +34,7 @@ re-statement of the protocol):
 | [ATTESTATION-SPEC-v1.md](./ATTESTATION-SPEC-v1.md) | `kubetee.attestation.v1` evidence, report-data binding, publication lifecycle |
 | [CLIENT-FACING-ATTESTATION.md](./CLIENT-FACING-ATTESTATION.md) | endpoint guide for verifiers |
 | [EAST-WEST-ATTESTED-MTLS.md](./EAST-WEST-ATTESTED-MTLS.md) | the backend hop this record measures |
-| [tee-measurements.schema.json](./tee-measurements.schema.json) | machine-readable schema for the published record |
+| [tee-measurements-sglang.tdx.schema.json](https://kubetee.ai/.well-known/tee-measurements-sglang.tdx.schema.json) | machine-readable schema for the published record (`kubetee.tee-measurements/1`) |
 
 ---
 
@@ -364,23 +368,24 @@ Do not publish this record until **all** are true. Status as of 2026-11-25:
    MRTD.
 3. ✅ **MRCONFIGID confirmed live** — equals the recomputed InitData SHA-384 and
    the QEMU `tdx-guest` object (§3.1, §3.5).
-4. ⬜ **Version strictly increased** (the signer enforces monotonic version) and
-   the change-notice has gone out **before** the deploy lands (partners pre-load
-   `upcoming` rows from it).
-5. ⬜ **Lifecycle status emitted** `upcoming` → roll → `active`, and the two
-   publications published together:
-   - `/.well-known/tee-measurements.json` (signed Ed25519 projection),
-   - `/.well-known/tee-reference-values.cbor` (CoRIM) + push to RVPS.
-6. ⬜ **Signed** with the offline Ed25519 key `key_id: kubetee-measurements-2026-11-22`
+4. ✅ **Version strictly increased** — this is `version: 1`, the first record in
+   the role-scoped stream (monotonic from here). *Change-notice note:* the
+   `upcoming`-before-`active` change-notice stage is folded here because this is
+   the initial publication of the stream (nothing to pre-load against yet); a
+   future revision must still emit `upcoming` → roll → `active`.
+5. ⬜ *Partially done* — lifecycle status emitted `active` and the signed JSON
+   projection is published at `/.well-known/tee-measurements-sglang.tdx.json`.
+   The second publication, `/.well-known/tee-reference-values.cbor` (CoRIM) +
+   push to RVPS, is **not yet** done.
+6. ✅ **Signed** with the offline Ed25519 key `key_id: kubetee-measurements-2026-11-22`
    (RFC 8785 JCS over the document with `signature` removed; the **private**
-   half never enters the cluster or the repo; `key_id` + pubkey go to partners
-   out-of-band and ride in the attestation keyset via `keyset_digest`). The
-   exact bytes to sign are prepared at
-   `/tmp/tee-measurements-jcs-bytes.json` (sha256
-   `90d7f32dcc6262cb14ac1768429cd05917e8cfc12bfb40d5c52aefd4d8f4b7d2` at
-   capture time — recompute from the final record before signing).
+   half never entered the cluster or the repo; `key_id` + pubkey go to partners
+   out-of-band and ride in the attestation keyset via `keyset_digest`). Signed
+   2026-11-25 and independently verified against the published verification key
+   ([`tee-measurements-signing-key-2026.json`](https://kubetee.ai/.well-known/tee-measurements-signing-key-2026.json)).
 
-A generated-but-unsigned record is a **draft**, not evidence. Publishing a
-record whose live measures were never observed would be exactly the failure
-mode to avoid: a successful hardware appraisal does not establish the claim
-you are publishing.
+A generated-but-unsigned record is a **draft**, not evidence — which is why
+this record was not published until the capture above completed and the
+signature was in place. Publishing a record whose live measures were never
+observed would be exactly the failure mode to avoid: a successful hardware
+appraisal does not establish the claim you are publishing.

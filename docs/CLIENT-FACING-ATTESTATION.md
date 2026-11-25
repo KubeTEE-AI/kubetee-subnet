@@ -22,7 +22,7 @@ registry.
 | The evidence is fresh for this request | The report contains the hash of the caller's v1 nonce/keyset statement, not a reused fixed challenge. |
 | The same guest terminates the caller's TLS connection | The gateway signs the nonce with its serving key; the client verifies it against the leaf certificate of its own TLS session and compares that key with the keyset. |
 | The approved guest composition is running | Launch `MEASUREMENT`, `HOST_DATA`, guest policy, TCB and approved images/policy are compared with the independently signed reference registry. |
-| The east-west SGLang backend runs our SGLang fork with the in-guest strict-mTLS transport | [ATTESTATION-REFERENCE-MEASURES-SGLANG.md](./ATTESTATION-REFERENCE-MEASURES-SGLANG.md) publishes the backend's measures (MRTD/RTMR0-3/MRCONFIGID), measured container set and fork/image provenance; machine record: [tee-measurements-sglang.tdx.draft.json](./tee-measurements-sglang.tdx.draft.json) (composition pins `MRCONFIGID`/OVMF/image/shim are **Active**; `MRTD`/`RTMR0-3` remain **PENDING-CAPTURE**, so the record is unsigned until they are read from a booted guest's quote). |
+| The east-west SGLang backend runs our SGLang fork with the in-guest strict-mTLS transport | [ATTESTATION-REFERENCE-MEASURES-SGLANG.md](./ATTESTATION-REFERENCE-MEASURES-SGLANG.md) publishes the backend's measures (MRTD/RTMR0-3/MRCONFIGID), measured container set and fork/image provenance; machine record: [tee-measurements-sglang.tdx.draft.json](./tee-measurements-sglang.tdx.draft.json), published signed as [`tee-measurements-sglang.tdx.json`](https://kubetee.ai/.well-known/tee-measurements-sglang.tdx.json) — all six registers (`MRTD`/`MRCONFIGID`/`RTMR0-3`) are **captured** from the booted guest's quote and cross-validated (report-data binding + CCEL replay), and the record is **Active (signed)**. |
 | A measurement-drifted or substituted backend cannot serve | Two independent layers: the KBS release policy (`nim/eastwest/resource-policy.rego`) blocks a drifted guest's certificate fetch at the source, and the gateway measurement-drift circuit breaker auto-blocks the row (HTTP 503) when role/`MRCONFIGID`/`MRTD`/`RTMR0-3`/OVMF move off the pinned reference. |
 | Which serving replica minted the report | The endpoint's `pod` field and the TLS-session binding. A standalone request is load-balanced; it does not identify a separate chat request's replica. |
 
@@ -250,13 +250,21 @@ Without `X-KubeTEE-Nonce`, a request is an ordinary OpenAI call with no
 additional report work. A malformed nonce produces an inline evidence error
 rather than fabricating a report.
 
-### Backend evidence for `nim-terminator` (agreed contract — **not deployed**)
+### Backend evidence for `nim-terminator` (agreed contract — relay to caller **not yet wired**)
 
-Everything above serves the `litellm` gateway role. The SGLang backend has no
-evidence surface today, and cannot reuse this one unchanged: the gateway
-terminates the caller's TLS, so the gateway's possession proof does not bind the
-backend, and the two roles sign against different keysets. The agreed contract
-is a **separate surface for the backend role**, relayed by the gateway.
+Everything above serves the `litellm` gateway role. The SGLang backend's own
+**in-guest evidence surface is deployed** — `GET /kubetee/evidence` (and the
+`/v1/kubetee/evidence` relay alias) on its in-guest strict-mTLS `:8443`
+listener returns the `{quote, cc_eventlog, keyset, bindings, tee_pubkey,
+signature}` envelope; this is the surface the 2026-11-25 capture exercised, and
+the measured gateway calls it as an mTLS client (east-west identity). What is
+**not yet wired** is the caller-facing relay described below — surfacing that
+backend envelope to the *caller* through a `X-KubeTEE-Backend-Evidence` response
+header on `/v1/chat/completions`. The backend cannot reuse the gateway surface
+unchanged: the gateway terminates the caller's TLS, so the gateway's possession
+proof does not bind the backend, and the two roles sign against different
+keysets. The agreed contract is a **separate surface for the backend role**,
+relayed by the gateway.
 
 **Request surface is one header.** The caller sends `X-KubeTEE-Nonce` (64
 lowercase hex) on `POST /v1/chat/completions` — the same header already used for
@@ -574,17 +582,21 @@ with a human twin per record in this directory.
 | Role | Record | Human twin | Status |
 |---|---|---|---|
 | `litellm` (SNP gateway) | [`tee-measurements.json`](https://kubetee.ai/.well-known/tee-measurements.json) | [ATTESTATION-SPEC-v1.md](./ATTESTATION-SPEC-v1.md) §2–3 | **Active** (signed) |
-| `nim-terminator` (SGLang backend, TDX/NVIDIA-CC) | [tee-measurements-sglang.tdx.draft.json](./tee-measurements-sglang.tdx.draft.json) | [ATTESTATION-REFERENCE-MEASURES-SGLANG.md](./ATTESTATION-REFERENCE-MEASURES-SGLANG.md) | **Partial** — composition pins (`MRCONFIGID` confirmed live ×2, OVMF `2a2dc271…` captured, image + shim digests) are **Active and enforced**; `MRTD`/`RTMR0-3` remain **PENDING-CAPTURE** (blocked on the not-yet-deployed backend evidence route — see the record's `capture_blockers`), so the record stays **unsigned** until they are read from a booted guest's quote. No row is marked Active (signed) while any field is pending. |
+| `nim-terminator` (SGLang backend, TDX/NVIDIA-CC) | [`tee-measurements-sglang.tdx.json`](https://kubetee.ai/.well-known/tee-measurements-sglang.tdx.json) | [ATTESTATION-REFERENCE-MEASURES-SGLANG.md](./ATTESTATION-REFERENCE-MEASURES-SGLANG.md) | **Active** (signed) — all six registers (`MRTD`/`MRCONFIGID`/`RTMR0-3`) captured from the booted guest's quote + CCEL replay (report-data binding MATCH) and cross-validated; signed Ed25519 (`key_id kubetee-measurements-2026-11-22`) and published at the role-scoped `.tdx.` URL. `MRTD` is captured-and-cross-checked (eventlog + binding), not independently recomputed bit-for-bit from firmware inputs (`tdx-measure` has no TDX MRTD mode). |
 
 **Measurement-drift boundary.** "A drifted backend cannot serve" (§1) is
 enforced against the **captured** pins above: `MRCONFIGID` (which fixes the
 whole InitData — role, measured agent policy, KBS endpoint), OVMF firmware
 digest, and the measured container/shim/image set. The TDX launch registers
-`MRTD`/`RTMR0-3` are additionally enforced **only once captured** — a reference
-that is `PENDING-CAPTURE` can never trip the breaker (a `None` expectation
-cannot fire), so drift in the firmware/boot-measurement layer is not yet
-caught until those values land. The boundary is stated in the machine record
-(`capture_blockers`) and mirrored in the gateway verifier's expectations.
+`MRTD`/`RTMR0-3` are captured and published, but the breaker enforces each one
+**only when its expectation is set** (a `None` expectation cannot fire — the
+detective always skips an unset field). In the shipped verifier those values are
+opt-in via env (`KUBETEE_BACKEND_EXPECTED_MRTD`/`_RTMR0-3`, which default to
+unset), so firmware/boot-measurement drift is caught only after those are
+configured; `MRCONFIGID` and OVMF are enforced by default. Auto-block itself is
+**separately opt-in** (`KUBETEE_BREAKER_ENFORCE=1`, default `0` = detect + 503
+surface only). The boundary is stated in the machine record (`capture_blockers`)
+and mirrored in the gateway verifier's expectations.
 
 ### Our SGLang fork (the measured backend source)
 
@@ -614,6 +626,6 @@ Current identity (full provenance in
 A verifier comparing the backend's live evidence should expect the published
 MRCONFIGID (SHA-384 of the uncompressed InitData TOML) and the MRTD/RTMR0-3
 values from the record — never a value supplied only by the serving guest.
-The draft record marks every not-yet-observed value `PENDING-CAPTURE`; it is
-not signed and not published until each value is read from a booted guest's
-quote and CC event-log replay.
+The record's values are **captured and cross-validated** (read from a booted
+guest's quote and CC event-log replay) and the record is **signed and
+published** at [`tee-measurements-sglang.tdx.json`](https://kubetee.ai/.well-known/tee-measurements-sglang.tdx.json).
