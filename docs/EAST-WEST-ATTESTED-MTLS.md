@@ -198,10 +198,10 @@ measurement-signing key is obtained independently from the registry's
 ## 7. Current verification and remaining gaps
 
 The released source is
-`KubeTEE-AI/litellm@836124e8830c51c8f07ccfe013e21cfaedfac420`,
-produced by GitHub Actions [run `44991222190`](https://github.com/KubeTEE-AI/litellm/actions/runs/44991222190),
+`KubeTEE-AI/litellm@447a3fca700ab00135f6de6910d42f97f4d0e743`,
+produced by GitHub Actions [run `45854725433`](https://github.com/KubeTEE-AI/litellm/actions/runs/45854725433),
 with image
-`ghcr.io/kubetee-ai/litellm-database:1.110.2-kubetee.1@sha256:2f47378d242aba5d4a73d4f6b7853e3fa1160e1c6020545960fa4a04cd651a96`.
+`ghcr.io/kubetee-ai/litellm-database:1.110.2-kubetee.4@sha256:f161a148ab560f19715c63a54fdd6673fa51b80f1e9a067255e66063da4f4dfb`.
 
 The signed measurement record identifies the exact guest launch measurement,
 InitData `HOST_DATA` derivation, images, firmware and kernel. All three

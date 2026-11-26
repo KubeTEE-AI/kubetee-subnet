@@ -1,44 +1,51 @@
 # Attestation reference measures — SGLang serving backend (`nim-terminator`)
 
-**Status: PUBLISHED (2026-11-25) — measures captured & cross-validated, record
-signed (Ed25519, `key_id: kubetee-measurements-2026-11-25`) and live at
-[`tee-measurements-sglang.tdx.json`](https://kubetee.ai/.well-known/tee-measurements-sglang.tdx.json).**
-Prepared 2026-11-24, captured 2026-11-25, signed & published 2026-11-25.
-This is the human twin of the machine record
-[`tee-measurements-sglang.tdx.draft.json`](./tee-measurements-sglang.tdx.draft.json).
-It documents **the measures and the container used for the attestation** of the
-east-west SGLang model backend — the guest that the measured AMD SEV-SNP LiteLLM
-gateway calls over strict mTLS (the "backend hop" of
-[EAST-WEST-ATTESTED-MTLS.md](./EAST-WEST-ATTESTED-MTLS.md)).
+This document is the **values record** for the TDX launch measures and
+container provenance of KubeTEE's east-west SGLang model backend — the guest
+that the measured AMD SEV-SNP LiteLLM gateway calls over strict mTLS (the
+"backend hop" of [EAST-WEST-ATTESTED-MTLS.md](./EAST-WEST-ATTESTED-MTLS.md)).
+Protocol, framing and binding are specified in
+[ATTESTATION-SPEC-v1.md](./ATTESTATION-SPEC-v1.md); the client procedure is
+[CLIENT-FACING-ATTESTATION.md](./CLIENT-FACING-ATTESTATION.md).
 
-**The `nim-terminator` role is TEE-generic; this record is one TEE of it.** The
-role names the SGLang/NIM backend regardless of hardware. The currently deployed
-NIM backends run on Intel TDX nodes, so this record is the `tee: "tdx"` sibling
-and its filename carries `.tdx.`. An AMD SEV-SNP NIM deployment would publish a
-separate `tee: "snp"` sibling record with `evidence.snp` populated and
-`quote`/`event_log`/`tdx` null — the same `role`, a different TEE. Do not treat
-the TDX registers below as intrinsic to the role.
+**Where these values are consumed: the signed registry (live allowlist).** The
+registers below are published as **records** in the single signed
+[`tee-measurements-registry.json`](https://kubetee.ai/.well-known/tee-measurements-registry.json)
+(schema `kubetee.tee-measurements-registry/1`). A verifier — and the gateway's
+circuit breaker — accepts live evidence iff its registers match **any active
+record** for the same `tee` (`policy.match: "any-active-record"`); there is no
+per-model / per-image pin. Records are retained **current + previous generation
+per chain** (a chain = model + role + tee; a generation = one immutable
+`image_ref`): both stay active so **both** verify during and after a rollout,
+and a record leaves the allowlist only when a third newer generation lands in
+its chain (or it is hard-expired / `status: "deprecated"` / `"revoked"`).
+Measurements change only at a rollout — there is no time-based re-capture and no
+fixed validity window. `valid_until` is optional, reserved for manual
+hard-expiry (for example throwaway canaries). Rotation is a re-capture + re-add
+(or `--prune` to drop the old one).
 
-Published 2026-11-25 as
-`https://kubetee.ai/.well-known/tee-measurements-sglang.tdx.json` (role-scoped
-`.tdx.` filename — the same `role`, a different TEE sibling of the SNP
-`litellm` record at `/.well-known/tee-measurements.json`, which is a separate
-document and is not overwritten by this record) + this human twin. The record
-contains no `PENDING-CAPTURE` field — see [Publication gate](#5-publication-gate).
-
-Companion specs (authoritative; this file is a role record, not a
-re-statement of the protocol):
-
-| Spec | Covers |
-|---|---|
-| [ATTESTATION-SPEC-v1.md](./ATTESTATION-SPEC-v1.md) | `kubetee.attestation.v1` evidence, report-data binding, publication lifecycle |
-| [CLIENT-FACING-ATTESTATION.md](./CLIENT-FACING-ATTESTATION.md) | endpoint guide for verifiers |
-| [EAST-WEST-ATTESTED-MTLS.md](./EAST-WEST-ATTESTED-MTLS.md) | the backend hop this record measures |
-| [tee-measurements-sglang.tdx.schema.json](https://kubetee.ai/.well-known/tee-measurements-sglang.tdx.schema.json) | machine-readable schema for the published record (`kubetee.tee-measurements/1`) |
+**The `nim-terminator` role is TEE-generic.** The role names the SGLang/NIM
+backend regardless of hardware. The deployed NIM backends run on Intel TDX
+nodes, so the records below are the `tee: "tdx"` family and their filenames
+carry `.tdx.`. An AMD SEV-SNP NIM deployment publishes a separate `tee: "snp"`
+sibling record with `evidence.snp` populated and `quote`/`event_log`/`tdx` null —
+the same `role`, a different TEE. Do not treat the TDX registers below as
+intrinsic to the role.
 
 ---
 
-## 1. Source and container provenance
+## 1. Record inventory and provenance
+
+Current registry records (each one measured `(model × node)` launch):
+
+| Record id | Model | Captured | Valid until | Capture node |
+|---|---|---|---|---|
+| `kimi-k3.1-pro-kimi-k31-granian-mtls-45497390909-b8f8015d` | `moonshotai/kimi-k3.1-pro` | 2026-11-25T01:28:17Z | 2027-02-23T01:28:17Z | `kimi-k3-1-pro-sglang-b300-cc-0` (lu-b300-39) |
+| `mimo-v2.6-pro-mtls-evidence-3117f580-20261125-d12bfac` | `xiaomi/mimo-v2.6-pro` | 2026-11-25T17:41:08Z | 2027-02-23T17:41:08Z | `mimo-v2-6-pro-rl-sglang-b200-cc-0` (tx-b200-16) |
+| `mimo-v2.6-pro-mtls-evidence-3117f580-20261125-lub30040` | `xiaomi/mimo-v2.6-pro` | 2026-11-26T10:28:53Z | 2027-02-24T10:28:53Z | `mimo-v2-6-pro-rl-sglang-b300-cc-0` (lu-b300-40) |
+
+A new measured model — or the same model on a new node — is simply one more
+record; the verifier needs no change.
 
 The serving engine is built from **KubeTEE's SGLang fork
 [`KubeTEE-AI/sglang`](https://github.com/KubeTEE-AI/sglang)** (public fork of
@@ -46,30 +53,25 @@ The serving engine is built from **KubeTEE's SGLang fork
 Actions on GitHub-hosted runners only, and consumed `@sha256:` digest-pinned.
 The strict-mTLS transport and the evidence route are **fork source code inside
 the attested image** — not a sidecar or a proxy — so they are covered by the
-guest measurement. Container provenance (image identity, the exact fork commit,
-the CI build, and the full container set in the guest):
+guest measurement. Per-record container provenance:
 
-| Field | Value |
-|---|---|
-| Image (quote-minting build) | `ghcr.io/kubetee-ai/sglang:kimi-k31-granian-mtls-45497390909-b8f8015d@sha256:68cb8790dd1a959831f9bb10403c6f68142ddf9b5963722d3aa2b5b3f1cf59cb` |
-| Fork source | `KubeTEE-AI/sglang`, `kubetee/kimi-k31-granian-mtls-day0` @ [`b8f8015d3291`](https://github.com/KubeTEE-AI/sglang/commit/b8f8015d329182a8d973aacc71e3d7ca371a5e22) |
-| CI run | [`45497390909`](https://github.com/KubeTEE-AI/sglang/actions/runs/45497390909) |
-| RuntimeClass | `kata-qemu-nvidia-gpu-tdx-runtime-rs` |
-| Validated | 2026-11-25 on the live Kimi-K3.1-Pro backend guest (Luxembourg) — the guest that minted the reference measurements |
+| Record | Image (quote-minting build) | Fork source | CI run |
+|---|---|---|---|
+| Kimi (lu-b300-39) | `ghcr.io/kubetee-ai/sglang:kimi-k31-granian-mtls-45497390909-b8f8015d@sha256:68cb8790dd1a959831f9bb10403c6f68142ddf9b5963722d3aa2b5b3f1cf59cb` | `kubetee/kimi-k31-granian-mtls-day0` @ [`b8f8015d3291`](https://github.com/KubeTEE-AI/sglang/commit/b8f8015d329182a8d973aacc71e3d7ca371a5e22) | [`45497390909`](https://github.com/KubeTEE-AI/sglang/actions/runs/45497390909) |
+| MiMo (tx-b200-16, lu-b300-40) | `ghcr.io/kubetee-ai/sglang:mtls-evidence-3117f580-20261125@sha256:982c8c10f59c5e8fb724a9cc5d67e8f777c5fde36704d79a5e0dba5f727a9590` | `kubetee-overlay` @ [`d12bfac85c87`](https://github.com/KubeTEE-AI/sglang/commit/d12bfac85c87076fd80983751d4f10f5dcb5c377) | [`45639037187`](https://github.com/KubeTEE-AI/sglang/actions/runs/45639037187) |
 
-Launch registers measure firmware + kernel + initrd + cmdline and **not
-application code**, so canary image rolls that change only app code keep the
-same registers. Full fork/branch/patch provenance, the transport source layout,
-the model-agnostic overlay base images and the guest's complete container set
-are in `docs/attestation-internal-technical-notes-2026-11-25.md` (root repo).
+RuntimeClass `kata-qemu-nvidia-gpu-tdx-runtime-rs` for both. Launch registers
+measure firmware + kernel + initrd + cmdline and **not** application code, so
+canary image rolls that change only app code keep the same registers. Full
+fork/branch/patch provenance, the transport source layout, the model-agnostic
+overlay base images and the guest's complete container set are in
+`docs/attestation-internal-technical-notes-2026-11-25.md` (root repo).
 
 ---
 
 ## 2. Measured launch inputs (TDX / NVIDIA-CC)
 
-These are the inputs a verifier pins. The TDX launch registers below were
-captured 2026-11-25 from the booted guest's hardware quote and cross-checked
-(report-data binding + CCEL replay) — see §2.3 and §5.
+These are the inputs a verifier pins.
 
 ### 2.1 InitData → MRCONFIGID / `host_data`
 
@@ -79,19 +81,25 @@ The guest's InitData is the gzip+base64 blob in the Kata annotation
 **SHA-384(uncompressed InitData TOML)**; the first 32 bytes are the SNP
 `host_data`, and the full 48-byte digest is the TDX **MRCONFIGID**.
 
-The deployed guest's InitData (role `image-gen`, committing `policy.rego`,
-`aa.toml`, `cdh.toml` at algorithm `sha384`, KBS endpoint
-`https://kbs.kubetee.ai`) digests to the `MRCONFIGID` in §2.3 — recomputed from
-the annotation and confirmed equal to the booted guest's quote byte-for-byte
-(2026-11-25).
+All deployed backend records share one InitData (role `image-gen`, committing
+`policy.rego`, `aa.toml`, `cdh.toml` at algorithm `sha384`, KBS endpoint
+`https://kbs.kubetee.ai`):
+
+- **InitData SHA-384 (= MRCONFIGID):**
+  `0484a58e5927efd31bf871c74bcc9f1768f4335bb92340176989b3c5b320f9341d772b9e3e9c4fe4d824613cc19e6e0b`
+- **`host_data` prefix-32 (SNP sibling field):**
+  `0484a58e5927efd31bf871c74bcc9f1768f4335bb92340176989b3c5b320f934`
+
+Recomputed from the annotation and confirmed byte-for-byte equal to the booted
+guests' quotes.
 
 ### 2.2 Measured agent policy
 
 The `policy.rego` inside InitData is **measured** — changing it changes
 MRCONFIGID, so enabling a denied capability is a measurement change a verifier
 would reject. The posture denies `ExecProcessRequest` and `WriteStreamRequest`
-(host cannot exec into the guest or write to processes) while allowing the
-standard container-lifecycle and read surface. The full request table is in
+(the host cannot exec into the guest or write to its processes) while allowing
+the standard container-lifecycle and read surface. The full request table is in
 `docs/attestation-internal-technical-notes-2026-11-25.md` (root repo).
 
 ### 2.3 Guest composition
@@ -103,92 +111,79 @@ standard container-lifecycle and read surface. The full request table is in
 | Shim | `/opt/kata/runtime-rs/bin/containerd-shim-kata-v2`, sha256 `82cd97b52ac89b6a73871d5ca68b61f840c5d84e030f28b72dc03f9baab9a73a` (overlay `v4.4.0-fix11649-t15t16-vsocktimeout`) |
 | Firmware (OVMF) | `/opt/kata/share/ovmf/OVMF.inteltdx.fd`, **`edk2-stable202608`** (in-tree lazy-accept) — fd sha256 **`2a2dc2710b0cfafc813310c7e98c67b72b919b8e1572d52a4c79466a2e499226`** |
 | NVIDIA guest driver | `615.71.09` (`kata-containers/versions.yaml` `nvidia.driver`) |
-| **TDX launch registers** | captured 2026-11-25 from the booted quote (TDINFO) — see the table below |
-| `MRTD` cross-check | captured from the quote's TDINFO (MRTD is TDX-module-measured and cannot be reconstructed from launch inputs). `RTMR0-3` independently cross-checked by CCEL replay — both matched (§2.5). |
 
-**TDX launch registers (captured 2026-11-25, `nim-terminator` / Kimi-K3.1-Pro):**
+---
 
-| Register | Value (48-byte SHA-384, hex) | Extended by |
-|---|---|---|
-| **MRTD** | `382d7bb61e152a5cc6eb22922a4dc9d33025211e24ec199fe38d6233c39cd86bf633e3c4f6e62393cf7ce6da91069ca0` | TDX module (initial TD: OVMF + kernel + initrd + cmdline) |
-| **MRCONFIGID** | `0484a58e5927efd31bf871c74bcc9f1768f4335bb92340176989b3c5b320f9341d772b9e3e9c4fe4d824613cc19e6e0b` | from `cc_init_data` (= §2.1 InitData SHA-384) |
-| **RTMR0** | `14f01287aefb3ac196451163aa8cf68cc1635083b24eb317256288815a5b48bbe7cdf2e2395ebf0474b3e528d2004014` | firmware / CCEL |
-| **RTMR1** | `97fa8ac275f656b876de7c68709608bfe6ace60b58a3b8fb6e990c15bd8711ce8807ed86956f39b62afb9a9daee80227` | kernel cmdline (incl. `agent.guest_components_rest_api=all`) |
-| **RTMR2** | `77903a48ffcc66809d3f01a9853186ac08bc0081d06e4d05a0e0307450188e08d9f21b9c77e6747df0a90e65d7e3bff9` | initrd / OS |
-| **RTMR3** | `000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000` | unused (zero) |
-| **MROWNER / MROWNERCONFIG** | `0000…0000` (both zero) | unset (as expected) |
+## 3. TDX launch registers (captured from booted quotes)
 
-These registers are a function of the guest's **launch config** (OVMF
-`edk2-stable202608` + kernel `6.18.62-211-nvidia-gpu` + initrd + cmdline +
-`cc_init_data`), **not** the in-guest `sglang` container image — the transport /
-evidence-route code is application-level and does not change MRTD/RTMR. So these
-values hold across canary image rolls that change only the app code.
+| Register | Kimi (lu-b300-39) | MiMo (tx-b200-16) | MiMo (lu-b300-40) | Extended by |
+|---|---|---|---|---|
+| **MRTD** | `382d7bb61e152a5cc6eb22922a4dc9d33025211e24ec199fe38d6233c39cd86bf633e3c4f6e62393cf7ce6da91069ca0` | *(identical)* | *(identical)* | TDX module (initial TD: OVMF + kernel + initrd + cmdline) |
+| **MRCONFIGID** | `0484a58e5927efd31bf871c74bcc9f1768f4335bb92340176989b3c5b320f9341d772b9e3e9c4fe4d824613cc19e6e0b` | *(identical)* | *(identical)* | from `cc_init_data` (= §2.1 InitData SHA-384) |
+| **RTMR0** | `14f01287aefb3ac196451163aa8cf68cc1635083b24eb317256288815a5b48bbe7cdf2e2395ebf0474b3e528d2004014` | `e5f1d7d291f34258fec25a5ba409a9b3a7a17d7057756fa556b22fad5e8d76d47f50be3d294d210e85039bacc57b1e19` | `f448be9c9b0a239e72852dc0711f87593a961823318ece53123693e555c08ee4fdd5908d9f12dafbc251f0b4ef19ef0b` | firmware / CCEL — **node-specific** |
+| **RTMR1** | `97fa8ac275f656b876de7c68709608bfe6ace60b58a3b8fb6e990c15bd8711ce8807ed86956f39b62afb9a9daee80227` | *(identical)* | *(identical)* | kernel cmdline (incl. `agent.guest_components_rest_api=all`) |
+| **RTMR2** | `77903a48ffcc66809d3f01a9853186ac08bc0081d06e4d05a0e0307450188e08d9f21b9c77e6747df0a90e65d7e3bff9` | *(identical)* | *(identical)* | initrd / OS |
+| **RTMR3** | `0000…0000` (zero) | *(identical)* | *(identical)* | unused (zero) |
+| **MROWNER / MROWNERCONFIG** | `0000…0000` (both zero) | *(identical)* | *(identical)* | unset (as expected) |
+
+**Register behavior across records:**
+
+- `MRTD`, `MRCONFIGID`, `RTMR1`, `RTMR2`, `RTMR3` are a function of the guest's
+  **launch config** (OVMF `edk2-stable202608` + kernel `6.18.62-211-nvidia-gpu`
+  + initrd + cmdline + `cc_init_data`), **not** the in-guest `sglang` container
+  image. They are byte-identical across every record above — and stay identical
+  across canary image rolls that change only application code.
+- `RTMR0` (firmware / CCEL) is **node-specific**: it legitimately differs per
+  host's firmware state. This is why the registry matches **any active record**
+  rather than one pinned register set — and why a model deployed to a new node
+  needs one new record for that `(model × node)` launch.
 
 Capture procedure (per release): (a) MRCONFIGID from the InitData digest as in
 §2.1; (b) `MRTD` + `RTMR0-3` from a booted guest's hardware quote via the
-`/kubetee/evidence` route (§2.5), cross-checked by CCEL replay; (c)
-OVMF/shim sha256 per node from the host. Each measure-changing release goes
+`/kubetee/evidence` route (or the gateway relay), cross-checked by CCEL replay;
+(c) OVMF/shim sha256 per node from the host. Each measure-changing release goes
 through the publication lifecycle in
-[ATTESTATION-SPEC-v1.md](./ATTESTATION-SPEC-v1.md) §3 (change-notice →
-`upcoming` → roll → `active`, strictly increasing version).
+[ATTESTATION-SPEC-v1.md](./ATTESTATION-SPEC-v1.md) §5.
 
-### 2.4 Report-data binding (agreed contract for this role)
+### 3.1 Capture method and cross-checks
 
-| Field | Value |
-|---|---|
-| Schema | `kubetee.attestation.v1` |
-| `report_data` | `SHA-256(JCS(statement)) ‖ 32 zero bytes` (64 bytes) |
-| statement (nonce-bound form) | `{"keyset_digest":"sha256:<hex>","nonce":"<64-hex>","purpose":"kubetee.attestation.v1"}` |
-| statement (epoch form, cached) | `{"epoch_id","issued_at","valid_until","keyset_digest","purpose"}` |
-| Nonce | caller-supplied, 64 lowercase hex |
-| Evidence | Intel TDX DCAP quote at `UpToDate` TCB, **debug bit clear** (AMD SEV-SNP is the gateway hop only) |
-| Per-request signature key | `tee-pubkey` — the backend's **per-epoch evidence-signing key** (Ed25519), distinct from its TLS serving key and from the gateway's keys. Its public half is committed via `keyset_digest` in the epoch statement (and therefore bound into the hardware `report_data`). |
-| Per-request signature input | `SHA-256(quote) ‖ SHA-256(nonce) ‖ epoch_id ‖ counter`, where `counter` is a monotonic per-epoch request counter. Verified with `tee-pubkey`. |
-
-The 64-byte convention is shared with the SNP gateway record. The two binding
-forms (nonce-bound and cached epoch) and the two-layer freshness model are
-specified in [CLIENT-FACING-ATTESTATION.md](./CLIENT-FACING-ATTESTATION.md)
-"Backend evidence for `nim-terminator`".
-
-> **This role is TEE-generic.** These TDX registers describe the currently
-> deployed NIM backends (Intel TDX nodes). An AMD SEV-SNP NIM deployment
-> publishes a sibling record for the same role with `evidence.snp` populated and
-> `quote`/`event_log`/`tdx` null; its binding is the SNP `report_data` convention
-> of [ATTESTATION-SPEC-v1.md](./ATTESTATION-SPEC-v1.md) §4.
-
-### 2.5 Capture method and cross-checks (2026-11-25)
-
-The registers in §2.3 are captured **from the live guest, with no pod disruption
-and no `ExecProcess`**, via the in-guest evidence surface (CoCo's
+The registers are captured **from the live guest, with no pod disruption and no
+`ExecProcess`**, via the in-guest evidence surface (CoCo's
 `GET 127.0.0.1:8006/aa/evidence`, relayed by our `/kubetee/evidence` route,
 enabled by the guest kernel parameter `agent.guest_components_rest_api=all`).
-`GET https://kimi-k3-1-pro.eu-lu-luxembourg-133.inference.kubetee.ai:8443/kubetee/evidence?role=nim-terminator&nonce=<64-hex>`
+`GET https://<backend-host>:8443/kubetee/evidence?role=nim-terminator&nonce=<64-hex>`
 over strict mTLS with the gateway east-west identity returns the
 `kubetee.attestation.v1` envelope (epoch statement, Ed25519 `tee-pubkey`,
 monotonic counter, `quote`, `cc_eventlog`); `MRTD`, `MRCONFIGID` and `RTMR0-3`
-are read from the quote's TDINFO.
+are read from the quote's TDINFO. When the direct listener is unavailable, the
+same envelope is obtained through the gateway relay
+(`X-KubeTEE-Backend-Evidence`).
 
-**Cross-checks (both passed):**
+**Cross-checks (passed on the Kimi and tx-b200-16 MiMo captures):**
 
 - **Report-data binding** — the quote's 64-byte `report_data` equals
   `SHA-256(epoch statement) ‖ 32 zero bytes`, recomputed independently: **match**.
-- **CCEL replay** — the 22-record CC event log replayed with the TDX rule
+- **CCEL replay** — the CC event log replayed with the TDX rule
   `RTMR[i] = SHA-384(RTMR[i] ‖ digest)` (records 1–4 → RTMR0–3) reproduces
   **all four** quote RTMRs exactly. MRTD is TDX-module-measured and is not in
   the event log.
 - **MRCONFIGID live-confirm** — equals the recomputed InitData SHA-384 (§2.1).
 
+The lu-b300-40 MiMo capture was cross-checked by register identity against its
+tx-b200-16 twin (MRTD/MRCONFIGID/RTMR1-3 byte-exact) plus the MRCONFIGID
+binding.
+
 ---
 
-## 3. What is proven, and what is not
+## 4. What is proven, and what is not
 
 Proven / in the measured surface:
 
 - The TLS key is built **in-guest** from attested CDH delivery — no Kubernetes
   Secret, no host mount, no unmeasured proxy in the trust path. TLS terminates
   inside the measured SGLang process (`:8443` Granian strict mTLS).
-- Key possession is provable: the backend signs the caller's nonce with the
-  TLS key.
+- Key possession is provable: the backend signs the caller's nonce with the TLS
+  key.
 - Exec into the guest is **measured-denied** (`ExecProcessRequest := false`),
   and stopping the pod destroys the VM and its decrypted memory.
 - The transport code itself is inside the attested image, built from our public
@@ -196,16 +191,17 @@ Proven / in the measured surface:
 
 Not claimed:
 
-- **Byte-identical reproducible digest** from a third party's own build. As with
-  the gateway record: transitive dependency resolution at build time (only one
-  requirements file is fully hash-locked) and build-timestamp normalization
-  (`SOURCE_DATE_EPOCH` / layer-tar normalization) block bit-reproducibility.
-  Independent **rebuild + verify** is available (public source, digest-pinned
-  bases, SHA-pinned workflow). We state bit-reproducibility only once a
-  third-party rebuild actually matches.
-- Fresh per-request **GPU** evidence on the backend hop (boot appraisal today;
-  the scheduled composite CPU + 8-GPU appraisal is designed and in
-  implementation — [EAST-WEST-ATTESTED-MTLS.md](./EAST-WEST-ATTESTED-MTLS.md)).
+- **Byte-identical reproducible digest** from a third party's own build.
+  Transitive dependency resolution at build time (only one requirements file is
+  fully hash-locked) and build-timestamp normalization (`SOURCE_DATE_EPOCH` /
+  layer-tar normalization) block bit-reproducibility. Independent **rebuild +
+  verify** is available (public source, digest-pinned bases, SHA-pinned
+  workflow). We state bit-reproducibility only once a third-party rebuild
+  actually matches.
+- Fresh per-request **GPU** evidence on the backend hop (boot appraisal plus the
+  per-epoch quote today; the scheduled composite CPU + 8-GPU appraisal is
+  designed and in implementation —
+  [EAST-WEST-ATTESTED-MTLS.md](./EAST-WEST-ATTESTED-MTLS.md)).
 - A bit-for-bit independent recomputation of `MRTD` from firmware inputs — it is
   captured from the hardware quote and cross-checked via the CCEL replay + the
   report-data binding, but no Intel TDX `tdx-measure`-equivalent recompute has
@@ -213,45 +209,24 @@ Not claimed:
 
 ---
 
-## 4. Publication gate
-
-A generated-but-unsigned record is a **draft**, not evidence — a successful
-hardware appraisal does not establish the claim you are publishing. This record
-was published 2026-11-25 only after the §2.5 capture and cross-checks passed,
-both machine-readable projections were published and registered, and the offline
-Ed25519 signature (`key_id: kubetee-measurements-2026-11-25`, RFC 8785 JCS over
-the document with `signature` removed) was in place and independently verified
-against the published verification key
-([`tee-measurements-signing-key-2026.json`](https://kubetee.ai/.well-known/tee-measurements-signing-key-2026.json)).
-
-The verification key (public half) — mirrored here independently of the machine
-record so a website-repo change cannot silently swap it. Verify the two agree
-before trusting a record signature:
-
-| Field | Value |
-|---|---|
-| `key_id` | `kubetee-measurements-2026-11-25` |
-| algorithm | `Ed25519` (RFC 8785 JCS, without the `signature` member) |
-| public `x` | `FekS2fBdTq91Xe6IIUoGWot_ig7uybpX9vhO5WN_1Wc` |
-| SPKI (DER, base64url) | `MCowBQYDK2VwAyEAFekS2fBdTq91Xe6IIUoGWot_ig7uybpX9vhO5WN_1Wc` |
-| SPKI SHA-256 | `sha256:046b732aa6bb0695a15c00af9d58d64661e5e27ec3d169851ea77dc0bbf6f530` |
-The full gate checklist and its status are in
-`docs/attestation-internal-technical-notes-2026-11-25.md` (root repo).
-
----
-
 ## 5. The CoRIM twin and RVPS registration
 
-Alongside the JSON record, KubeTEE publishes a **CoRIM** (Concise Reference
+Alongside the JSON records, KubeTEE publishes a **CoRIM** (Concise Reference
 Integrity Manifest, IETF RATS) so a Verifier's **RVPS** (Trustee Reference Value
-Provider Service) can appraise a TDX quote's launch registers against this
-approved reference state.
+Provider Service) can appraise a TDX quote's launch registers against approved
+reference state.
 
 - **CoRIM (CBOR):** [https://kubetee.ai/.well-known/tee-reference-values.cbor](https://kubetee.ai/.well-known/tee-reference-values.cbor)
 - **Detached signature:** `/.well-known/tee-reference-values.cbor.sig` (Ed25519,
-  same `key_id: kubetee-measurements-2026-11-25` as the JSON record)
+  same `key_id` as the JSON records)
 - **Digest:** `/.well-known/tee-reference-values.cbor.sha256`
 - **Human twin + derived URIs:** `/.well-known/tee-reference-values.json`
+
+**Scope: the Kimi-K3.1-Pro record only.** The published CoRIM carries the
+`kimi-k3.1-pro` register set (its model class is `kubetee` /
+`sglang-kimi-k3-1-pro`); the MiMo records exist in the JSON registry and are
+not (yet) represented in RVPS reference state. An RVPS-based verifier appraises
+Kimi evidence; MiMo evidence is appraised against the JSON registry.
 
 The CoRIM is canonical CBOR (RFC 8949), CoRIM tag **501** wrapping one CoMID tag
 **506** with a single compound reference-triple (all six registers must match
@@ -264,9 +239,8 @@ Digests are SHA-384 (`alg = 7`). The build is byte-reproducible:
 
 Trustee's CoRIM extractor (`rvps/src/extractors/corim/`, v0.23.0) maps each
 reference value to a URI `class.vendor / class.model / mkey / digests`. The model
-class identifies the **Kimi-K3.1-Pro** model (`vendor = kubetee`,
-`model = sglang-kimi-k3-1-pro`) — it carries no deployment or node suffix. These
-land as:
+class identifies the model (`vendor = kubetee`, `model = sglang-kimi-k3-1-pro`) —
+it carries no deployment or node suffix. These land as:
 
 | URI | Register | Value (SHA-384) |
 |---|---|---|
@@ -310,15 +284,38 @@ hardware := 2 if {
 Compare the quote's `report_data` / `mr_config_id` against the record's
 `initdata.sha384` for the InitData binding, exactly as in the JSON twin.
 
-These URIs are namespaced (`kubetee/<model>/<register>/digests`) on purpose: the
-stock `default_cpu` attestation policy queries bare ids, so this registration is
-inert to live appraisal and cannot accidentally affirm an arbitrary guest. Only a
-policy that explicitly queries these URIs appraises against them.
-
 The CoRIM's detached signature is a **publication integrity artifact** (same
-offline key as the JSON record); verify it offline before ingesting if you want
-supply-chain assurance. The build, the byte-reproducible generator
+offline key as the JSON records); verify it offline before ingesting if you want
+supply-chain assurance. Trustee v0.23.0's RVPS CoRIM extractor does not verify
+CoRIM signatures itself. The build, the byte-reproducible generator
 (`kubetee-subnet/scripts/build-tee-reference-values-corim.py`), and the Trustee
 RVPS ingestion mechanics (the standard gRPC `RegisterReferenceValue` call) are
 documented in `docs/attestation-internal-technical-notes-2026-11-25.md` (root
 repo).
+
+---
+
+## 6. Publication gate and signing key
+
+A generated-but-unsigned record is a **draft**, not evidence — a successful
+hardware appraisal does not establish the claim you are publishing. A record is
+published only after its capture and cross-checks (§3.1) pass, both
+machine-readable projections are published and registered, and the offline
+Ed25519 signature (RFC 8785 JCS over the document with `signature` removed) is
+in place and independently verified against the published verification key
+([`tee-measurements-signing-key-2026.json`](https://kubetee.ai/.well-known/tee-measurements-signing-key-2026.json)).
+
+The verification key (public half) — mirrored here independently of the machine
+record so a website-repo change cannot silently swap it. Verify the two agree
+before trusting a record signature:
+
+| Field | Value |
+|---|---|
+| `key_id` | `kubetee-measurements-2026-11-25` |
+| algorithm | `Ed25519` (RFC 8785 JCS, without the `signature` member) |
+| public `x` | `FekS2fBdTq91Xe6IIUoGWot_ig7uybpX9vhO5WN_1Wc` |
+| SPKI (DER, base64url) | `MCowBQYDK2VwAyEAFekS2fBdTq91Xe6IIUoGWot_ig7uybpX9vhO5WN_1Wc` |
+| SPKI SHA-256 | `sha256:046b732aa6bb0695a15c00af9d58d64661e5e27ec3d169851ea77dc0bbf6f530` |
+
+The full gate checklist and its status are in
+`docs/attestation-internal-technical-notes-2026-11-25.md` (root repo).
