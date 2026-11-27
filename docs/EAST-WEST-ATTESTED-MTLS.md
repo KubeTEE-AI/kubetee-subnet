@@ -210,13 +210,25 @@ with image
 The signed measurement record identifies the exact guest launch measurement,
 InitData `HOST_DATA` derivation, images, firmware and kernel. All three
 captured gateway replicas were checked using native AMD verification.
-Independent SNP consumer work is being reviewed in
-[SayGM/gm-miner PR #419](https://github.com/taostat/gm-miner/pull/419); that
-pull request is not a claim of an already-merged worker migration.
+Independent SNP consumer work (AMD SEV-SNP appraisal of the current
+`kubetee.attestation.v2` binding) is under review in
+[SayGM/gm-miner PR #430](https://github.com/taostat/gm-miner/pull/430) (its
+predecessor #419 was closed unmerged and superseded); that pull request is not
+a claim of an already-merged worker migration.
 
 Acceptance still requires native client verification rather than only a
 chat 200. Remaining hardening includes fresh in-guest-generated serving
 identities (the zero-operator step) and byte-reproducible builds. The
 per-backend fresh-evidence contract is deployed (Phase 4b + release `.8`).
+
+**Registry anti-rollback (Phase 6 §3.2) is implemented and enforced** in the
+gateway matcher and the reference verifier (chain + monotonic `version` floor);
+the first chained registry publish is pending (see
+[ATTESTATION-SPEC-v1.md §5](./ATTESTATION-SPEC-v1.md) "Registry anti-rollback").
+The general rule it embodies — *a verifier never accepts material older than the
+newest it has already trusted* — is the same one this doc recommends for the
+east-west mesh-CA rotation in §3: the measurement-registry floor delivers that
+for measurement approval today, and a chained mesh-CA history would deliver it
+for per-boot identities once §3 is built.
 Reproducible-build equivalence is published source-commit → CI-run →
 image-digest provenance today; bit-for-bit reproducibility is not claimed.
