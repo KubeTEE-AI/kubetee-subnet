@@ -53,7 +53,11 @@ Changelog = "https://github.com/KubeTEE-AI/kubetee-subnet/releases"
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
-    "black>=24.0",
+    "pytest-cov>=5.0",
+    # Formatters/linters are pinned for deterministic output; keep these
+    # two pins in sync with .github/workflows/ci.yml.
+    "black==26.10.1",
+    "ruff==0.14.13",
 ]
 
 # The `validator/` directory is a flat unit of bare-import modules, not an
