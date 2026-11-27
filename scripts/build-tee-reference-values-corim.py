@@ -57,6 +57,7 @@ Outputs (byte-reproducible -- canonical CBOR + fixed inputs):
     tee-reference-values.cbor.sha256   hex digest of the CBOR bytes
     tee-reference-values.json          human-readable twin + derived RV URIs
 """
+
 from __future__ import annotations
 
 import argparse
@@ -114,7 +115,9 @@ def build_corim() -> CBORTag:
     for register, hexval in REFERENCE_VALUES.items():
         digest_bytes = bytes.fromhex(hexval)
         if len(digest_bytes) != 48:
-            raise SystemExit(f"{register}: expected 48-byte SHA-384, got {len(digest_bytes)}")
+            raise SystemExit(
+                f"{register}: expected 48-byte SHA-384, got {len(digest_bytes)}"
+            )
         claims.append({0: register, 1: {2: [[SHA384_ALG, digest_bytes]]}})
 
     # ONE reference-triple = one compound reference state for one target
@@ -148,7 +151,10 @@ def verify_extraction(raw: bytes) -> list[dict]:
         assert tag.tag == 506, f"CoMID tag {tag.tag} != 506"
         # The CoMID is a CBOR byte string (corim-rs ConciseMidTag); decode it.
         comid = cbor2.loads(tag.value)
-        assert set(comid.keys()) == {1, 4}, f"unexpected CoMID keys {comid.keys()}"
+        assert set(comid.keys()) == {
+            1,
+            4,
+        }, f"unexpected CoMID keys {comid.keys()}"
         assert comid[1][0] == COMID_TAG_ID and comid[1][1] == COMID_TAG_VERSION
         for env, ref_claims in comid[4][0]:
             base = []
@@ -185,15 +191,27 @@ def sign_detached(cbor_bytes: bytes, key: Path) -> bytes:
     )
     expected_pub = (key.parent / "signing-public.der").read_bytes()
     if derived != expected_pub:
-        raise SystemExit("offline key does not match its intended public identity")
+        raise SystemExit(
+            "offline key does not match its intended public identity"
+        )
     in_path = key.parent / ".tee-ref-values.cbor.tmp"
     sig_path = key.parent / ".tee-ref-values.sig.tmp"
     try:
         # `pkeyutl -rawin` needs a seekable input file (not a pipe/stdin).
         in_path.write_bytes(cbor_bytes)
         subprocess.run(
-            [OPENSSL, "pkeyutl", "-sign", "-rawin", "-inkey", str(key),
-             "-in", str(in_path), "-out", str(sig_path)],
+            [
+                OPENSSL,
+                "pkeyutl",
+                "-sign",
+                "-rawin",
+                "-inkey",
+                str(key),
+                "-in",
+                str(in_path),
+                "-out",
+                str(sig_path),
+            ],
             check=True,
         )
         return sig_path.read_bytes()
@@ -204,8 +222,12 @@ def sign_detached(cbor_bytes: bytes, key: Path) -> bytes:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--key", type=Path, required=True,
-                    help="offline Ed25519 private key (PEM)")
+    ap.add_argument(
+        "--key",
+        type=Path,
+        required=True,
+        help="offline Ed25519 private key (PEM)",
+    )
     ap.add_argument("--out-dir", type=Path, required=True)
     a = ap.parse_args()
     key = a.key.expanduser().resolve(strict=True)
@@ -218,7 +240,9 @@ def main() -> None:
     expected = {derived_uri(r): [v] for r, v in REFERENCE_VALUES.items()}
     got = {d["uri"]: d["value"] for d in derived}
     if got != expected:
-        raise SystemExit(f"extractor round-trip mismatch:\n got={got}\n want={expected}")
+        raise SystemExit(
+            f"extractor round-trip mismatch:\n got={got}\n want={expected}"
+        )
 
     cbor_path = a.out_dir / "tee-reference-values.cbor"
     cbor_path.write_bytes(raw)
@@ -258,7 +282,8 @@ def main() -> None:
         },
         "target_environment": {"class": {"vendor": VENDOR, "model": MODEL}},
         "reference_values": [
-            {"uri": derived_uri(r), "register": r, "value": v} for r, v in REFERENCE_VALUES.items()
+            {"uri": derived_uri(r), "register": r, "value": v}
+            for r, v in REFERENCE_VALUES.items()
         ],
         "rvps": {
             "ingest": (
@@ -278,8 +303,20 @@ def main() -> None:
         json.dumps(twin, indent=2) + "\n"
     )
 
-    print("cbor        =", cbor_path, "sha256=", twin["corim"]["sha256"], "bytes=", len(raw))
-    print("signature   =", a.out_dir / "tee-reference-values.cbor.sig", "len=", len(sig))
+    print(
+        "cbor        =",
+        cbor_path,
+        "sha256=",
+        twin["corim"]["sha256"],
+        "bytes=",
+        len(raw),
+    )
+    print(
+        "signature   =",
+        a.out_dir / "tee-reference-values.cbor.sig",
+        "len=",
+        len(sig),
+    )
     for d in derived:
         print("rv          =", d["uri"], "->", d["value"])
 

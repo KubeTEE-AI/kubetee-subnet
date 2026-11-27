@@ -26,7 +26,9 @@ jobs:
           cache: pip
           cache-dependency-path: pyproject.toml
       - name: Install linters
-        run: pip install "black>=24.0" "ruff==0.14.13"
+        # Pinned to match [project.optional-dependencies].dev in
+        # pyproject.toml (deterministic formatting).
+        run: pip install "black==26.10.1" "ruff==0.14.13"
       - name: black --check
         run: black --line-length 79 --exclude '(env|venv|.eggs|.git|subtensor)' --check .
       - name: ruff (correctness gate)
