@@ -1,6 +1,11 @@
 version: 2
 updates:
-  - package-ecosystem: pip
+  # Root Python project is uv-managed (pyproject.toml + uv.lock). Use the
+  # dedicated `uv` ecosystem so Dependabot regenerates uv.lock alongside the
+  # manifest pins; `pip` would bump pyproject.toml only and leave the lockfile
+  # stale. The vendored SDK at subtensor/sdk/python is upstream's (pinned via
+  # the `gitsubmodule` entry below) — not managed here.
+  - package-ecosystem: "uv"
     directory: "/"
     schedule:
       interval: weekly
