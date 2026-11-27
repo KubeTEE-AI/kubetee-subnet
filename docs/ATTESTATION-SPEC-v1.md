@@ -2,7 +2,7 @@
 
 **Deployment described:** KubeTEE's public gateway at `https://llm.kubetee.ai`
 on the Subnet-Owner-controlled `kubetee` cluster — three **AMD SEV-SNP** Kata
-replicas of LiteLLM `1.110.2-kubetee.1` (`kata-qemu-snp-runtime-rs`) routing to
+replicas of LiteLLM `1.110.2-kubetee.8` (`kata-qemu-snp-runtime-rs`) routing to
 **Intel TDX** SGLang backends (`kata-qemu-nvidia-gpu-tdx-runtime-rs`).
 
 **Audience:** clients and partner verifiers integrating with
@@ -43,11 +43,12 @@ The production confidentiality boundary has two hops:
    and TLS-possession signature are verifiable by the client.
 2. The gateway calls the TDX backend over strict mTLS. That backend is
    appraised at boot before Trustee releases its identity, and serves its own
-   fresh in-guest evidence envelope (§3.2). Fresh per-request **GPU** evidence
-   is not part of this deployment; a composite CPU + 8-GPU appraisal with a
-   per-nonce CPU-quote binding is designed (see
-   [EAST-WEST-ATTESTED-MTLS.md](./EAST-WEST-ATTESTED-MTLS.md) §6) and not
-   deployed.
+   fresh in-guest evidence envelope (§3.2). A composite **CPU + 8-GPU** mint
+   with the caller's nonce bound into the CPU quote's `report_data` is
+   **deployed** on the rate-limited `X-KubeTEE-Nonce` tier (1 per minute per
+   key); the unlimited `X-KubeTEE-Proof` tier attaches the routed pod's cached
+   evidence plus a gateway signature binding it to the response (§3.3, and
+   [CLIENT-FACING-ATTESTATION.md](./CLIENT-FACING-ATTESTATION.md) §3A).
 
 CoCo, Trustee and KBS remain standard upstream components in their own evidence
 formats. The gateway is not presented as a miner or as a replacement for either
@@ -75,9 +76,9 @@ The published launch measurement for the gateway is:
 
 The full uncompressed InitData digest is:
 
-`sha384:5bd1fe028a632b9efc6eceedcbf5a344b13ed1dab6c1b3a8295f0ff20aebe3aa3cd773703afb77f5ee2c2fbe567b50ab`
+`sha384:e2b14e15f4cfd73d489881134ef1d1bd12a822e3d7ad0421b668336da37e50e60447b2629c461b804291dad719686eb2`
 
-Its first 32 bytes, `5bd1fe028a632b9efc6eceedcbf5a344b13ed1dab6c1b3a8295f0ff20aebe3aa`,
+Its first 32 bytes, `e2b14e15f4cfd73d489881134ef1d1bd12a822e3d7ad0421b668336da37e50e6`,
 must equal the report's `HOST_DATA`.
 
 ### 2.2 TDX launch registers (backend)
@@ -108,13 +109,25 @@ processes) while allowing the standard container-lifecycle and read surface.
 
 ## 3. Request binding — `kubetee.attestation.v1`
 
-Both evidence formats use the same 64-byte `report_data` convention:
+Both evidence formats use one 64-byte `report_data` convention whose **head**
+is always the statement digest and whose **tail** is form-dependent:
 
 ```text
-SHA256(exact bindings.report_data_statement bytes) || 32 zero bytes
+SHA256(exact bindings.report_data_statement bytes)  ||  tail(32 bytes)
 ```
 
-Two statement forms exist. Each is RFC 8785 JCS; `bindings.report_data_statement`
+| Form | Tail (last 32 bytes) |
+|---|---|
+| Gateway nonce-bound (§3.1) | 32 zero bytes |
+| Backend shared epoch (§3.2) | 32 zero bytes |
+| Backend **fresh composite** (`X-KubeTEE-Nonce`, §3.2) | the caller's 32-byte nonce (raw bytes of the 64-hex nonce) |
+
+Do not assume the zero-pad on the fresh composite: it is `digest ‖ nonce`,
+verified live (2026-11-27, MiMo lu-b300-40). A verifier keys the check off the
+served statement + nonce it sent: `report_data[:32] == SHA-256(statement)` and
+`report_data[32:]` must equal either 32 zero bytes or the nonce bytes.
+
+Three statement forms exist. Each is RFC 8785 JCS; `bindings.report_data_statement`
 carries the exact string to hash — do not substitute or reserialize it.
 
 ### 3.1 Nonce-bound form (gateway, and direct backend requests)
@@ -145,7 +158,8 @@ statement is
 
 The statement digest must be
 `755d36ae1b2ea98e9bdb32350b7356b75515e4ecae711a198ade29ec325b14f4`. Its 32
-bytes followed by 32 zero bytes must equal the report's 64-byte `report_data`.
+bytes followed by 32 zero bytes must equal the report's 64-byte `report_data`
+(zero-padded tail — this is the gateway form).
 
 ### 3.2 Epoch form (backend, shared across callers)
 
@@ -172,16 +186,67 @@ Two epochs (current + previous) are retained so a caller can resolve its
    covered by the hardware quote. Verify Layer 2 strictly when present; a
    missing Layer 2 is a weaker binding, not an invalid envelope.
 
-`X-KubeTEE-Attestation-Mode: nonce-bound` requests a quote binding that
-caller's nonce directly (statement form §3.1) and bypasses the epoch cache; it
-is rate-limited to 1 per 5 minutes per client key (`429` with `Retry-After`
-beyond that).
+**Fresh nonce-bound mint.** `X-KubeTEE-Nonce: <64-hex>` (one of the two client
+opt-in headers) requests a **fresh CPU + 8-GPU composite** and bypasses the
+epoch cache. The CPU quote's statement binds the caller's nonce directly and
+adds epoch context (a third statement form — the nonce form of §3.1 plus
+`epoch_id`/`issued_at`):
+
+```json
+{"epoch_id":"<epoch>-fresh","issued_at":"<RFC3339>","keyset_digest":"sha256:<hex>","nonce":"<64-hex>","purpose":"kubetee.attestation.v1"}
+```
+
+and its `report_data` is `SHA-256(statement) ‖ nonce bytes` — the zero-pad tail
+becomes the caller's nonce (verified live 2026-11-27). Each of the 8 GPU SPDM
+`GET_MEASUREMENTS` frames echoes the same nonce. The envelope carries a compact
+`gpu` summary (count / arch / `evidence_digest` / timing / `nonce_echoed`); the
+8 full GPU reports + certificate chains stay on the backend's own
+east-west-mTLS evidence service (operator surface), with `evidence_digest` the
+commitment to the full set. The mint is sealed to one nonce — deliberately
+uncacheable — and rate-limited to **1 per minute per API key** (`429` with
+`Retry-After` and a self-documenting `use_instead` beyond that). A second
+opt-in header, `X-KubeTEE-Proof`, is the unlimited proof-of-inference tier
+(§3.3). Ordinary completions ride the cached epoch.
 
 **Residual limit.** A hardware report carries no timestamp, and serving keys are
 KBS-released rather than proved generated in-guest per boot (§4). The epoch
 window bounds freshness in time, not per boot. Closing that gap requires a
 keypair generated in-guest per boot and named in `report_data`; it is not
 claimed until implemented.
+
+### 3.3 Proof statement — `kubetee.proof.v1` (gateway signature over response)
+
+`X-KubeTEE-Proof` is the unlimited proof-of-inference tier. The gateway signs a
+canonical (RFC 8785 JCS) statement with its **serving key** — the key committed
+into its own SNP quote via `keyset_digest` (the same key as `tls_possession`):
+
+```json
+{"backend_evidence_digest":"sha256:<hex>","backend_endpoint":"https://<routed-backend>/v1","issued_at":"<RFC3339>","keyset_digest":"sha256:<hex>","purpose":"kubetee.proof.v1","request_anchor":{...},"response_digest":"sha256:<hex>","response_input":"sha256(utf8(jcs({content,model})))","response_mode":"response-bound","version":"kubetee.proof.v1"}
+```
+
+`response_mode` is `response-bound` (non-streaming, binds the assembled output)
+or `request-bound` (streaming fallback, binds the request). `response_input` is
+the **recipe**, emitted verbatim so a verifier never guesses the byte layout:
+`sha256(utf8(jcs({content,model})))` for `response-bound`, and
+`sha256(utf8(jcs({messages,model})))` for `request-bound` (over a
+JSON-stable `{messages, model}` — sorted keys, compact separators). The exact
+statement text is also served in `X-KubeTEE-Proof-Statement`; hash it as
+received. `request_anchor` is
+`{"kind":"nonce","value":"<64-hex>"}` when the client sends `X-KubeTEE-Proof:
+<64-hex>`, or `{"kind":"request-digest","value":"sha256:<hex>"}` when it sends
+`X-KubeTEE-Proof: 1`. `backend_evidence_digest` is the SHA-256 of the attached
+routed-pod evidence bytes (per-row cache — each LiteLLM row surfaces its own
+pod's evidence, not a gateway-global blob).
+
+The chain of trust is `gateway-sig(response+nonce+evidence) → evidence(quote) →
+backend-L2(quote+nonce)`. This is **not** a quote whose `REPORTDATA` is the
+response hash: silicon cannot sign arbitrary post-hoc data and the gateway
+assembles the response. The algorithm is reported, not assumed (`EdDSA`, `ES256`
+raw `r‖s`, or `RS256`), and verifying it is a **separate trust operation** from
+the hardware-report signature and the registry signature. Signature verification
+is fail-closed: no key ⇒ `X-KubeTEE-Proof-Error` and no signature. Full header
+set and a runnable check are in
+[CLIENT-FACING-ATTESTATION.md](./CLIENT-FACING-ATTESTATION.md) §3A/§5.
 
 ---
 
@@ -292,9 +357,9 @@ identifies:
 
 | Field | Value |
 |---|---|
-| Source | `KubeTEE-AI/litellm`, `kubetee-prod@447a3fca700ab00135f6de6910d42f97f4d0e743` |
-| Image | `ghcr.io/kubetee-ai/litellm-database:1.110.2-kubetee.4@sha256:f161a148ab560f19715c63a54fdd6673fa51b80f1e9a067255e66063da4f4dfb` |
-| GitHub build | [run `45854725433`](https://github.com/KubeTEE-AI/litellm/actions/runs/45854725433) |
+| Source | `KubeTEE-AI/litellm`, `kubetee-prod@e763bb83ebf6f9f711199a58760235911bb1d6e1` |
+| Image | `ghcr.io/kubetee-ai/litellm-database:1.110.2-kubetee.8@sha256:5d6c4c88bbca792909a91f14df4dde3fbc4e132e530adfc88e8514d3a8400fed` |
+| GitHub build | [run `45909231309`](https://github.com/KubeTEE-AI/litellm/actions/runs/45909231309) |
 | Guest | Kata 4.4.0, AMD EPYC-v4, 9 effective vCPUs; measured agent policy denies `ExecProcessRequest` and guest evidence write streams. |
 | Measurement derivation | Independently recomputed with `sev-snp-measure` and compared with live signed reports. |
 
@@ -339,7 +404,8 @@ connection:
    signed registry record and the verifier's own policy. Validate the measured
    InitData/image composition and denied guest control operations.
 5. Recompute `SHA256(JCS(keyset))`, hash the exact statement bytes and check the
-   report's 64-byte `report_data` equals digest plus 32 zero bytes.
+   report's 64-byte `report_data` equals that digest followed by 32 zero bytes
+   (the gateway form — §3).
 6. Require keyset validity, correct `llm.kubetee.ai` scope and match of the
    reported SPKI/certificate fingerprint to the caller's TLS session.
 7. Verify the nonce possession signature with the session certificate. This is
@@ -355,10 +421,17 @@ Accept backend evidence only after the TDX counterpart succeeds:
    registers and replay the CC event log (`RTMR[i] = SHA-384(RTMR[i] ‖ digest)`)
    to reproduce `RTMR0–3`.
 3. Check the 64-byte `report_data` against the exact epoch (or nonce-bound)
-   statement, and `MRCONFIGID` against the published InitData digest.
+   statement: the first 32 bytes must equal `SHA-256(statement)` and the tail
+   must be 32 zero bytes (epoch form) or the caller's nonce bytes (fresh
+   composite form, §3.2). Check `MRCONFIGID` against the published InitData
+   digest.
 4. Match the registers against the **signed registry** (any active record) —
    never against a value the serving guest supplies.
-5. Verify Layer 2 (`tee-pubkey` per-request signature) when present.
+5. Verify Layer 2 (`tee-pubkey` per-request signature) when present. It is
+   emitted on a fresh `X-KubeTEE-Nonce` mint and **absent on the cached epoch
+   path** (`X-KubeTEE-Backend-Evidence-Layer2: absent`); a missing Layer 2 is a
+   weaker binding, not an invalid envelope. The `X-KubeTEE-Proof` statement
+   (§3.3) is a separate gateway-level signature and is verified separately.
 6. If a boot EAR is present, verify it with the Trustee AS JWKS — and never let
    it clear a circuit-breaker trip or replace the request binding.
 
@@ -375,11 +448,12 @@ this checklist is in [CLIENT-FACING-ATTESTATION.md](./CLIENT-FACING-ATTESTATION.
 |---|---|
 | Is the public TLS session inside the confidential gateway? | **Yes.** TLS passthrough reaches LiteLLM in the SNP guest; neither Traefik nor Cloudflare terminates the payload. |
 | Is client-to-gateway evidence fresh and nonce-bound? | **Yes.** The current connection receives an SNP report with the v1 statement binding and TLS possession. |
-| Is backend evidence fresh? | **Partly.** One hardware quote per epoch (≤ 1 per 5 minutes per replica) with an optional per-request caller binding; `nonce-bound` mode binds a caller's nonce directly at a rate limit. No fresh per-request **GPU** quote. |
+| Is backend evidence fresh? | **Yes, on two tiers.** `X-KubeTEE-Nonce` mints a fresh CPU + 8-GPU composite per caller nonce (rate-limited 1/min/key); `X-KubeTEE-Proof` returns the routed pod's cached evidence plus a gateway signature binding it to the response (unlimited). Without either header: one hardware quote per epoch (≤ 1 per 5 minutes per replica) with an optional per-request caller binding. |
 | Are measurements publicly available? | **Yes.** The signed registry (authoritative backend allowlist), the SNP record, the CoRIM twin, schema and independent Ed25519 public key are live at the links in §5. |
 | Are all gateway instances exactly the released image? | The deployment pins the exact image and measured policy; all captured replicas passed independent SNP verification. Each session still requires its own possession check. |
 | Does this establish zero-operator trust? | **No.** Trustee/KBS release authority, protected administration/storage, infrastructure control and reusable identities remain explicit trust boundaries. |
 
-This contract does not invent per-request GPU freshness, encrypted weights,
-in-guest-only key generation, a completed consumer rollout or full
-reproducible-build equivalence.
+This contract does not invent per-request GPU freshness beyond the deployed
+`X-KubeTEE-Nonce` composite (rate-limited, raw GPU reports fetched separately),
+encrypted weights, in-guest-only key generation, a completed consumer rollout or
+full reproducible-build equivalence.

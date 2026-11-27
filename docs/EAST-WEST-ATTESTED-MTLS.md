@@ -1,7 +1,7 @@
 # Attested mTLS between the KubeTEE gateway and model backends
 
 **Current deployment:** an **AMD SEV-SNP** LiteLLM
-`1.110.2-kubetee.1` gateway on the Subnet-Owner-controlled `kubetee` cluster,
+`1.110.2-kubetee.8` gateway on the Subnet-Owner-controlled `kubetee` cluster,
 calling **Intel TDX + NVIDIA-CC** model guests on external-miner clusters.
 The gateway uses `kata-qemu-snp-runtime-rs`; the GPU backends use
 `kata-qemu-nvidia-gpu-tdx-runtime-rs`.
@@ -56,8 +56,9 @@ native evidence for each platform.
 
 | Public model family | Backend placement | Gateway URL |
 |---|---|---|
-| `moonshotai/kimi-k3.1-pro` | External-miner TDX B300-CC guest | `https://kimi-k3-1-pro.eu-lu-luxembourg-133.inference.kubetee.ai:443/v1` |
-| `xiaomi/mimo-v2.6-pro` | External-miner TDX B200-CC guest | `https://mimo-v2-6-pro.na-us-dallas-132.inference.kubetee.ai/v1` |
+| `moonshotai/kimi-k3.1-pro` | External-miner TDX B300-CC guest (Granian frontend) | `https://kimi-k3-1-pro39.eu-lu-luxembourg-133.inference.kubetee.ai:443/v1` |
+| `xiaomi/mimo-v2.6-pro` | External-miner TDX B300-CC guest (Granian frontend) | `https://mimo-v2-6-pro.eu-lu-luxembourg-133.inference.kubetee.ai/v1` |
+| `xiaomi/mimo-v2.6-pro` (second row) | External-miner TDX B200-CC guest (Granian frontend) | `https://mimo-v2-6-pro.na-us-dallas-132.inference.kubetee.ai/v1` |
 
 The backend hostname, certificate SAN, serving certificate and appraised
 workload identity must agree. A public hostname resolving successfully or
@@ -138,23 +139,21 @@ unauthenticated backend path.
 
 ### Model backend
 
-### Model backend
+On the Granian frontend (the 2026-11-23 standard, now the **only** frontend in
+deployed backends — MiMo on Dallas and Luxembourg and the K3.1-Pro B300 cells),
+the measured SGLang process itself binds `:8443` and enforces strict
+client-certificate mTLS with HTTP/2 — no transport proxy sits in the trust path,
+and the mTLS TLS state and serving key live in the same measured process as the
+inference engine. Kubelet probes use a separate loopback-only HTTP listener
+(`/health`, `/health_generate` only; all other routes return 404) so probe
+traffic never traverses the mTLS surface.
 
-On the Granian frontend (the 2026-11-23 standard), the measured SGLang
-process itself binds `:8443` and enforces strict client-certificate mTLS with
-HTTP/2 — no transport proxy sits in the trust path, and the mTLS TLS state and
-serving key live in the same measured process as the inference engine. Kubelet
-probes use a separate loopback-only HTTP listener (`/health`,
-`/health_generate` only; all other routes return 404) so probe traffic never
-traverses the mTLS surface.
-
-On the legacy HAProxy frontend (still serving MiMo on Dallas and the K3.1
-production cell as their images rebuild), HAProxy and the inference process
-are containers in one confidential VM: they are not separate VMs. SGLang
-listens on `127.0.0.1:8000`; HAProxy binds `:8443` and performs certificate
-verification before allowing inference requests. Its health-check exception
-is limited to probe paths; other API traffic requires a verified client
-identity.
+On the legacy HAProxy frontend (one HAProxy container + SGLang in one CVM — now
+retained only in the not-yet-migrated K3.1 cell, `0/0` today), HAProxy binds
+`:8443` and performs certificate verification before allowing inference
+requests, fronting loopback SGLang on `127.0.0.1:8000`. Its health-check
+exception is limited to probe paths; other API traffic requires a verified
+client identity.
 
 Both frontends keep the serving image's native protocol behind the same
 measured mTLS boundary. The server certificate is built inside the guest from
@@ -173,23 +172,28 @@ Gateway evidence includes:
 - nonce signature made with the TLS possession key;
 - optional boot Trustee appraisal.
 
-Backend headers report `X-KubeTEE-Backend-Attested` as
-`boot-time (Trustee EAR; east-west mTLS)`. That is **not an assertion of
-fresh GPU evidence per request**. Fresh SNP evidence proves the live
-client-to-gateway hop. Backend boot appraisal and mTLS establish a separate,
-different evidence/control chain.
+Backend headers report `X-KubeTEE-Backend-Attested` as one of three **evidence
+boundary** labels: `boot-time (Trustee EAR; east-west mTLS)` (freshness gap /
+degraded), `hardware-evidence (shared epoch cache)` (the default cached epoch
+path), or `hardware-evidence (fresh cpu+gpu, nonce-bound)` (a fresh mint on
+`X-KubeTEE-Nonce`). The label is the **evidence boundary**, not an assertion
+that model-output bytes are signed. Fresh SNP evidence proves the live
+client-to-gateway hop; backend evidence establishes a separate, different
+evidence chain.
 
-The designed per-backend fresh-evidence contract — a scheduled (~every 5 min)
-composite CPU + all-8-GPU appraisal through the stock CoCo attestation-agent
-and Trustee AS, plus a cheap per-request CPU quote binding the caller's
-`X-KubeTEE-Nonce` to the serving key and the latest cached appraisal — is in
-implementation and will supersede the `boot-time` boundary statement on
-backends that deploy it. It is **not deployed**; today's header value is the
-honest current limit. Under that contract, customer nonce rotation never
-triggers GPU evidence work (deliberately — a freshness decision must not be
-throttleable by a DoS caller), and a measurement mismatch or stale evidence
-circuit-breaks **new verified routing on the customer side** while KubeTEE
-alerts operators and never auto-kills a serving pod.
+The deployed per-backend fresh-evidence contract (Phase 4b + release `.8`) is:
+on `X-KubeTEE-Nonce: <64-hex>`, the routed backend mints a **fresh composite** —
+one CPU TDX quote (caller nonce bound in `report_data`) plus 8× GPU SPDM
+`GET_MEASUREMENTS` NVAT frames (each echoing the nonce) — surfacing a compact
+`gpu` summary + `evidence_digest` in the relayed envelope and the full 8-GPU
+set on the backend's own east-west-mTLS evidence service. The mint is
+rate-limited to 1 per minute per API key with a self-documenting `429` beyond.
+`X-KubeTEE-Proof` (unlimited) attaches the routed pod's cached evidence plus a
+gateway signature binding it to the response. Ordinary completions ride the
+shared cached epoch (one hardware quote per ≤5 min per replica). A measurement
+mismatch trips the circuit breaker (fail-closed, sticky: new verified routing is
+blocked client-side while KubeTEE alerts operators and never auto-kills a
+serving pod).
 
 `signing_keys: []` is intentional in this deployment. The public
 measurement-signing key is obtained independently from the registry's
@@ -198,10 +202,10 @@ measurement-signing key is obtained independently from the registry's
 ## 7. Current verification and remaining gaps
 
 The released source is
-`KubeTEE-AI/litellm@447a3fca700ab00135f6de6910d42f97f4d0e743`,
-produced by GitHub Actions [run `45854725433`](https://github.com/KubeTEE-AI/litellm/actions/runs/45854725433),
+`KubeTEE-AI/litellm@e763bb83ebf6f9f711199a58760235911bb1d6e1`,
+produced by GitHub Actions [run `45909231309`](https://github.com/KubeTEE-AI/litellm/actions/runs/45909231309),
 with image
-`ghcr.io/kubetee-ai/litellm-database:1.110.2-kubetee.4@sha256:f161a148ab560f19715c63a54fdd6673fa51b80f1e9a067255e66063da4f4dfb`.
+`ghcr.io/kubetee-ai/litellm-database:1.110.2-kubetee.8@sha256:5d6c4c88bbca792909a91f14df4dde3fbc4e132e530adfc88e8514d3a8400fed`.
 
 The signed measurement record identifies the exact guest launch measurement,
 InitData `HOST_DATA` derivation, images, firmware and kernel. All three
@@ -211,8 +215,8 @@ Independent SNP consumer work is being reviewed in
 pull request is not a claim of an already-merged worker migration.
 
 Acceptance still requires native client verification rather than only a
-chat 200. Remaining hardening includes the per-backend fresh-evidence
-contract described in section 6 (designed, not deployed) and fresh
-in-guest-generated serving identities. Reproducible-build equivalence is published
-source-commit → CI-run → image-digest provenance today; bit-for-bit
-reproducibility is not claimed. None of these is advertised as deployed here.
+chat 200. Remaining hardening includes fresh in-guest-generated serving
+identities (the zero-operator step) and byte-reproducible builds. The
+per-backend fresh-evidence contract is deployed (Phase 4b + release `.8`).
+Reproducible-build equivalence is published source-commit → CI-run →
+image-digest provenance today; bit-for-bit reproducibility is not claimed.

@@ -35,9 +35,10 @@ half.
   serving identity is retrieved after appraisal at start and can persist.
 - Reusable, KBS-released keys are not a zero-operator-trust claim; KBS
   administration and trusted storage remain in the trust boundary.
-- No fresh per-request backend **GPU** quote is supplied today (the backend is
-  boot-attested with a per-epoch quote; the per-backend fresh-evidence contract
-  is in implementation, not deployed).
+- The proof-of-inference tier (`X-KubeTEE-Proof`) attaches the serving pod's
+  **most recent** attestation plus a gateway signature binding it to your
+  response — it is **not** a hardware quote minted fresh for your request. For
+  that, use the rate-limited `X-KubeTEE-Nonce` tier (see §3A).
 - The circuit breaker catches **launch-composition drift** against the pinned
   reference — not runtime tampering inside an already-measured guest, and not
   model-output bytes. A drifted launch is caught; a compromised but
@@ -180,7 +181,9 @@ OpenAI call.
 | `X-KubeTEE-TLS-Signature`, `X-KubeTEE-TLS-Signature-Alg`, `X-KubeTEE-TLS-Signature-Input` | TLS-key nonce signature, algorithm and signature-input convention. |
 | `X-KubeTEE-TLS-Cert-SHA256` | SHA-256 of the serving leaf's DER, to match the caller's own TLS certificate. |
 | `X-KubeTEE-Backend`, `X-KubeTEE-Backend-Endpoint` | Routed model/backend identity. |
-| `X-KubeTEE-Backend-Attested` | `boot-time (Trustee EAR; east-west mTLS)` (evidence gap) or `hardware-evidence (shared epoch cache)` (fresh backend evidence). The label means the backend's shared-epoch evidence is present, not that model-output bytes are signed. |
+| `X-KubeTEE-Backend-Attested` | `boot-time (Trustee EAR; east-west mTLS)` (evidence gap), `hardware-evidence (shared epoch cache)`, or `hardware-evidence (fresh cpu+gpu, nonce-bound)` (fresh `X-KubeTEE-Nonce` mint). The label states the **evidence boundary**, not that model-output bytes are signed. |
+| `X-KubeTEE-Backend-Evidence-Layer2` | `present` (a per-request caller-binding `signature` is included to verify) or `absent` (epoch freshness only). |
+| `X-KubeTEE-Backend-Evidence-Source` | `cache` (shared epoch quote) or `fresh-nonce` (fresh CPU+GPU mint). |
 | `X-KubeTEE-Backend-Evidence` | Base64url (no padding) of one self-describing JSON envelope for the backend role (see §4). Decode once and branch on `schema`/`tee`. |
 | `X-KubeTEE-Backend-Evidence-Location`, `…-Reason` | Sent instead of `X-KubeTEE-Backend-Evidence` when the envelope exceeds the inline header budget; fetch the bulk bundle at `Location`. |
 | `X-KubeTEE-Backend-Evidence-Subject`, `…-Schema`, `…-Tee`, `…-Digest`, `…-Source` | Flat discriminators so you can filter without decoding: whose evidence, what schema, which TEE, the quote/`snp` digest, and `cache`/`fetch` provenance. |
@@ -194,6 +197,75 @@ If evidence cannot be framed safely within the header-size limit, the endpoint
 instructs you to obtain the standalone bundle rather than silently accepting a
 truncated report. A malformed nonce produces an inline evidence error rather
 than fabricating a report.
+
+---
+
+## 3A. Two evidence tiers — `X-KubeTEE-Nonce` and `X-KubeTEE-Proof`
+
+Two opt-in headers give you two different strengths of proof on any completion.
+Both tell you which **serving pod** produced your response and attach that pod's
+attested-hardware evidence.
+
+| Header you send | What you get back | Rate limit |
+|---|---|---|
+| `X-KubeTEE-Nonce: <64-hex>` | **Fresh attestation** — a new hardware quote (CPU + 8 GPUs) minted for your nonce | **1 per minute per key** |
+| `X-KubeTEE-Proof: <64-hex>` | **Proof-of-inference** — the serving pod's most recent attestation, plus a signature binding **this exact response** to it (using your nonce) | none |
+| `X-KubeTEE-Proof: 1` | Same proof-of-inference, anchored to a digest of your request instead of a nonce | none |
+
+**Which should I use?** Use `X-KubeTEE-Proof` for normal traffic — it is cheap,
+unlimited, and proves the response came from a specific attested TEE. Use
+`X-KubeTEE-Nonce` when you need the strongest freshness (a hardware quote minted
+just for you) — it is expensive, so it is limited to 1 per minute.
+
+The attestation on the proof tier is the **serving pod's own** evidence (each
+model row routes to its own pod), so two responses served by two different pods
+show two different attestation digests — that is expected.
+
+### What the proof looks like
+
+The response carries `X-KubeTEE-Proof-*` headers: `X-KubeTEE-Proof-Spec`
+(`kubetee.proof.v1`), `X-KubeTEE-Proof-Mode` (`response-bound` or
+`request-bound` — on streaming the proof binds the **request** instead of the
+response), `X-KubeTEE-Proof-Response-Input` (the digest recipe),
+`X-KubeTEE-Proof-Response-Digest`, `X-KubeTEE-Proof-Anchor-Kind` /
+`-Anchor-Value` (your nonce or a request digest),
+`X-KubeTEE-Proof-Backend-Evidence-Digest`, `X-KubeTEE-Proof-Keyset-Digest`,
+`X-KubeTEE-Proof-Issued-At`, and `X-KubeTEE-Proof-Statement` — the exact
+canonical (RFC 8785 JCS) text covered by `X-KubeTEE-Proof-Signature` (with its
+algorithm, `X-KubeTEE-Proof-Signature-Alg`: `EdDSA`, `ES256` raw `r‖s`, or
+`RS256`). Verify the signature with the gateway's published key (the same one
+that matches your TLS session) — a runnable check is in §5. Hash the statement
+bytes as received; never re-serialize it.
+
+If the gateway cannot sign, you get `X-KubeTEE-Proof-Error` and no signature —
+a proof is never fabricated.
+
+### Rate limiting (the 429)
+
+If you ask for more than 1 fresh mint (`X-KubeTEE-Nonce`) per minute per key, the
+excess requests return **HTTP 429** with a `Retry-After` header and an error body
+that explains what to do — use `X-KubeTEE-Proof: 1` for the same response instead,
+and retry the fresh mint later. The body and headers are self-documenting
+(`X-KubeTEE-RateLimit-Limit` / `-Window` / `-Policy` / `-Alternative` plus
+`Retry-After`; body `error.type: kubetee_evidence_rate_limited` with
+`limit`, `retry_after_seconds` and `use_instead: {"header": "X-KubeTEE-Proof", "value": "1", …}`),
+so agents can recover from the response alone, no external docs needed.
+
+### Fresh-mint details
+
+When a fresh mint runs (`X-KubeTEE-Nonce`), the response says so:
+`X-KubeTEE-Backend-Evidence-Source: fresh-nonce` (vs `cache`), with the GPU count
+and architecture (`X-KubeTEE-Backend-GPU-Count` / `-GPU-Arch`, e.g. `8` /
+`BLACKWELL`) and the per-leg mint timing (`X-KubeTEE-Backend-CPU-Mint-Ms`,
+`-GPU-Collect-Ms`, `-Mint-Total-Ms` — ~1.3 s total on 8-GPU Blackwell). The
+compact GPU summary + `evidence_digest` ride in the response envelope's `gpu`
+block. The 8 individual GPU attestations (SPDM `GET_MEASUREMENTS` NVAT blobs +
+certificate chains, ~190 KB) are **not** part of the `llm.kubetee.ai` response —
+they are held on the model backend's own evidence service, which requires an
+east-west client certificate (a KubeTEE operator surface, not a public
+endpoint). Ordinary clients use the compact GPU summary + `evidence_digest` in
+the response envelope (§4); an operator or partner with east-west material can
+fetch the full set and check it against `evidence_digest`.
 
 ---
 
@@ -234,20 +306,30 @@ Envelope layout (base64url-decoded):
   "report_data": ["64 unsigned byte values"],
   "report_data_statement": "<exact JCS statement hashed into report_data>",
   "cert_chain": [{"cert_type": "<label>", "data": ["DER byte values"]}],
-  "signature": "<base64 per-request signature — OPTIONAL, present only when the backend mints it; empty string otherwise. See 'Two-layer freshness'.>",
+  "signature": "<base64 per-request binding signature — optional, only when the backend attaches one>",
+  "counter": "<used with `signature`; null when none>",
+  "tee_pubkey": "<JWK-style public key that made `signature`; null when none>",
+  "keyset": {"...": "keyset committing that key; null when none"},
+  "keyset_digest": "sha256:<hex>, null when none",
+  "signature_input": "<recipe describing the bytes `signature` signed; null when none>",
   "quote": "<base64 Intel DCAP quote, tee=tdx only>",
   "event_log": "<base64 TCC/CC event log, tee=tdx only>",
+  "gpu": {"count": 8, "arch": "BLACKWELL", "evidence_digest": "sha256:<hex>", "timing": {"cpu_mint_ms": 1023.85, "gpu_collect_ms": 239.71, "total_ms": 1265.4}, "nonce_echoed": "<64-hex>"},
   "snp": {"schema": "kubetee.snp-evidence/1", "attestation_report": {}, "cert_chain": []}
 }
 ```
 
 Exactly one of `quote`/`event_log` (TDX) or `snp` (SNP) is populated. Reject a
-response whose `tee` disagrees with the populated half.
+response whose `tee` disagrees with the populated half. The `gpu` block appears
+**only** on a fresh `X-KubeTEE-Nonce` mint (§3A): a short summary of the 8 GPU
+attestations plus an `evidence_digest` commitment to the full set. The full set
+is held on the model backend's own evidence service (a KubeTEE operator surface
+requiring an east-west client certificate), not on `llm.kubetee.ai`.
 
 | Element | Value |
 |---|---|
-| Bulk endpoint | `GET /v1/attestation/backend?role=nim-terminator&nonce=<64-hex>` — the same envelope plus `vm_config` (`role`, measured `files`, `agent_policy_claims`). Fetch it when the inline envelope is too large or you want `vm_config`. |
-| Report-data binding | `SHA-256(JCS(statement)) ‖ 32 zero bytes` (the same 64-byte convention as the gateway), over an **epoch statement** |
+| Backend bundle | `GET /kubetee/evidence?role=nim-terminator[&nonce=<64-hex>]` on the model backend's own evidence service — the full envelope plus `vm_config`. With `nonce` the backend mints the fresh CPU+8GPU composite (the 8 GPU SPDM frames echo the nonce); without it, the cached epoch envelope. It needs an east-west client certificate (operator surface), not a public API-key call. |
+| Report-data binding | `SHA-256(JCS(statement)) ‖ tail` where the tail is **32 zero bytes** on the epoch form or the **caller's 32-byte nonce** on the fresh composite form — check `report_data[:32] == SHA-256(statement)` and the tail against those two candidates. |
 | Backend signing key | `tee-pubkey` — the backend's **per-epoch evidence-signing key** (Ed25519), distinct from its TLS serving key and the gateway's keys. Its public half is bound into the epoch statement via `keyset_digest`, so it is covered by the hardware quote. |
 
 **Two-layer freshness.** A hardware quote is sealed at mint: the caller's nonce
@@ -276,10 +358,12 @@ is therefore split:
 Verify the signature with the `tee-pubkey` whose hash is committed in the epoch
 statement's `keyset_digest` **when `signature` is non-empty**.
 
-`X-KubeTEE-Attestation-Mode: nonce-bound` requests a quote whose `report_data`
-binds that caller's nonce directly (the strongest form); it bypasses the epoch
-cache and is rate-limited to **1 per 5 minutes per client key** (exceeding it
-returns `429` with `Retry-After`). Ordinary completions ride the cached epoch.
+**Fresh nonce-bound mint (new).** `X-KubeTEE-Nonce: <64-hex>` (§3A) requests a
+**fresh CPU quote + 8-GPU evidence** whose `report_data` binds that caller's nonce
+directly (statement form §3.1) and bypasses the epoch cache. It is rate-limited
+to **1 per minute per API key** (exceeding it returns `429` with `Retry-After` and
+a self-documenting `use_instead` pointing at `X-KubeTEE-Proof: 1`). Without
+`X-KubeTEE-Nonce`, a completion rides the cached epoch quote.
 
 **Residual limit, stated honestly.** A hardware report carries no timestamp, and
 the serving keys are KBS-released rather than proved generated in-guest per boot
@@ -302,7 +386,7 @@ is never presented as one:
 
 | Boundary | Rule |
 |---|---|
-| Where it appears | **Bulk** evidence bundles only (`GET /v1/attestation`, `GET /v1/attestation/backend`), as `appraisal.ear_token` + `appraisal.ar4si`. Omitted from inline per-completion envelopes. |
+| Where it appears | **Full** evidence bundles only (`GET /v1/attestation` on the gateway; `GET /kubetee/evidence` on the backend's own evidence service), as `appraisal.ear_token` + `appraisal.ar4si`. Omitted from inline per-completion envelopes. |
 | What it covers | Boot composition of the guest that minted it. Nothing about a later request, prompt, or model-output bytes. |
 | Freshness | One EAR per **boot**, not per request. Always pair it with the per-request Layer-2 signature when one is present. |
 | Breaker relationship | A fresh boot EAR **never clears a tripped circuit breaker** — otherwise a reboot would launder a drift trip. |
@@ -448,9 +532,15 @@ def verify_backend_envelope(header_value: str, nonce_hex: str, *,
         tee_pubkey = registry_key_for(epoch, env["role"])             # bound via keyset_digest
         VerifyKey(tee_pubkey).verify(msg, b64url_decode(env["signature"])) # Ed25519
 
-    # 3. Report-data binding (64-byte convention).
-    expected = hashlib.sha256(env["report_data_statement"].encode()).digest() + bytes(32)
-    assert bytes(env["report_data"]) == expected, "report_data does not bind statement"
+    # 3. Report-data binding (64-byte convention). The TAIL is form-dependent:
+    #    epoch form = 32 zero bytes; fresh CPU+8GPU composite (X-KubeTEE-Nonce)
+    #    = the caller's 32-byte nonce bytes. Both: head = SHA-256(statement).
+    expected_head = hashlib.sha256(env["report_data_statement"].encode()).digest()
+    actual = bytes(env["report_data"])
+    assert actual[:32] == expected_head, "report_data does not bind statement"
+    nonce_bytes = bytes.fromhex(nonce_hex) if nonce_hex else b""
+    tail = actual[32:]
+    assert tail == bytes(32) or tail == nonce_bytes, "unexpected report_data tail"
 
     # 4. Hardware authenticity + composition against the SIGNED registry.
     if tdx:
@@ -476,6 +566,44 @@ signature verification, chain validation and registry signature verification are
 marked `# VERIFY` and must be filled from a native implementation before you
 accept anything. A response that fails any assertion must be rejected outright —
 do not downgrade to a transport or key-label check.
+
+### Runnable proof-of-inference checklist (`X-KubeTEE-Proof-*` headers)
+
+A **separate** trust operation from the hardware-report and registry signatures:
+verify the gateway's per-response signature over the exact `…-Statement` bytes,
+using the gateway key named in the keyset (matched to your own TLS session):
+
+```python
+import base64
+from cryptography.hazmat.primitives.asymmetric import padding, utils, ec, ed25519
+from cryptography.hazmat.primitives import hashes
+
+def verify_proof(headers: dict, gateway_pubkey):
+    # The statement is the exact text covered by the signature — hash it as
+    # received, never re-serialize it.
+    stmt = headers["X-KubeTEE-Proof-Statement"].encode("utf-8")
+    alg = headers["X-KubeTEE-Proof-Signature-Alg"]
+    sig = base64.b64decode(headers["X-KubeTEE-Proof-Signature"])
+
+    # Verify the gateway's signature (the algorithm is reported in the header).
+    # The key is the gateway's published key — the one that matches your TLS
+    # session (§5 step 6).
+    if alg == "EdDSA":
+        ed25519.Ed25519PublicKey.from_public_bytes(gateway_pubkey).verify(sig, stmt)
+    elif alg == "RS256":
+        gateway_pubkey.verify(sig, stmt, padding.PKCS1v15(), hashes.SHA256())
+    elif alg == "ES256":
+        size = gateway_pubkey.curve.key_size // 8
+        der = utils.encode_dss_signature(int.from_bytes(sig[:size], "big"),
+                                         int.from_bytes(sig[size:], "big"))
+        gateway_pubkey.verify(der, stmt, ec.ECDSA(hashes.SHA256()))
+
+    # On non-streaming responses, re-check the response digest and confirm the
+    # anchor (…-Anchor-Value) is the nonce or request digest you sent.
+    return True
+```
+
+An unsigned proof (`X-KubeTEE-Proof-Error` present) proves nothing — reject it.
 
 ---
 

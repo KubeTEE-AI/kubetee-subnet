@@ -47,6 +47,18 @@ Current registry records (each one measured `(model × node)` launch):
 A new measured model — or the same model on a new node — is simply one more
 record; the verifier needs no change.
 
+**Deployed generation note (2026-11-27).** All three live pods (MiMo
+tx-b200-16, MiMo lu-b300-40, Kimi-K3.1-Pro on `kimi-k3-1-pro39-sglang-b300-cc-0`
+/ lu-b300-39) now run the **freshgpu** image generation
+(`mtls-evidence-freshgpu-3117f580-20261126`, provenance below) with the fresh
+CPU+8-GPU mint enabled. Launch registers are unchanged from the table — an
+image roll that changes only application code keeps the same registers — so
+live evidence from these pods still matches the active records above
+(`policy.match: any-active-record`, no per-image pin). Per the retention policy,
+a new record per (model × node) is captured and appended as the new generation
+(20261126) at the pods' evidence captures; the 20261125 records above stay
+active as the previous generation until a third generation lands.
+
 The serving engine is built from **KubeTEE's SGLang fork
 [`KubeTEE-AI/sglang`](https://github.com/KubeTEE-AI/sglang)** (public fork of
 [`sgl-project/sglang`](https://github.com/sgl-project/sglang)), in GitHub
@@ -59,6 +71,7 @@ guest measurement. Per-record container provenance:
 |---|---|---|---|
 | Kimi (lu-b300-39) | `ghcr.io/kubetee-ai/sglang:kimi-k31-granian-mtls-45497390909-b8f8015d@sha256:68cb8790dd1a959831f9bb10403c6f68142ddf9b5963722d3aa2b5b3f1cf59cb` | `kubetee/kimi-k31-granian-mtls-day0` @ [`b8f8015d3291`](https://github.com/KubeTEE-AI/sglang/commit/b8f8015d329182a8d973aacc71e3d7ca371a5e22) | [`45497390909`](https://github.com/KubeTEE-AI/sglang/actions/runs/45497390909) |
 | MiMo (tx-b200-16, lu-b300-40) | `ghcr.io/kubetee-ai/sglang:mtls-evidence-3117f580-20261125@sha256:982c8c10f59c5e8fb724a9cc5d67e8f777c5fde36704d79a5e0dba5f727a9590` | `kubetee-overlay` @ [`d12bfac85c87`](https://github.com/KubeTEE-AI/sglang/commit/d12bfac85c87076fd80983751d4f10f5dcb5c377) | [`45639037187`](https://github.com/KubeTEE-AI/sglang/actions/runs/45639037187) |
+| **freshgpu** (deployed 2026-11-27 on all three live pods — MiMo ×2 + Kimi K3.1-Pro pro39) | `ghcr.io/kubetee-ai/sglang:mtls-evidence-freshgpu-3117f580-20261126@sha256:b1b9b705cc7db51e20c9405b3c3c5e6a8e97f6d48dbf4596ff5541777c44148e` | `kubetee-overlay` @ [`b25fafc964cd`](https://github.com/KubeTEE-AI/sglang/commit/b25fafc964cda56ff7d8cf32f59a38f003a95abc) | [`45882334220`](https://github.com/KubeTEE-AI/sglang/actions/runs/45882334220) |
 
 RuntimeClass `kata-qemu-nvidia-gpu-tdx-runtime-rs` for both. Launch registers
 measure firmware + kernel + initrd + cmdline and **not** application code, so
@@ -162,7 +175,10 @@ same envelope is obtained through the gateway relay
 **Cross-checks (passed on the Kimi and tx-b200-16 MiMo captures):**
 
 - **Report-data binding** — the quote's 64-byte `report_data` equals
-  `SHA-256(epoch statement) ‖ 32 zero bytes`, recomputed independently: **match**.
+  `SHA-256(epoch statement) ‖ 32 zero bytes` on the cached epoch form,
+  recomputed independently: **match**. On the **fresh composite** form
+  (`?nonce=`), it is `SHA-256(nonce statement) ‖ <nonce bytes>` instead
+  (verified live 2026-11-27, MiMo lu-b300-40).
 - **CCEL replay** — the CC event log replayed with the TDX rule
   `RTMR[i] = SHA-384(RTMR[i] ‖ digest)` (records 1–4 → RTMR0–3) reproduces
   **all four** quote RTMRs exactly. MRTD is TDX-module-measured and is not in
@@ -198,10 +214,12 @@ Not claimed:
   verify** is available (public source, digest-pinned bases, SHA-pinned
   workflow). We state bit-reproducibility only once a third-party rebuild
   actually matches.
-- Fresh per-request **GPU** evidence on the backend hop (boot appraisal plus the
-  per-epoch quote today; the scheduled composite CPU + 8-GPU appraisal is
-  designed and in implementation —
-  [EAST-WEST-ATTESTED-MTLS.md](./EAST-WEST-ATTESTED-MTLS.md)).
+- Fresh per-request **GPU** evidence on the backend hop is **deployed** since
+  Phase 4b (2026-11-27): `X-KubeTEE-Nonce` mints a fresh CPU quote + 8× GPU
+  SPDM evidence per caller nonce (rate-limited 1/min/key); the shared epoch
+  quote remains the always-on freshness layer. The 8 raw GPU reports live on
+  the backend's own east-west-mTLS evidence service; the relayed envelope
+  carries a compact `gpu` summary + `evidence_digest` commitment.
 - A bit-for-bit independent recomputation of `MRTD` from firmware inputs — it is
   captured from the hardware quote and cross-checked via the CCEL replay + the
   report-data binding, but no Intel TDX `tdx-measure`-equivalent recompute has
