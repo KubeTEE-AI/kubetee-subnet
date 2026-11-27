@@ -1,0 +1,30 @@
+# Marks inactive issues/PRs stale after 60 days, closes after a further 14.
+name: Stale
+
+on:
+  schedule:
+    - cron: "23 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/stale@5bef64f19d7facfb25b37b414482c7164d639639 # v9
+        with:
+          days-before-stale: 60
+          days-before-close: 14
+          stale-issue-message: >
+            This issue has had no activity for 60 days. It will be closed in
+            14 days unless there is new activity.
+          stale-pr-message: >
+            This PR has had no activity for 60 days. It will be closed in 14
+            days unless there is new activity.
+          exempt-issue-labels: security,keep-open
+          exempt-pr-labels: security,keep-open

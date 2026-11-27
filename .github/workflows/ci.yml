@@ -9,47 +9,76 @@ on:
 permissions:
   contents: read
 
+# All third-party actions are pinned to full commit SHAs (tag comments record
+# the human-readable version). `zizmor` enforces this below.
 jobs:
   lint:
-    name: black format check
+    name: black + ruff
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           submodules: true
-      - uses: actions/setup-python@v7
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
           python-version: "3.14"
           cache: pip
           cache-dependency-path: pyproject.toml
-      - name: Install black
-        run: pip install "black>=24.0"
+      - name: Install linters
+        run: pip install "black>=24.0" "ruff==0.14.13"
       - name: black --check
         run: black --line-length 79 --exclude '(env|venv|.eggs|.git|subtensor)' --check .
+      - name: ruff (correctness gate)
+        # Minimal high-signal set (syntax errors, undefined names, broken
+        # f-strings). Style debt is tracked separately; this gate catches
+        # NameError-class bugs like the unimported `resolve_card`.
+        run: >-
+          ruff check .
+          --exclude subtensor --exclude build
+          --select E9,F63,F7,F82
 
   test:
     name: pytest
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           submodules: true
-      - uses: actions/setup-python@v7
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
           python-version: "3.14"
           cache: pip
           cache-dependency-path: pyproject.toml
       - name: Install dev dependencies
         run: pip install -e ".[dev]"
-      - name: pytest
-        run: pytest validator/tests -q
+      - name: pytest + coverage gate
+        # Baseline is ~84% (213 tests) as of 2026-11-27; the floor is set to
+        # 80% so incremental work cannot silently erode coverage.
+        run: pytest validator/tests -q --cov=validator --cov-report=term --cov-fail-under=80
+
+  zizmor:
+    name: zizmor (workflow security)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: zizmor
+        # Scoped to this repo's workflows only: subtensor/vendor/** carries
+        # upstream workflows that are not ours to harden or gate on.
+        run: |
+          pip install "zizmor==1.23.0"
+          zizmor --no-online-audits .github/workflows/
 
   build:
     name: build (docker image)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           submodules: true
+          persist-credentials: false
       - name: Build the validator image
         run: docker build -f validator/Dockerfile -t kubetee-validator:ci .

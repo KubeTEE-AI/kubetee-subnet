@@ -38,6 +38,7 @@ from price_card import (
     DEFAULT_PRICING,
     build_price_card,
     parse_price_card,
+    resolve_card,
 )
 from price_feed import PriceFeed, PriceFeedError
 from rancher_client import RancherClient, RancherEvidenceError, hotkey_of
