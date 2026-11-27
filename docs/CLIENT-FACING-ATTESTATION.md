@@ -68,6 +68,18 @@ nonce returns 400, inability to obtain evidence returns 502.
 
 ### Response shape
 
+> **The gateway now serves the `kubetee.attestation.v2` binding.** The
+> illustration below is the **legacy v1 shape** (`spec_version` /
+> `report_data_input` / `bindings.version` = `kubetee.attestation.v1`, `keyset`
+> without `phase6_key_attestation`, no `key_possession`). The **current** shape
+> sets those to `kubetee.attestation.v2`, adds
+> `keyset.phase6_key_attestation` and a `key_possession` block, and its
+> `report_data_statement` is the v2 form (`context` / `keyset_digest` /
+> `nonce` / `pkix_pubkey_b64url` / `purpose`), with
+> `report_data = SHA-384(tag ‖ framed(…)) ‖ 16 zero bytes`. The binding
+> contract and the exact verification steps are in
+> [ATTESTATION-SPEC-v1.md §3.4](./ATTESTATION-SPEC-v1.md#34-current-binding--kubeteeattestationv2-quote-bound-per-boot-key).
+
 The following is a **schema illustration**, not a real nonce, signature,
 certificate or verified report:
 
@@ -503,7 +515,14 @@ to CoCo, Trustee or KBS is needed to consume this contract.
    three separate trust operations.
 7. **Registry.** Validate the schema, canonicalize the registry without its
    `signature` member, and verify its Ed25519 signature using the separately
-   published public key.
+   published public key. **Before trusting any record**, verify the registry's
+   anti-rollback `chain` (`content_hash` / `transition_hash` — see
+   [ATTESTATION-SPEC-v1.md §5](./ATTESTATION-SPEC-v1.md) "Registry
+   anti-rollback") and reject any `version` below your previously accepted
+   floor. A chain-less or rolled-back registry must not be used to approve
+   measurements (a stale pre-revocation registry has a valid signature — only
+   the floor catches it). Keep that floor across restarts (e.g. persist the
+   highest accepted `version`).
 8. **Optional EAR.** Validate the boot RCAR's native evidence and Trustee policy
    if present. Do not substitute it for the caller's nonce binding or the
    current connection's possession proof.
@@ -589,6 +608,10 @@ def verify_backend_envelope(header_value: str, nonce_hex: str, *,
             assert d == regs.mrconfigid, "initdata_toml does not hash to MRCONFIGID"
         else:
             assert d[:32] == regs.host_data, "initdata_toml does not hash to host_data"
+
+    # 4c. Registry anti-rollback (Phase 6 §3.2) — BEFORE trusting any record:
+    #     verify the chain + reject any revision below your accepted floor.
+    registry.verify_chain_and_floor(accepted_version)                   # fail-closed on chain-less / rollback
 
     ref = registry.match_any_active(regs, tee=env["tee"])               # VERIFY registry Ed25519 sig
     assert ref is not None, "registers match no active record"          # policy.match: any-active-record

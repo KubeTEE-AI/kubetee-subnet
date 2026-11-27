@@ -1,4 +1,14 @@
-# KubeTEE attestation specification — `kubetee.attestation.v1`
+# KubeTEE attestation specification — `kubetee.attestation.v1` (legacy) + `kubetee.attestation.v2` (current)
+
+> **Scope as of 2026-11-27.** The gateway serves the **`kubetee.attestation.v2`
+> quote-bound key binding** (§3.4) as its current request binding; the `v1`
+> `keyset_digest ‖ zero-tail` binding documented in §3 is the **legacy** form,
+> retained here for existing clients and for historical continuity of this
+> contract. New integrators verify **v2**. Both bindings share the same evidence
+> framing (§1), measurement composition (§2), keyset (§4) and published records
+> (§5); they differ only in what `report_data` commits (§3.4 vs §3) and the
+> possession proof. "v1" in this document's title and prose refers to the legacy
+> binding version, not to this document's revision.
 
 **Deployment described:** KubeTEE's public gateway at `https://llm.kubetee.ai`
 on the Subnet-Owner-controlled `kubetee` cluster — three **AMD SEV-SNP** Kata
@@ -151,7 +161,10 @@ Rules:
 
 ---
 
-## 3. Request binding — `kubetee.attestation.v1`
+## 3. Request binding — `kubetee.attestation.v1` (legacy)
+
+> The **current** request binding is §3.4 (`kubetee.attestation.v2`). This
+> section is the legacy form.
 
 Both evidence formats use one 64-byte `report_data` convention whose **head**
 is always the statement digest and whose **tail** is form-dependent:
@@ -292,6 +305,105 @@ is fail-closed: no key ⇒ `X-KubeTEE-Proof-Error` and no signature. Full header
 set and a runnable check are in
 [CLIENT-FACING-ATTESTATION.md](./CLIENT-FACING-ATTESTATION.md) §3A/§5.
 
+### 3.4 Current binding — `kubetee.attestation.v2` (quote-bound per-boot key)
+
+**This is the binding the gateway serves today** (`spec_version` and
+`bindings.version` are both `kubetee.attestation.v2`). It replaces the §3
+`keyset_digest ‖ tail` binding with a **per-boot, in-guest generated** evidence
+key bound into the hardware report — which also closes the §3.2 "Residual
+limit" (a keypair generated in-guest per boot and named in `report_data`).
+
+**Construction.** The AMD `report_data` (64 bytes at `0x0050..0x0090`) is:
+
+```text
+SHA-384( tag ‖ framed(pkix) ‖ framed(nonce) ‖ framed(context) )  ‖  16 zero bytes
+```
+
+- `tag` is the raw ASCII bytes of
+  `kubetee.attestation.v2/ReportDataForKeyWithContext` (the domain-separation
+  tag; changing it is a contract change).
+- Each of `pkix`, `nonce`, `context` is **length-framed** as
+  `u64-be length ‖ bytes`, so no two distinct tuples share a preimage.
+- `pkix` is the DER `SubjectPublicKeyInfo` of the per-boot key; `nonce` is 32
+  raw bytes; `context` is a domain-separation string (deployed value
+  `llm.kubetee.ai/tls-possession`).
+- The digest is 48 bytes (SHA-384) **zero-padded to 64** — 16 zero bytes, not a
+  second digest.
+
+**Statement (served verbatim as `bindings.report_data_statement`).** The
+response carries the binding inputs as one canonical (RFC 8785 JCS) JSON
+string; hash **exactly the served bytes**, never a reserialization:
+
+```json
+{"context":"llm.kubetee.ai/tls-possession","keyset_digest":"sha256:<hex>","nonce":"<64-hex>","pkix_pubkey_b64url":"<base64url(DER SPKI)>","purpose":"kubetee.attestation.v2"}
+```
+
+`keyset_digest` is `sha256(JCS(keyset))` over the served keyset (§4). The
+`pkix_pubkey_b64url` in the statement must equal the `pkix_pubkey_b64url` of the
+`keyset.phase6_key_attestation` entry for the same `domain` — the statement is
+never trusted alone.
+
+**Keyset addition (`phase6_key_attestation`).** The keyset gains an array
+naming the bound key's class and identity (the `subject` string itself remains
+`kubetee.attestation.v1/…` — that is a subject label, not the binding version):
+
+```json
+"phase6_key_attestation": [
+  {"domain": "llm.kubetee.ai",
+   "key_type": "tls-ephemeral",
+   "pkix_pubkey_b64url": "<base64url(DER SPKI)>",
+   "purpose": "kubetee.attestation.v2"}
+]
+```
+
+The bound key is **distinct from the TLS serving key**: on the deployed
+gateway the bound key's SPKI SHA-256 (`58689378…`) is not
+`tls_public_keys[0].spki_sha256` (`e49027e3…`). It is a dedicated per-boot
+evidence key, and the `context` string (`…/tls-possession`) is a naming
+convention for its intended use — not a claim that it terminates the TLS
+session. Both keys are committed under the one `keyset_digest`, so the
+statement commits them together.
+
+**Key possession (EAT model M2 style).** The response carries
+`key_possession`:
+
+```json
+{"input":"quote_report_data","alg":"ecdsa-secp256r1-sha256","signature_b64":"<base64(DER ECDSA P-256/SHA-256)>"}
+```
+
+The signature is over the report's **64-byte `report_data` verbatim**, made by
+the per-boot private half, and verified under the `pkix` bound into that same
+`report_data`. This proves the served key's holder saw the report contents.
+
+**Required verification (in addition to §6's evidence checks).** Fail closed —
+any mismatch is a reject:
+
+1. Require `spec_version`, `bindings.version` and the statement's `purpose` all
+   equal `kubetee.attestation.v2` (the only accepted binding version).
+2. Re-derive every statement field from the served keyset / the nonce you sent
+   (anti-downgrade: nothing is trusted as served). Require
+   `bindings.keyset_digest == statement.keyset_digest == sha256(JCS(keyset))`,
+   and `statement.pkix_pubkey_b64url` equals the matching
+   `keyset.phase6_key_attestation` entry.
+3. Recompute `report_data` from those fields with the construction above and
+   require the report's 64 bytes to equal `SHA-384(…) ‖ 16 zero bytes` exactly
+   (compare all 64 bytes — the trailing 16 must be zero).
+4. Verify `key_possession.signature_b64` (ECDSA P-256 / SHA-256) over that
+   `report_data` under the bound `pkix`, and require
+   `key_possession.input == "quote_report_data"` and
+   `key_possession.alg == "ecdsa-secp256r1-sha256"`.
+
+**Reference implementation and conformance vector.** The consumer verifier
+(`gm-kubetee-verify-proxy`, `attestd/src/kubetee_verify/binding.rs`) derives and
+checks this binding, and its test vectors pin the wire format (the tag string,
+the `u64-be` framing and the 16-byte zero pad are frozen). An independent
+**AMD SEV-SNP consumer appraisal** of this binding — VCEK chain anchored to the
+builtin AMD roots, report signature over the signed region, and this
+`report_data` derivation against a live report — is under review as
+[SayGM/gm-miner PR #430](https://github.com/taostat/gm-miner/pull/430) (its
+predecessor #419 was closed unmerged and superseded). That pull request is not
+a claim of an already-merged worker migration.
+
 ---
 
 ## 4. Keyset and key custody
@@ -319,6 +431,7 @@ connection**, never a certificate supplied only inside a response.
 | Gateway east-west identity | `kubetee_bootstrap` retrieves the approved CA and gateway leaf over CDH loopback into container-local `/run/kubetee-eastwest`. Startup fails closed if unavailable. This path is not a declared pod-shared host-visible volume. | Protected by guest/policy custody and role-scoped key release, not a claim that privileged KBS administrators cannot access escrowed identity material. |
 | Kimi/MiMo backend identities | A measured CDH-fetch init container inside each backend Kata CVM retrieves its role-specific cert/key, CA and HF resource into disk-backed `emptyDir: {}` `/certs`. On the Granian frontend the measured SGLang process reads `/certs` and terminates strict mTLS directly; on the legacy frontend an in-CVM HAProxy container reads `/certs` and fronts loopback SGLang. | The volume is in-sandbox guest storage, not a mounted ordinary Kubernetes TLS Secret, and not Memory tmpfs. The backend key is released to an appraised guest, not proved generated only inside it. |
 | Backend per-epoch evidence key (`tee-pubkey`) | Ed25519 key held by the backend guest; public half committed in the epoch statement's `keyset_digest` and therefore bound into the hardware `report_data`. Distinct from the backend TLS key and from all gateway keys. | Proves caller-binding of a relayed envelope; it does not sign model-output bytes. |
+| Gateway per-boot evidence key (v2 `tls-ephemeral`) | **Generated in-guest per boot** (not KBS-released), per §3.4: its `pkix` is bound into the gateway SNP `report_data` and named in `keyset.phase6_key_attestation`. Its `key_possession` signature is over the report's `report_data`. | Distinct from the TLS serving key (its SPKI is not `tls_public_keys[0]`). Generated in-guest per boot and named in `report_data` — this is the zero-operator step the §3.2 residual limit named as missing for v1. |
 | Measurement signing key | Offline Ed25519 private key. Only its public document is served over HTTPS; it is separate from the gateway keyset. | Compromise of that public document/HTTPS publication path is a distinct reference-distribution risk from compromise of a serving guest. |
 
 `signing_keys: []` is intentional for this deployment: the offline measurement
@@ -394,6 +507,51 @@ a prior immutable record is not silently reused or rewritten. Retention lets a
 verifier establish that a measured release is approved; it does not establish
 that a different live replica has the same identity without appraisal.
 
+### Registry anti-rollback — transition-hash chain (Phase 6 §3.2)
+
+Beyond `any-active-record`, each published registry revision carries a
+`chain` member binding it to the previous revision's transition hash
+(Contrast-style manifest history), and a verifier keeps the highest `version`
+it has ever accepted as a monotonic **floor**. This closes the "serve a stale
+pre-revocation registry" hole: that stale doc has a valid Ed25519 signature
+*and* a self-consistent chain, so only a persisted floor catches it.
+
+```json
+"chain": {
+  "algorithm": "sha256",
+  "content_hash": "sha256(jcs(doc-minus-signature-and-chain))",
+  "previous_transition_hash": "<previous revision's transition_hash; genesis = 64 zeros>",
+  "transition_hash": "sha256(TAG ‖ framed(content_hash) ‖ framed(previous_transition_hash))",
+  "previous_version": 2
+}
+```
+
+- `TAG` is the raw ASCII `kubetee.registry.transition/1`; `framed(x)` is
+  `u64-be length ‖ x`. `content_hash` excludes `signature` and `chain`; the
+  Ed25519 `signature` covers the doc **including** `chain` (RFC 8785 over the
+  doc minus `signature` only), so history cannot be spliced onto a signed
+  record-set.
+- **Fail closed.** A present-but-malformed `chain` is rejected — never silently
+  treated as "no chain" (that is a downgrade, CVE-2026-100833 class). A revision
+  below the verifier's accepted floor is rejected outright. Verify the chain of
+  every served revision end-to-end and terminate at the newest one.
+- **Construction is byte-identical across the publisher**
+  (`kubetee-website/scripts/build-tee-measurements-registry.py`),
+  **the reference verifier** (`kubetee-attestation-verifier/src/registry.rs`),
+  **and the gateway matcher** (`litellm/.../kubetee_attestation.py`) — a shared
+  known-answer vector pins the cross-language agreement.
+
+*Rollout status (2026-11-27).* Enforcement is live in both the reference
+verifier (`verify()` — chain + `--min-revision` floor, fail-closed) and the
+gateway matcher (`_load_registry` — downgrade-aware: a chain-less doc is
+tolerated as the pre-Phase-6 revision until the first chained one is accepted,
+then a chain-less doc is a rollback; `KUBETEE_REGISTRY_MIN_REVISION` pins the
+floor across gateway restarts). The **first chained publish** (`version 2` with
+`chain`) is the remaining step — runbook
+`kubetee-website/scripts/PUBLISH-REGISTRY-CHAINED.md`; until it lands, the
+published registry is `version 1, chain ABSENT` and is treated as the
+pre-Phase-6 doc.
+
 ### Provenance and signature
 
 Every record links source → signed build → digest. The gateway record
@@ -424,9 +582,10 @@ The publication is signed JSON and, where published, a detached-signed CoRIM —
 not a claim that CoRIM/COSE ingestion is required of any consumer. The optional
 `attestation.observed_pod_identities` block records which running replicas were
 verified, at what time and against which verifier reference; verifier
-[PR #419](https://github.com/taostat/gm-miner/pull/419) is the separate SayGM
-consumer contribution awaiting its maintainers' review, not a merged worker
-release.
+[PR #430](https://github.com/taostat/gm-miner/pull/430) is the separate SayGM
+consumer contribution (AMD SEV-SNP appraisal of the §3.4 v2 binding; its
+predecessor #419 was closed unmerged and superseded) awaiting its maintainers'
+review, not a merged worker release.
 
 ---
 
@@ -449,7 +608,10 @@ connection:
    InitData/image composition and denied guest control operations.
 5. Recompute `SHA256(JCS(keyset))`, hash the exact statement bytes and check the
    report's 64-byte `report_data` equals that digest followed by 32 zero bytes
-   (the gateway form — §3).
+   (the **legacy** v1 gateway form — §3). For the current **v2** binding, run
+   the §3.4 checklist instead: `report_data = SHA-384(tag ‖ framed(pkix) ‖
+   framed(nonce) ‖ framed(context)) ‖ 16 zero bytes`, plus the `key_possession`
+   signature.
 6. Require keyset validity, correct `llm.kubetee.ai` scope and match of the
    reported SPKI/certificate fingerprint to the caller's TLS session.
 7. Verify the nonce possession signature with the session certificate. This is
@@ -472,7 +634,10 @@ Accept backend evidence only after the TDX counterpart succeeds:
    `evidence.vm_config.initdata_toml`, recompute `sha384(initdata_toml)` and
    require it to equal `MRCONFIGID` exactly (§3.4).
 4. Match the registers against the **signed registry** (any active record) —
-   never against a value the serving guest supplies.
+   never against a value the serving guest supplies. **Before matching**, verify
+   the registry's anti-rollback `chain` and reject any revision below your
+   accepted `version` floor (§5 "Registry anti-rollback"); a chain-less or
+   rolled-back registry must not be used.
 5. Verify Layer 2 (`tee-pubkey` per-request signature) when present. It is
    emitted on a fresh `X-KubeTEE-Nonce` mint and **absent on the cached epoch
    path** (`X-KubeTEE-Backend-Evidence-Layer2: absent`); a missing Layer 2 is a
@@ -501,5 +666,7 @@ this checklist is in [CLIENT-FACING-ATTESTATION.md](./CLIENT-FACING-ATTESTATION.
 
 This contract does not invent per-request GPU freshness beyond the deployed
 `X-KubeTEE-Nonce` composite (rate-limited, raw GPU reports fetched separately),
-encrypted weights, in-guest-only key generation, a completed consumer rollout or
-full reproducible-build equivalence.
+encrypted weights, in-guest-only generation of the **TLS serving identity** (the
+v2 per-boot evidence key (§3.4) is generated in-guest, but the serving key is
+still KBS-released — see §4/§3.2), a completed consumer rollout or full
+reproducible-build equivalence.
