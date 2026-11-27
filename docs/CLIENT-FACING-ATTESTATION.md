@@ -111,7 +111,19 @@ certificate or verified report:
       "cert_chain": [{"cert_type": "<CoCo serialization label>", "data": ["DER byte values"]}]
     },
     "tdx": null,
-    "vm_config": {"role": "litellm", "files": {}, "agent_policy_claims": {}}
+    "vm_config": {
+      "algorithm": "sha384",
+      "version": "<version>",
+      "role": "litellm",
+      "runtime_class": "kata-qemu-snp-runtime-rs",
+      "initdata_toml": "<the EXACT uncompressed InitData TOML document, verbatim>",
+      "initdata_sha384": "<hex — sha384(initdata_toml), full 48 bytes>",
+      "host_data": "<hex — sha384(initdata_toml)[:32] — SNP only>",
+      "host_data_semantics": "kata4initdataSha384Truncated32 — SNP only",
+      "mrconfigid": "<hex — sha384(initdata_toml), full 48 bytes — TDX only>",
+      "files": {"aa.toml": "…", "cdh.toml": "…", "policy.rego": "…"},
+      "agent_policy_claims": {}
+    }
   },
   "tls_possession": {
     "tls_signature": "<base64 signature>",
@@ -134,6 +146,19 @@ binding and TLS-possession checks.
 For an Intel TDX backend response, `quote` (Intel DCAP quote carrying TDINFO
 `MRTD`, `RTMR0–3`, `MRCONFIGID`), `event_log` (TCC event log whose replay
 reproduces `RTMR0–3`) and `evidence.tdx` are populated instead of `evidence.snp`.
+
+`evidence.vm_config` carries the **deployment configuration (InitData)** and is
+present on the **full evidence bundles** (this endpoint; `GET /kubetee/evidence`
+on the backend; and the backend bundle relayed through the gateway). Its shape
+follows the TEE: the **SNP** shape carries `host_data` +
+`host_data_semantics` (`kata4initdataSha384Truncated32`) + `agent_policy_claims`;
+the **TDX** shape carries `mrconfigid` instead (it has no SNP `host_data`
+field). Both carry `initdata_toml` (verbatim), `initdata_sha384`, `algorithm`,
+`version`, `role`, `runtime_class`, `files`. The **compact inline envelope**
+(`X-KubeTEE-Backend-Evidence`, §4) is the exception: it does **not** carry
+`vm_config` — fetch the full bundle (its `…-Location`) to run the InitData check.
+Hash `initdata_toml` and compare to the quote field per §3.4 of
+[ATTESTATION-SPEC-v1.md](./ATTESTATION-SPEC-v1.md).
 
 ---
 
@@ -328,7 +353,7 @@ requiring an east-west client certificate), not on `llm.kubetee.ai`.
 
 | Element | Value |
 |---|---|
-| Backend bundle | `GET /kubetee/evidence?role=nim-terminator[&nonce=<64-hex>]` on the model backend's own evidence service — the full envelope plus `vm_config`. With `nonce` the backend mints the fresh CPU+8GPU composite (the 8 GPU SPDM frames echo the nonce); without it, the cached epoch envelope. It needs an east-west client certificate (operator surface), not a public API-key call. |
+| Backend bundle | `GET /kubetee/evidence?role=nim-terminator[&nonce=<64-hex>]` on the model backend's own evidence service — the full envelope plus `vm_config` (which carries `initdata_toml`, the backend's deployment configuration document verbatim). With `nonce` the backend mints the fresh CPU+8GPU composite (the 8 GPU SPDM frames echo the nonce); without it, the cached epoch envelope. It needs an east-west client certificate (operator surface), not a public API-key call. |
 | Report-data binding | `SHA-256(JCS(statement)) ‖ tail` where the tail is **32 zero bytes** on the epoch form or the **caller's 32-byte nonce** on the fresh composite form — check `report_data[:32] == SHA-256(statement)` and the tail against those two candidates. |
 | Backend signing key | `tee-pubkey` — the backend's **per-epoch evidence-signing key** (Ed25519), distinct from its TLS serving key and the gateway's keys. Its public half is bound into the epoch statement via `keyset_digest`, so it is covered by the hardware quote. |
 
@@ -550,6 +575,21 @@ def verify_backend_envelope(header_value: str, nonce_hex: str, *,
         # VERIFY: AMD ARK/ASK/VCEK chain + report signature (sev-snp), read
         # measurement/host_data/policy.
         regs = verify_snp_report(env["snp"], amd_root)
+    # 4b. Deployment configuration (InitData) — on the FULL evidence bundle the
+    #     exact document travels WITH the evidence (vm_config.initdata_toml).
+    #     Hash the SERVED bytes (never trust the served digest alone) and check
+    #     against the quote field. The compact inline envelope (this header) has
+    #     no vm_config, so this runs only on the full bundle (fetch via
+    #     X-KubeTEE-Backend-Evidence-Location). TDX binds mrconfigid (full 48);
+    #     SNP binds host_data (sha384 truncated to 32).
+    vm = env.get("evidence", {}).get("vm_config") or env.get("vm_config")
+    if vm and vm.get("initdata_toml"):
+        d = hashlib.sha384(vm["initdata_toml"].encode("utf-8")).digest()
+        if tdx:
+            assert d == regs.mrconfigid, "initdata_toml does not hash to MRCONFIGID"
+        else:
+            assert d[:32] == regs.host_data, "initdata_toml does not hash to host_data"
+
     ref = registry.match_any_active(regs, tee=env["tee"])               # VERIFY registry Ed25519 sig
     assert ref is not None, "registers match no active record"          # policy.match: any-active-record
 

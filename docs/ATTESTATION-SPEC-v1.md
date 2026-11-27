@@ -63,7 +63,7 @@ party's independent hardware appraisal.
 | SNP report field | Contract |
 |---|---|
 | `measurement` | 48-byte SHA-384 launch measurement covering the declared guest composition. Compare against the independent published reference, not a value supplied only by the serving guest. |
-| `host_data` | 32-byte prefix of the SHA-384 digest of the exact **uncompressed InitData TOML**. Kata 4.4 computes that digest and truncates it to 32 bytes for `HOST_DATA`. It is not a SHA-256 digest. |
+| `host_data` | 32-byte prefix of the SHA-384 digest of the exact **uncompressed InitData TOML**. Kata 4.4 computes that digest and truncates it to 32 bytes for `HOST_DATA`. It is not a SHA-256 digest. The document itself is served verbatim as `evidence.vm_config.initdata_toml`, so the verifier recomputes this digest from the served bytes (§3.4). |
 | `report_data` | The exact 64-byte v1 request binding defined in §3. |
 | `policy` | Require `debug_allowed=false`, `migrate_ma_allowed=false`, the documented guest ABI/policy, VMPL0 and report version 3–5. |
 | `tcb` | Validate the AMD VCEK chip/TCB relationship and approve the reported platform TCB independently. A TLS success is not TCB verification. |
@@ -86,7 +86,7 @@ must equal the report's `HOST_DATA`.
 | TDX register | Contract |
 |---|---|
 | `MRTD` | 48-byte SHA-384 measured by the TDX module over the initial TD (OVMF + kernel + initrd + cmdline). Captured from the quote's TDINFO and cross-checked by CC event-log replay. |
-| `MRCONFIGID` | 48-byte SHA-384 of the exact **uncompressed InitData TOML** — the TDX sibling of SNP `host_data` at full digest length. |
+| `MRCONFIGID` | 48-byte SHA-384 of the exact **uncompressed InitData TOML** — the TDX sibling of SNP `host_data` at full digest length. Served verbatim as `evidence.vm_config.initdata_toml` (gateway and backend), so the verifier recomputes `sha384(initdata_toml)` and compares it to the quote's `tdinfo.mrconfigid` directly. |
 | `RTMR0` | Firmware / CCEL measurement. **Node-specific**: it legitimately differs per host and is one reason matching is any-active-record (§5). |
 | `RTMR1` | Kernel command line. |
 | `RTMR2` | Initrd / OS. |
@@ -104,6 +104,50 @@ The measured **agent policy** is inside InitData: changing it changes
 rejects. The deployed posture denies `ExecProcessRequest` and
 `WriteStreamRequest` (the host cannot exec into the guest or write to its
 processes) while allowing the standard container-lifecycle and read surface.
+
+### 3.4 Deployment configuration (InitData) delivery
+
+The **exact, uncompressed InitData TOML document** is served verbatim inside
+`evidence.vm_config.initdata_toml` on the **full evidence bundles** — the
+gateway SNP bundle, the backend's own bundle, and the backend bundle relayed
+through the gateway. This makes the composition-hash check executable on the
+client — the deployment configuration is sent with the evidence:
+
+```python
+d = hashlib.sha384(vm_config["initdata_toml"].encode("utf-8")).digest()
+# TDX:  d       == vm_config.mrconfigid             (full 48 bytes)
+# SNP:  d[:32]  == vm_config.host_data              (truncated to 32 bytes)
+```
+
+The `vm_config` shape follows the TEE (a TDX bundle has no SNP `host_data`
+field and vice versa):
+
+| Field | SNP bundle | TDX bundle |
+|---|---|---|
+| `initdata_toml` | verbatim document | verbatim document |
+| `initdata_sha384` | `sha384(initdata_toml)` mirror | `sha384(initdata_toml)` mirror |
+| `host_data` | `sha384(initdata_toml)[:32]` | — (absent) |
+| `host_data_semantics` | `kata4initdataSha384Truncated32` | — (absent) |
+| `mrconfigid` | — (absent) | `sha384(initdata_toml)`, full 48 bytes |
+| `files` / `agent_policy_claims` | readability aid | readability aid (`files`) |
+
+Rules:
+
+* `initdata_toml` is **verbatim** — the exact bytes the firmware consumed at
+  launch. The hash is computed over the served document, never over the
+  served `initdata_sha384` value (which is a convenience mirror only).
+* One byte of difference breaks the equality — that is the point. A
+  configuration change is a measurement change (it moves `host_data` /
+  `MRCONFIGID`) and requires a new signed registry record.
+* `files` (the parsed `data` keys: `aa.toml`, `cdh.toml`, `policy.rego`) and
+  `agent_policy_claims` are a readability aid; the normative binding is over
+  `initdata_toml` alone.
+* `host_data_semantics` is `kata4initdataSha384Truncated32` on SNP — the
+  runtime truncates SHA-384 to 32 bytes for `HOST_DATA`; it is not a SHA-256
+  digest and must not be compared to one.
+* The **compact inline envelope** (`X-KubeTEE-Backend-Evidence`) is the
+  exception: it carries no `vm_config`. Fetch the full bundle to run this
+  check (see [CLIENT-FACING-ATTESTATION.md](./CLIENT-FACING-ATTESTATION.md) §4).
 
 ---
 
@@ -424,7 +468,9 @@ Accept backend evidence only after the TDX counterpart succeeds:
    statement: the first 32 bytes must equal `SHA-256(statement)` and the tail
    must be 32 zero bytes (epoch form) or the caller's nonce bytes (fresh
    composite form, §3.2). Check `MRCONFIGID` against the published InitData
-   digest.
+   digest — and, since the InitData document is served verbatim in
+   `evidence.vm_config.initdata_toml`, recompute `sha384(initdata_toml)` and
+   require it to equal `MRCONFIGID` exactly (§3.4).
 4. Match the registers against the **signed registry** (any active record) —
    never against a value the serving guest supplies.
 5. Verify Layer 2 (`tee-pubkey` per-request signature) when present. It is
